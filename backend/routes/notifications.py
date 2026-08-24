@@ -292,13 +292,31 @@ async def avisar_reporte_aplazado(user_id: str) -> None:
     ])
 
 
-async def sincronizar_avisos(user_id: str) -> int:
+async def sincronizar_avisos(user_id: str, marcar_entrada: bool = True,
+                             solo_calendario: bool = False) -> int:
     """Mira si al cliente le toca algún aviso de los de la parte 9 y lo crea.
 
     Se evalúa al entrar en la app en vez de con un cron: un aviso in-app solo se ve
     cuando entra, así que no gana nada existiendo antes. Cada aviso lleva una clave
     única del evento y no se repite mientras esa clave siga viva, así que da igual
     cuántas veces se llame aquí.
+
+    LOS DOS INTERRUPTORES SON PARA QUIEN NO ES EL CLIENTE. La pasada de correos
+    (`core/correo_avisos`) evalúa a todos los perfiles activos cada 15 minutos, día y
+    noche, y evaluar no es entrar. Los dos van a False ahí y solo a True en los dos
+    endpoints que consulta el navegador del cliente:
+
+      - `marcar_entrada`: escribir `ultima_entrada = hoy`. Puesta por la pasada, en dev
+        dejó los 194 perfiles activos entrados hoy, así que `dias_sin_entrar` no pasaba
+        de 0 o 1. En producción `correos_avisos` está apagado y todavía no ha pasado: es
+        la trampa que se dispararía el día que se encienda, y se lleva por delante el
+        «¿Todo bien?» de los siete días y la tarea del entrenador de los catorce.
+      - `solo_calendario`: crear únicamente avisos de calendario. La pasada solo manda
+        por correo familias de calendario, y en cambio podía crear una condicionada a las
+        00:15 -- «¿Todo bien?», por ejemplo -- que con la regla de «uno al día» cerraba el
+        día y dejaba sin nacer el «tu reporte está abierto» de las 10:00, que solo es
+        candidato ese día. Las condicionadas nacen cuando el cliente entra, que es cuando
+        las va a leer.
 
     Falla en silencio, como `notify`: quedarse sin un aviso no puede impedirle entrar.
     """
@@ -312,7 +330,7 @@ async def sincronizar_avisos(user_id: str) -> int:
             return 0
 
         ahora = datetime.now(timezone.utc)
-        datos = await _datos_para_avisos(perfil, ahora)
+        datos = await _datos_para_avisos(perfil, ahora, marcar_entrada=marcar_entrada)
 
         # Las reglas de avisos son puras a proposito (se prueban sin base): el estado del
         # interruptor de la rutina se lee aqui y se les pasa.
@@ -346,6 +364,8 @@ async def sincronizar_avisos(user_id: str) -> int:
                 rutina_visible=rutina_visible,
                 ciclo_vencido=datos.get("ciclo_vencido", False),
                 fin_de_ciclo=datos.get("fin_de_ciclo"),
+                vencio_el=datos.get("vencio_el"),
+                con_correo_de_novedades=datos.get("newsletter_mandada", False),
             )
         condicionados = avisos_condicionados(
             ahora=ahora,
@@ -357,9 +377,16 @@ async def sincronizar_avisos(user_id: str) -> int:
             dias_con_el_perfil_a_medias=datos["dias_con_el_perfil_a_medias"],
             dias_sin_preferencias=datos.get("dias_sin_preferencias"),
             dias_en_mantenimiento=datos.get("dias_en_mantenimiento"),
+            mantenimiento_desde=datos.get("mantenimiento_desde"),
             rutina_mes_aplazada_hasta=datos.get("rutina_mes_aplazada_hasta"),
             con_ajuste=datos.get("con_ajuste", True),
         )
+
+        # LA PASADA DE FONDO NO CREA CONDICIONADAS (ver `solo_calendario` arriba). Se
+        # calculan igual porque son puras y de ellas sale lo que hay que caducar, pero no
+        # entran en la elección: una condicionada nacida a las 00:15 cerraba el día y el
+        # aviso del reporte de las 10:00 -- candidato un solo día -- no llegaba a existir.
+        posibles = [] if solo_calendario else condicionados
 
         # Antes de mirar si le toca una nueva, se retiran las que ya no tocan: si no, se
         # acumulan y el cliente lee tres condicionadas a la vez cuando la regla es UNA cada
@@ -382,13 +409,30 @@ async def sincronizar_avisos(user_id: str) -> int:
         claves = {p.get("clave") for p in previas if p.get("clave")}
         ultima_cond = max((p["created_at"] for p in previas if p.get("condicionada")), default=None)
 
+        # LAS CLAVES DE UN SOLO USO SE MIRAN EN TODO EL HISTÓRICO. Tres avisos siguen siendo
+        # candidatos mucho más de 35 días con la MISMA clave -- «Tu ciclo ha terminado»
+        # mientras siga caducado, «¿Volvemos?» mientras siga en Mantenimiento y el de macros
+        # provisionales mientras nadie le ponga unos --, así que al día 36 se salían de la
+        # ventana y volvían a nacer como si fueran nuevos. Los que se marcan `unica` se
+        # comprueban contra la colección entera y no contra el último mes.
+        #
+        # OJO A LO QUE `unica` NO PUEDE SIGNIFICAR: «este cliente no lo recibe nunca más».
+        # Los tres llevan el evento dentro de la clave (el vencimiento, la fecha en que
+        # aterrizó en Mantenimiento, la del alta), así que lo que no se repite es el MISMO
+        # evento. Si renueva y vuelve a caducar, la clave es otra y el aviso vuelve.
+        eternas = [a["clave"] for a in (calendario + posibles) if a.get("unica")]
+        if eternas:
+            async for p in db.notifications.find(
+                    {"user_id": user_id, "clave": {"$in": eternas}}, {"_id": 0, "clave": 1}):
+                claves.add(p.get("clave"))
+
         # MÁXIMO UNO AL DÍA (doc 19-08): si hoy ya le nació un aviso -- de aquí o de un
         # evento, como la entrega de macros del miércoles --, lo demás espera a mañana.
         # «Hoy» es el día de España, no el del servidor.
         arranque_del_dia = _arranque_del_dia_es()
         hubo_aviso_hoy = any((p.get("created_at") or "") >= arranque_del_dia for p in previas)
 
-        elegidos = elegir_avisos(calendario, condicionados, claves, ultima_cond, ahora,
+        elegidos = elegir_avisos(calendario, posibles, claves, ultima_cond, ahora,
                                  hubo_aviso_hoy=hubo_aviso_hoy)
         for aviso in elegidos:
             # El texto se elige AQUI, no al montar la regla: la rotacion solo puede
@@ -453,7 +497,8 @@ async def _caducar_condicionadas(user_id: str, claves_vivas: set) -> None:
             {"$set": {"caducada": True, "read": True}})
 
 
-async def _datos_para_avisos(perfil: dict, ahora: datetime) -> dict:
+async def _datos_para_avisos(perfil: dict, ahora: datetime,
+                             marcar_entrada: bool = True) -> dict:
     """Los datos que miran los disparadores. Consultas cortas y contadas."""
     from core.avisos_cliente import _dias_desde
 
@@ -519,6 +564,12 @@ async def _datos_para_avisos(perfil: dict, ahora: datetime) -> dict:
     hoy = hoy_madrid()
     cerro_hoy, dias_sin_cerrar = await _cierres_del_cliente(client_id, hoy)
 
+    # CUÁNDO ATERRIZÓ EN MANTENIMIENTO. Sale una sola vez porque se usa dos veces: para
+    # contar el mes que dispara «¿Volvemos?» y para meterla DENTRO de su clave, que es lo
+    # que hace que el que se va y vuelve al plan reciba el suyo y no el de la vez pasada.
+    aterrizo = ((perfil.get("plan_start") or perfil.get("created_at"))
+                if (perfil.get("plan") or "").lower() == "mantenimiento" else None)
+
     return {
         "semanas_sin_ajustar": (dias_sin_ajustar // 7) if dias_sin_ajustar is not None else None,
         "reporte_sin_fotos": sin_fotos,
@@ -534,9 +585,9 @@ async def _datos_para_avisos(perfil: dict, ahora: datetime) -> dict:
         # None si ya las marcó (entonces no hay nada que pedirle).
         "dias_sin_preferencias": (None if (perfil.get("food_preferences") or [])
                                   else _dias_desde(perfil.get("created_at"), ahora)),
-        # «¿Volvemos?» (doc 19-08): cuanto lleva aterrizado en Mantenimiento.
-        "dias_en_mantenimiento": (_dias_desde(perfil.get("plan_start") or perfil.get("created_at"), ahora)
-                                  if (perfil.get("plan") or "").lower() == "mantenimiento" else None),
+        # «¿Volvemos?» (doc 19-08): cuanto lleva aterrizado en Mantenimiento, y desde cuándo.
+        "dias_en_mantenimiento": _dias_desde(aterrizo, ahora) if aterrizo else None,
+        "mantenimiento_desde": str(aterrizo)[:10] if aterrizo else None,
         # «¿Te preparo la rutina del mes?» (doc 19-08): la fecha que eligió al marcar
         # «pregúntame en una semana» en su reporte. None si no aplazó nada.
         "rutina_mes_aplazada_hasta": perfil.get("rutina_mes_aplazada_hasta") or None,
@@ -548,6 +599,13 @@ async def _datos_para_avisos(perfil: dict, ahora: datetime) -> dict:
                                        and (perfil.get("subscription_status") or "") == "active")),
         # Cuándo se le acaba lo pagado, para el aviso de «acaba en una semana» por fecha.
         "fin_de_ciclo": _fecha_es_de(perfil.get("current_period_end")),
+        # Y CUÁNDO SE LE ACABÓ, que es lo que va dentro de la clave de «Tu ciclo ha
+        # terminado» para que ese aviso vuelva si renueva y caduca otra vez. `access_until`
+        # primero: desde el 20-08 todo lo que se vende es pago único y es el campo que de
+        # verdad decide el acceso (`core/plan_access.has_active_access` lo mira antes que
+        # nada); `current_period_end` es el de los legacy con suscripción de Stripe.
+        "vencio_el": _fecha_es_de(perfil.get("access_until")
+                                  or perfil.get("current_period_end")),
         "ventanas": ventanas,
         "macros_puestos_por_alguien": de_una_persona(ultimos_macros),
         # ¿VA A RECIBIR UNOS DEFINITIVOS? (punto 04 del doc del 19-08). El aviso de macros
@@ -561,7 +619,25 @@ async def _datos_para_avisos(perfil: dict, ahora: datetime) -> dict:
         ),
         "cerro_hoy": cerro_hoy,
         "dias_sin_cerrar": dias_sin_cerrar,
-        "dias_sin_entrar": await _dias_sin_entrar(perfil, hoy),
+        "dias_sin_entrar": await _dias_sin_entrar(perfil, hoy, marcar_entrada),
+        # ¿SALIÓ DE VERDAD EL CORREO DEL VIERNES? El aviso «Te hemos mandado el correo de
+        # novedades» se dispara todos los viernes a las 12:00 sin que nada lo compruebe, y
+        # la newsletter no la manda la app: es una tarea MANUAL que se le crea a Jenny
+        # (core/tareas_automaticas, clave `newsletter:{semana}`). O sea que la app afirma
+        # un hecho que no conoce, y eso está mal.
+        #
+        # SE INTENTÓ ATARLO A LA TAREA Y SE DESHIZO EL 24-08. Medido en producción antes de
+        # dejarlo puesto: hay UNA tarea de newsletter (`newsletter:2026-W34`, del 20-08) y
+        # NADIE la ha marcado hecha. Con la comprobación puesta, este aviso -- que está en
+        # la tabla del doc del 19-08 -- no volvería a salirle a nadie nunca, y apagar en
+        # silencio algo que Jesús pidió es peor que el defecto que se venía a arreglar.
+        #
+        # Para cerrarlo de verdad hacen falta las dos cosas y una es de fuera del código:
+        # que el equipo marque esa tarea cada viernes, y entonces se vuelve a atar aquí
+        # (`_newsletter_de_esta_semana` se queda escrita justo debajo, lista). Mientras
+        # tanto se queda como estaba: sale el viernes, y quien lo lea que sepa que la app
+        # no comprueba nada.
+        "newsletter_mandada": True,
         # Cuánto lleva con el perfil largo a medias, para el aviso de los tres días (18-08).
         # `None` para quien no tiene que hacerlo: los que no llevan entrenador y los que ya
         # lo terminaron.
@@ -604,9 +680,29 @@ async def _fotos_o_medidas_viejas(perfil: dict, hoy) -> Optional[list]:
     if base is None or base < CUATRO_SEMANAS:
         return None
 
+    # POR `taken_at`, NO POR `created_at`: esa columna no existe en `client_photos`. Se
+    # escribe con `taken_at` (la fecha de la foto) y `uploaded_at` (cuándo se subió) desde
+    # que existe la colección -- POST /reports/photos, las fotos del alta y el importador de
+    # Calma --, y los índices son por `taken_at`. Medido en producción: 647 fotos, 0 con
+    # `created_at`. Consecuencia: en cuanto el cliente subía UNA foto, `dias_foto` salía None
+    # y «tus fotos» no se nombraba jamás, aunque la última fuera de hace un año; y al que no
+    # había subido ninguna se le pedían siempre. O sea, justo al revés.
+    #
+    # Y SIN LAS FOTOS DEL ALTA. Las que llevan `uso` (`alta_grasa`, `mejor_forma`) no son de
+    # seguimiento y el resto de la app las deja fuera a propósito (`core/fotos.listar_fotos_de`
+    # filtra igual). Contándolas, al de autogestión que reenvía el básico con su foto de
+    # grasa -- ese bloque lo contesta todo el mundo -- se le callaba «repite tus fotos»
+    # cuatro semanas más sin que hubiera hecho una sola foto de progreso.
+    #
+    # No hay respaldo a `uploaded_at` y no es un olvido: ordenando por `taken_at`
+    # descendente, un documento sin ese campo queda el ÚLTIMO y `find_one` no lo devuelve
+    # nunca (salvo que sea su única foto), así que el respaldo aparentaba una robustez que
+    # no daba. Los tres sitios que escriben aquí -- `routes/checkins.py`, `routes/users.py`
+    # y `_importar_fotos_calma.py` -- ponen `taken_at` siempre.
     ultima_foto = await db.client_photos.find_one(
-        {"client_id": perfil["id"]}, {"_id": 0, "created_at": 1}, sort=[("created_at", -1)])
-    dias_foto = _dias((ultima_foto or {}).get("created_at")) if ultima_foto else base
+        {"client_id": perfil["id"], "uso": {"$exists": False}},
+        {"_id": 0, "taken_at": 1}, sort=[("taken_at", -1)])
+    dias_foto = _dias(ultima_foto.get("taken_at")) if ultima_foto else base
 
     # La última toma de medidas: la de un reporte o una suelta, la más reciente.
     con_medidas = await db.reports.find_one(
@@ -689,13 +785,20 @@ def _dias_con_el_perfil_a_medias(perfil: dict, hoy) -> Optional[int]:
     return max(0, (hoy - d).days)
 
 
-async def _dias_sin_entrar(perfil: dict, hoy) -> Optional[int]:
+async def _dias_sin_entrar(perfil: dict, hoy, marcar: bool = True) -> Optional[int]:
     """Cuántos días lleva sin abrir la app, y de paso deja constancia de que hoy entró.
 
     LO QUE ESTO NO PUEDE HACER: sin push ni cron, el aviso de los catorce días no le llega
     mientras está fuera; le llega en cuanto vuelve, que es cuando la app se entera. Se
     calcula igual porque el dato hay que empezar a guardarlo: el día que existan las push,
     la regla ya está escrita y el histórico también.
+
+    `marcar=False` es para quien NO es el cliente. La pasada de correos evalúa a todos los
+    perfiles activos cada 15 minutos, y con la huella puesta aquí aparecen todos entrados
+    hoy: `dias_sin_entrar` no pasa nunca de 1, así que el «¿Todo bien?» de los siete días y
+    la tarea del entrenador de los catorce quedan muertos. En dev, con el interruptor
+    puesto, así estaban los 194 perfiles activos; en producción `correos_avisos` sigue
+    apagado, o sea que era una trampa armada para el día que se encienda.
     """
     anterior = perfil.get("ultima_entrada")
     dias = None
@@ -705,10 +808,31 @@ async def _dias_sin_entrar(perfil: dict, hoy) -> Optional[int]:
         except (ValueError, TypeError):
             dias = None
     # Una escritura al día como mucho: esto se evalúa en cada consulta de la campanita.
-    if str(anterior or "")[:10] != hoy.isoformat():
+    if marcar and str(anterior or "")[:10] != hoy.isoformat():
         await db.client_profiles.update_one(
             {"id": perfil.get("id")}, {"$set": {"ultima_entrada": hoy.isoformat()}})
     return dias
+
+
+async def _newsletter_de_esta_semana(hoy) -> bool:
+    """¿Consta que la newsletter de esta semana salió?
+
+    La app no la manda: la manda una persona (la tarea automática «Mandar la newsletter y
+    comprobar que sale bien», que se le crea a Jenny los viernes). Lo único que la app sabe
+    es si esa tarea está marcada hecha, y sin eso no puede decirle al cliente «te hemos
+    mandado el correo de novedades»: los dos viernes que ya salió en producción, nadie
+    había comprobado que hubiera salido nada.
+
+    El aviso solo existe los viernes, así que los otros seis días esto ni pregunta: se
+    evalúa en CADA consulta de la campanita y no se le añade una consulta a la base por un
+    aviso que hoy no puede salir.
+    """
+    if hoy.weekday() != 4:
+        return False
+    semana_iso = f"{hoy.isocalendar()[0]}-W{hoy.isocalendar()[1]:02d}"
+    hecha = await db.tareas.find_one(
+        {"clave": f"newsletter:{semana_iso}", "hecha": True}, {"_id": 0, "id": 1})
+    return bool(hecha)
 
 
 async def _ventanas_de_reporte(perfil: dict, catalogo: dict, ahora: datetime) -> tuple:
@@ -734,7 +858,7 @@ async def _ventanas_de_reporte(perfil: dict, catalogo: dict, ahora: datetime) ->
     inicio = _week_window_start(perfil, ahora)
 
     # QUÉ SEMANA DECIDE EL REPORTE: la de su rutina si la tiene (doc 19-08), la de ciclo
-    # si no. La misma regla que `compute_client_report_state` — el aviso de «tu quincenal
+    # si no. La misma regla que `compute_client_report_state` -- el aviso de «tu quincenal
     # está abierto» no puede salir en una semana distinta de la que abre la ventana.
     rutina = await rutina_activa_de(perfil.get("id"))
     hoy_es = (a_madrid(ahora) or ahora).date()

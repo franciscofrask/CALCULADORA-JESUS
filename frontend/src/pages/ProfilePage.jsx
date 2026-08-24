@@ -397,11 +397,19 @@ const ProfilePage = () => {
                                     </div>
                                 )}
                             </div>
-                            {/* «Estás en la semana 7» (la pantalla Mi plan del doc 19-08). */}
+                            {/* «Estás en la semana 7» (la pantalla Mi plan del doc 19-08).
+                                LAS DOS MITADES DE LA FRASE, DEL MISMO SITIO (24-08). El «de
+                                12» salía del catálogo (`myPlan`) y la semana la cuenta el
+                                servidor con core/cycle, que busca el plan sin resolver
+                                alias: a un perfil migrado escrito «CalMa» no le encontraba
+                                el ciclo, así que la semana crecía sin dar la vuelta y aquí
+                                se leía «Estás en la semana 63 de 12». `cycle_total_weeks`
+                                es el total con el que se calculó ESA semana, así que los dos
+                                números no pueden contradecirse. */}
                             {profile.week && (
                                 <p className="text-sm text-foreground/60" data-testid="perfil-semana">
                                     Estás en la semana {profile.week}
-                                    {myPlan?.ciclo?.semanas ? ` de ${myPlan.ciclo.semanas}` : ''}
+                                    {profile.cycle_total_weeks ? ` de ${profile.cycle_total_weeks}` : ''}
                                 </p>
                             )}
                             <Separator className="bg-white/10" />

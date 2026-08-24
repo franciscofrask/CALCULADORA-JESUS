@@ -9,8 +9,11 @@
  * que puede hacer. Al revés sería un cobro con fotos de adorno; así es un balance del
  * que sale una decisión.
  *
- * Y se le dice claramente que si no hace nada se renueva solo. Esta pantalla no es un
- * muro: es donde decide si quiere cambiar algo antes de que le cobren.
+ * Y se le dice claramente qué pasa si no hace nada, que desde el 20-08 es lo contrario de
+ * lo que ponía aquí: no se renueva solo nadie (todo se vende como pago único), así que la
+ * renovación la confirma él en esta pantalla. Solo al que arrastra una suscripción de las
+ * de antes se le sigue cobrando sin tocar nada, y eso lo decide el servidor
+ * (`renueva_solo`). Esta pantalla no es un muro: es donde decide.
  */
 import React, { useEffect, useState } from 'react';
 import { euros } from '../lib/precios';
@@ -23,16 +26,56 @@ import { mensajeDeError } from '../lib/mensajeDeError';
 const fmtPct = (x) => (x == null ? '—' : `${x > 0 ? '+' : ''}${x}%`);
 
 const RenovacionPage = () => {
-    const { api } = useAuth();
+    const { api, refreshProfile } = useAuth();
     const navigate = useNavigate();
     const [datos, setDatos] = useState(null);
     const [yendo, setYendo] = useState(null);
+    const [confirmando, setConfirmando] = useState(
+        () => new URLSearchParams(window.location.search).get('renovado') === 'ok');
 
     useEffect(() => {
         api.get('/billing/renovacion')
             .then(r => setDatos(r.data))
             .catch(() => toast.error('No hemos podido cargar tu ciclo'));
     }, [api]);
+
+    // LA VUELTA DE STRIPE SE CONFIRMA AQUÍ, no se espera al webhook (24-08).
+    //
+    // La renovación mandaba a /dashboard?renovado=ok y allí no lee ese parámetro nadie:
+    // el cliente pagaba, aterrizaba en su panel y no veía ni un «pago confirmado». Si el
+    // webhook tardaba o fallaba, se quedaba mirando «tu suscripción ha terminado» con el
+    // dinero ya cobrado y sin ninguna forma de forzar la sincronización. Las otras tres
+    // vueltas de Stripe (alta, planes y bienvenida) ya lo hacían bien; esta vuelve a la
+    // propia pantalla de renovación, sincroniza y de ahí le lleva a su panel.
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('renovado') !== 'ok') return;
+        const sessionId = params.get('session_id');
+        // CADA SALIDA VUELVE CON LA SUYA. Las tres usan el mismo `success_path`, así que
+        // al que acaba de bajarse a Mantenimiento (60 €/mes) se le decía «tu ciclo nuevo
+        // ya está en marcha»: justo lo contrario de lo que había hecho. El tipo de salida
+        // viaja en la vuelta porque el servidor ya lo sabe y aquí, tras el redirect de
+        // Stripe, no queda nada del estado de la pantalla.
+        const confirmado = {
+            salida: '¡Pago confirmado! Ya estás en Mantenimiento.',
+            cambiar: '¡Pago confirmado! Ya estás en tu plan nuevo.',
+        }[params.get('salida')] || '¡Pago confirmado! Tu ciclo nuevo ya está en marcha.';
+        (async () => {
+            try {
+                if (sessionId) {
+                    await api.post('/billing/checkout-session/sync', { session_id: sessionId });
+                }
+                await refreshProfile();
+                toast.success(confirmado);
+                navigate('/dashboard', { replace: true });
+            } catch {
+                // Que vea su pantalla y no un spinner eterno: recargar reintenta.
+                setConfirmando(false);
+                toast.error('No hemos podido confirmar el pago. Si te han cobrado, recarga en unos segundos.');
+            }
+        })();
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al volver de Stripe
+    }, []);
 
     const elegir = async (salida) => {
         // Seguir en el mismo plan solo se salta la pasarela cuando de verdad renueva solo,
@@ -61,7 +104,10 @@ const RenovacionPage = () => {
         try {
             const r = await api.post('/billing/checkout-session', {
                 plan: salida.plan,
-                success_path: '/dashboard?renovado=ok',
+                // Vuelve AQUÍ para confirmar el cobro antes de mandarle al panel, y con
+                // qué eligió: renovar, cambiar de plan y bajarse a Mantenimiento no se
+                // confirman con la misma frase.
+                success_path: `/renovacion?renovado=ok&salida=${salida.tipo}`,
                 cancel_path: '/renovacion',
             });
             if (r.data?.checkout_url) window.location.href = r.data.checkout_url;
@@ -72,10 +118,15 @@ const RenovacionPage = () => {
         }
     };
 
-    if (!datos) {
+    if (!datos || confirmando) {
         return (
-            <div className="min-h-[60vh] flex items-center justify-center">
+            <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
                 <Loader2 className="w-6 h-6 animate-spin text-brand" />
+                {/* Volver del pago y ver el balance del ciclo VIEJO, con su botón de
+                    renovar, parece que el cobro no ha entrado. */}
+                {confirmando && (
+                    <p className="text-sm text-muted-foreground">Confirmando tu pago...</p>
+                )}
             </div>
         );
     }
@@ -209,21 +260,28 @@ const RenovacionPage = () => {
             )}
             {/* El plan antiguo reabierto para los suyos: puede quedarse, pero esta vez tiene
                 que darle él, porque su plan ya no se cobra solo. Decirlo evita que se quede
-                esperando una renovación que no va a llegar. */}
-            {!motivo_cambio && !renueva_solo && salidas.some(s => s.tipo === 'renovar' && s.por_checkout) && (
+                esperando una renovación que no va a llegar.
+                Quién es «antiguo» lo dice `renovacion_legacy` y no `por_checkout`: desde el
+                24-08 a la pasarela va también el del catálogo, y con eso a un cliente de
+                nivel2 se le decía que su plan ya no se vende. */}
+            {!motivo_cambio && !renueva_solo && salidas.some(s => s.tipo === 'renovar' && s.renovacion_legacy) && (
                 <p className="text-sm text-muted-foreground mb-4" data-testid="aviso-renovacion-legacy">
                     Tu plan ya no se vende, pero puedes seguir en él. Eso sí, esta vez la
                     renovación la tienes que confirmar tú aquí.
                 </p>
             )}
             {/* Ningún plan renueva solo desde el 20-08: al que sigue en el catálogo también
-                hay que decírselo, o se queda esperando un cobro que no va a llegar. Renovar
-                antes de que acabe encadena el ciclo y no pierde ni una semana. */}
-            {!motivo_cambio && !renueva_solo && !salidas.some(s => s.tipo === 'renovar' && s.por_checkout) && !ciclo.ya_vencido && (
+                hay que decírselo, o se queda esperando un cobro que no va a llegar.
+                Y AL QUE YA HA VENCIDO TAMBIÉN SE LE DICE ALGO. Esto exigía `!ya_vencido`, y
+                en cuanto `ya_vencido` empezó a funcionar de verdad (24-08) el caducado del
+                catálogo se quedó sin una sola línea: «Tu ciclo ha terminado» y tres botones.
+                Lo que cambia con el ciclo vencido no es que haya que callarse, es que la
+                promesa de encadenar ya no le sirve: esa semana la ha perdido. */}
+            {!motivo_cambio && !renueva_solo && !salidas.some(s => s.tipo === 'renovar' && s.renovacion_legacy) && (
                 <p className="text-sm text-muted-foreground mb-4" data-testid="aviso-renovacion-manual">
-                    Tu plan no se renueva solo: cuando quieras seguir, la renovación la
-                    confirmas tú aquí. Si renuevas antes de que acabe, el ciclo nuevo empieza
-                    donde termina este y no pierdes ni una semana.
+                    Tu plan no se renueva solo: {ciclo.ya_vencido
+                        ? 'para volver a tenerlo, la renovación la confirmas tú aquí abajo.'
+                        : 'cuando quieras seguir, la renovación la confirmas tú aquí. Si renuevas antes de que acabe, el ciclo nuevo empieza donde termina este y no pierdes ni una semana.'}
                 </p>
             )}
 

@@ -8,6 +8,7 @@ import uuid
 import os
 import json
 import logging
+import re
 
 from core.database import db
 from core.dias_de_entreno import dias_de_entreno
@@ -36,7 +37,104 @@ async def get_current_routine(ctx = Depends(require_access("rutina"))):
     if not routine:
         return None
 
+    # TAMBIÉN AL LEER (24-08). Sanear solo al escribir deja fuera lo que YA está guardado:
+    # una fila vieja con las series en blanco seguía tumbando esta llamada con un 500, y el
+    # cliente se quedaba con «No hemos podido cargar tu rutina» y un «Volver a intentarlo»
+    # que no podía funcionar nunca. Aquí no se escribe en la base: se arregla lo que se
+    # manda a pintar, que es lo único que necesita el cliente para ver su rutina hoy.
+    routine["days"] = _rutina_pintable(routine.get("days"))
     return RoutineResponse(**routine)
+
+# ── LA PETICIÓN DE LA RUTINA DEL MES, APUNTADA (24-08) ───────────────────────────────
+#
+# Hasta hoy pulsar «Quiero mi rutina · 57 €» solo escribía un aviso en la campana del
+# equipo: no quedaba ni rastro en el perfil. El cliente pagaba, leía el mensaje, recargaba
+# la pantalla y volvía a ver el botón como si no hubiera pasado nada; y podía volver a
+# pulsarlo (pasadas 24 h la clave de idempotencia de Stripe ya no frena el segundo cargo).
+# Desde aquí la petición se guarda en su ficha y la pantalla la lee para decirle cuándo la
+# pidió en vez de volver a venderle lo mismo.
+#
+# LA RUTINA ES DEL MES, así que la petición vale un mes: pasado el plazo, si sigue sin
+# rutina, puede volver a pedirla. Sin plazo, quien no llegara a recibirla se quedaba sin
+# forma de reclamarla desde la app.
+#
+# Y SON DOS PUERTAS, no una: la misma rutina se pide desde aquí y marcando «Sí» en el
+# reporte mensual, que cobra igual y no deja rastro en la ficha. Por eso el candado
+# pregunta también por su último reporte (`_pedida_en_su_reporte`). Queda el otro sentido,
+# que no se arregla desde este fichero: el reporte le sigue preguntando a quien ya la pidió
+# aquí (`routes/reports.py` y `components/reports/ReporteMensual.jsx`).
+DIAS_QUE_VALE_LA_PETICION = 30
+
+
+def _peticion_de_rutina_viva(profile: Dict[str, Any], hoy) -> Optional[Dict[str, Any]]:
+    """La petición de la rutina del mes si todavía cuenta, o None."""
+    pedida = (profile or {}).get("rutina_mes_pedida") or {}
+    try:
+        cuando = datetime.fromisoformat(str(pedida.get("fecha"))).date()
+    except (TypeError, ValueError):
+        return None
+    return pedida if (hoy - cuando).days < DIAS_QUE_VALE_LA_PETICION else None
+
+
+async def _pedida_en_su_reporte(client_id: Optional[str], hoy) -> Optional[Dict[str, Any]]:
+    """La rutina del mes pedida por LA OTRA PUERTA: marcando «Sí, básica/avanzada» en el
+    reporte mensual (`routes/reports.py`, que cobra los 57 € y no escribe nada en la ficha).
+
+    Mirando solo `rutina_mes_pedida` el candado tapaba media puerta: quien la marcó en su
+    reporte el día 1 abría Mi rutina el día 5, veía el botón y pagaba OTRA VEZ. Y Stripe no
+    lo frena ni dentro de las 24 h, porque las claves de idempotencia de las dos puertas son
+    distintas (`rutina_del_mes:{perfil}:{report_id}` contra `...:None`,
+    `core/rutina_del_mes.py`). El segundo cargo de 57 € es el fallo caro de todo esto.
+
+    Se pregunta por el reporte y no por el aviso del equipo porque el reporte es el dato del
+    cliente: el aviso se puede archivar y el reporte no. Con `hasta_hoy` por el punto 22: hay
+    reportes importados de Calma fechados en 2028 y uno de esos, sin tope, dejaría a su
+    dueño sin poder pedir la rutina nunca más.
+    """
+    if not client_id:
+        return None
+    from datetime import timedelta
+    from core.tiempo import a_madrid
+    desde = (hoy - timedelta(days=DIAS_QUE_VALE_LA_PETICION)).isoformat()
+    reporte = await db.reports.find_one(
+        hasta_hoy({"client_id": client_id,
+                   "entreno.rutina_del_mes": {"$in": ["basica", "avanzada"]},
+                   "created_at": {"$gte": desde}}),
+        {"_id": 0, "created_at": 1, "entreno": 1},
+        sort=[("created_at", -1)],
+    )
+    if not reporte:
+        return None
+    cuando = a_madrid(reporte.get("created_at"))
+    return {"fecha": (cuando.date() if cuando else hoy).isoformat(),
+            "modalidad": (reporte.get("entreno") or {}).get("rutina_del_mes"),
+            "origen": "reporte_mensual"}
+
+
+async def _peticion_viva(profile: Dict[str, Any], hoy) -> Optional[Dict[str, Any]]:
+    """La petición de la rutina del mes que todavía cuenta, venga por la puerta que venga:
+    la de esta pantalla (apuntada en la ficha) o la del reporte mensual."""
+    return (_peticion_de_rutina_viva(profile, hoy)
+            or await _pedida_en_su_reporte((profile or {}).get("id"), hoy))
+
+
+@router.get("/quiero-la-rutina")
+async def estado_de_la_peticion(user = Depends(get_current_user)):
+    """¿Ya pidió la rutina del mes, y cuándo? Lo que la pantalla necesita para no volver
+    a enseñarle el botón de 57 € a quien ya la pagó."""
+    from core.tiempo import hoy_madrid
+    profile = await db.client_profiles.find_one(
+        {"user_id": user["id"]}, {"_id": 0, "id": 1, "rutina_mes_pedida": 1})
+    pedida = await _peticion_viva(profile, hoy_madrid())
+    if not pedida:
+        return {"pedida": False}
+    return {"pedida": True, "fecha": pedida.get("fecha"),
+            "modalidad": pedida.get("modalidad"),
+            # Del cobro solo se habla cuando consta que NO entró. De la pedida en el reporte
+            # aquí no sabemos si se cobró (eso vive en el aviso del equipo), y decirle «se
+            # quedó pendiente» a quien ya pagó asusta para nada.
+            "cobro_pendiente": pedida.get("cobrado") is False}
+
 
 @router.post("/quiero-la-rutina")
 async def quiero_la_rutina(data: dict, user = Depends(get_current_user)):
@@ -48,6 +146,8 @@ async def quiero_la_rutina(data: dict, user = Depends(get_current_user)):
     cuentas de pruebas) y el aviso al equipo con el estado del cobro. Si el cobro no
     entra, la petición queda avisada igual: lo que no se hace es perderla.
     """
+    from core.tiempo import hoy_madrid
+
     modalidad = str((data or {}).get("modalidad") or "").strip()
     if modalidad not in ("basica", "avanzada"):
         raise HTTPException(status_code=400, detail="Dinos si la quieres básica o avanzada.")
@@ -61,10 +161,45 @@ async def quiero_la_rutina(data: dict, user = Depends(get_current_user)):
     if activa:
         raise HTTPException(status_code=400, detail="Ya tienes una rutina activa.")
 
+    # Ni el que ya la pidió este mes, POR CUALQUIERA DE LAS DOS PUERTAS (aquí o marcándola
+    # en su reporte mensual): el segundo cargo de 57 € es el fallo caro y se para antes de
+    # llamar a `cobrar`, que es lo irreversible.
+    if await _peticion_viva(profile, hoy_madrid()):
+        raise HTTPException(
+            status_code=400,
+            detail="Ya nos pediste tu rutina y estamos con ella. Te llega en unos días.")
+
     from core.avisos_equipo import avisar_al_equipo
     from core.rutina_del_mes import PRECIO_EUR, cobrar
 
     cobro = await cobrar(profile, modalidad, None)
+
+    # LO PRIMERO DESPUÉS DEL COBRO, que es lo irreversible: dejar constancia en su ficha.
+    # De paso se le quita el aplazamiento («pregúntame en una semana»), igual que hace el
+    # reporte al contestar (routes/reports.py): el que aplazó y luego compró recibía igual
+    # el recordatorio «¿Te preparamos la rutina del mes?».
+    #
+    # De todo lo que se guarda aquí, la pantalla solo lee `fecha`, `modalidad` y `cobrado`.
+    # `cuando`, `motivo`, `payment_intent` e `importe_eur` son TRAZABILIDAD y no los lee
+    # ningún endpoint: son con lo que se contesta «¿cuándo la pidió y por qué no se le
+    # cobró?» mirando su ficha, y el `payment_intent` es lo que se busca en Stripe el día que
+    # haya que devolverle el dinero. `origen` hoy vale siempre lo mismo porque la otra puerta
+    # (el reporte mensual) no escribe aquí: se lee desde `_pedida_en_su_reporte`.
+    await db.client_profiles.update_one(
+        {"id": profile["id"]},
+        {"$set": {"rutina_mes_pedida": {
+            "fecha": hoy_madrid().isoformat(),
+            "cuando": datetime.now(timezone.utc).isoformat(),
+            "modalidad": modalidad,
+            "cobrado": bool(cobro["cobrado"]),
+            "motivo": cobro.get("motivo"),
+            "payment_intent": cobro.get("payment_intent"),
+            "importe_eur": PRECIO_EUR,
+            "origen": "pantalla_rutina",
+        }},
+         "$unset": {"rutina_mes_aplazada_hasta": ""}},
+    )
+
     nombre = user.get("name") or user.get("email") or "Un cliente"
     etiqueta = "básica" if modalidad == "basica" else "avanzada"
     if cobro["cobrado"]:
@@ -94,6 +229,8 @@ async def quiero_la_rutina(data: dict, user = Depends(get_current_user)):
     return {
         "ok": True,
         "cobrado": cobro["cobrado"],
+        "pedida_el": hoy_madrid().isoformat(),
+        "modalidad": modalidad,
         "mensaje": ("Hecho. Te hemos cobrado los 57 € y el equipo se pone con tu rutina: "
                     "la tendrás cargada aquí en cuanto esté."
                     if cobro["cobrado"] else
@@ -111,8 +248,22 @@ async def get_routine_history(ctx = Depends(require_access("rutina"))):
         {"client_id": profile["id"]},
         {"_id": 0}
     ).sort("created_at", -1).to_list(20)
-    
-    return [RoutineResponse(**r) for r in routines]
+
+    # UNA RUTINA VIEJA MALA NO PUEDE TUMBAR LA PANTALLA (24-08). Aquí vienen también las
+    # `inactive`, que nadie sanea nunca, y la pantalla pide esto y /current a la vez: si una
+    # sola de las veinte no se puede construir, el cliente se quedaba sin ver la rutina que
+    # tiene puesta y perfecta. Se sanea lo que se puede y la que aun así no se pueda pintar
+    # se cae ella sola, con su motivo en el log para quien tenga que arreglar el dato.
+    fuera = []
+    for r in routines:
+        r["days"] = _rutina_pintable(r.get("days"))
+        try:
+            fuera.append(RoutineResponse(**r))
+        except Exception as e:                     # noqa: BLE001
+            logging.getLogger("uvicorn.error").warning(
+                "historial de rutinas: la rutina %s de %s no se puede pintar: %s",
+                r.get("id"), profile["id"], e)
+    return fuera
 
 
 # ==================== ADMIN ROUTES ====================
@@ -120,9 +271,35 @@ async def get_routine_history(ctx = Depends(require_access("rutina"))):
 admin_router = APIRouter(prefix="/admin/routines", tags=["admin-routines"])
 
 
+# ── EL PDF TAMBIÉN ES RUTINA (24-08) ─────────────────────────────────────────────────
+#
+# El PDF es la vía de entrega real -- «se siguen generando como hasta ahora», bloque 11 del
+# doc 19-08 -- y para el panel de Rutinas no existía: el cliente que ya tenía la suya
+# entregada salía en rojo como trabajo pendiente, entraba en los grupos del «Ponérsela a los
+# N» y se le podía generar encima una rutina de IA que no necesitaba. Su ficha sí sabía
+# decirlo («Rutina entregada en PDF el ...»).
+#
+# UNA SOLA FORMA DE PREGUNTARLO, y agrupando EN LA BASE: en `rutina_pdfs` cada fila lleva el
+# PDF entero dentro (hasta `MAX_PDF_BYTES`, 15 MB), así que lo que no se pida no viaja y
+# vuelve una fila por cliente en vez de una por PDF. Lo que falta es el ÍNDICE por
+# `client_id`: sin él esto recorre la colección entera, y esta es justo la pantalla donde ya
+# hubo que arreglar siete segundos (ver `_los_que_no_tienen_rutina`). El índice va en
+# `core/database.create_indexes` -- fichero de otro bloque -- y de paso arregla los
+# `find_one(..., sort=[("uploaded_at", -1)])` del PDF, que recorren lo mismo desde el 21-08.
+async def _ultimo_pdf_por_cliente() -> Dict[str, str]:
+    """{client_id: fecha del último PDF de rutina que se le subió}."""
+    fuera: Dict[str, str] = {}
+    async for fila in db.rutina_pdfs.aggregate(
+            [{"$group": {"_id": "$client_id", "ultimo": {"$max": "$uploaded_at"}}}]):
+        if fila.get("_id"):
+            fuera[fila["_id"]] = fila.get("ultimo") or ""
+    return fuera
+
+
 @admin_router.get("/overview")
 async def routines_overview(user = Depends(get_admin_user)):
-    """Vista general para el panel: cada cliente activo y si tiene rutina activa o no."""
+    """Vista general para el panel: cada cliente activo y si tiene rutina PUESTA o no,
+    sea la estructurada (`db.routines`) o la entregada en PDF."""
     # El equipo fuera, como en el resto del panel desde el 09-08. Aquí seguían dentro y
     # salían "Admin" y los entrenadores entre los clientes sin rutina, contando como
     # trabajo pendiente: nadie le va a poner una rutina al perfil de pruebas del admin.
@@ -142,6 +319,8 @@ async def routines_overview(user = Depends(get_admin_user)):
         {"status": "active"}, {"_id": 0, "client_id": 1, "days": 1, "created_at": 1}
     ).to_list(2000)
     rmap = {r["client_id"]: r for r in routines}
+    # El que tiene su rutina entregada en PDF no es trabajo pendiente: ver arriba.
+    pdfs = await _ultimo_pdf_por_cliente()
 
     out = []
     for p in profiles:
@@ -149,12 +328,17 @@ async def routines_overview(user = Depends(get_admin_user)):
         if not u:
             continue
         r = rmap.get(p["id"])
+        pdf = pdfs.get(p["id"])
         out.append({
             "client_id": p["id"],
             "name": u.get("name"),
             "email": u.get("email"),
             "plan": p.get("plan"),
-            "has_routine": bool(r),
+            "has_routine": bool(r) or bool(pdf),
+            # Cuál de las dos tiene: la estructurada se puede abrir por dentro (días y
+            # ejercicios) y el PDF no, así que la pantalla no puede tratarlos igual.
+            "tiene_pdf": bool(pdf),
+            "pdf_uploaded_at": pdf or None,
             "training_days": len([d for d in r.get("days", []) if not d.get("is_rest")]) if r else 0,
             "routine_created_at": r.get("created_at") if r else None,
         })
@@ -242,6 +426,76 @@ Genera una rutina completa de 7 días. Responde SOLO con el JSON."""
             "note": "Rutina por defecto debido a error en generación IA"
         }
 
+# ─────────────────────────────────────────────────────────────────────────────────────
+# LO QUE SE GUARDA TIENE QUE PODERSE PINTAR (24-08)
+#
+# `Exercise` (models/common.py) pide las series como ENTERO. El campo Series del editor de
+# la biblioteca admite el blanco y el generador puede devolver un rango («3-4»), y nada
+# validaba entre lo que se escribe y lo que se guarda: con un solo ejercicio así,
+# GET /routines/current revienta con un 500 y el cliente lee «Sin rutina asignada»
+# mientras el panel le dice «Activa». Nadie se entera hasta que el cliente pregunta.
+#
+# Por eso se sanea al ESCRIBIR, en los sitios que escriben rutina de un cliente (la de la
+# IA, la de la biblioteca y la de la asignación en bloque), y TAMBIÉN AL LEER en /current y
+# /history: lo que ya está guardado no lo arregla ningún candado nuevo, y esa fila vieja es
+# justo la que deja al cliente mirando un error con un botón de reintentar que no sirve.
+# ─────────────────────────────────────────────────────────────────────────────────────
+
+def _series(valor: Any) -> int:
+    """Las series de un ejercicio, siempre un entero entre 1 y 99.
+
+    Se queda con el primer número que traiga, que es lo que salva el rango del generador
+    («3-4» son 3 series y una nota de reps, no un error que deba costar la rutina entera).
+    Sin ningún número, una: un número raro se ve en la pantalla y el entrenador lo corrige;
+    una rutina que no se puede pintar deja al cliente sin nada y sin decirle por qué.
+    """
+    if isinstance(valor, (int, float)) and not isinstance(valor, bool):
+        n = int(valor)
+    else:
+        encontrado = re.search(r"\d+", str(valor or ""))
+        n = int(encontrado.group()) if encontrado else 1
+    return min(max(n, 1), 99)
+
+
+def _rutina_pintable(dias: Any) -> Any:
+    """Los días, con TODO lo que el modelo exige: `day` en el día (RoutineDay) y `name`,
+    `sets`, `reps` y `rest` en el ejercicio (Exercise, models/common.py).
+
+    Estaban solo los tres del ejercicio y faltaban los dos nombres: un ejercicio de la IA
+    sin `name`, o un día sin `day`, reventaba `GET /current` con el mismo 500 y el mismo
+    «Sin rutina» que esto venía a cerrar. Sin nombre no hay nada que pintar, así que se cae
+    ese ejercicio (o ese día) y no la rutina entera, que es la regla de la biblioteca
+    (`_dias_limpios`) desde el 17-08.
+
+    No toca nada más a propósito: por aquí pasan rutinas de la IA y de la biblioteca con
+    campos que la limpieza de la biblioteca no conoce (el cardio del día, el vídeo del
+    ejercicio) y que no se pueden perder por el camino.
+    """
+    limpios = []
+    for d in dias or []:
+        if not isinstance(d, dict):
+            continue
+        dia = str(d.get("day") or "").strip()
+        if not dia:
+            continue
+        d["day"] = dia
+        ejercicios = []
+        for e in d.get("exercises") or []:
+            if not isinstance(e, dict):
+                continue
+            nombre = str(e.get("name") or "").strip()
+            if not nombre:
+                continue
+            e["name"] = nombre
+            e["sets"] = _series(e.get("sets"))
+            e["reps"] = str(e.get("reps") or "")
+            e["rest"] = str(e.get("rest") or "")
+            ejercicios.append(e)
+        d["exercises"] = ejercicios
+        limpios.append(d)
+    return limpios
+
+
 @admin_router.post("/save", response_model=RoutineResponse)
 async def save_routine(client_id: str, routine: Dict[str, Any], user = Depends(get_admin_user)):
     """Guardar rutina para un cliente."""
@@ -257,7 +511,7 @@ async def save_routine(client_id: str, routine: Dict[str, Any], user = Depends(g
     routine_doc = {
         "id": routine_id,
         "client_id": client_id,
-        "days": routine.get("days", []),
+        "days": _rutina_pintable(routine.get("days", [])),
         "trainer_notes": routine.get("trainer_notes"),
         "status": "active",
         "created_at": datetime.now(timezone.utc).isoformat()
@@ -380,11 +634,16 @@ def _como_se_llama_el_grupo(clave: Dict[str, Any]) -> str:
 
 
 async def _los_que_no_tienen_rutina(user) -> List[Dict[str, Any]]:
-    """Los clientes cuyo plan incluye rutina y no tienen ninguna activa."""
+    """Los clientes cuyo plan incluye rutina y no tienen ninguna PUESTA: ni estructurada
+    activa ni entregada en PDF (24-08, ver `_ultimo_pdf_por_cliente`)."""
     from core.plan_access import plan_grants_feature
     from routes.admin import _fuera_el_equipo
 
     con_rutina = set(await db.routines.distinct("client_id", {"status": "active"}))
+    # Con el PDF subido YA TIENE SU RUTINA: es la vía de entrega real y quien la tiene no es
+    # trabajo pendiente. Sin esto entraba en los grupos del «Ponérsela a los N» y la
+    # asignación en bloque le machacaba con una rutina de IA la que ya le habían hecho.
+    con_rutina |= set(await _ultimo_pdf_por_cliente())
     filtro: Dict[str, Any] = {**await _fuera_el_equipo(),
                               "status": {"$in": ["activo", "pago_pendiente"]}}
     # Un entrenador solo ve y toca a los suyos, la misma regla que la ficha.
@@ -525,11 +784,14 @@ async def asignar_rutinas_en_bloque(data: Dict[str, Any], user = Depends(get_adm
                 await db.routines.insert_one({
                     "id": str(uuid.uuid4()),
                     "client_id": p["id"],
-                    "days": rutina.get("days", []),
+                    "days": _rutina_pintable(rutina.get("days", [])),
                     "trainer_notes": rutina.get("trainer_notes"),
                     "status": "active",
                     "created_at": datetime.now(timezone.utc).isoformat(),
-                    # De dónde salió, para poder deshacerlo y para saber cuál se puso a mano.
+                    # De dónde salió y quién la puso: para poder contestar «¿por qué tiene
+                    # esta rutina?» mirando la fila. Decía «para poder deshacerlo» y ese
+                    # deshacer NO existe -- no hay endpoint ni botón que lea estos campos --,
+                    # así que la etiqueta engañaba al que viniera a buscarlo.
                     "origen": "bloque",
                     "grupo": gid,
                     "puesta_por": user.get("id"),
@@ -664,7 +926,9 @@ def _dias_limpios(dias: Any) -> List[Dict[str, Any]]:
                 continue
             ejercicios.append({
                 "name": nom[:120],
-                "sets": e.get("sets"),
+                # Entero siempre: ver `_series`. Guardar aquí el '' del campo en blanco
+                # dejaba sin rutina a todo el que recibiera esta plantilla.
+                "sets": _series(e.get("sets")),
                 "reps": str(e.get("reps") or "")[:40],
                 "rest": str(e.get("rest") or "")[:40],
                 # Donde cabe la ejecución y las notas del entrenador.
@@ -765,7 +1029,9 @@ async def asignar_de_biblioteca(rutina_id: str, data: Dict[str, Any],
     rutina = {
         "id": str(uuid.uuid4()),
         "client_id": client_id,
-        "days": plantilla.get("days", []),
+        # También aquí: en la biblioteca pueden quedar plantillas guardadas antes de que
+        # las series se saneasen al escribir, y esa copia es la que va a abrir el cliente.
+        "days": _rutina_pintable(plantilla.get("days", [])),
         "trainer_notes": plantilla.get("trainer_notes"),
         "status": "active",
         "created_at": datetime.now(timezone.utc).isoformat(),

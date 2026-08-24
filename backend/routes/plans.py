@@ -7,7 +7,6 @@ El catálogo refleja el documento "JG - Catálogo de Planes y Membresías".
 from fastapi import APIRouter, Body, HTTPException, Depends
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
-import os
 import re
 import uuid
 
@@ -209,15 +208,15 @@ async def guardar_quiz_venta(data: Dict[str, Any] = Body(default={})):
 admin_router = APIRouter(prefix="/admin/plans", tags=["admin-plans"])
 
 
-def _tiene_price_en_stripe(plan: Dict[str, Any]) -> bool:
-    """Si este plan puede cobrarse hoy: tiene variable de Price y la variable trae un id.
-
-    Sin esto el checkout revienta con un 503 y un mensaje que al cliente no le dice nada.
-    Es lo que decide si el interruptor de «renovable por los suyos» se puede encender: de
-    poco sirve reabrirle el plan a alguien si al darle a pagar no hay nada que cobrarle.
-    """
-    env = (plan.get("stripe_price_env") or "").strip()
-    return bool(env and os.environ.get(env, "").strip())
+# AQUI VIVIA `_tiene_price_en_stripe`, Y CON EL EL CAMPO `tiene_price_en_stripe` DE LA
+# RESPUESTA (borrados el 24-08). Decia si el plan tenia Price de Stripe, y su unico lector
+# era el panel, que con eso bloqueaba el interruptor de «renovable por los suyos» y escribia
+# «no se le podria cobrar la renovacion». Ese motivo dejo de ser cierto el 20-08: la
+# renovacion de un plan retirado se cobra con el precio congelado del cliente EN LINEA, sin
+# Price de catalogo (routes/billing.py), y el unico cerrojo que queda es que el plan este en
+# legacy (admin_update_plan, aqui debajo). Quitado el bloqueo del panel, el campo no lo leia
+# nadie: un dato que se calcula en cada peticion y no decide nada acaba siendo la regla que
+# alguien se cree.
 
 
 @admin_router.get("")
@@ -228,9 +227,6 @@ async def admin_list_plans(user=Depends(get_admin_only_user)):
     catalog = merged_catalog(overrides)
     for code, p in catalog.items():
         p["has_override"] = bool(overrides.get(code))
-        # Para que el panel pueda dejar el interruptor bloqueado en vez de dejar encender
-        # algo que despues no cobra.
-        p["tiene_price_en_stripe"] = _tiene_price_en_stripe(p)
     return catalog
 
 

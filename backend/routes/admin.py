@@ -162,6 +162,31 @@ def _semaforo_del_cliente(profile: Dict[str, Any], hablado: Dict[str, str],
     return {**celdas, "peor": semaforo.peor(*[c["estado"] for c in celdas.values()])}
 
 
+async def _ajustes_al_dia(perfiles: List[Dict[str, Any]]) -> None:
+    """Mete en cada perfil el último ajuste VIGENTE, el del histórico (core/ultimo_ajuste).
+
+    La migración de Calma inserta en `macro_history` sin llamar a `marcar_ajuste`, así que
+    `client_profiles.ultimo_ajuste` se queda atrás: medidos 52 de 200 perfiles, uno decía
+    «15 de junio» con el último ajuste real del 17 de agosto. Se machaca el campo ANTES de
+    que lo lean el semáforo y la fila que viaja al front, que es de donde salen la casilla
+    «ajuste», la columna «Sin tocar» y el orden ?orden=sin_tocar.
+
+    Vive aquí y no en cada endpoint porque los TRES sitios que contestan esa pregunta -- la
+    lista de clientes, los contadores de la portada y «Esta semana te tocan» -- se pintan en
+    la MISMA pantalla, que los pide a la vez. Corregir uno solo deja el KPI «ajuste N»
+    contando más rojos de los que hay justo al lado de una tabla que ya dice la fecha buena:
+    la misma contradicción de partida con otra cara. Una sola consulta para toda la lista:
+    aquí se cargan cientos de perfiles.
+    """
+    from core.tiempo import hoy_madrid
+    from core.ultimo_ajuste import ajuste_de, ultimos_ajustes_vigentes
+    hoy = hoy_madrid().isoformat()
+    vigentes = await ultimos_ajustes_vigentes(
+        db, [p["id"] for p in perfiles if p.get("id")], hoy)
+    for p in perfiles:
+        p["ultimo_ajuste"] = ajuste_de(p, vigentes, hoy)
+
+
 # `precio_de_ciclo` se mudó a models/user.py y se importa arriba: lo necesitan también el
 # perfil del cliente y su ficha, y viviendo aquí solo lo tenía el panel (punto 2.4c).
 
@@ -345,6 +370,13 @@ async def get_all_clients(
         {"_id": 0, "client_id": 1, "created_at": 1}).to_list(len(profiles) or 1)
     rutina_de = {r["client_id"]: r for r in rutinas if r.get("client_id")}
     hoy_es = (_a_madrid(ahora) or ahora).date()
+
+    # La fecha buena de «cuándo se le tocó por última vez», la del histórico: la tarjeta
+    # «Esta semana te tocan» ya la resolvía así y esta lista mandaba el campo crudo, con lo
+    # que la misma portada daba dos fechas y el botón «Ver los N ordenados» llevaba de la
+    # tarjeta buena a una tabla ordenada por la mala. Va antes del bucle porque de ese campo
+    # comen el semáforo y la fila entera (ver `_ajustes_al_dia`).
+    await _ajustes_al_dia(profiles)
 
     result = []
     for profile in profiles:
@@ -1717,6 +1749,12 @@ async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
         if ext and uid and ext > (hablado_a.get(uid) or ""):
             hablado_a[uid] = ext
 
+    # Y LA MISMA FECHA DE AJUSTE QUE LA LISTA. Este contador es el «ajuste N» del KPI de la
+    # portada, que se pinta en la misma pantalla que la tabla de clientes y que «Esta semana
+    # te tocan»: leyendo el campo crudo del perfil (52 de 200 atrasados) decía más rojos de
+    # los que había justo al lado de las dos cosas que ya dicen la fecha buena.
+    await _ajustes_al_dia(active_profiles)
+
     # POR CELDA, no por fila. Con cuatro celdas, "tiene alguna en rojo" es cierto para casi
     # todo el mundo y volveriamos a la alerta que nadie mira. Lo que sirve es saber CUANTOS
     # y EN QUE: "78 sin mandar reporte a tiempo, 72 sin pesarse, 33 sin que nadie les hable".
@@ -1890,13 +1928,11 @@ async def get_todo_semana(user = Depends(get_admin_user)):
     ).to_list(len(uids) or 1)
     umap = {u["id"]: u for u in users}
 
-    # El último ajuste VIGENTE de cada uno, en una sola consulta al histórico (el porqué,
-    # en core/ultimo_ajuste): el campo del perfil se queda atrás con los migrados.
-    from core.tiempo import hoy_madrid
-    from core.ultimo_ajuste import ajuste_de, ultimos_ajustes_vigentes
-    hoy_es = hoy_madrid().isoformat()
-    ajustes_del_historico = await ultimos_ajustes_vigentes(
-        db, [p["id"] for p in profiles], hoy_es)
+    # El último ajuste VIGENTE de cada uno, en una sola consulta al histórico: el campo del
+    # perfil se queda atrás con los migrados (el porqué, en `_ajustes_al_dia`). Los tres
+    # sitios de este fichero que contestan «cuándo se le tocó» pasan por ahí: mientras
+    # fueron tres copias de las mismas tres líneas, arreglar una dejó las otras mintiendo.
+    await _ajustes_al_dia(profiles)
 
     # Rutinas activas y reportes recientes: una consulta cada uno (no N+1). De la rutina
     # se trae también su fecha: desde el doc del 19-08 la semana de RUTINA es la que
@@ -1989,10 +2025,10 @@ async def get_todo_semana(user = Depends(get_admin_user)):
         # muevan los macros, y el que nunca los ha tenido movidos va arriba del todo -- que
         # es justo el que se pierde cuando esto se lleva en una hoja aparte.
         if hab.get("calculadora") == "personalizado":
-            # La fecha sale del HISTÓRICO cuando este va por delante del campo del perfil
-            # (core/ultimo_ajuste): la migración de Calma escribe filas sin marcar el
-            # ajuste y el panel se quedaba con la fecha vieja.
-            ajuste_vigente = ajuste_de(p, ajustes_del_historico, hoy_es)
+            # La fecha sale del HISTÓRICO cuando este va por delante del campo del perfil:
+            # la migración de Calma escribe filas sin marcar el ajuste y el panel se
+            # quedaba con la fecha vieja. Ya viene corregida de `_ajustes_al_dia`.
+            ajuste_vigente = p.get("ultimo_ajuste")
             desde_ajuste = dias_desde(ajuste_vigente, now)
             te_tocan.append({
                 **base,

@@ -233,8 +233,9 @@ const PonerlesRutinaAVarios = ({ api, onHecho }) => {
     );
 };
 
-// Vista general de rutinas: quien tiene rutina activa y quien no.
-// La rutina se genera/edita dentro de la ficha del cliente (pestaña Entreno).
+// Vista general de rutinas: quien tiene su rutina puesta (estructurada o en PDF) y quien no.
+// La rutina se genera y se asigna dentro de la ficha del cliente (pestaña Entreno); editarle
+// un ejercicio a un cliente concreto todavía no se puede desde ninguna pantalla.
 const AdminRoutinesPage = () => {
     const { api, planCatalog } = useAuth();
     const navigate = useNavigate();
@@ -280,10 +281,14 @@ const AdminRoutinesPage = () => {
     const laPagan = rows.filter(r => pagaRutina(r.plan));
     const laPaganSinRutina = laPagan.filter(r => !r.has_routine).length;
 
-    // Las dos columnas solo hablan de rutinas que existen. Si no hay ninguna, son dos
-    // columnas de guiones: «o se rellenan o se quitan», y aquí se quitan solas en cuanto
-    // no hay nada que enseñar, y vuelven cuando lo haya.
-    const hayRutinas = withRoutine > 0;
+    // Cada columna se enseña solo si tiene algo que decir: «o se rellenan o se quitan».
+    // Los DÍAS solo los tiene la rutina estructurada (un PDF no se puede abrir por dentro),
+    // así que colgarla de `withRoutine` -- que desde el 24-08 cuenta también los PDF --
+    // dejaba esa columna entera a guiones en una casa que entregue todo en PDF. La FECHA la
+    // tienen las dos, y la del PDF es la que dice si esa rutina es de este mes o de marzo.
+    const hayDias = rows.some(r => r.routine_created_at);
+    const hayFechas = hayDias || rows.some(r => r.pdf_uploaded_at);
+    const columnas = 4 + (hayDias ? 1 : 0) + (hayFechas ? 1 : 0);
 
     if (loading) return <div className="p-6 bg-[#0A0A0A] min-h-screen"><div className="animate-pulse space-y-4"><div className="h-8 bg-[#222] rounded w-1/4" /><div className="h-96 bg-[#111] rounded-xl" /></div></div>;
 
@@ -292,7 +297,9 @@ const AdminRoutinesPage = () => {
             <div>
                 <h1 className="text-2xl font-bold text-white tracking-tight" style={{ fontFamily: 'Barlow Condensed' }}>RUTINAS</h1>
                 <p className="text-white/40 text-sm">
-                    {withRoutine} de {rows.length} clientes con rutina activa
+                    {/* «Con rutina puesta» y no «activa»: desde el 24-08 cuenta también la
+                        entregada en PDF, que es la vía de entrega real (bloque 11, 19-08). */}
+                    {withRoutine} de {rows.length} clientes con rutina puesta
                     {rows.length - withRoutine > 0 && <span className="text-yellow-400"> · {rows.length - withRoutine} sin rutina</span>}
                 </p>
                 {/* El número que de verdad es una tarea: a los demás no se les prometió. */}
@@ -329,8 +336,8 @@ const AdminRoutinesPage = () => {
                                     <th className="px-4 py-3">Cliente</th>
                                     <th className="px-4 py-3 hidden sm:table-cell">Plan</th>
                                     <th className="px-4 py-3">Rutina</th>
-                                    {hayRutinas && <th className="px-4 py-3 hidden md:table-cell">Días de entreno</th>}
-                                    {hayRutinas && <th className="px-4 py-3 hidden lg:table-cell">Generada</th>}
+                                    {hayDias && <th className="px-4 py-3 hidden md:table-cell">Días de entreno</th>}
+                                    {hayFechas && <th className="px-4 py-3 hidden lg:table-cell">Generada</th>}
                                     <th className="px-4 py-3 text-right"></th>
                                 </tr>
                             </thead>
@@ -351,23 +358,30 @@ const AdminRoutinesPage = () => {
                                             )}
                                         </td>
                                         <td className="px-4 py-3">
-                                            {r.has_routine
+                                            {/* «En PDF» no es lo mismo que «Activa»: la entregada en PDF no
+                                                se puede abrir por dentro desde aquí, pero está puesta y no
+                                                es trabajo pendiente. */}
+                                            {r.routine_created_at
                                                 ? <Badge className="bg-green-500/15 text-green-500 border-0">Activa</Badge>
-                                                : <Badge className={`border-0 ${pagaRutina(r.plan) ? 'bg-red-500/15 text-red-400' : 'bg-white/5 text-white/40'}`}>
-                                                    Sin rutina
-                                                </Badge>}
+                                                : r.tiene_pdf
+                                                    ? <Badge className="bg-green-500/15 text-green-500 border-0">En PDF</Badge>
+                                                    : <Badge className={`border-0 ${pagaRutina(r.plan) ? 'bg-red-500/15 text-red-400' : 'bg-white/5 text-white/40'}`}>
+                                                        Sin rutina
+                                                    </Badge>}
                                         </td>
-                                        {hayRutinas && <td className="px-4 py-3 text-white/60 hidden md:table-cell">{r.has_routine ? `${r.training_days} días` : '-'}</td>}
-                                        {hayRutinas && (
+                                        {hayDias && <td className="px-4 py-3 text-white/60 hidden md:table-cell">{r.training_days ? `${r.training_days} días` : '-'}</td>}
+                                        {hayFechas && (
                                             <td className="px-4 py-3 text-white/40 text-xs hidden lg:table-cell">
-                                                {r.routine_created_at ? new Date(r.routine_created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
+                                                {r.routine_created_at || r.pdf_uploaded_at
+                                                    ? new Date(r.routine_created_at || r.pdf_uploaded_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
+                                                    : '-'}
                                             </td>
                                         )}
                                         <td className="px-4 py-3 text-right"><ChevronRight className="w-4 h-4 text-white/30 inline" /></td>
                                     </tr>
                                 ))}
                                 {filtered.length === 0 && (
-                                    <tr><td colSpan={hayRutinas ? 6 : 4} className="px-4 py-10 text-center text-white/30">
+                                    <tr><td colSpan={columnas} className="px-4 py-10 text-center text-white/30">
                                         <Dumbbell className="w-8 h-8 mx-auto mb-2 text-white/15" />
                                         {onlyMissing ? 'Todos los clientes tienen rutina' : 'Sin clientes'}
                                     </td></tr>
@@ -377,7 +391,10 @@ const AdminRoutinesPage = () => {
                     </div>
                 </CardContent>
             </Card>
-            <p className="text-white/25 text-xs">La rutina se genera y edita dentro de la ficha del cliente, pestaña Entreno.</p>
+            {/* Decía «se genera y EDITA en la ficha» y la ficha no la edita: la pinta. Para
+                cambiarle un ejercicio a alguien hay que volver a generarla o asignarle otra
+                plantilla. Mientras no exista el editor por cliente, aquí no se promete. */}
+            <p className="text-white/25 text-xs">La rutina se genera y se asigna desde la ficha del cliente, pestaña Entreno.</p>
         </div>
     );
 };

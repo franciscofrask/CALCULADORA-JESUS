@@ -11,6 +11,23 @@ const DAYS_ES = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'
 const DAY_LABELS = { lunes: 'L', martes: 'M', 'miércoles': 'X', jueves: 'J', viernes: 'V', 'sábado': 'S', domingo: 'D' };
 const slug = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
+// Lo que se le dice a quien YA pidió su rutina del mes. La fecha viene como día suelto
+// («2026-08-24») y se monta a mediodía a propósito: a las 00:00 el huso se la lleva al día
+// anterior y le diríamos que la pidió un día antes de pedirla.
+const textoDeLaPeticion = (p) => {
+    if (!p) return '';
+    const cual = p.modalidad === 'avanzada' ? 'avanzada' : 'básica';
+    const cuando = p.fecha
+        ? new Date(`${p.fecha}T12:00:00`).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })
+        : null;
+    return (cuando ? `Nos pediste tu rutina ${cual} el ${cuando}.` : `Nos pediste tu rutina ${cual}.`)
+        + ' El equipo se pone con ella y la tendrás aquí en cuanto esté.'
+        // Del cobro solo se habla cuando el servidor dice que NO entró. Antes esto colgaba
+        // de `!cobrado`, y la petición que llega del reporte mensual no trae ese dato: al
+        // que ya había pagado se le decía «el cobro se quedó pendiente» sin ser verdad.
+        + (p.cobro_pendiente ? ' El cobro se quedó pendiente: te escribimos para resolverlo.' : '');
+};
+
 // Fuera del componente a propósito, por lo mismo que el marco de RecuperarPage (13-08):
 // definido dentro, cada render creaba una función nueva y React remontaba la página entera
 // en vez de actualizarla. Aquí no hay ningún campo que escribir, así que no se pierde el
@@ -170,6 +187,18 @@ const RoutinePage = () => {
     })();
     const [comprando, setComprando] = useState(null);      // null | 'eligiendo' | 'basica' | 'avanzada'
     const [compraHecha, setCompraHecha] = useState(null);  // el mensaje del servidor
+    // LA PETICIÓN QUE YA HIZO (24-08). Hasta hoy la compra solo vivía en el estado de
+    // React: el cliente pagaba 57 €, recargaba la pantalla y volvía a ver el botón como si
+    // no hubiera pasado nada, con el segundo cargo a un clic. Ahora el servidor la apunta
+    // en su ficha y la pantalla la pregunta al abrirse.
+    const [peticion, setPeticion] = useState(null);
+    const cargarPeticion = React.useCallback(() => {
+        if (rutinaIncluida) return;   // su plan la lleva: aquí no se compra nada
+        api.get('/routines/quiero-la-rutina')
+            .then(r => setPeticion(r.data?.pedida ? r.data : null)).catch(() => {});
+    }, [api, rutinaIncluida]);
+    useEffect(() => { cargarPeticion(); }, [cargarPeticion]);
+
     const comprarRutina = async (modalidad) => {
         setComprando(modalidad);
         try {
@@ -179,11 +208,16 @@ const RoutinePage = () => {
             console.error('[quiero-la-rutina]', e?.response?.data || e);
             toast.error(e?.response?.data?.detail || 'No hemos podido apuntar tu petición. Inténtalo en un momento.');
             setComprando('eligiendo');
+            // Si el servidor la rechaza porque ya estaba pedida, que la pantalla se entere
+            // y deje de ofrecerla en vez de dejar el botón puesto.
+            cargarPeticion();
         }
     };
     const [routineHistory, setRoutineHistory] = useState([]);
     const [selectedDay, setSelectedDay] = useState(null);
     const [loading, setLoading] = useState(true);
+    // La rutina no ha podido cargarse (no es lo mismo que no tenerla): ver fetchRoutine.
+    const [fallo, setFallo] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
     // La rutina en PDF que sube su entrenador (la de EntrenoPage). Hasta ahora esta
     // pantalla ni preguntaba por ella: el cliente con PDF y sin rutina estructurada leía
@@ -255,6 +289,7 @@ const RoutinePage = () => {
     useEffect(() => { fetchRoutine(); }, []);
 
     const fetchRoutine = async () => {
+        setFallo(false);
         try {
             const [currentRes, historyRes] = await Promise.all([
                 api.get('/routines/current'),
@@ -266,6 +301,14 @@ const RoutinePage = () => {
             setSelectedDay(today);
         } catch (error) {
             console.error('Error fetching routine:', error);
+            // UN 500 NO ES «SIN RUTINA» (24-08). Un 403, un 402 o un 404 son estados
+            // normales aquí -- su plan no la lleva, la suscripción no está al día, aún no
+            // hay perfil -- y la pantalla ya sabe qué decir en cada uno. Pero cuando la
+            // petición reventaba (un ejercicio con las series en blanco tumba
+            // GET /current entero) el cliente leía «Sin rutina asignada» teniendo la suya
+            // puesta, y el panel le decía «Activa».
+            const estado = error?.response?.status;
+            if (!estado || estado >= 500) setFallo(true);
         } finally {
             setLoading(false);
         }
@@ -314,13 +357,30 @@ const RoutinePage = () => {
                     <div className="w-16 h-16 bg-brand/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
                         <Dumbbell className="w-8 h-8 text-brand/60" />
                     </div>
-                    {rutinaIncluida ? (
+                    {fallo ? (
+                        /* No es que no tenga rutina: es que no hemos podido traerla. */
+                        <div data-testid="routine-fallo">
+                            <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">No hemos podido cargar tu rutina</h2>
+                            <p className="text-muted-foreground text-sm mb-5 max-w-sm mx-auto">
+                                Ha sido cosa nuestra, no tuya. Inténtalo otra vez en un momento y, si sigue igual, dínoslo por el chat.
+                            </p>
+                            <button onClick={fetchRoutine} data-testid="routine-reintentar" className="btn-brand">
+                                Volver a intentarlo
+                            </button>
+                        </div>
+                    ) : rutinaIncluida ? (
                         <>
                             <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">Sin rutina asignada</h2>
                             <p className="text-muted-foreground text-sm">Tu entrenador está preparando tu rutina personalizada.</p>
                         </>
-                    ) : compraHecha ? (
-                        <p className="text-sm text-foreground max-w-sm mx-auto" data-testid="rutina-compra-hecha">{compraHecha}</p>
+                    ) : (compraHecha || peticion) ? (
+                        /* Ya la pidió: lo que se le enseña es cuándo, no otra vez el botón
+                           de 57 €. `compraHecha` es el mensaje de este mismo momento;
+                           `peticion` es lo que quedó apuntado en su ficha y sobrevive a
+                           recargar la pantalla. */
+                        <p className="text-sm text-foreground max-w-sm mx-auto" data-testid="rutina-compra-hecha">
+                            {compraHecha || textoDeLaPeticion(peticion)}
+                        </p>
                     ) : (
                         /* Su plan no lleva rutina: el aviso y el botón de compra del
                            DECIDIDO (P72, doc 23-08), con el precio delante. */

@@ -663,6 +663,21 @@ ALIAS_EXTRA = {
     "silver 4-trimestral": "silver",
 }
 
+# Y ESAS GRAFIAS VIVEN TAMBIEN EN LA FICHA DEL PLAN (24-08). ALIAS_EXTRA solo lo miraba
+# `codigo_de_plan`, o sea el servidor. La app resuelve el plan del perfil con los alias que
+# le llegan dentro de cada ficha en GET /plans (`planDelCatalogo` en lib/planAccess.js), y
+# estas diez no las declaraba ninguna: un perfil escrito «premium 177 mensual» o «lunes
+# empiezo» -- que son justo las grafias con las que llegaron los migrados -- tenia todas las
+# habilitaciones en el servidor y ninguna en la app. Se pegan a la ficha para que las dos
+# puntas lean la misma tabla y no haya que mantener una copia en el front.
+for _grafia, _code in ALIAS_EXTRA.items():
+    _ficha = PLAN_CATALOG.get(_code)
+    if _ficha is None:
+        continue
+    _ya = [str(a).lower().strip() for a in (_ficha.get("alias") or [])]
+    if _grafia not in _ya:
+        _ficha["alias"] = [*(_ficha.get("alias") or []), _grafia]
+
 
 def suplementacion_incluida(habilitaciones: Dict[str, Any]) -> bool:
     """Si el plan incluye algo de suplementación (la guía o el protocolo).
@@ -698,7 +713,32 @@ def derive_features(habilitaciones: Dict[str, Any]) -> List[str]:
     """
     h = habilitaciones or {}
     reportes = h.get("reportes") or []
-    features: List[str] = ["macros", "chat"]
+    features: List[str] = ["macros"]
+    # EL CHAT ES DEL QUE TIENE ENTRENADOR DETRAS (24-08). Aqui entraba para todos sin mirar
+    # nada, asi que `plan_grants_feature(plan, "chat")` era verdad siempre y los tres sitios
+    # que se apoyan en el para no molestar a los planes sin acompanamiento no filtraban a
+    # nadie: los de El Lunes Empiezo, Calculadora, Mantenimiento, Calculadora JP y Basica
+    # -- unos 83 de los 200 perfiles -- contaban como gente a la que hay que escribir.
+    #
+    # DONDE SE VE HOY: en la columna «Contacto» del semaforo del panel (routes/admin.py, que
+    # es quien llama a `plan_grants_feature(plan, "chat")`) y en su contador. A esos 83 se
+    # les pintaba el rojo de «nunca» cada dia por un canal que su plan no incluye, y la celda
+    # «su plan no lleva chat», que existe para eso, no se alcanzaba nunca con un plan real.
+    # Las dos listas de «sin contactar» que tambien lo filtran (routes/paneles.py y la de
+    # routes/admin.py) no se pintan desde el 21-08 -- el front las descarta y lo deja escrito
+    # en AdminPanelesPage.jsx y AdminDashboard.jsx --, asi que ahi no se nota.
+    #
+    # El criterio es el mismo que ya usa el front (CAP.CHAT en lib/planAccess.js, decision
+    # de Francisco del 23-08): cualquier acompanamiento con entrenador, no solo el valor
+    # exacto, para que el Premium -- que es `con_entrenador_y_llamadas` -- no se quede fuera.
+    #
+    # La deduccion se repite aqui en vez de llamar a `completar_acompanamiento` porque
+    # PLAN_TYPES se construye unas lineas mas abajo, antes de que esa funcion exista, y
+    # porque los planes legacy del catalogo no declaran el campo: sin esto, Gold, Silver,
+    # Bronze, CALMA 12 y compañia -- que SI llevan coach -- se quedarian sin chat.
+    if str(h.get("acompanamiento") or ("con_entrenador" if reportes else "solo_app")
+           ).startswith("con_entrenador"):
+        features.append("chat")
     if h.get("rutina") in ("del_mes", "personalizada", "opcional"):
         features.append("rutina")
     if reportes:
@@ -856,6 +896,27 @@ def opciones_de_renovacion(plan_actual: Optional[str],
     # significa nada, y en un plan que no esta en el catalogo no hay nada que renovar.
     legacy_reabierto = bool(es_legacy and info and info.get("renovable_por_los_suyos"))
 
+    # EL PLAN A MEDIDA NO SE RENUEVA POR AQUI, Y HAY QUE DECIRLO (24-08). El 6M esta en
+    # estado "especial": no es legacy -- no se retiro de nada -- y tampoco es "activo", asi
+    # que `puede_seguir_igual` daba False y el motivo se quedaba a None, porque solo se
+    # escribia para los retirados. Resultado en la pantalla de renovacion: no le sale
+    # «Seguir igual» y tampoco la frase que lo explica (RenovacionPage solo la pinta si hay
+    # motivo), o sea la lista de los otros planes y ni una linea que le diga por que el suyo
+    # no esta. Son 2 perfiles en la base, y su renovacion se habla: manda el contrato.
+    #
+    # EL ESTADO EXACTO, NO «TODO LO QUE NO SEA ACTIVO NI LEGACY» (24-08). Escrito por
+    # descarte se llevaba tambien los cuatro «complemento» -- rutina_mes,
+    # rutina_personalizada, revision_macros y formaciones --, a los que se les decia «tu
+    # plan es a medida» cuando no son un plan: son extras que se compran sueltos.
+    especial = info.get("estado") == "especial"
+
+    if es_legacy and not legacy_reabierto:
+        motivo = "Tu plan ya no se ofrece: al renovar eliges entre los actuales"
+    elif especial:
+        motivo = "Tu plan es a medida: su renovación la vemos contigo, no se cierra desde aquí"
+    else:
+        motivo = None
+
     return {
         "plan_actual": actual or None,
         "puede_seguir_igual": legacy_reabierto or (not es_legacy and info.get("estado") == "activo"),
@@ -870,8 +931,7 @@ def opciones_de_renovacion(plan_actual: Optional[str],
         "salida": next((c for c, p in cat.items()
                         if p.get("solo_salida") and p.get("estado") == "activo"), None),
         "mantiene_precio": legacy_reabierto or not es_legacy,
-        "motivo": ("Tu plan ya no se ofrece: al renovar eliges entre los actuales"
-                   if (es_legacy and not legacy_reabierto) else None),
+        "motivo": motivo,
     }
 
 

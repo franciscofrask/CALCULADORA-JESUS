@@ -26,14 +26,11 @@ from core.avisos_cliente import avisos_condicionados      # noqa: E402
 from core.database import db                              # noqa: E402
 
 
-# UN solo bucle para todo el fichero: el cliente de Mongo (motor) queda atado al
-# primer bucle que lo usa, y con asyncio.run cada test estrena uno; el segundo test
-# muere con "attached to a different loop" sin que el motivo se vea.
-_BUCLE = asyncio.new_event_loop()
-
-
-def correr(coro):
-    return _BUCLE.run_until_complete(coro)
+# UN solo bucle, y el de TODA la bateria (tests/conftest.py), no uno de este fichero: el
+# cliente de Mongo (motor) queda atado al primero que lo usa, asi que dos ficheros con
+# bucle propio se pisan. Solo o en tanda pequeña no se nota; el 24-08 estos tres tests
+# empezaron a fallar al lanzar la bateria entera junto a otro fichero que hacia lo mismo.
+from conftest import corre as correr  # noqa: E402
 
 
 # ── P58: el tope del número ──────────────────────────────────────────────────

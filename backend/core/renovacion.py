@@ -8,9 +8,13 @@ Lo importante de esta pantalla es QUE ORDEN tienen las cosas: primero lo que ha
 conseguido, y solo despues lo que puede hacer. Al reves seria un cobro con fotos de
 adorno; asi es un balance del que sale una decision.
 
-Sobre el cobro: si no hace nada, Stripe cobra solo el dia que acaba su ciclo -- para eso
-se ancla al lunes (ver core/calendario_arranque.py). Esta pantalla no es un paywall: es
-donde decide si quiere cambiar algo antes de que eso pase.
+Sobre el cobro (ojo, esto cambio el 20-08 y aqui seguia escrito lo de antes): NO SE
+RENUEVA SOLO NADIE. Todo el catalogo se vende como pago unico, asi que la renovacion la
+confirma el cliente en esta pantalla, y si la confirma antes de que acabe su ciclo el
+nuevo empieza donde termina este (el encadenado vive en core/stripe_billing). El unico
+que sigue cobrandose solo es el que arrastra una suscripcion de las de antes, y eso lo
+dice `renueva_solo`, no el plan. El arranque en lunes sigue en core/calendario_arranque.
+Esta pantalla no es un paywall: es donde decide.
 
 Y el precio: "se congela mientras el cliente no se de de baja". Si renueva en su mismo
 plan paga lo que pagaba, aunque el catalogo haya subido. Si cambia de plan, paga el del
@@ -46,7 +50,34 @@ def estado_del_ciclo(perfil: Dict[str, Any], ahora: Optional[datetime] = None) -
     from core.cycle import compute_cycle
 
     ahora = ahora or datetime.now(timezone.utc)
-    fin = _fecha(perfil.get("fin_de_ciclo"))
+    # LA FECHA DE FIN ES `current_period_end`, LA QUE ESCRIBE EL PAGO (24-08).
+    #
+    # Aqui se leia solo `fin_de_ciclo`, y ese campo lo escribe una sola linea de
+    # routes/billing.py: la de la rama de suscripcion, que no corre para nadie desde que
+    # todo el catalogo es de pago unico. O sea, `fin` salia None siempre y con el la
+    # pantalla no se enteraba nunca de que el ciclo habia terminado: al caducado la
+    # cabecera le decia «Vas por la semana 4» -- la semana da la vuelta sola, se cuenta en
+    # modulo -- en vez de «Tu ciclo ha terminado», y se le seguia ofreciendo el «si
+    # renuevas antes de que acabe, no pierdes ni una semana» cuando ya la habia perdido.
+    # `current_period_end` es la que ya miran los avisos y Mi perfil; `fin_de_ciclo` se
+    # deja de respaldo porque el modo pruebas escribe las dos. Y con el mismo candado que
+    # Mi perfil (P50 del doc 23-08): una fecha a mas de un año vista no es el final de un
+    # ciclo, es una membresia de Calma importada tal cual («Gold · 1/1/2026 a 1/2/2030»),
+    # y sin esto la pantalla saludaria con «Te quedan 1.257 días».
+    #
+    # DONDE NO SE PARECE A MI PERFIL, Y A PROPOSITO: alli hay un tercer escalon (si no hay
+    # fecha creible, `cycle_start + cycle_total_weeks`, routes/users.py). Aqui no, porque
+    # eso es inventarse un final para quien no lo tiene guardado -- la regla escrita de
+    # esta pantalla es «sin fecha de fin no se inventan dias» -- y porque el numero no
+    # coincidiria de todas formas: Mi perfil ancla al PRIMER ciclo, con lo que a un cliente
+    # de dos años le sale «vencida», y aqui el ciclo vivo es el de ahora (ver
+    # `inicio_del_ciclo`). Cambiar un desacuerdo por otro no arregla nada; lo que hay que
+    # cuadrar es routes/users.py, y eso es otro bloque.
+    def _creible(valor):
+        f = _fecha(valor)
+        return f if (f and f <= ahora + timedelta(days=370)) else None
+
+    fin = _creible(perfil.get("current_period_end")) or _creible(perfil.get("fin_de_ciclo"))
     # Con ancla (cycle_start o created_at) manda la cuenta; sin ninguna, lo guardado.
     if perfil.get("cycle_start") or perfil.get("created_at"):
         semana = int(compute_cycle(perfil, ahora).get("week") or 1)
@@ -59,7 +90,16 @@ def estado_del_ciclo(perfil: Dict[str, Any], ahora: Optional[datetime] = None) -
         return {"conocido": False, "semana": semana, "toca_renovar": semana >= 11,
                 "dias_restantes": None, "fin": None}
 
-    dias = (fin.date() - ahora.date()).days
+    # LOS DIAS QUE LE QUEDAN, EN HORA DE ESPAÑA (24-08). Restando fechas en UTC, entre las
+    # 22:00 y las 00:00 de aqui -- que en Madrid ya son del dia siguiente -- la cabecera
+    # contaba un dia de mas y un ciclo que acabo hoy todavia no era `ya_vencido`. Es un
+    # plazo, y los plazos van con el reloj de España (regla del 23-08). Ademas la misma
+    # pantalla ya lo hacia asi por el otro lado -- la semana (core/cycle), la tarjeta de
+    # Constancia y el contador de ajustes (routes/billing) --, con lo que quedaban dos
+    # relojes contando la misma pantalla.
+    from core.tiempo import a_madrid
+    hoy = (a_madrid(ahora) or ahora).date()
+    dias = ((a_madrid(fin) or fin).date() - hoy).days
     return {
         "conocido": True,
         "semana": semana,
@@ -68,6 +108,69 @@ def estado_del_ciclo(perfil: Dict[str, Any], ahora: Optional[datetime] = None) -
         "toca_renovar": dias <= SEMANAS_ANTES_DE_AVISAR * 7,
         "ya_vencido": dias < 0,
     }
+
+
+def dias_de_ciclo(perfil: Dict[str, Any]) -> int:
+    """Cuantos dias dura UN ciclo de su plan.
+
+    Del catalogo primero, que es de donde saca `core/cycle` las semanas para decir en que
+    semana va: si los dos no midieran lo mismo, la cabecera y la tarjeta «Constancia» de
+    esta misma pantalla se contradirian. Los planes mensuales no traen semanas en el
+    catalogo, y para esos vale lo que se apunto al cobrar (`billing_cycle_days`).
+    """
+    from models.user import PLAN_CATALOG
+
+    plan = PLAN_CATALOG.get((perfil.get("plan") or "").lower().strip()) or {}
+    semanas = (plan.get("ciclo") or {}).get("semanas")
+    if semanas:
+        return int(semanas) * 7
+    dias = perfil.get("billing_cycle_days")
+    return int(dias) if isinstance(dias, (int, float)) and dias > 0 else 84
+
+
+def inicio_del_ciclo(perfil: Dict[str, Any], hoy=None):
+    """El dia en que arranco EL CICLO QUE ESTA VIVIENDO. Devuelve un `date`, o None.
+
+    El resumen se medía desde su fecha de alta -- `arranque_lunes`, que solo escribe la
+    rama de suscripcion, o `created_at` --, asi que a un cliente de dos años la tarjeta
+    «Constancia» le decia «45 de 730 dias con el dia cuadrado» y contaba como ajustes de
+    este ciclo los de toda su vida. Es el mismo numero del «AJUSTES 176» de Jesus,
+    entrando por la otra puerta. Lo que si escribe el pago de hoy es
+    `current_period_start` (core/stripe_billing).
+    """
+    from core.tiempo import hoy_madrid
+
+    hoy = hoy or hoy_madrid()
+    duracion = dias_de_ciclo(perfil)
+    inicio = _fecha(perfil.get("current_period_start"))
+    if inicio and inicio.date() > hoy:
+        # Renovo antes de que acabara: el ciclo comprado arranca donde termina el de
+        # ahora, o sea que el que esta viviendo es el anterior, de la misma duracion.
+        # Sin esto, el resumen del que acaba de renovar salia con «0 de 1 dias».
+        return (inicio.date() - timedelta(days=duracion))
+    if inicio:
+        return inicio.date()
+    # EL RESPALDO NO ES EL ARRANQUE DEL CICLO DE AHORA: HAY QUE ADELANTARLO (24-08).
+    #
+    # `current_period_start` es el unico escalon que dice de verdad cuando empezo este
+    # ciclo, y lo escribe SOLO el pago por Stripe. Los otros tres son el ancla ORIGINAL, la
+    # de su primer dia: `core/cycle` la usa en modulo -- `weeks_elapsed % total` -- justo
+    # porque no es el arranque del ciclo en curso, y aqui se leia cruda. O sea que al que
+    # nunca ha pagado por la pasarela le seguia saliendo lo que este arreglo venia a
+    # cerrar: la cabecera «Vas por la semana 9» y, debajo, «X de 730 dias con el dia
+    # cuadrado», con los ajustes de toda su vida contados como de este ciclo. En los
+    # importados de Calma el ancla es el inicio del TRAMO entero de membresia («Gold ·
+    # 1/1/2026 a 1/2/2030»), asi que el numero cambiaba pero el fallo era el mismo.
+    #
+    # Se adelanta en ciclos enteros, que es exactamente la cuenta que ya hace
+    # `compute_cycle` para el numero de ciclo: floor(dias / duracion) es lo mismo que su
+    # `weeks_elapsed // total`. Asi las dos frases de la pantalla salen del mismo reloj.
+    for campo in ("arranque_lunes", "cycle_start", "created_at"):
+        ancla = _fecha(perfil.get(campo))
+        if ancla and ancla.date() <= hoy:
+            ciclos = (hoy - ancla.date()).days // duracion
+            return ancla.date() + timedelta(days=ciclos * duracion)
+    return None
 
 
 def resumen_del_ciclo(*, reporte_primero: Optional[Dict[str, Any]],
@@ -234,6 +337,12 @@ def salidas(*, plan_actual: Optional[str], opciones_catalogo: Dict[str, Any],
             "periodo": periodo_de_cobro(info),
             "precio_congelado": bool(precio_alta and precio_alta != info.get("precio")),
             "por_checkout": legacy or (not suscripcion_viva and se_vende_hoy),
+            # SI SU PLAN YA NO SE VENDE, dicho aparte de `por_checkout`. La pantalla
+            # decidia el texto con `por_checkout`, que hasta el 24-08 solo se encendia
+            # para el plan antiguo reabierto; ahora se enciende tambien para los del
+            # catalogo, asi que a un cliente de nivel2 se le saludaba con «tu plan ya no
+            # se vende, pero puedes seguir en el», que es mentira.
+            "renovacion_legacy": legacy,
             # El plan que se cierra hablando tampoco se renueva solo por la pasarela: el
             # front lo lleva al chat, como hace con «Cambiar a» ese mismo plan. Sin esto,
             # al renovar se le abriria un cobro de 1.500 EUR por su cuenta.

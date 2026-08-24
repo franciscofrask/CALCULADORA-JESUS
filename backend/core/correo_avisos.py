@@ -3,8 +3,13 @@
 El sistema de avisos se evalúa al entrar en la app, y eso explica el 33 contra 1 de
 los reportes: el que no entra, no se entera. Esta pieza da la vuelta a eso para las
 familias que tocan dinero: una pasada periódica evalúa los avisos de TODOS los
-clientes activos (con el mismo `sincronizar_avisos` de siempre, así la campanita y el
-correo cuentan lo mismo) y manda por correo los de reporte y fin de ciclo.
+clientes activos (con el mismo `sincronizar_avisos` de siempre, así lo que sale por
+correo es exactamente lo que le aparece en la campanita) y manda por correo los de
+reporte y fin de ciclo.
+
+ESTO NO ES EL CLIENTE ENTRANDO, y `sincronizar_avisos` tiene que saberlo: la pasada no
+deja la huella de «ha entrado» ni crea avisos condicionados (los de hábitos, que además
+no salen por correo). Ver `marcar_entrada` y `solo_calendario` allí.
 
 CÓMO NO SE DISPARA DOS VECES
   - Interruptor `correos_avisos` en app_settings, APAGADO de fábrica: desplegar esto
@@ -14,6 +19,9 @@ CÓMO NO SE DISPARA DOS VECES
     el otro se encuentra el duplicado y pasa. Un aviso = un correo, como mucho.
   - La clave del aviso ya trae el evento (p. ej. `mensual_ultimo:2026-08-21`): el
     mismo reporte no genera dos correos aunque la pasada corra veinte veces.
+  - Y si el relay falla, la marca se queda pero en rojo (`fallido`), con un contador:
+    se reintenta hasta `MAX_INTENTOS` y después se para. Ni se pierde el correo ni se
+    reintenta durante tres días seguidos.
 
 El correo va al de CONTACTO del cliente (core/correo.correo_del_cliente), en texto
 plano y con el enlace a la app. Sin SMTP (dev), `enviar` lo deja en
@@ -43,6 +51,14 @@ FAMILIAS_CORREO = {
 CADA_SEGUNDOS = 15 * 60
 APP_URL = "https://12en12app.jesusgallegopt.com"
 
+# CUÁNTAS VECES SE VUELVE A INTENTAR UN CORREO QUE NO SALIÓ. El reintento no puede ser
+# infinito: la pasada corre cada 15 minutos y la ventana de avisos es de 3 días, así que un
+# relay caído dejaría hasta 288 filas en `correos_pendientes` y 288 warnings POR AVISO Y
+# CLIENTE, y la cola de sin_enviar -- que es lo único que se puede mirar después -- dejaría
+# de leerse. Con tres, el relay tiene 45 minutos para volver y el rastro sigue siendo un
+# rastro.
+MAX_INTENTOS = 3
+
 
 def _cuerpo(nombre, titulo, cuerpo, link) -> str:
     saludo = f"Hola {nombre.split()[0]}," if nombre else "Hola,"
@@ -54,7 +70,7 @@ def _cuerpo(nombre, titulo, cuerpo, link) -> str:
 
 
 async def pasada_de_correos_de_avisos(solo_user_id: str = None) -> int:
-    """Una pasada completa. Devuelve cuántos correos intentó mandar.
+    """Una pasada completa. Devuelve cuántos correos SALIERON.
 
     `solo_user_id` acota la pasada a un cliente: lo usan los tests (recorrer los
     trescientos perfiles de dev por un aviso de mentira tarda minutos) y vale para
@@ -64,7 +80,7 @@ async def pasada_de_correos_de_avisos(solo_user_id: str = None) -> int:
     if not await pantalla_activa("correos_avisos"):
         return 0
 
-    from core.correo import correo_del_cliente, enviar
+    from core.correo import configurado, correo_del_cliente, enviar
     from routes.notifications import sincronizar_avisos
 
     # La marca de enviado, única por usuario y clave de aviso (la carrera entre réplicas
@@ -74,7 +90,13 @@ async def pasada_de_correos_de_avisos(solo_user_id: str = None) -> int:
 
     # Los clientes con cuenta viva. `es_prueba` fuera: a las cuentas del QA no se les
     # escribe. El correo del alta puede faltar en migrados: se resuelve por usuario.
-    filtro = {"plan": {"$nin": [None, ""]}, "status": {"$ne": "baja"}}
+    #
+    # LA MARCA ES `es_prueba`, NO `es_pruebas`. Aquí se filtraba por `es_pruebas`, que es
+    # otra cosa -- el modo laboratorio de una cuenta concreta --, así que las prueba.nivel1,
+    # prueba.bronze, prueba.caducado... quedaban fuera del panel y de las tareas pero
+    # habrían recibido correos de verdad. Y va en la consulta para no recorrerlas.
+    filtro = {"plan": {"$nin": [None, ""]}, "status": {"$ne": "baja"},
+              "es_prueba": {"$ne": True}}
     if solo_user_id:
         filtro["user_id"] = solo_user_id
     perfiles = await db.client_profiles.find(
@@ -91,12 +113,19 @@ async def pasada_de_correos_de_avisos(solo_user_id: str = None) -> int:
         try:
             usuario = await db.users.find_one(
                 {"id": uid, "deleted_at": None},
-                {"_id": 0, "email": 1, "name": 1, "es_pruebas": 1})
-            if not usuario or not usuario.get("email") or usuario.get("es_pruebas"):
+                {"_id": 0, "email": 1, "name": 1, "es_prueba": 1, "es_pruebas": 1})
+            if (not usuario or not usuario.get("email")
+                    or usuario.get("es_prueba") or usuario.get("es_pruebas")):
                 continue
 
-            # La misma evaluación que al entrar: crea (o no) los avisos que toquen.
-            await sincronizar_avisos(uid)
+            # La misma evaluación que al entrar, pero esto NO es el cliente abriendo la app:
+            #   - sin dejar la huella de «ha entrado», que mataba los avisos de «llevas días
+            #     sin entrar»,
+            #   - y solo avisos de calendario, que son los únicos que salen por correo
+            #     (`FAMILIAS_CORREO`). Esta pasada corre también de madrugada, y una
+            #     condicionada nacida a las 00:15 gastaba el «uno al día» y dejaba sin nacer
+            #     el «tu reporte está abierto» de las 10:00, que solo es candidato ese día.
+            await sincronizar_avisos(uid, marcar_entrada=False, solo_calendario=True)
 
             pendientes = await db.notifications.find(
                 {"user_id": uid, "familia": {"$in": list(FAMILIAS_CORREO)},
@@ -108,18 +137,58 @@ async def pasada_de_correos_de_avisos(solo_user_id: str = None) -> int:
                 clave = aviso.get("clave")
                 if not clave:
                     continue
+                # La marca se pone ANTES de mandar: es lo que decide la carrera entre las
+                # dos réplicas. Si el envío falla no se borra, se marca `fallido` con su
+                # contador. Borrarla dejaba el reintento sin freno: la siguiente pasada
+                # empezaba de cero y no había nada que supiera cuántas veces se había
+                # intentado ya.
+                intento = 1
                 try:
                     await db.correos_de_avisos.insert_one({
                         "id": str(uuid.uuid4()), "user_id": uid, "clave": clave,
-                        "creado_en": ahora.isoformat()})
+                        "intentos": 1, "creado_en": ahora.isoformat()})
                 except Exception:
-                    continue    # ya salió (por esta réplica o por la otra)
+                    # Ya hay marca. Si el correo salió, aquí no se toca nada: un aviso, un
+                    # correo. Si falló y le quedan intentos, este es quien lo coge, y el
+                    # find_one_and_update es atómico, así que la otra réplica no lo repite.
+                    marca = await db.correos_de_avisos.find_one_and_update(
+                        {"user_id": uid, "clave": clave, "fallido": True,
+                         "intentos": {"$lt": MAX_INTENTOS}},
+                        {"$inc": {"intentos": 1}})
+                    if not marca:
+                        continue
+                    intento = int(marca.get("intentos") or 1) + 1
                 destino = await correo_del_cliente(db, uid, usuario["email"])
-                await enviar(db, destino, aviso["title"],
-                             _cuerpo(usuario.get("name"), aviso["title"],
-                                     aviso.get("body"), aviso.get("link")),
-                             tipo="aviso")
-                enviados += 1
+                salio = await enviar(db, destino, aviso["title"],
+                                     _cuerpo(usuario.get("name"), aviso["title"],
+                                             aviso.get("body"), aviso.get("link")),
+                                     tipo="aviso")
+                if salio:
+                    enviados += 1
+                    if intento > 1:     # salió al reintentar: la marca deja de estar en rojo
+                        await db.correos_de_avisos.update_one(
+                            {"user_id": uid, "clave": clave}, {"$set": {"fallido": False}})
+                elif configurado():
+                    # SI EL RELAY TIENE UN MAL RATO, ESTO NO SE PUEDE DAR POR MANDADO. Con la
+                    # marca limpia, este aviso -- los de reporte y fin de ciclo, los que traen
+                    # el dinero -- no se volvería a intentar nunca más y nadie mira la cola de
+                    # `correos_pendientes`. Se deja en rojo para que la pasada de dentro de 15
+                    # minutos lo reintente, hasta `MAX_INTENTOS`.
+                    #
+                    # Sin SMTP (dev) no se toca: ahí no hay nada que reintentar, el correo
+                    # queda a la vista en `correos_pendientes` como 'sin_enviar' y reintentar
+                    # solo serviría para apuntar el mismo cuatro veces por hora.
+                    await db.correos_de_avisos.update_one(
+                        {"user_id": uid, "clave": clave},
+                        {"$set": {"fallido": True, "ultimo_fallo": ahora.isoformat()}})
+                    if intento < MAX_INTENTOS:
+                        log.warning("correo_avisos: no salió el aviso %s de %s (intento %d de "
+                                    "%d); se reintenta en la próxima pasada",
+                                    clave, uid, intento, MAX_INTENTOS)
+                    else:
+                        log.warning("correo_avisos: el aviso %s de %s no salió en %d intentos; "
+                                    "se deja de intentar y queda en correos_pendientes",
+                                    clave, uid, MAX_INTENTOS)
         except Exception as e:   # noqa: BLE001 - un cliente roto no para la pasada
             log.warning("correo_avisos: fallo con el cliente %s: %s", uid, e)
 

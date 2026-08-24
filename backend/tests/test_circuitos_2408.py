@@ -12,20 +12,12 @@ Ejecutar:
     cd backend && REACT_APP_BACKEND_URL=http://127.0.0.1:8000 \
         venv/Scripts/python.exe -m pytest tests/test_circuitos_2408.py -q
 """
-import asyncio
 from datetime import datetime, timedelta, timezone
 
 from core.plan_access import estado_de_acceso, has_active_access
 
-# UN SOLO BUCLE PARA TODO EL FICHERO. El cliente de Motor se ata al bucle en el que nace,
-# asi que varios `asyncio.run` con el mismo cliente dan «Event loop is closed» y resultados
-# fantasma (paso de verdad en test_pedir_alimento_concreto). Mismo apaño que en
-# test_correos_avisos_2308.
-_BUCLE = asyncio.new_event_loop()
-
-
-def corre(corutina):
-    return _BUCLE.run_until_complete(corutina)
+# El bucle es el de la bateria entera (tests/conftest.py): ver ahi por que.
+from conftest import corre  # noqa: E402
 
 
 def dentro(dias=30):

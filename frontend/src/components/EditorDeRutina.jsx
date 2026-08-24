@@ -6,8 +6,9 @@
  * la app no las conoce y cada asignación empieza de cero.
  *
  * Aquí se escribe una vez, se guarda con su nombre, y desde la ficha de cualquier cliente se
- * elige y se le asigna. Al asignarla se copia: tocarle un ejercicio a un cliente no se lo
- * cambia a los otros veinte que la tienen puesta.
+ * elige y se le asigna. Al asignarla se COPIA, para que el día que se pueda retocar la de
+ * una persona no se les cambie a los otros veinte que la tienen puesta. Ese retoque por
+ * cliente TODAVÍA NO EXISTE: este editor escribe en la biblioteca, no en nadie.
  *
  * QUÉ CABE Y QUÉ NO. Cabe lo que la app ya sabe pintar -- días, ejercicios, series,
  * repeticiones, descanso -- más las notas de ejecución por ejercicio. Lo que Jesús escribe
@@ -93,6 +94,16 @@ const EditorDeRutina = ({ api, rutina, onGuardada, onCerrar }) => {
         if (!totalEjercicios) return toast.error('Añade al menos un ejercicio');
         const sinNombre = dias.some((d) => (d.exercises || []).some((e) => !String(e.name || '').trim()));
         if (sinNombre) return toast.error('Hay un ejercicio sin nombre');
+        // LAS SERIES, SIEMPRE UN NÚMERO. El campo admite el blanco (hace falta para poder
+        // borrar y reescribir), pero guardarlo así dejaba al cliente que recibiera esta
+        // plantilla con «Sin rutina asignada» mientras el panel decía «Activa»: la rutina
+        // no se puede ni pintar sin ese número. El servidor NO devuelve ningún error por
+        // esto: lo guarda como 1 en silencio (`_series`, backend/routes/routines.py) para no
+        // dejar sin rutina a quien reciba la plantilla. O sea que este aviso es la única
+        // defensa de verdad, y está aquí para que el número lo ponga quien escribe la
+        // rutina y no se lo pongamos nosotros.
+        const sinSeries = dias.some((d) => (d.exercises || []).some((e) => !(Number(e.sets) > 0)));
+        if (sinSeries) return toast.error('Hay un ejercicio sin series');
 
         setGuardando(true);
         api.post('/admin/routines/biblioteca', {

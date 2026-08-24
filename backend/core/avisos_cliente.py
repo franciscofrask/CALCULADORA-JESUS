@@ -163,6 +163,12 @@ def avisos_de_calendario(*, perfil: Dict[str, Any], ahora: datetime,
                     # de darse de alta, asi que era la primera cosa que tocaban de la app.
                     "link": "/dashboard/macro-calculator",
                     "calendario": True,
+                    # Su clave lleva el evento dentro (la fecha del alta) y ese evento pasa
+                    # una vez en la vida, asi que se comprueba contra el historico entero y
+                    # no contra los ultimos 35 dias: ver `unica` en `sincronizar_avisos`.
+                    # Sin esto volvia a nacer al mes y medio, porque el aviso sigue siendo
+                    # candidato mientras nadie le ponga unos macros.
+                    "unica": True,
                 })
 
     # "Mañana empiezas": el domingo de antes de arrancar. Mientras la Rutina esté apagada
@@ -250,6 +256,7 @@ def avisos_condicionados(*, ahora: datetime,
                          dias_con_el_perfil_a_medias: Optional[int] = None,
                          dias_sin_preferencias: Optional[int] = None,
                          dias_en_mantenimiento: Optional[int] = None,
+                         mantenimiento_desde: Optional[str] = None,
                          rutina_mes_aplazada_hasta: Optional[str] = None,
                          con_ajuste: bool = True) -> List[Dict[str, Any]]:
     """Las cuatro del doc 16-08 y una quinta del 18-08, en su orden de prioridad.
@@ -432,12 +439,23 @@ def avisos_condicionados(*, ahora: datetime,
             "calendario": False,
         })
 
-    # 6) «¿Volvemos?» (tabla del doc 19-08): SOLO Mantenimiento, al mes de aterrizar ahi.
-    #    Una sola vez -- la clave es la fecha en que cayo al plan --, y con la puerta de
-    #    vuelta delante.
+    # 6) «¿Volvemos?» (tabla del doc 19-08): SOLO Mantenimiento, al mes de aterrizar ahi, y
+    #    con la puerta de vuelta delante.
+    #
+    #    UNA SOLA VEZ POR ATERRIZAJE, y la clave lo dice: lleva dentro la fecha en que cayo
+    #    al plan (`mantenimiento_desde`). Aqui hubo dos fallos seguidos. Primero la clave era
+    #    la cadena fija `volvemos:mantenimiento` mientras el comentario juraba que llevaba la
+    #    fecha: con la deduplicacion mirando 35 dias atras, al mes y medio le volvia a
+    #    preguntar «¿Volvemos?» al mismo cliente. Y despues se arreglo marcandola `unica`, que
+    #    lo empujo al otro extremo: al que sale de Mantenimiento y vuelve un año mas tarde ya
+    #    no se le preguntaba nunca mas. Con la fecha dentro, cada aterrizaje tiene su clave y
+    #    `unica` solo impide repetir ESE. Sin fecha -- no deberia pasar, sale de `plan_start`
+    #    o del alta -- se deja la clave de siempre y sin `unica`: que se repita al mes y medio
+    #    es menos malo que callarlo para siempre.
     if dias_en_mantenimiento is not None and dias_en_mantenimiento >= 30:
-        fuera.append({
-            "clave": "volvemos:mantenimiento",
+        aterrizo = str(mantenimiento_desde)[:10] if mantenimiento_desde else None
+        aviso = {
+            "clave": f"volvemos:mantenimiento:{aterrizo}" if aterrizo else "volvemos:mantenimiento",
             "familia": "volvemos",
             "tipo": "programa",
             "variantes": [
@@ -448,7 +466,10 @@ def avisos_condicionados(*, ahora: datetime,
             ],
             "link": "/planes",
             "calendario": False,
-        })
+        }
+        if aterrizo:
+            aviso["unica"] = True   # ver `unica` en `sincronizar_avisos`
+        fuera.append(aviso)
 
     return fuera
 
@@ -477,12 +498,22 @@ def avisos_de_calendario_doc(*, ahora_es: datetime,
                              rutina_visible: bool = False,
                              ciclo_vencido: bool = False,
                              fin_de_ciclo: Optional[date] = None,
-                             con_correo_de_novedades: bool = True) -> List[Dict[str, Any]]:
+                             vencio_el: Optional[date] = None,
+                             con_correo_de_novedades: bool = False) -> List[Dict[str, Any]]:
     """Los ocho del calendario. Siempre salen: no gastan el cupo de las condicionadas.
 
     `ventanas` son las ventanas de reporte que le tocan (la de esta semana de ciclo y la
     de la anterior, que es la que sostiene el aviso del martes), cada una con
     `{tipo, semana, abre, cierra, mandado}` y las fechas ya en hora de España.
+
+    `vencio_el` es la fecha en que se le acabo lo pagado: va DENTRO de la clave de «Tu
+    ciclo ha terminado» para que ese aviso vuelva a poder nacer si renueva y caduca otra vez.
+
+    TODOS LOS DEFECTOS DE AQUI SON «NO SALE». Sin dato no hay aviso: sin `arranque` no hay
+    «Mañana empiezas», sin `ventanas` no hay reporte, `cerro_hoy=True` calla el diario.
+    `con_correo_de_novedades` valia True y era el unico que se salia de esa regla: quien
+    llamara sin pasarlo le afirmaba al cliente «te hemos mandado el correo de novedades»
+    sin que nadie hubiera mandado nada -- la newsletter la manda una persona, no la app.
     """
     fuera: List[Dict[str, Any]] = []
     hoy = ahora_es.date()
@@ -508,22 +539,8 @@ def avisos_de_calendario_doc(*, ahora_es: datetime,
             "calendario": True,
         })
 
-    # 2 · "Cierra tu día". Cada día a las 20:00 si no lo ha cerrado. Es el único que el
-    # cliente puede apagar (`profile.avisos.cierre_dia`): es diario, y un aviso diario que
-    # no se puede callar acaba con la campanita silenciada entera.
-    if quiere_cierre_dia and not cerro_hoy and ahora_es.hour >= 20:
-        fuera.append({
-            "clave": f"cierra_dia:{hoy}",
-            "familia": "cierra_dia",
-            "tipo": "checkin",
-            "variantes": [
-                {"titulo": "Cierra tu día", "cuerpo": "Dos toques y listo."},
-                {"titulo": "¿Cómo fuiste hoy?", "cuerpo": "Un minuto y lo tenemos."},
-                {"titulo": "Te falta cerrar el día", "cuerpo": "Lo que no apuntas, no lo vemos."},
-            ],
-            "link": "/dashboard/checkins",
-            "calendario": True,
-        })
+    # 2 · "Cierra tu día" NO VA AQUÍ: va el ÚLTIMO de todos, al final de la función. Ver
+    # el bloque del final, que explica por qué.
 
     for v in ventanas:
         tipo, abre, cierra = v.get("tipo"), v.get("abre"), v.get("cierra")
@@ -717,8 +734,26 @@ def avisos_de_calendario_doc(*, ahora_es: datetime,
     # mensuales que renuevan solos no les vence nada). Es de entrega -- un hecho, no una
     # prisa -- y su clave dura el vencimiento entero: no se repite cada día.
     if ciclo_vencido:
-        fuera.append({
-            "clave": f"ciclo_terminado:{cliente_id}",
+        # SU CLAVE LLEVA EL VENCIMIENTO, y esto es lo que hay que mirar dos veces porque es
+        # el aviso que trae el dinero.
+        #
+        # Era `ciclo_terminado:{cliente}`, sin fecha: mientras siga caducado la condicion
+        # sigue siendo cierta, asi que con la deduplicacion mirando 35 dias atras volvia a
+        # nacer al mes y medio. Se marco `unica` para cortarlo y el remedio fue peor: pasaba
+        # a ser irrepetible DE POR VIDA, o sea que el que caduca, renueva y vuelve a caducar
+        # doce semanas despues no recibia «Tu ciclo ha terminado» la segunda vez, ni en la
+        # campanita ni por correo. Nada borra `notifications` al renovar.
+        #
+        # Con la fecha en que se le acabo lo pagado dentro (`vencio_el`), cada vencimiento es
+        # una clave distinta y `unica` significa lo que dice: uno por vencimiento, para
+        # siempre. Al renovar, la fecha se mueve y el aviso puede volver a nacer.
+        #
+        # Si no se sabe cuando se le acabo -- una baja a mano no deja fecha -- se queda la
+        # clave de antes y SIN `unica`: que se repita al mes y medio es menos malo que
+        # callarle la renovacion para siempre.
+        aviso = {
+            "clave": (f"ciclo_terminado:{cliente_id}:{vencio_el}" if vencio_el
+                      else f"ciclo_terminado:{cliente_id}"),
             "familia": "ciclo_terminado",
             "tipo": "programa",
             "variantes": [
@@ -729,7 +764,10 @@ def avisos_de_calendario_doc(*, ahora_es: datetime,
             ],
             "link": "/renovacion",
             "calendario": True,
-        })
+        }
+        if vencio_el:
+            aviso["unica"] = True   # ver `unica` en `sincronizar_avisos`
+        fuera.append(aviso)
 
     # 10 · «Te hemos mandado el correo de novedades», los viernes (tabla del doc 19-08).
     # El correo se queda como correo; esto solo lo anuncia en la app. Desde mediodía, que
@@ -746,6 +784,33 @@ def avisos_de_calendario_doc(*, ahora_es: datetime,
                  "cuerpo": "Mira tu bandeja: novedades de esta semana."},
             ],
             "link": None,
+            "calendario": True,
+        })
+
+    # 2 · "Cierra tu día". Cada día a las 20:00 si no lo ha cerrado. Es el único que el
+    # cliente puede apagar (`profile.avisos.cierre_dia`): es diario, y un aviso diario que
+    # no se puede callar acaba con la campanita silenciada entera.
+    #
+    # VA EL ÚLTIMO A PROPÓSITO (24-08). Estaba el segundo, y como `elegir_avisos` manda el
+    # PRIMERO sin mandar y solo deja nacer uno al día, se comía a los del reporte: todas
+    # las ventanas abren entre las 08:00 y las 10:00 y son candidatas UN SOLO DÍA, así que
+    # el cliente de hábitos nocturnos que entraba a las 21:00 sin haber cerrado el día se
+    # llevaba "Cierra tu día" y el "Último día para tu quincenal" no llegaba a existir:
+    # al día siguiente ya no era candidato y se perdía para siempre. En la base había 19
+    # cierra_dia contra 1 aviso de reporte. Es la regla del doc del 19-08 -- «primero el de
+    # entrega, después el de recordatorio» -- y además el único que puede volver a nacer
+    # mañana es este: cualquier otro que pierda hoy, se pierde.
+    if quiere_cierre_dia and not cerro_hoy and ahora_es.hour >= 20:
+        fuera.append({
+            "clave": f"cierra_dia:{hoy}",
+            "familia": "cierra_dia",
+            "tipo": "checkin",
+            "variantes": [
+                {"titulo": "Cierra tu día", "cuerpo": "Dos toques y listo."},
+                {"titulo": "¿Cómo fuiste hoy?", "cuerpo": "Un minuto y lo tenemos."},
+                {"titulo": "Te falta cerrar el día", "cuerpo": "Lo que no apuntas, no lo vemos."},
+            ],
+            "link": "/dashboard/checkins",
             "calendario": True,
         })
 

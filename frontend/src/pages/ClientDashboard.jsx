@@ -290,11 +290,28 @@ const PlanCaducado = ({ navigate, nombre, api, email }) => {
                     aquí se ofrecía la Membresía de 97, que se vende por su propio embudo. */}
                 <div className="mt-6 pt-6 border-t border-border">
                     <p className="text-sm text-foreground font-medium mb-1">¿Prefieres seguir por tu cuenta?</p>
+                    {/* A /renovacion Y NO A /planes (24-08). Este boton prometia
+                        Mantenimiento y llevaba a la comparativa de 247, 847 y 1.500, donde
+                        Mantenimiento no sale por ningun lado: /planes pinta solo los tres
+                        niveles a proposito, porque la membresia no se compra, se aterriza
+                        en ella. El unico sitio donde Mantenimiento existe para el cliente
+                        es la pantalla de renovacion, como salida «Dejarlo por ahora»
+                        (core/renovacion.py). Al que se le acaba el ciclo y estaba dudando,
+                        enseñarle tres precios mas caros que el que acaba de leer es lo que
+                        hace que se vaya.
+
+                        Y SE DICE DONDE VA A CAER. Los dos botones de esta pantalla acaban en
+                        la misma pagina, asi que el de abajo tenia que prometer solo lo que
+                        hay: la salida esta ahi, pero es la ultima tarjeta y se titula
+                        «Dejarlo por ahora», no «Mantenimiento». Quien no lo sabe cree que se
+                        equivoco de boton y se va. La otra mitad -- que la pantalla de
+                        renovacion baje sola hasta esa tarjeta -- es de RenovacionPage.jsx. */}
                     <p className="text-muted-foreground text-xs mb-3">
-                        Mantenimiento son 60 €/mes y te deja la calculadora y tus alimentos.
+                        Mantenimiento son 60 €/mes y te deja la calculadora y tus alimentos. Lo tienes con
+                        tus opciones de renovación, el último, como «Dejarlo por ahora».
                     </p>
-                    <button onClick={() => navigate('/planes')} className="text-brand text-sm hover:underline" data-testid="ver-membresia">
-                        Ver Mantenimiento
+                    <button onClick={() => navigate('/renovacion')} className="text-brand text-sm hover:underline" data-testid="ver-membresia">
+                        Ver mis opciones
                     </button>
                 </div>
             </div>
@@ -1024,7 +1041,12 @@ const ClientDashboard = () => {
     const showChecklist = !checklistDismissed && checklistSteps.some(s => !s.done);
 
     // Ciclo del plan: nº de semanas (null si es mensual indefinido / variable).
-    const cicloSemanas = myPlan?.ciclo?.semanas ?? null;
+    // EL TOTAL CON EL QUE SE CONTÓ LA SEMANA, NO EL DEL CATÁLOGO (24-08). Aquí se leía
+    // `myPlan.ciclo.semanas` y la semana la calcula el servidor con core/cycle, que busca el
+    // plan sin resolver alias: con un perfil migrado escrito «CalMa» no le encontraba el
+    // ciclo, la semana crecía sin dar la vuelta y salía «Semana 63/12». `cycle_total_weeks`
+    // viene de esa misma cuenta, así que los dos números van siempre a la par.
+    const cicloSemanas = profile.cycle_total_weeks ?? null;
     const weekProgress = cicloSemanas ? Math.min((profile.week / cicloSemanas) * 100, 100) : null;
     const todayRoutine = routine?.days?.find(d =>
         d.day.toLowerCase() === new Date().toLocaleDateString('es-ES', { weekday: 'long' }).toLowerCase());

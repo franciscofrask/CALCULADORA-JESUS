@@ -691,13 +691,16 @@ const ClientDetailPage = () => {
     const setUserPlan = async (plan, comp) => {
         const uid = client?.user?.id; if (!uid) return;
         try { await api.put(`/admin/users/${uid}`, { plan: plan || null, comp_plan: comp }); toast.success('Plan actualizado'); fetchClient(); }
-        catch { toast.error('Error al actualizar el plan'); }
+        catch (e) { toast.error(mensajeDeError(e, 'No se pudo actualizar el plan')); }
     };
     const toggleUserBaja = async () => {
         const uid = client?.user?.id; if (!uid) return;
         if (client.user.deleted_at) {
+            // Con el motivo del servidor, como los otros dos de esta tarjeta: este se quedó
+            // atrás cuando se arreglaron los demás y «No se pudo reactivar» a secas no dice
+            // si es un permiso, un usuario que ya no está o un fallo de red.
             try { await api.post(`/admin/users/${uid}/restore`); toast.success('Usuario reactivado'); fetchClient(); }
-            catch { toast.error('No se pudo reactivar'); }
+            catch (e) { toast.error(mensajeDeError(e, 'No se pudo reactivar')); }
             return;
         }
         if (!await confirm({
@@ -1525,10 +1528,24 @@ const ClientDetailPage = () => {
 
                 {/* ========== TAB 3: MEMBRESÍA ========== */}
                 <TabsContent value="membresia" className="space-y-4">
-                    {/* Gestión de usuario: rol, plan (cortesía) y baja lógica */}
+                    {/* GESTIÓN DE USUARIO: SOLO EL ADMIN (rol, plan de cortesía y baja lógica).
+                        Los tres controles llaman a endpoints que van con `get_admin_only_user`,
+                        así que al entrenador -- que ve la ficha de TODOS los clientes desde el
+                        13-08 -- se le pintaban y al pulsarlos solo se llevaba un 403. Un botón
+                        que siempre falla es peor que no tenerlo, y es el mismo candado que ya
+                        lleva la sección Usuarios del menú.
+                        La baja se dice aparte y para todos: es el motivo de que su cliente no
+                        pueda entrar y no se lee en ningún otro sitio de la ficha. UNA sola
+                        copia del aviso -- estuvo escrito dos veces, aquí para el entrenador y
+                        dentro de la tarjeta para el admin, y dos copias del mismo texto acaban
+                        diciendo cosas distintas el día que alguien retoca una. Al admin le sale
+                        justo encima de la tarjeta, que es donde lo tenía. */}
+                    {user?.deleted_at && (
+                        <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/25 rounded-lg px-3 py-2">Usuario dado de baja: no puede entrar en la app.</div>
+                    )}
+                    {adminUser?.role === 'admin' && (
                     <Card className="bg-[#111] border-[#222]"><CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider flex items-center gap-2"><Shield className="w-4 h-4" />Gestión de usuario</CardTitle></CardHeader>
                         <CardContent className="space-y-3">
-                            {user?.deleted_at && <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/25 rounded-lg px-3 py-2">Usuario dado de baja: no puede entrar en la app.</div>}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div><Label className="text-white/60 text-xs">Rol</Label>
                                     <select value={user?.role || 'client'} onChange={e => changeUserRole(e.target.value)} disabled={savingMgmt} className="w-full bg-[#0A0A0A] border border-[#333] text-white text-sm rounded-lg px-2 py-2 mt-1">
@@ -1574,6 +1591,7 @@ const ClientDetailPage = () => {
                             </div>
                         </CardContent>
                     </Card>
+                    )}
                     <Card className="bg-[#111] border-[#222]"><CardContent className="p-5">
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <InfoItem icon={Shield} label="Plan" value={<PlanBadge plan={profile?.plan} />} />

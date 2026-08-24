@@ -49,12 +49,18 @@ def test_un_plan_que_no_esta_en_el_catalogo_no_encierra_a_nadie():
     """El caso que de verdad había en producción: `plan: None`.
 
     `modo_calculadora` manda a `sin_ajuste` todo lo que no reconoce -- None, la cadena vacía
-    y grafías que no están en el catálogo, como «CalMa» --, así que el régimen más
-    restrictivo era también el de los perfiles con el plan mal puesto. En producción el
-    17-08 eran 5 perfiles (4 sin plan y 1 «CalMa»), y 3 de ellos sin macros: uno era una
-    clienta real y activa, que no podía pasar del cuestionario.
+    y cualquier grafía que no case con el catálogo --, así que el régimen más restrictivo
+    era también el de los perfiles con el plan mal puesto. En producción el 17-08 eran 5
+    perfiles (4 sin plan y 1 «CalMa»), y 3 de ellos sin macros: uno era una clienta real y
+    activa, que no podía pasar del cuestionario.
+
+    «CalMa» SALIÓ DE ESTA LISTA EL 24-08. Desde que `modo_calculadora` resuelve alias como
+    ya hacía `plan_features`, esa grafía encuentra su ficha (calma12, personalizado), o sea
+    que deja de ser un plan desconocido: ahora entra por la rama del que tiene entrenador y
+    consulta el historial, y aquí se llama con `db=None`. Lo que este test defiende -- que
+    un plan que no se reconoce no encierre a nadie -- se sigue probando con los otros tres.
     """
-    for plan in (None, "", "CalMa", "loquesea"):
+    for plan in (None, "", "loquesea"):
         puede, _ = asyncio.run(puede_ajustarlos(None, {"id": "x", "plan": plan,
                                                        "macros_training": {}}))
         assert puede is True, f"con plan={plan!r} se queda encerrado"

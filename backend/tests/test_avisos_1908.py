@@ -71,9 +71,14 @@ class TestCicloTerminado:
 
 
 class TestCorreoDelViernes:
+    # `con_correo_de_novedades` se pasa a mano desde el 24-08. El defecto de la funcion es
+    # False, como el de todo lo de ahi ("sin dato, no sale"): quien la llame sin pasarlo no
+    # puede afirmarle al cliente que se le ha mandado un correo. En produccion lo pasa
+    # `sincronizar_avisos`, y hoy lo pasa a True fijo porque atarlo a que alguien marque la
+    # tarea de la newsletter dejaria el aviso sin salir nunca (medido: una tarea, sin marcar).
     def test_el_viernes_desde_mediodia_si(self):
         # El 21-08-2026 es viernes.
-        avisos = avisos_de_calendario_doc(ahora_es=_es(2026, 8, 21, 12))
+        avisos = avisos_de_calendario_doc(ahora_es=_es(2026, 8, 21, 12), con_correo_de_novedades=True)
         assert any(a["familia"] == "correo_viernes" for a in avisos)
 
     def test_el_viernes_por_la_manana_todavia_no(self):
@@ -85,8 +90,10 @@ class TestCorreoDelViernes:
         assert not any(a["familia"] == "correo_viernes" for a in avisos)
 
     def test_la_clave_lleva_el_dia_para_volver_el_viernes_siguiente(self):
-        de_este = [a for a in avisos_de_calendario_doc(ahora_es=_es(2026, 8, 21, 13))
+        de_este = [a for a in avisos_de_calendario_doc(ahora_es=_es(2026, 8, 21, 13),
+                                                       con_correo_de_novedades=True)
                    if a["familia"] == "correo_viernes"][0]["clave"]
-        del_siguiente = [a for a in avisos_de_calendario_doc(ahora_es=_es(2026, 8, 28, 13))
+        del_siguiente = [a for a in avisos_de_calendario_doc(ahora_es=_es(2026, 8, 28, 13),
+                                                             con_correo_de_novedades=True)
                          if a["familia"] == "correo_viernes"][0]["clave"]
         assert de_este != del_siguiente

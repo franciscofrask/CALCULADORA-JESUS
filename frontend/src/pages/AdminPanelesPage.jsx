@@ -471,8 +471,12 @@ const PanelEntrenador = ({ api, user, onAsignar, irAOperaciones }) => {
                 <ListaSeleccionable titulo="Macros por entregar" icono={ClipboardList} color="#FF671F"
                     sub="Mandaron reporte y esperan sus macros" items={datos.macros_por_entregar} onAsignar={onAsignar}
                     extra={(c) => c.reporte_el ? <span className="text-[10px] text-white/40">desde el {c.reporte_el}</span> : null} />
+                {/* «SIN MIRAR» ERA MENTIRA: nadie apunta quién ha visto una foto. El dato son
+                    las fotos con `uploaded_at` de los últimos 7 días (routes/paneles.py), así
+                    que la lista no se vacía al repasarlas, se vacía sola a la semana. El
+                    rótulo dice ahora lo que hay; marcar quién las ha mirado sería otra cosa. */}
                 <ListaSeleccionable titulo="Fotos nuevas" icono={Camera} color="#0EA5E9"
-                    sub="Fotos de progreso sin mirar" items={datos.fotos_nuevas} onAsignar={onAsignar}
+                    sub="Subidas en los últimos 7 días" items={datos.fotos_nuevas} onAsignar={onAsignar}
                     extra={(c) => (
                         <span className="text-[10px] text-white/40 tabular-nums">
                             {c.n_fotos ? `${c.n_fotos} fotos` : ''}{c.ultima ? ` · ${c.ultima}` : ''}

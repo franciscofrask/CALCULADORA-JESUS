@@ -22,7 +22,11 @@ from models.user import (
 )
 from target_calculator import calcular_targets, targets_to_profile_macros
 from macro_engine import calcular_macros_v2, ajustes_to_kwargs, multiplicadores_de
-from core.plan_access import tiene_entrenador_detras, dias_hasta_la_revision
+# Las versiones «vivo» miran ademas lo que el equipo haya editado en el plan desde el panel
+# (db.plan_overrides). Sin ellas, cambiar la Calculadora o la cadencia de reportes de un plan
+# cambiaba la tarjeta y el menu del cliente -- que salen de GET /plans, con overrides -- y no
+# el comportamiento del servidor, que seguia con el valor escrito en el codigo.
+from core.plan_access import tiene_entrenador_detras_vivo, dias_hasta_la_revision_vivo
 from core.quiz_store import guardar_quiz_respuestas, registrar_revision
 from core.avisos_equipo import avisar_al_equipo
 from core.cycle import enrich_cycle
@@ -918,7 +922,13 @@ async def guardar_punto_de_partida(data: dict, user = Depends(get_current_user))
 
 @router.get("/clients/mis-dias")
 async def mis_dias_montados(user = Depends(get_current_user)):
-    """Los últimos días que el cliente tiene montados en la calculadora (para elegir uno en P10)."""
+    """Los últimos días que el cliente tiene montados en la calculadora (para elegir uno en P10).
+
+    YA NO LO LLAMA NADIE DE LA APP (24-08). Era la puerta «Un día mío» del cuestionario, que
+    se quitó con el doc del 23-08 (ver QuestionnairePage.jsx, donde queda dicho). Se deja
+    porque no molesta y lo usa el script de pruebas `_probar_alta_y_ajuste.py`; si alguien
+    la revive, que sepa que la pantalla que la usaba ya no existe.
+    """
     from core.lectura_dieta import dias_disponibles
     return {"dias": await dias_disponibles(user["id"])}
 
@@ -1180,7 +1190,7 @@ async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
     # se le presentan como propuesta y esperan a que el coach los valide. Se calculan igual (y no
     # se le deja con los provisionales del alta) porque si no, el que mas paga seria el que peor lo
     # pasa: esperaria con peores numeros que el del plan basico.
-    con_entrenador = tiene_entrenador_detras(profile.get("plan"))
+    con_entrenador = await tiene_entrenador_detras_vivo(profile.get("plan"))
     aplicado = False
     if not con_entrenador and profile.get("macros_source") != "manual":
         update["macros_training"] = profile_macros["macros_training"]
@@ -1248,7 +1258,7 @@ async def ajustar_macros(data: AjustesMacros, user = Depends(get_current_user)):
     # decidir (los macros propuestos, las respuestas del cliente y el desglose del porque).
     # La fecha de la proxima revision: en el plan que se autogestiona es la revision automatica;
     # en el plan con coach, cuando le toca repasarlos con el.
-    dias_revision = dias_hasta_la_revision(profile.get("plan"))
+    dias_revision = await dias_hasta_la_revision_vivo(profile.get("plan"))
     proxima = datetime.now(timezone.utc) + timedelta(days=dias_revision)
     MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
              "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
@@ -1730,25 +1740,29 @@ def _feedback_del_entrenador(h: Dict[str, Any]) -> Optional[str]:
 async def get_mi_historial_de_macros(user = Depends(get_current_user)):
     """Lo que se pinta en «Mis macros»: sus ajustes, su feedback y su peso (punto 6.2).
 
-    QUIEN VE EL HISTORICO lo decide su plan, como manda la TABLA 20 del documento:
+    EL HISTORICO ES DE TODOS. Aqui ponia que lo decidia el plan, con la TABLA 20 del
+    documento delante -- `personalizado` si, `sin_ajuste` no --, y eso dejo de ser verdad con
+    el bloque 09 del doc del 19-08: lo que cambia por plan es DONDE se ve, no quien lo tiene.
+    El que se calcula sus macros lo tiene en su pestaña; al que se los lleva un entrenador se
+    le enseña en Seguimiento -> Evolucion. Por eso `con_historico` sale True para todos (esta
+    escrito tambien abajo, en el propio campo).
 
-        calculadora: personalizado   sus macros los lleva una persona -> CON historico
-        calculadora: sin_ajuste      no se le tocan                   -> SIN historico
-
-    La diferencia no es cosmetica. En el plan personalizado el historico ES el producto: es la
-    prueba de que alguien mira sus numeros cada quince dias y por que los movio. En el plan sin
-    ajuste no hay ajustes que enseñar, y una tabla con una sola fila repetida solo consigue que
-    parezca que le hemos dejado de hacer caso.
+    Lo que si sigue saliendo del plan es `modo_calculadora`, que es con lo que la pantalla
+    decide como titular la cabecera y si le toca boton de revisar.
     """
-    from core.plan_access import modo_calculadora
+    from core.plan_access import catalogo_vivo, modo_calculadora
     from core.sin_futuro import hasta_hoy
 
     profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
 
-    modo = modo_calculadora(profile.get("plan"))
-    con_historico = modo == "personalizado"
+    # EL CATALOGO SE LEE UNA VEZ Y LO USAN LOS DOS (24-08). La cabecera decia el modo del
+    # catalogo VIVO y la fecha de al lado salia de `ventana_de_revision`, que lo resolvia con
+    # el CONGELADO: con un override guardado en el panel volvian a discrepar, que es el fallo
+    # que se cerro el 23-08 (ver el comentario de la cabecera, mas abajo).
+    catalogo = await catalogo_vivo()
+    modo = modo_calculadora(profile.get("plan"), catalogo)
     client_id = profile.get("id")
 
     # HASTA HOY, igual que el panel del entrenador (punto 22): hay ajustes programados con
@@ -1833,7 +1847,13 @@ async def get_mi_historial_de_macros(user = Depends(get_current_user)):
     proxima_revision = None
     try:
         from core.ventana_revision import ventana_de_revision
-        ventana = await ventana_de_revision(db, profile)
+        # Con el catalogo del panel, el mismo que resolvio `modo` arriba, como ya se hace en
+        # GET /clients/profile. PENDIENTE Y NO ES DE ESTE FICHERO: `ventana_de_revision` usa
+        # el catalogo que recibe para el calendario de reportes, pero el modo lo sigue
+        # sacando de `modo_calculadora(perfil["plan"])` en seco (core/ventana_revision.py).
+        # Hasta que esa linea reciba el catalogo, un override de la Calculadora puede mandar
+        # esta fecha por la rama equivocada mientras la cabecera de al lado ya cambio.
+        ventana = await ventana_de_revision(db, profile, catalogo=catalogo)
         proxima_revision = hoy if ventana.get("abierta") else ventana.get("se_abre")
     except Exception as e:  # noqa: BLE001 - la cabecera puede vivir sin fecha
         logging.getLogger("uvicorn.error").warning(

@@ -23,11 +23,46 @@ export const CAP = {
 // Suplementación con sus tres valores (fallo 10 del 19-08: «ninguna · la guía · protocolo
 // personalizado»), tolerando el booleano viejo de los overrides guardados. «ninguna» es un
 // texto y un texto es truthy: mirarlo a pelo diría que un plan sin nada la incluye.
-export const suplementacionIncluida = (h) => {
+//
+// CUÁL de las tres, y no solo si la hay (24-08): es lo que separa «la guía» genérica del
+// protocolo que escribe el coach. La comparativa de /planes miraba el campo a pelo y le
+// decía al Nivel 1 -- que lleva la guía -- que su suplementación era «Personalizada».
+// Gemela de `nivel_suplementacion` en backend/models/user.py, con la misma tolerancia al
+// booleano viejo: el True de antes significaba «se la lleva el coach», o sea protocolo.
+export const nivelSuplementacion = (h) => {
     const v = (h || {}).suplementacion;
-    if (typeof v === 'string') return ['guia', 'guía', 'protocolo'].includes(v.trim().toLowerCase());
-    return !!v;
+    if (typeof v === 'string') {
+        const t = v.trim().toLowerCase().replace('guía', 'guia');
+        return ['ninguna', 'guia', 'protocolo'].includes(t) ? t : 'ninguna';
+    }
+    return v ? 'protocolo' : 'ninguna';
 };
+
+export const suplementacionIncluida = (h) => nivelSuplementacion(h) !== 'ninguna';
+
+// EL PLAN DEL PERFIL, BUSCADO COMO LO BUSCA EL SERVIDOR (24-08).
+//
+// Aquí se hacía `planCatalog[profile.plan]` a pelo, y el plan de un perfil no siempre viene
+// normalizado: los migrados lo traen escrito «CalMa» o «Membresía» tal cual. El backend
+// resuelve mayúsculas y alias (`codigo_de_plan` en models/user.py), así que con el plan
+// escrito así el cliente tenía TODAS las habilitaciones por dentro y NINGUNA en la app --
+// `myPlan` salía null y `can()` devolvía false para todo: sin Rutina, sin Reportes, sin
+// Suplementos y sin Chat --, y sin un solo error por ninguna parte. Hoy los 200 perfiles
+// están normalizados; esto es para el día que una escritura a mano deje uno que no lo esté.
+//
+// Los alias salen del propio catálogo (cada entrada de GET /plans trae los suyos), para no
+// mantener aquí una copia de la tabla del servidor. Que la tabla sea LA MISMA depende de que
+// el catálogo las traiga todas: las diez grafías sueltas de `ALIAS_EXTRA` («lunes empiezo»,
+// «premium 177 mensual», «silver 4-trimestral»...) no las declaraba ninguna ficha, así que
+// se pegan a la suya en models/user.py, justo debajo de la tabla.
+export function planDelCatalogo(catalogo, plan) {
+    const codigo = String(plan || '').toLowerCase().trim();
+    if (!codigo) return null;
+    const cat = catalogo || {};
+    if (cat[codigo]) return cat[codigo];
+    return Object.values(cat).find(
+        p => (p?.alias || []).some(a => String(a).toLowerCase().trim() === codigo)) || null;
+}
 
 // Deriva capacidades booleanas a partir de la matriz de habilitaciones del plan.
 //

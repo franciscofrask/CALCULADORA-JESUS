@@ -83,8 +83,18 @@ def perfil(cab_cliente):
 
 
 def inicio_de_ciclo(perfil):
-    """El dia desde el que cuenta este ciclo, que es el mismo criterio que usa billing."""
-    return str(perfil.get("arranque_lunes") or perfil.get("created_at") or "")[:10]
+    """El dia desde el que cuenta este ciclo: LA MISMA funcion que usa billing.
+
+    Estaba copiado a mano (`arranque_lunes` o `created_at`) y el 24-08 dejo de ser cierto:
+    el resumen de la renovacion pasa a contar EL CICLO QUE VIVE, con `current_period_start`
+    y topado a la duracion del plan, para que al de dos años no le diga «45 de 730 dias».
+    Con la copia vieja, este test comparaba dos ventanas distintas y cantaba una diferencia
+    que no existia. Se llama a la de verdad: es lo que el test quiere fijar, que las dos
+    pantallas cuenten lo mismo desde el mismo dia.
+    """
+    from core.renovacion import inicio_del_ciclo
+    d0 = inicio_del_ciclo(perfil)
+    return d0.isoformat() if d0 else ""
 
 
 # ---------------------------------------------------------------------------

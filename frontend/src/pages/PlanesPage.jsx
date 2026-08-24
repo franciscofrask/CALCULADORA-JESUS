@@ -16,6 +16,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { euros, numero } from '../lib/precios';
+import { nivelSuplementacion, suplementacionIncluida } from '../lib/planAccess';
 import { limpiarDestino } from '../lib/navegacion';
 import { toast } from 'sonner';
 import { Check, Minus, Phone, Loader2, ArrowLeft, ArrowRight, Compass, RotateCcw } from 'lucide-react';
@@ -68,6 +69,14 @@ const DETALLE = {
         chat: true, llamadaInicial: true, videollamada: 'Mensual', seguimiento: 'Semanal',
         porLlamada: true,
     },
+};
+
+// La rutina que trae cada plan, dicha en la fila «Rutina» de la comparativa (la etiqueta
+// ya está a la izquierda, así que aquí no se repite la palabra).
+const RUTINA_TEXTO = {
+    personalizada: 'Personalizada',
+    del_mes: 'La del mes',
+    opcional: 'Opcional',
 };
 
 const Si = () => <Check className="w-4 h-4 text-emerald-500 mx-auto" />;
@@ -284,12 +293,29 @@ const PlanesPage = () => {
         { etiqueta: 'Ajuste de macros', render: p => <Texto>{p.ajuste}</Texto> },
         { etiqueta: 'Reportes', render: p => (
             <Texto>{(p.habilitaciones?.reportes || []).join(' + ') || null}</Texto>) },
-        { etiqueta: 'Rutina', render: p => (
-            p.habilitaciones?.rutina === 'personalizada'
-                ? <Texto>Personalizada</Texto>
-                : <No />) },
+        // LAS DOS FILAS QUE CONTRADECÍAN AL CATÁLOGO (24-08). La comparativa es lo último
+        // que se lee antes de pagar 247 €, y decía dos cosas que el propio plan desmiente:
+        //   - Rutina: solo pintaba «Personalizada», así que el Nivel 1, que lleva la rutina
+        //     del mes, salía con el guion de «no» mientras el gancho de su misma tarjeta
+        //     dice «calculadora, rutina del mes y reporte mensual».
+        //   - Suplementación: miraba el campo a pelo, y desde el 19-08 son tres valores
+        //     (ninguna | guia | protocolo). «guia» es un texto y un texto es truthy: los
+        //     tres niveles salían «Personalizada» cuando el Nivel 1 lleva la guía genérica,
+        //     y un plan con «ninguna» habría salido igual.
+        { etiqueta: 'Rutina', render: p => {
+            const r = p.habilitaciones?.rutina;
+            if (!r || r === 'ninguna') return <No />;
+            // TOLERA EL BOOLEANO VIEJO DE LOS OVERRIDES, igual que `nivelSuplementacion` dos
+            // filas más abajo: con `rutina: true` guardado en la base, `RUTINA_TEXTO[true]`
+            // es undefined y React no pinta un booleano, así que la celda salía en blanco
+            // -- ni el nombre de la rutina ni el guion de «no».
+            return <Texto>{RUTINA_TEXTO[r] || 'Incluida'}</Texto>;
+        } },
         { etiqueta: 'Suplementación', render: p => (
-            <Texto>{p.habilitaciones?.suplementacion ? 'Personalizada' : 'Sugerencia automática'}</Texto>) },
+            suplementacionIncluida(p.habilitaciones)
+                ? <Texto>{nivelSuplementacion(p.habilitaciones) === 'protocolo'
+                    ? 'Personalizada' : 'La guía'}</Texto>
+                : <No />) },
         { etiqueta: 'Chat con el equipo', render: p => (p.chat ? <Si /> : <No />) },
         { etiqueta: 'Llamada inicial', render: p => (p.llamadaInicial ? <Si /> : <No />) },
         { etiqueta: 'Videollamada', render: p => <Texto>{p.videollamada}</Texto> },

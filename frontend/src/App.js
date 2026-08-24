@@ -172,7 +172,14 @@ function AppRoutes() {
                             hablando. Además le faltaban los textos de los niveles nuevos.
                             Manda /planes, que es la que cumple el documento.
                             Se conserva la query para no perder la vuelta de Stripe de un
-                            pago que se hubiera iniciado antes de este cambio. */}
+                            pago que se hubiera iniciado antes de este cambio.
+
+                            Y EL COMPONENTE VIEJO SIGUE EN EL REPO SIN MONTARSE EN NINGUNA
+                            RUTA: pages/OnboardingPage.jsx no lo importa nadie desde aquel
+                            cambio. Antes de revivirlo hay que saber que apunta a planes ya
+                            retirados (reto12en12_gold, reto60, calculadora_jp) y que su
+                            checkout va sin success_path, o sea que el que pagara volveria
+                            a ninguna parte. */}
                         <Navigate to={`/planes${window.location.search}`} replace />
                     </ProtectedRoute>
                 }

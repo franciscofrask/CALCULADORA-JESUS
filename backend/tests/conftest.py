@@ -15,10 +15,29 @@ Ahora:
     de fallar en masa. Un test que no se puede ejecutar no es un test roto, y mezclarlos
     hace que nadie mire la lista.
 """
+import asyncio
 import os
 
 import pytest
 import requests
+
+# UN SOLO BUCLE DE ASYNCIO PARA TODA LA BATERIA.
+#
+# El cliente de Motor (`core.database.db`) se ata al bucle en el que nace, asi que dos
+# ficheros que creen cada uno el suyo se pisan: el segundo recibe «Event loop is closed» o,
+# peor, resultados fantasma (paso de verdad en test_pedir_alimento_concreto, donde un test
+# veia peras al buscar pepino). Y no se nota corriendo el fichero solo -- ahi hay un unico
+# bucle y todo pasa --, solo cuando se lanza la bateria entera: el 24-08 tres tests de
+# correos empezaron a fallar SOLO en tanda por esto.
+#
+# Los tests que tocan la base llaman a `corre(...)` en vez de a `asyncio.run` y todos
+# comparten este.
+BUCLE = asyncio.new_event_loop()
+
+
+def corre(corutina):
+    """Ejecuta una corutina en el bucle comun de la bateria."""
+    return BUCLE.run_until_complete(corutina)
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "http://localhost:8000").rstrip("/")
 API = f"{BASE_URL}/api"

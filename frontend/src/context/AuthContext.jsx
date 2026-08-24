@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { deriveCapabilities } from '../lib/planAccess';
+import { deriveCapabilities, planDelCatalogo } from '../lib/planAccess';
 import { limpiarLoDeLaPersona } from '../lib/almacenLocal';
 import { aplicarAjustesDeFicha } from '../lib/ajustesEnFicha';
 
@@ -282,8 +282,11 @@ export const AuthProvider = ({ children }) => {
         && ['draft', 'created'].includes(profile.checkout_status));
 
     // Plan del usuario actual (entrada del catálogo), sus habilitaciones y capacidades.
+    // La entrada se busca con `planDelCatalogo`, que resuelve mayúsculas y alias igual que
+    // el servidor: un plan escrito «CalMa» dejaba al cliente sin ninguna capacidad en la app
+    // mientras el backend se las daba todas (ver lib/planAccess.js).
     const myPlan = useMemo(
-        () => (profile?.plan && !planUnpaid ? planCatalog[profile.plan] || null : null),
+        () => (profile?.plan && !planUnpaid ? planDelCatalogo(planCatalog, profile.plan) : null),
         [profile?.plan, planUnpaid, planCatalog]
     );
     const habilitaciones = myPlan?.habilitaciones || null;

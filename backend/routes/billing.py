@@ -6,7 +6,7 @@ Rutas de facturación con Stripe (suscripciones, test mode).
 """
 import os
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, Depends, Request, Body
 from typing import Any, Dict, List
@@ -101,7 +101,9 @@ async def create_checkout_session(data: CheckoutSessionRequest, user=Depends(get
             status_code=400,
             detail="Este plan se contrata por llamada: agenda la tuya y te mandamos el enlace de pago.")
 
-    profile = await ensure_checkout_profile(user, plan_info["code"])
+    # Con el precio congelado por delante: si no, la preparación del checkout le escribe
+    # el del catálogo en la ficha (0,00 € en los planes antiguos) y le borra el suyo.
+    profile = await ensure_checkout_profile(user, plan_info["code"], price_override=precio_congelado)
     customer_id = await get_or_create_stripe_customer(user, profile)
 
     success_url = build_frontend_url(data.success_path, include_session_placeholder=True)
@@ -119,6 +121,13 @@ async def create_checkout_session(data: CheckoutSessionRequest, user=Depends(get
         linea = {"price": stripe_price_id, "quantity": 1}
 
     checkout_metadata = {"user_id": user["id"], "profile_id": profile["id"], "plan": plan_info["code"]}
+    if renovacion_legacy:
+        # SU PRECIO VIAJA CON LA SESIÓN (24-08). Es lo que se le cobra de verdad, y es lo
+        # que tiene que quedar en su ficha cuando el pago vuelva: al confirmarlo se
+        # escribía el del catálogo, que en los planes antiguos es 0,00 €, así que la
+        # renovación SIGUIENTE moría en «No sabemos tu precio de renovación» y el cliente
+        # tenía que escribir al equipo para poder seguir pagando.
+        checkout_metadata["precio_congelado"] = f"{precio_congelado:.2f}"
 
     # Si pagó una revisión suelta hace menos de 30 días, ese importe se le descuenta al subir de
     # plan: es lo que hace que probar no le cueste nada. Se crea un cupón de un solo uso por el
@@ -230,7 +239,7 @@ async def create_checkout_session(data: CheckoutSessionRequest, user=Depends(get
     return CheckoutSessionResponse(checkout_url=session["url"], session_id=session["id"], profile_id=profile["id"])
 
 
-async def _dias_con_ajuste(client_id: str, desde) -> int:
+async def _dias_con_ajuste(client_id: str, desde, hasta=None) -> int:
     """Cuantas veces le han tocado los macros EN ESTE CICLO. Por dias y hasta hoy.
 
     Jesus, 12-08-2026: «En la renovacion sigue poniendo AJUSTES 176». Contaba filas de
@@ -259,8 +268,12 @@ async def _dias_con_ajuste(client_id: str, desde) -> int:
     # asi que entre las 00:00 y las 02:00 de aqui se queda en el dia anterior y el ajuste de
     # hoy no se contaba: la tarjeta de renovacion decia 4 y «Mis macros» enseñaba 5. Es el
     # mismo fallo que se arreglo en la serie de peso, en otro sitio.
+    #
+    # `hasta` es el final del ciclo que se esta resumiendo, que no siempre es hoy: al
+    # caducado hace meses hay que cortarle en el dia en que su ciclo acabo, o se le cuentan
+    # como ajustes «de este ciclo» los de todo lo que lleva fuera.
     from core.tiempo import hoy_madrid
-    return dias_distintos(marcas, desde, hoy_madrid())
+    return dias_distintos(marcas, desde, hasta or hoy_madrid())
 
 
 def dias_distintos(marcas, desde=None, hasta=None) -> int:
@@ -294,7 +307,9 @@ async def get_renovacion(user=Depends(get_current_user)):
 
     No cobra nada ni cambia nada: solo cuenta. Cada salida lleva a su propio checkout.
     """
-    from core.renovacion import montar_renovacion, resumen_del_ciclo
+    from core.renovacion import (
+        dias_de_ciclo, inicio_del_ciclo, montar_renovacion, resumen_del_ciclo,
+    )
     from models.user import opciones_de_renovacion, merged_catalog
     from routes.plans import _overrides_by_code
 
@@ -310,19 +325,31 @@ async def get_renovacion(user=Depends(get_current_user)):
     ultimo = await db.reports.find_one(
         hasta_hoy({"client_id": perfil["id"]}), {"_id": 0}, sort=[("created_at", -1)])
 
-    desde = perfil.get("arranque_lunes") or perfil.get("created_at")
-    dias_totales, dias_dieta, d0 = 84, 0, None
-    if desde:
-        try:
-            d0 = datetime.fromisoformat(str(desde).replace("Z", "+00:00")).date()
-            hoy = datetime.now(timezone.utc).date()
-            dias_totales = max(1, (hoy - d0).days)
-            dias_dieta = await db.diets.count_documents({
-                "user_id": user["id"], "fecha": {"$gte": d0.isoformat(), "$lte": hoy.isoformat()}})
-        except (ValueError, TypeError):
-            d0 = None
+    # EL RESUMEN ES DE ESTE CICLO, no de toda su vida con nosotros: el arranque lo decide
+    # `core.renovacion.inicio_del_ciclo` (ahi esta contado el caso). Y el «hoy» es el de
+    # España, como en `_dias_con_ajuste`: en UTC, entre las 00:00 y las 02:00 de aqui, el
+    # dia cuadrado de esta noche no entraba en la cuenta de dias y el ajuste si.
+    from core.tiempo import hoy_madrid
+    hoy = hoy_madrid()
+    d0 = inicio_del_ciclo(perfil, hoy)
+    # OJO CON EL NOMBRE: `ultimo` es EL ULTIMO REPORTE y viaja al resumen como tal. El
+    # cierre de la ventana de la cuenta es otra cosa y se llama `cierre_ventana`; llamarlo
+    # igual pisaba el reporte con una fecha y la pantalla entera respondia 500
+    # («'datetime.date' object has no attribute 'get'»).
+    dias_totales, dias_dieta, cierre_ventana = 84, 0, hoy
+    if d0:
+        # Y EL CICLO NO DURA MAS DE LO QUE DURA. La ventana se cerraba en «hoy», asi que al
+        # que lleva medio año caducado -- su ultimo ciclo pagado empezo hace nueve meses --
+        # le salia «X de 270 dias con el dia cuadrado» y los ajustes de esos nueve meses.
+        # Es el mismo «45 de 730» por la tercera puerta: el ciclo que resume esta pantalla
+        # termina cuando termino, no hoy.
+        cierre_ventana = min(hoy, d0 + timedelta(days=dias_de_ciclo(perfil)))
+        dias_totales = max(1, (cierre_ventana - d0).days)
+        dias_dieta = await db.diets.count_documents({
+            "user_id": user["id"],
+            "fecha": {"$gte": d0.isoformat(), "$lte": cierre_ventana.isoformat()}})
 
-    ajustes = await _dias_con_ajuste(perfil["id"], d0)
+    ajustes = await _dias_con_ajuste(perfil["id"], d0, cierre_ventana)
     catalogo = merged_catalog(await _overrides_by_code())
 
     # Los pesos que viajaron dentro de un ajuste. La mayoria de los clientes de Calma NO tienen

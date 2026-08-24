@@ -699,24 +699,43 @@ const AdminPlansPage = () => {
                                 Solo tiene sentido en los que ya no se venden: al cliente que
                                 YA lo tiene se le deja renovarlo con lo que incluye hoy y con
                                 su precio congelado; para el resto el plan sigue sin existir.
-                                Bloqueado si el plan no tiene precio en Stripe, porque
-                                entonces la renovación no se podría cobrar. */}
+                                YA NO SE BLOQUEA POR EL PRECIO DE STRIPE (24-08). El
+                                interruptor salía gris para reto12en12, calma12,
+                                personalizado, básica, premium, plan_6m, entrenamiento
+                                personal y optimización hormonal, con el motivo «no se le
+                                podría cobrar la renovación», y ese motivo ya no lo sostiene
+                                el código: desde el 20-08 la renovación del legacy se cobra
+                                con el precio congelado del cliente EN LÍNEA, sin Price de
+                                catálogo (routes/billing.py y core/stripe_billing.py lo
+                                dicen y lo hacen), y el servidor solo comprueba que el plan
+                                esté retirado (routes/plans.py). Al estar deshabilitado en
+                                los DOS sentidos, un admin que lo apagara por error no podía
+                                volver a encenderlo desde aquí. Dos reglas para el mismo
+                                interruptor son dos verdades del mismo dato. */}
                             {form.estado === 'legacy' && (
                                 <div className="border border-[#282828] rounded-lg p-3 bg-[#0A0A0A]">
                                     <button
                                         type="button"
-                                        disabled={!editing?.tiene_price_en_stripe}
                                         onClick={() => setForm(f => ({ ...f, renovable_por_los_suyos: !f.renovable_por_los_suyos }))}
                                         data-testid="plan-renovable-por-los-suyos"
-                                        className={`w-full flex items-center justify-between gap-3 text-left text-sm ${editing?.tiene_price_en_stripe ? '' : 'opacity-50 cursor-not-allowed'}`}
+                                        className="w-full flex items-center justify-between gap-3 text-left text-sm"
                                     >
                                         <span className="text-white/80">Dejar que lo renueven los que ya lo tienen</span>
                                         <Dot on={!!form.renovable_por_los_suyos} />
                                     </button>
+                                    {/* LA FRASE VA SIEMPRE (24-08). Salía solo para los planes
+                                        sin Price de Stripe, y eso daba a entender que a los
+                                        que sí lo tienen se les cobraría el precio del
+                                        catálogo. No es así: routes/billing.py cobra el precio
+                                        congelado en línea en TODA renovación de un plan que no
+                                        esté activo, tenga Price o no. Y así vuelve el aviso
+                                        que de verdad hace falta, que es el del cliente sin
+                                        precio guardado: ese se queda a medias con un 400. */}
                                     <p className="text-[11px] text-white/30 mt-1">
-                                        {editing?.tiene_price_en_stripe
-                                            ? 'No vuelve a la tienda: solo lo verá quien ya esté en este plan, al acabar su ciclo.'
-                                            : 'Este plan no tiene precio en Stripe, así que no se le podría cobrar la renovación.'}
+                                        No vuelve a la tienda: solo lo verá quien ya esté en este plan, al acabar su ciclo.
+                                        Se le cobra su precio congelado, el que tiene guardado en su ficha. Al que no
+                                        tenga precio guardado no se le puede cobrar: se le corta la renovación y se le
+                                        dice que os escriba.
                                     </p>
                                 </div>
                             )}

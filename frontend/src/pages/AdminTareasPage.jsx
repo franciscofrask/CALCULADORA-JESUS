@@ -12,15 +12,16 @@ import { useAuth } from '../context/AuthContext';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
-import { CheckCircle2, ClipboardList, Plus, RotateCcw } from 'lucide-react';
+import { CheckCircle2, ClipboardList, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import AsignarTarea from '../components/AsignarTarea';
+import { useConfirm } from '../components/ui/confirm';
 import { mensajeDeError } from '../lib/mensajeDeError';
 
 const Fecha = ({ iso }) => iso
     ? <span>{new Date(iso + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</span>
     : null;
 
-const Tarea = ({ t, onHecha, onIrAlCliente, mostrarQuien = false }) => (
+const Tarea = ({ t, onHecha, onIrAlCliente, onBorrar, puedeBorrar, mostrarQuien = false }) => (
     <div className="flex items-start gap-3 py-2.5 border-b border-[#1c1c1c] last:border-0"
         data-testid={`tarea-${t.id}`}>
         <button onClick={() => onHecha(t)} title={t.hecha ? 'Deshacer' : 'Marcar hecha'}
@@ -44,6 +45,17 @@ const Tarea = ({ t, onHecha, onIrAlCliente, mostrarQuien = false }) => (
                 {t.hecha && t.hecha_por_nombre && <span>· la hizo {t.hecha_por_nombre}</span>}
             </p>
         </div>
+        {/* BORRAR LA QUE SE ESCRIBIÓ MAL. Hasta ahora lo único que se podía hacer con una
+            tarea puesta por error era marcarla hecha, o sea mentir en el registro que luego
+            se lee en la ficha del cliente. El botón solo sale donde el backend deja borrar
+            (manual y tuya, o admin): pintarlo donde va a dar 403 es peor que no tenerlo. */}
+        {puedeBorrar?.(t) && (
+            <button onClick={() => onBorrar(t)} title="Borrar la tarea"
+                data-testid={`tarea-borrar-${t.id}`}
+                className="mt-0.5 text-white/20 hover:text-red-400">
+                <Trash2 className="w-4 h-4" />
+            </button>
+        )}
     </div>
 );
 
@@ -60,7 +72,8 @@ const Bloque = ({ titulo, tono, tareas, ...resto }) => {
 };
 
 const AdminTareasPage = () => {
-    const { api } = useAuth();
+    const { api, user } = useAuth();
+    const { confirm } = useConfirm();
     const navigate = useNavigate();
     const [datos, setDatos] = useState(null);
     const [modal, setModal] = useState(false);
@@ -81,8 +94,27 @@ const AdminTareasPage = () => {
             toast.error(mensajeDeError(e, 'No se pudo marcar'));
         }
     };
+    // Las mismas reglas que el endpoint (routes/tareas.py): las automáticas no se borran
+    // -- el sistema las volvería a crear -- y una manual solo la borra quien la escribió,
+    // salvo que seas admin.
+    const puedeBorrar = (t) => t.origen === 'manual'
+        && (t.creada_por === user?.id || user?.role === 'admin');
+    const borrar = async (t) => {
+        if (!await confirm({
+            title: '¿Borrar esta tarea?',
+            description: 'Desaparece de la lista de quien la tenía. Si ya se hizo, márcala hecha en vez de borrarla.',
+            confirmLabel: 'Borrar', danger: true,
+        })) return;
+        try {
+            await api.delete(`/admin/tareas/${t.id}`);
+            toast.success('Tarea borrada');
+            cargar();
+        } catch (e) {
+            toast.error(mensajeDeError(e, 'No se pudo borrar la tarea'));
+        }
+    };
     const irAlCliente = (t) => t.sobre_quien && navigate(`/admin/clients/${t.sobre_quien}`);
-    const props = { onHecha: marcar, onIrAlCliente: irAlCliente };
+    const props = { onHecha: marcar, onIrAlCliente: irAlCliente, onBorrar: borrar, puedeBorrar };
 
     return (
         <div className="p-6 space-y-6 animate-fade-in bg-[#0A0A0A] min-h-screen">

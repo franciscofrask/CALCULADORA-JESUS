@@ -178,6 +178,35 @@ const Descuento = () => {
 };
 
 /**
+ * EL TEXTO DE ENTRADA DE LA GUÍA, EL SUYO (24-08).
+ *
+ * Jesús lo escribió en su web, se importó a la base (`app_state.guia_suplementacion`) y el
+ * endpoint lo sirve desde entonces, pero esta pantalla pintaba una versión recortada
+ * escrita aquí a mano y no lo leía: editarlo en la base no cambiaba nada de lo que ve
+ * nadie. Ahora manda el suyo -- que además trae el párrafo de la guía de definición del
+ * Catálogo Premium, que aquí se había quedado fuera -- y el de casa queda de respaldo,
+ * por si esta base no ha pasado por la importación.
+ *
+ * Del suyo se cae UNA línea: el «*IMPORTANTE» del descuento, porque va justo debajo en su
+ * propio bloque con el texto que dictó el 21-08. Decírselo dos veces en la misma pantalla
+ * no es ser literal, es repetirse.
+ */
+const TEXTO_DE_ENTRADA_DE_CASA = 'Estos son los suplementos que más utilizo y recomiendo. '
+    + 'Con pautas exactas sobre su uso. Están organizados por categorías según su función. '
+    + 'En condiciones normales, se recomienda empezar por los básicos.';
+
+const TextoDeEntrada = ({ texto }) => {
+    const suyos = (texto || '').split('\n').map(p => p.trim())
+        .filter(p => p && !p.startsWith('*IMPORTANTE'));
+    const parrafos = suyos.length > 0 ? suyos : [TEXTO_DE_ENTRADA_DE_CASA];
+    return (
+        <div className="mb-5 max-w-2xl space-y-2" data-testid="texto-entrada-guia">
+            {parrafos.map((p, i) => <p key={i} className="text-muted-foreground text-sm">{p}</p>)}
+        </div>
+    );
+};
+
+/**
  * LA GUÍA (doc 19-08, presentada como dictó Jesús el 21-08): primero LAS CATEGORÍAS,
  * para pinchar y entrar, no todo el mensaje de golpe. Dentro de cada una, sus fichas.
  * El remate por plan sigue igual (el aviso del plan personalizado o la oferta de los 87).
@@ -351,11 +380,7 @@ const SupplementsPage = () => {
             <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground mb-2">
                 Tu suplementación
             </h1>
-            <p className="text-muted-foreground text-sm mb-5 max-w-2xl">
-                Estos son los suplementos que más utilizo y recomiendo. Con pautas exactas
-                sobre su uso. Están organizados por categorías según su función. En
-                condiciones normales, se recomienda empezar por los básicos.
-            </p>
+            <TextoDeEntrada texto={guia?.texto_entrada} />
             <GuiaDeSuplementacion api={api} guia={guia} />
         </Wrap>;
     }

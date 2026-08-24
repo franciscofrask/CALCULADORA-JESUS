@@ -220,10 +220,38 @@ async def ensure_checkout_profile(user: Dict[str, Any], plan: str, *, price_over
         stripe_price_id = get_stripe_price_id_for_plan(plan)
     except HTTPException:
         stripe_price_id = None
+    # `price_override` es lo que de verdad se le va a cobrar cuando no es el precio de
+    # tarifa: la renovacion del plan antiguo va con el precio congelado de cada cliente y
+    # en linea (routes/billing.py). Sin el, aqui se le escribia el del catalogo encima --
+    # 0,00 € en los planes antiguos, porque su importe vive en la hoja de control de pagos
+    # -- y el cliente se quedaba sin su precio antes incluso de llegar a la pasarela.
     profile_price = price_override if price_override is not None else plan_info["price"]
 
     if profile and profile.get("subscription_status") in {"active", "trialing", "past_due"}:
-        raise HTTPException(status_code=400, detail="Este cliente ya tiene una suscripción activa o en cobro pendiente.")
+        # Frase humana: el que la lee es el cliente, en un toast, al pulsar «cambiar de
+        # plan» o «dejarlo por ahora». «Este cliente ya tiene una suscripción activa o en
+        # cobro pendiente» era una nota de sistema y le dejaba sin saber que hacer.
+        #
+        # PERO SON DOS SITUACIONES DISTINTAS Y NO SE LES DICE LO MISMO (24-08). Al de
+        # `past_due` el cobro automatico le ha FALLADO: decirle «tu plan sigue con el
+        # cobro automático de antes» es justo lo contrario de lo que le pasa, y ademas le
+        # llega -- la pantalla le pinta el boton de la pasarela porque `renueva_solo` solo
+        # cuenta active/trialing (core/renovacion.py). Lo que necesita es la tarjeta al
+        # dia, y como el portal de Stripe no esta enchufado a ninguna pantalla, la unica
+        # via honesta hoy es que nos escriba.
+        estado_sub = profile.get("subscription_status")
+        logger.info("Checkout bloqueado: el perfil %s tiene subscription_status=%s",
+                    profile.get("id"), estado_sub)
+        if estado_sub == "past_due":
+            raise HTTPException(
+                status_code=400,
+                detail="Tienes un cobro de tu plan que no llegó a entrar, y hasta "
+                       "resolverlo no podemos hacer este cambio. Escríbenos y te pasamos "
+                       "el enlace para actualizar la tarjeta.")
+        raise HTTPException(
+            status_code=400,
+            detail="Tu plan sigue con el cobro automático de antes, así que este cambio "
+                   "no se puede hacer desde aquí. Escríbenos y te lo dejamos listo.")
 
     if profile:
         if "id" not in profile:
@@ -243,16 +271,13 @@ async def ensure_checkout_profile(user: Dict[str, Any], plan: str, *, price_over
         # explica que `users.plan` NO se escribe aqui «porque concedia el plan por el
         # mero hecho de iniciar (y abandonar) el checkout». Faltaba la otra mitad.
         #
-        # Al que YA tiene acceso no se le toca nada suyo: solo se anota que hay una
-        # compra en marcha. Quien decide el plan comprado es el `metadata` de la sesion
-        # (routes/billing.py:120 lo pone del catalogo, no del perfil), asi que el webhook
-        # se entera igual. Y de paso vuelve a ser posible ENCADENAR el ciclo: el webhook
-        # compara el plan comprado con el del perfil y mira `current_period_end`, dos
-        # cosas que este borrado dejaba siempre sin efecto.
-        # No se le escribe NADA suyo: ni el plan, ni el estado, ni las fechas. La sesion
-        # de Stripe no necesita nada de eso (lleva `client_reference_id` y el plan en su
-        # metadata), y lo que no se toca no se puede perder. Lo unico que pasa, si viene,
-        # es el entrenador, que no tiene que ver con el pago.
+        # Al que YA tiene acceso no se le escribe NADA suyo: ni el plan, ni el estado, ni
+        # las fechas (lo unico que se guarda, si viene, es el entrenador, que no tiene que
+        # ver con el pago). La sesion de Stripe no necesita nada de eso -- lleva
+        # `client_reference_id` y el plan en su metadata --, y lo que no se toca no se
+        # puede perder. Y de paso vuelve a ser posible ENCADENAR el ciclo: al volver el
+        # pago se compara el plan comprado con el del perfil y se mira
+        # `current_period_end`, dos cosas que este borrado dejaba siempre sin efecto.
         from .plan_access import has_active_access
         if has_active_access(profile):
             if trainer_id is not None:
@@ -261,6 +286,22 @@ async def ensure_checkout_profile(user: Dict[str, Any], plan: str, *, price_over
                 return await db.client_profiles.find_one({"id": profile["id"]}, {"_id": 0})
             return profile
 
+        # Y LAS FECHAS DEL CICLO TAMPOCO SE BORRAN AL CADUCADO (24-08).
+        #
+        # Lo de arriba solo cubria al que tiene acceso vivo. El caducado -- que es
+        # justamente el destinatario de esta pantalla -- seguia perdiendo
+        # `current_period_start` y `current_period_end` por el mero hecho de abrir la
+        # pasarela y cerrarla. Y de esas dos fechas vive la renovacion: sin la de fin, la
+        # cabecera vuelve a «Vas por la semana N» -- que ademas da la vuelta sola, se
+        # cuenta en modulo -- en vez de «Tu ciclo ha terminado», y le reaparece el «si
+        # renuevas antes de que acabe»; sin la de inicio, la tarjeta «Constancia» vuelve a
+        # contar desde su fecha de alta. O sea: mirar el precio y cerrar la ventana
+        # deshacia los dos arreglos del dia.
+        #
+        # Borrarlas no hacia falta para nada. Cuando el pago vuelva las reescribe quien
+        # sabe la fecha buena (`sync_profile_from_one_time_session`, o el webhook de la
+        # suscripcion), y mientras tanto no dan acceso a nadie: `has_active_access` corta
+        # antes por `status` y, si no, por la propia fecha ya pasada.
         update_data = {
             "plan": plan_info["code"],
             "price": profile_price,
@@ -269,8 +310,6 @@ async def ensure_checkout_profile(user: Dict[str, Any], plan: str, *, price_over
             "checkout_status": "draft",
             "stripe_price_id": stripe_price_id,
             "next_payment": None,
-            "current_period_start": None,
-            "current_period_end": None,
             "cancel_at_period_end": False,
             "billing_cycle_days": plan_info["billing_cycle_weeks"] * 7,
             "last_payment_error": None,
@@ -469,6 +508,22 @@ async def sync_profile_from_one_time_session(session, *, user_id=None):
             str(profile.get("current_period_end") or "").replace("Z", "+00:00"))
     except (ValueError, TypeError):
         pass
+    # EL PRECIO QUE SE GUARDA ES EL DE SU RENOVACION, NO EL DE TARIFA (24-08). Ojo con
+    # leerlo como «lo que se le ha cobrado», que es lo que decia antes esta linea y no es
+    # verdad: si trae cupon -- la revision suelta ya pagada se descuenta, routes/billing --
+    # el recibo es menor. Este `price` es el precio de referencia de su plan, el que manda
+    # en la proxima renovacion y el que se le enseña; el importe del recibo vive en
+    # `db.payments`. Aqui se escribia siempre el del catalogo, y la renovacion del plan
+    # antiguo no se cobra con ese:
+    # va con el precio congelado del cliente y en linea. Como en los legacy el catalogo
+    # pone 0,00 € -- su importe vive en la hoja de control de pagos --, el cliente renovaba
+    # bien una vez y su ficha se quedaba sin precio; a la siguiente, la app le contestaba
+    # «No sabemos tu precio de renovación» y tenia que escribir al equipo para poder pagar.
+    # El importe viaja en la metadata de la sesion, puesto por quien cobra (routes/billing).
+    try:
+        precio_cobrado = float(metadata.get("precio_congelado") or 0) or plan_info["price"]
+    except (TypeError, ValueError):
+        precio_cobrado = plan_info["price"]
     mismo_plan = plan_info["code"] == (profile.get("plan") or "").lower().strip()
     if mismo_plan and fin_actual and fin_actual > pago:
         start = fin_actual
@@ -487,7 +542,7 @@ async def sync_profile_from_one_time_session(session, *, user_id=None):
         {"$set": {
             "stripe_customer_id": session.get("customer") or profile.get("stripe_customer_id"),
             "plan": plan_info["code"],
-            "price": plan_info["price"],
+            "price": precio_cobrado,
             "status": "activo",
             "subscription_status": None,
             "checkout_status": "completed",

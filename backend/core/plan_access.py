@@ -191,7 +191,28 @@ async def plan_grants_feature_vivo(plan_code: Optional[str], feature: Optional[s
     return feature in await plan_features_vivo(plan_code)
 
 
-def modo_calculadora(plan_code: Optional[str]) -> str:
+async def catalogo_vivo() -> Dict[str, Dict[str, Any]]:
+    """El catalogo CON lo que el equipo haya editado en el panel (db.plan_overrides).
+
+    Mismo criterio que `plan_features_vivo`: si la base no contesta, mejor el catalogo del
+    codigo que dejar la funcion sin plan.
+
+    El respaldo es `merged_catalog()` SIN overrides y no `PLAN_CATALOG` a pelo (24-08): el
+    crudo no trae `code`, no trae `features` y no pasa las habilitaciones por
+    `completar_acompanamiento`, asi que el dia que Mongo no conteste el que leyera cualquiera
+    de esos tres campos se encontraria un vacio sin un solo error. A los dos usos de hoy no
+    les afectaba -- solo miran `calculadora` y `reportes` --, pero el nombre promete «el
+    catalogo» y el que venga detras se lo va a creer.
+    """
+    from models.user import merged_catalog
+    from routes.plans import _overrides_by_code
+    try:
+        return merged_catalog(await _overrides_by_code())
+    except Exception:
+        return merged_catalog()
+
+
+def modo_calculadora(plan_code: Optional[str], catalogo: Optional[Dict[str, Any]] = None) -> str:
     """
     Como trabaja la calculadora en este plan: 'personalizado' (hay un coach detras que revisa),
     'autogestion' (el cliente se lo lleva solo) o 'sin_ajuste'.
@@ -199,32 +220,66 @@ def modo_calculadora(plan_code: Optional[str]) -> str:
     Es el eje que separa los dos comportamientos del doc del 29-07: en el plan con entrenador los
     macros del cuestionario se calculan pero NO se aplican solos, se le presentan como propuesta y
     esperan a que el coach los valide.
+
+    `catalogo`: para pasarle el mezclado con los overrides del panel. Sin el lee el del
+    codigo, que es lo que hacia siempre y por lo que el admin podia cambiar la Calculadora
+    de un plan, ver como cambiaban la tarjeta y el menu del cliente (esos leen GET /plans,
+    que si los aplica) y que el cerrojo del servidor siguiera con el valor de fabrica.
+
+    POR `codigo_de_plan`, COMO `plan_features` (24-08). Buscaba con el plan en minusculas y
+    nada mas, asi que un perfil migrado con el plan escrito «CalMa» no casaba con ninguna
+    ficha y salia "sin_ajuste". Mientras el front tambien fallaba, los dos mentian igual;
+    desde que la app resuelve alias (`planDelCatalogo`), a ese cliente la pantalla le decia
+    «tus macros te los ajustamos nosotros» y el servidor se los aplicaba solo, sin esperar
+    al coach (routes/users.py, el ajuste del cuestionario).
     """
-    from models.user import PLAN_CATALOG
-    plan = PLAN_CATALOG.get((plan_code or "").lower().strip()) or {}
+    from models.user import PLAN_CATALOG, codigo_de_plan
+    cat = catalogo or PLAN_CATALOG
+    plan = cat.get(codigo_de_plan(plan_code)) or {}
     return (plan.get("habilitaciones") or {}).get("calculadora") or "sin_ajuste"
 
 
-def tiene_entrenador_detras(plan_code: Optional[str]) -> bool:
+async def modo_calculadora_vivo(plan_code: Optional[str]) -> str:
+    """`modo_calculadora` mirando tambien lo editado en el panel."""
+    return modo_calculadora(plan_code, await catalogo_vivo())
+
+
+def tiene_entrenador_detras(plan_code: Optional[str], catalogo: Optional[Dict[str, Any]] = None) -> bool:
     """True si el plan incluye coach que revisa los macros."""
-    return modo_calculadora(plan_code) == "personalizado"
+    return modo_calculadora(plan_code, catalogo) == "personalizado"
 
 
-def dias_hasta_la_revision(plan_code: Optional[str]) -> int:
+async def tiene_entrenador_detras_vivo(plan_code: Optional[str]) -> bool:
+    """`tiene_entrenador_detras` mirando tambien lo editado en el panel."""
+    return await modo_calculadora_vivo(plan_code) == "personalizado"
+
+
+def dias_hasta_la_revision(plan_code: Optional[str], catalogo: Optional[Dict[str, Any]] = None) -> int:
     """
     Cada cuanto le toca revision de macros segun su plan: quincenal si el plan la incluye,
     mensual en el resto. Es lo que hay que decirle al terminar el cuestionario ("tu proxima
     revision automatica sera el ..."), porque un numero sin fecha de repaso no dice cuando
     volver.
+
+    `catalogo`: igual que en `modo_calculadora`, para que lo que el admin edita en el panel
+    valga tambien aqui. Y por `codigo_de_plan` por lo mismo: al perfil escrito «premium 177
+    mensual» se le daba la cadencia del plan que no existe -- 28 dias -- cuando el Premium
+    lleva reporte semanal y le tocan cada 7.
     """
-    from models.user import PLAN_CATALOG
-    plan = PLAN_CATALOG.get((plan_code or "").lower().strip()) or {}
+    from models.user import PLAN_CATALOG, codigo_de_plan
+    cat = catalogo or PLAN_CATALOG
+    plan = cat.get(codigo_de_plan(plan_code)) or {}
     reportes = (plan.get("habilitaciones") or {}).get("reportes") or []
     if "semanal" in reportes:
         return 7
     if "quincenal" in reportes:
         return 14
     return 28
+
+
+async def dias_hasta_la_revision_vivo(plan_code: Optional[str]) -> int:
+    """`dias_hasta_la_revision` mirando tambien lo editado en el panel."""
+    return dias_hasta_la_revision(plan_code, await catalogo_vivo())
 
 
 def require_access(feature: Optional[str] = None):

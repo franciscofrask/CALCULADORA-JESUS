@@ -43,6 +43,18 @@ from typing import Any, Dict, List, Optional
 # un recordatorio, es perder un cobro.
 TIPOS_EQUIPO: Dict[str, Dict[str, Any]] = {
     "rutina_del_mes": {"etiqueta": "Quiere comprar la rutina del mes", "dinero": True},
+    # APLAZAR NO ES COMPRAR (23-08). El que marca «preguntame en una semana» se escribe con
+    # el tipo de arriba, y como el panel sustituye el titulo del aviso por la etiqueta del
+    # catalogo, en «Piden comprar» sale literalmente «Quiere comprar la rutina del mes»: se
+    # llama a vender a quien acaba de pedir margen.
+    #
+    # CUIDADO, EL FALLO SIGUE VIVO: esto es solo el tipo al que tiene que mudarse, con su
+    # etiqueta y fuera del dinero. Quien escribe el aviso es `routes/reports.py` (el bloque
+    # del aplazamiento, hoy con tipo="rutina_del_mes") y ese fichero no es de este bloque:
+    # mientras esa linea no cambie, el equipo lo sigue viendo como una compra. Lo vigila la
+    # prueba marcada xfail de `tests/test_cierre_panel_2408.py`, que se pondra en XPASS el
+    # dia que se cambie.
+    "rutina_del_mes_aplazada": {"etiqueta": "Aplazó la rutina del mes", "dinero": False},
     "interes_plan": {"etiqueta": "Quiere que le cuentes el plan de arriba", "dinero": True},
     "revision_suelta_pagada": {"etiqueta": "Revisión de macros pagada", "dinero": True},
     "lead_pagado": {"etiqueta": "Lead que ha pagado", "dinero": True},
