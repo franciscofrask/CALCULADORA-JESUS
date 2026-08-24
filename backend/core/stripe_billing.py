@@ -204,7 +204,22 @@ async def ensure_checkout_profile(user: Dict[str, Any], plan: str, *, price_over
     plan_info = get_plan_info(plan)
     profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
     now_iso = datetime.now(timezone.utc).isoformat()
-    stripe_price_id = get_stripe_price_id_for_plan(plan)
+
+    # EL PRICE AQUI SOLO SE GUARDA; QUIEN COBRA ES EL QUE LLAMA (24-08).
+    #
+    # Esta linea tumbaba la renovacion de los planes antiguos con un 503 -- «el plan X no
+    # esta disponible para compra en este momento» -- antes de que el endpoint llegara a
+    # su propio precio congelado. Y es que en ese camino el Price NO SE USA: la renovacion
+    # legacy cobra con precio en linea justamente porque esos planes no tienen Price en
+    # Stripe (routes/billing.py lo dice y lo hace). Aqui el valor solo se apunta en la
+    # ficha, asi que no poder resolverlo no es motivo para cortarle el paso a nadie.
+    #
+    # Al que compra un plan del catalogo no le cambia nada: si su Price falta de verdad,
+    # el 503 lo sigue dando `routes/billing.py` cuando lo pide para cobrar.
+    try:
+        stripe_price_id = get_stripe_price_id_for_plan(plan)
+    except HTTPException:
+        stripe_price_id = None
     profile_price = price_override if price_override is not None else plan_info["price"]
 
     if profile and profile.get("subscription_status") in {"active", "trialing", "past_due"}:

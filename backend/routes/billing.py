@@ -75,16 +75,17 @@ async def create_checkout_session(data: CheckoutSessionRequest, user=Depends(get
         # ES LA RENOVACIÓN DE SU PLAN ANTIGUO. Se cobra con SU precio congelado (parte 1:
         # «el precio se congela mientras no se dé de baja»), en línea y como pago único:
         # los legacy no tienen Price en Stripe -- se retiraron de la venta -- y su importe
-        # es el de cada cliente, no uno de tarifa. Cascada: lo que tiene apuntado su
-        # perfil, si no su último cobro real, y si no el precio de catálogo del plan.
+        # es el de cada cliente, no uno de tarifa.
+        #
+        # SU PRECIO, O NINGUNO (24-08). La cascada tenía un tercer escalón -- «si no, su
+        # último cobro real» -- y adivinar sale caro: ese cobro es el último de CUALQUIER
+        # cosa que haya comprado. Medido sobre los diez clientes sin precio guardado, a
+        # dos les habría cobrado 60 € por renovar un Reto 12en12, porque 60 € fue su
+        # último recibo (un mes de Mantenimiento). Cobrar de menos sin que nadie se entere
+        # es peor que no cobrar: ahora, si no se sabe su precio, sale el 400 humano de
+        # abajo y lo resuelve el equipo, que es quien sabe lo que pagó.
         renovacion_legacy = True
         precio_congelado = (perfil_previo or {}).get("price") or (perfil_previo or {}).get("precio_alta")
-        if not precio_congelado:
-            pago = await db.pagos_historicos.find_one(
-                {"email": (user.get("email") or "").lower(), "importe": {"$gt": 0},
-                 "duplicado_de": {"$exists": False}, "es_dinero": {"$ne": False}},
-                {"_id": 0, "importe": 1}, sort=[("fecha", -1)])
-            precio_congelado = (pago or {}).get("importe")
         precio_congelado = float(precio_congelado or plan_info.get("price") or 0)
         if precio_congelado <= 0:
             raise HTTPException(status_code=400,

@@ -1,16 +1,31 @@
 # -*- coding: utf-8 -*-
 """Los circuitos que la revision del 24-08 encontro abiertos, y que ya no lo estan.
 
-Cuatro de los seis graves; los otros dos esperan una decision de precio. Cada bloque
-empieza con lo que le pasaba a una persona, que es lo que hay que impedir que vuelva.
+Los seis graves por el lado del codigo. Lo que sigue faltando no es un arreglo sino una
+pieza que no existe: que el equipo pueda alargar un ciclo desde el panel, para el que
+paga por transferencia y para el que no tiene precio congelado.
+
+Cada bloque empieza con lo que le pasaba a una persona, que es lo que hay que impedir
+que vuelva.
 
 Ejecutar:
     cd backend && REACT_APP_BACKEND_URL=http://127.0.0.1:8000 \
         venv/Scripts/python.exe -m pytest tests/test_circuitos_2408.py -q
 """
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 from core.plan_access import estado_de_acceso, has_active_access
+
+# UN SOLO BUCLE PARA TODO EL FICHERO. El cliente de Motor se ata al bucle en el que nace,
+# asi que varios `asyncio.run` con el mismo cliente dan «Event loop is closed» y resultados
+# fantasma (paso de verdad en test_pedir_alimento_concreto). Mismo apaño que en
+# test_correos_avisos_2308.
+_BUCLE = asyncio.new_event_loop()
+
+
+def corre(corutina):
+    return _BUCLE.run_until_complete(corutina)
 
 
 def dentro(dias=30):
@@ -120,12 +135,9 @@ def test_el_plan_antiguo_reabierto_se_queda_como_estaba():
 # =====================================================================================
 # GRAVE 3 · «abro el pago, me lo pienso, cierro, y he perdido el ciclo que ya habia pagado»
 # =====================================================================================
-# OJO: este es el UNICO test async del fichero. El cliente de Motor se ata al bucle en
-# el que nace, asi que dos `asyncio.run` con el mismo cliente dan «Event loop is closed».
+# Los tests que tocan la base van con `corre()`, el bucle unico de arriba.
 
 def test_abrir_un_pago_no_le_quita_el_acceso_al_que_ya_pago():
-    import asyncio
-
     async def recorrido():
         from core.database import db
         from core.stripe_billing import ensure_checkout_profile
@@ -154,7 +166,7 @@ def test_abrir_un_pago_no_le_quita_el_acceso_al_que_ya_pago():
         finally:
             await db.client_profiles.replace_one({"id": original["id"]}, original)
 
-    r = asyncio.run(recorrido())
+    r = corre(recorrido())
     if isinstance(r, str):
         import pytest
         pytest.skip(r)
@@ -206,3 +218,59 @@ def test_el_equipo_lee_el_hilo_aunque_lo_llevara_otro_companero():
             "companero: puede contestar sin haber podido leerlo")
     finally:
         base.messages.delete_many({"content": marca})
+
+
+# =====================================================================================
+# GRAVE 6 · «llevo tres años con vosotros y no me deja renovar»
+# =====================================================================================
+# El endpoint de renovacion ya sabia cobrar un plan antiguo con su precio congelado y en
+# linea (esos planes no tienen Price en Stripe). Pero una linea antes llamaba a
+# `ensure_checkout_profile`, que resolvia el Price SIEMPRE -- un dato que en ese camino
+# solo se guarda en la ficha -- y reventaba con 503 antes de llegar. Eran 73 clientes de
+# plan antiguo de los 119 que entran.
+
+def test_preparar_el_checkout_no_revienta_sin_precio_de_stripe():
+    """El Price aqui solo se apunta; no poder resolverlo no puede cortar el paso."""
+    async def recorrido():
+        from core.database import db
+        from core.stripe_billing import ensure_checkout_profile
+
+        u = await db.users.find_one({"email": "clientedemo@test.com"}, {"_id": 0})
+        if not u:
+            return "sin cuenta de demo"
+        original = await db.client_profiles.find_one({"user_id": u["id"]}, {"_id": 0})
+        if not original:
+            return "la cuenta de demo no tiene ficha"
+        # Sin acceso vivo, para que entre por el camino que escribe la ficha.
+        await db.client_profiles.update_one({"id": original["id"]}, {"$set": {
+            "status": "pendiente_pago", "access_until": None, "current_period_end": None,
+            "subscription_status": None}})
+        try:
+            p = await ensure_checkout_profile(u, "reto12en12")   # legacy, sin Price
+            return {"plan": p.get("plan"), "price_id": p.get("stripe_price_id")}
+        finally:
+            await db.client_profiles.replace_one({"id": original["id"]}, original)
+
+    r = corre(recorrido())
+    if isinstance(r, str):
+        import pytest
+        pytest.skip(r)
+    assert r["plan"] == "reto12en12", "no ha preparado el checkout del plan antiguo"
+    assert r["price_id"] is None, "sin Price en Stripe, el campo se queda a nulo y ya"
+
+
+def test_sin_precio_congelado_no_se_adivina_cobrando_el_ultimo_recibo():
+    """SU precio, o ninguno.
+
+    La cascada tenia un escalon que miraba el ultimo cobro del cliente, fuera de lo que
+    fuera. Medido sobre los diez sin precio: a dos les habria cobrado 60 EUR por renovar
+    un Reto 12en12, porque 60 fue su ultimo recibo (un mes de Mantenimiento). Ahora, sin
+    precio congelado, sale la frase humana y lo resuelve el equipo.
+    """
+    fuente = open("routes/billing.py", encoding="utf-8").read()
+    trozo = fuente[fuente.index("ES LA RENOVACIÓN DE SU PLAN ANTIGUO"):]
+    trozo = trozo[:trozo.index("EL PREMIUM SE CONTRATA POR LLAMADA")]
+    assert "pagos_historicos" not in trozo, (
+        "vuelve a adivinar el precio de renovacion con el ultimo cobro del cliente")
+    assert "No sabemos tu precio de renovación" in trozo, \
+        "se ha perdido la salida humana para el que no tiene precio congelado"
