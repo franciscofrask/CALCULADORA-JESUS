@@ -208,6 +208,24 @@ def salidas(*, plan_actual: Optional[str], opciones_catalogo: Dict[str, Any],
         info = catalogo[actual]
         precio = precio_alta if precio_alta else info.get("precio")
         legacy = bool(opciones_catalogo.get("renovacion_legacy")) and not suscripcion_viva
+
+        # RENOVAR COBRA, salvo que haya una suscripcion viva que lo haga sola (24-08).
+        #
+        # `por_checkout` solo se encendia para el legacy reabierto, asi que a un cliente
+        # de nivel1, nivel2, ELM o Mantenimiento se le decia «Perfecto, seguimos. No
+        # tienes que hacer nada mas» y no se llamaba a nadie: llegaba el fin de ciclo y se
+        # quedaba caducado creyendo que habia renovado. Dos parrafos mas arriba, la misma
+        # pantalla le acaba de decir que su plan no se renueva solo.
+        #
+        # La regla de verdad es esa: desde el 20-08 NINGUN plan renueva solo (todos son de
+        # pago unico), asi que lo unico que justifica el atajo es una suscripcion viva de
+        # las de antes. Y solo se manda a la pasarela lo que se puede cobrar de verdad:
+        # un plan que se sigue vendiendo y con su precio en Stripe. Los planes antiguos
+        # sin precio configurado se quedan como estaban -- ese es otro arreglo, y espera
+        # una decision de cuanto cobrarles.
+        se_vende_hoy = (info.get("estado") == "activo"
+                        and float(info.get("precio") or 0) > 0
+                        and bool(info.get("stripe_price_env")))
         fuera.append({
             "tipo": "renovar",
             "plan": actual,
@@ -215,7 +233,11 @@ def salidas(*, plan_actual: Optional[str], opciones_catalogo: Dict[str, Any],
             "precio": precio,
             "periodo": periodo_de_cobro(info),
             "precio_congelado": bool(precio_alta and precio_alta != info.get("precio")),
-            "por_checkout": legacy,
+            "por_checkout": legacy or (not suscripcion_viva and se_vende_hoy),
+            # El plan que se cierra hablando tampoco se renueva solo por la pasarela: el
+            # front lo lleva al chat, como hace con «Cambiar a» ese mismo plan. Sin esto,
+            # al renovar se le abriria un cobro de 1.500 EUR por su cuenta.
+            "por_llamada": es_por_llamada(actual),
             "titulo": "Seguir igual",
             # La duracion sale del catalogo: a un plan mensual (ELM, Mantenimiento) se le
             # decia «otras 12 semanas» con toda la cara (cazado con el P51 del 23-08).

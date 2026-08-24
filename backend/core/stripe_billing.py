@@ -214,6 +214,38 @@ async def ensure_checkout_profile(user: Dict[str, Any], plan: str, *, price_over
         if "id" not in profile:
             profile["id"] = str(uuid.uuid4())
             await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": {"id": profile["id"]}})
+
+        # ABRIR UN PAGO NO PUEDE QUITARTE EL QUE YA HICISTE (24-08).
+        #
+        # Esto dejaba el perfil en «pendiente_pago» y borraba las fechas ANTES de que el
+        # cliente viera la pasarela. Al que estaba en la semana 10, con seis semanas
+        # pagadas por delante, le bastaba pulsar «Cambiar a...», ver el precio y cerrar
+        # la ventana para quedarse fuera de la app: `has_active_access` decia que no y
+        # los endpoints le contestaban 402, sin haber pagado nada y sin nada que lo
+        # devolviera salvo pagar otra vez o que alguien le tocara la ficha.
+        #
+        # La misma leccion ya estaba aprendida a medias unas lineas mas abajo, donde se
+        # explica que `users.plan` NO se escribe aqui «porque concedia el plan por el
+        # mero hecho de iniciar (y abandonar) el checkout». Faltaba la otra mitad.
+        #
+        # Al que YA tiene acceso no se le toca nada suyo: solo se anota que hay una
+        # compra en marcha. Quien decide el plan comprado es el `metadata` de la sesion
+        # (routes/billing.py:120 lo pone del catalogo, no del perfil), asi que el webhook
+        # se entera igual. Y de paso vuelve a ser posible ENCADENAR el ciclo: el webhook
+        # compara el plan comprado con el del perfil y mira `current_period_end`, dos
+        # cosas que este borrado dejaba siempre sin efecto.
+        # No se le escribe NADA suyo: ni el plan, ni el estado, ni las fechas. La sesion
+        # de Stripe no necesita nada de eso (lleva `client_reference_id` y el plan en su
+        # metadata), y lo que no se toca no se puede perder. Lo unico que pasa, si viene,
+        # es el entrenador, que no tiene que ver con el pago.
+        from .plan_access import has_active_access
+        if has_active_access(profile):
+            if trainer_id is not None:
+                await db.client_profiles.update_one(
+                    {"id": profile["id"]}, {"$set": {"trainer_id": trainer_id}})
+                return await db.client_profiles.find_one({"id": profile["id"]}, {"_id": 0})
+            return profile
+
         update_data = {
             "plan": plan_info["code"],
             "price": profile_price,

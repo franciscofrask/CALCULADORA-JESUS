@@ -95,12 +95,34 @@ async def get_messages(with_user: Optional[str] = None, user = Depends(get_curre
     if with_user:
         if with_user == "support":
             with_user = await _resolve_receiver(user, "support")
-        query = {
-            "$or": [
-                {"sender_id": user["id"], "receiver_id": with_user},
-                {"sender_id": with_user, "receiver_id": user["id"]}
-            ]
-        }
+
+        # SI LA BANDEJA ES COMPARTIDA, EL HILO TAMBIÉN (24-08).
+        #
+        # `GET /messages/conversations` trae la bandeja del equipo ENTERO desde el 11-08,
+        # pero este hilo seguía filtrando por quien mira. Resultado: alguien del equipo
+        # abría una conversación de la lista -- normalmente de otro compañero, porque al
+        # cliente sin coach se le resuelve al primer admin -- y leía «Sin mensajes con
+        # este cliente», con el botón de responder al lado. Se podía contestar sin haber
+        # podido leer lo que el cliente escribió.
+        #
+        # Se ensancha SOLO cuando el que mira es del equipo y el otro NO lo es: entre dos
+        # del equipo la conversación sigue siendo de los dos, y un cliente nunca ve nada
+        # que no sea suyo.
+        del_equipo = set(await db.users.distinct("id", {"role": {"$in": ["admin", "trainer"]}}))
+        if user["id"] in del_equipo and with_user not in del_equipo:
+            query = {
+                "$or": [
+                    {"sender_id": with_user, "receiver_id": {"$in": list(del_equipo)}},
+                    {"sender_id": {"$in": list(del_equipo)}, "receiver_id": with_user},
+                ]
+            }
+        else:
+            query = {
+                "$or": [
+                    {"sender_id": user["id"], "receiver_id": with_user},
+                    {"sender_id": with_user, "receiver_id": user["id"]}
+                ]
+            }
 
     messages = await db.messages.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
     return [MessageResponse(**m) for m in messages]

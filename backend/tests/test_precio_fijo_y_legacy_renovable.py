@@ -201,10 +201,17 @@ class TestLoQueVeElClienteAlRenovar:
     def test_al_del_plan_vivo_sin_suscripcion_se_le_dice_que_renueva_el(self):
         # Nada renueva solo desde el 20-08: el del catalogo sin suscripcion de Stripe
         # renueva a mano, y la pantalla ya no puede prometerle lo contrario.
+        #
+        # OJO, 24-08: este test decia eso en el comentario y fijaba lo CONTRARIO en la
+        # linea de abajo (`por_checkout is False`), que es el atajo de «no tienes que
+        # hacer nada mas». Con eso, un nivel2 pulsaba renovar, no se le cobraba y se
+        # quedaba caducado creyendo que habia renovado. Se corrige la asercion para que
+        # diga lo que el comentario ya decia: renovar a mano es ir a la pasarela.
         cat = merged_catalog()
         pantalla = self._pantalla(cat, plan="nivel2")
         seguir = [s for s in pantalla["salidas"] if s["tipo"] == "renovar"]
-        assert seguir and seguir[0].get("por_checkout") is False
+        assert seguir and seguir[0].get("por_checkout") is True, \
+            "sin suscripcion viva, «seguir igual» tiene que cobrar"
         assert pantalla["renueva_solo"] is False
 
     def test_con_el_interruptor_apagado_no_hay_seguir_igual(self):

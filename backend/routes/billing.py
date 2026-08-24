@@ -191,10 +191,15 @@ async def create_checkout_session(data: CheckoutSessionRequest, user=Depends(get
         # but passed a recurring price». Era un 500 seco en la cara del cliente; ahora
         # dice qué pasa (a él, en humano) y deja el detalle en el log para arreglarlo
         # donde toca, que es el price del entorno.
+        # OJO (24-08): esta linea decia `plan_code`, que en esta funcion NO EXISTE. El
+        # `except` que estaba para dar la cara petaba el mismo con un NameError, asi que
+        # el cliente recibia el 500 seco que esto venia a evitar y el log que lo explicaba
+        # no se escribia nunca. Se ve en cuanto Stripe rechaza una sesion por cualquier
+        # motivo: aqui salio con «No such customer» al probar la renovacion en dev.
         detalle = str(e)
         logging.getLogger("uvicorn.error").error(
             "checkout: Stripe rechazó la sesión del plan %s (price %s, modo %s): %s",
-            plan_code, stripe_price_id, session_kwargs.get("mode"), detalle)
+            plan_info["code"], stripe_price_id, session_kwargs.get("mode"), detalle)
         if "recurring price" in detalle or "one-time price" in detalle:
             raise HTTPException(
                 status_code=502,

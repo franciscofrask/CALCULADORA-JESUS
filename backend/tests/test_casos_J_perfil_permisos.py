@@ -105,11 +105,12 @@ def _capacidades(habilitaciones: dict) -> dict:
         "macros_personalizados": h.get("calculadora") == "personalizado",
         "reportes": len(reportes) > 0,
         "harbiz": bool(h.get("harbiz")),
-        # PARA TODOS LOS PLANES DE PAGO (doc 21-08, incongruencia 1b): el Chat abre con
-        # dos entradas y la de «Mi suscripción» la necesitan todos, porque todos pagan.
-        # Sin plan contratado `can()` devuelve false, así que esto no abre nada al que
-        # no paga.
-        "chat": True,
+        # EL CHAT SALE DEL ACOMPAÑAMIENTO DEL PLAN (decisión de Francisco del 23-08, P73).
+        # Antes lo veían los siete planes: al de «solo app», que por definición no lleva
+        # entrenador, se le enseñaba el Chat y dentro encontraba un vacío. Ahora lo abre
+        # quien tiene entrenador detrás, sea `con_entrenador` o `con_entrenador_y_llamadas`
+        # (el Premium es lo segundo, y con la igualdad exacta se quedaba fuera).
+        "chat": str(h.get("acompanamiento") or "").startswith("con_entrenador"),
     }
 
 
@@ -134,7 +135,7 @@ def test_las_reglas_del_front_siguen_siendo_estas():
     for regla in ("[CAP.RUTINA]: !!rutinaVisible && !!h.rutina && h.rutina !== 'ninguna'",
                   "[CAP.SUPLEMENTACION]: suplementacionIncluida(h)",
                   "[CAP.REPORTES]: reportes.length > 0",
-                  "[CAP.CHAT]: true"):
+                  "[CAP.CHAT]: String(h.acompanamiento || '').startsWith('con_entrenador')"):
         assert regla in src, (
             f"cambió una regla de deriveCapabilities ({regla}): actualiza `_capacidades` "
             "en este fichero o los casos 67-69 dejan de probar lo que creen")
@@ -273,18 +274,31 @@ def test_66_nunca_se_le_dice_no_definida(cabeceras_cliente):
 # con dos entradas (Mi suscripción · Algo no funciona) y es visible para todos.
 # ─────────────────────────────────────────────────────────────────────────────
 
-def test_67_el_chat_se_ensena_tambien_al_plan_solo_app(
+def test_67_el_chat_es_del_que_tiene_entrenador_detras(
         cabeceras_admin, cabeceras_cliente, plan_del_cliente):
-    """Se le quita el entrenador al plan (acompanamiento «solo app») y el Chat SIGUE en
-    el menú: por él entran «Mi suscripción» y «Algo no funciona», y esas son de todos."""
+    """DOS DECISIONES SEGUIDAS, y manda la ultima.
+
+    El doc del 21-08 (incongruencia 1b) abrio el Chat a los siete planes porque por el
+    entran «Mi suscripcion» y «Algo no funciona», y esas son de todos. El 23-08 Francisco
+    decidio lo contrario (P73): el Chat vuelve a ser del acompanamiento, porque al plan
+    «solo app» -- que por definicion no lleva entrenador -- se le enseñaba el Chat y
+    dentro encontraba «Soporte JG12» y un vacio.
+
+    Este test fija la regla vigente. QUEDA ABIERTO, y esta en el informe del 24-08: el
+    cliente de «solo app» paga y hoy no tiene por donde preguntar por su dinero.
+    """
     with plan_sin(plan_del_cliente, cabeceras_admin, acompanamiento="solo_app"):
+        plan = _catalogo_del_cliente(cabeceras_cliente, plan_del_cliente)
+        assert _capacidades(plan["habilitaciones"])["chat"] is False, \
+            "el plan «solo app» no lleva entrenador: el Chat no es suyo (P73 del 23-08)"
+
+    with plan_sin(plan_del_cliente, cabeceras_admin, acompanamiento="con_entrenador_y_llamadas"):
         plan = _catalogo_del_cliente(cabeceras_cliente, plan_del_cliente)
         caps = _capacidades(plan["habilitaciones"])
         assert caps["chat"] is True, (
-            "a un plan «solo app» se le vuelve a esconder el Chat: sin él no tiene por "
-            "dónde preguntar por su dinero (doc 21-08, incongruencia 1b)")
-        menu = _menu_del_cliente(plan["habilitaciones"])
-        assert "Chat" in menu, f"el Chat no está en el menú del plan «solo app»: {menu}"
+            "al plan con entrenador Y llamadas -- el Premium, el mas caro -- se le "
+            "esconde el Chat: la regla compara con igualdad y su valor es otro")
+        assert "Chat" in _menu_del_cliente(plan["habilitaciones"])
 
 
 def test_67_el_chat_tambien_esta_abierto_por_detras(

@@ -35,11 +35,15 @@ const RenovacionPage = () => {
     }, [api]);
 
     const elegir = async (salida) => {
-        // Seguir en el mismo plan no necesita checkout: su suscripción ya renueva sola.
+        // Seguir en el mismo plan solo se salta la pasarela cuando de verdad renueva solo,
+        // que hoy es únicamente el que arrastra una suscripción viva de las de antes:
+        // desde el 20-08 todo lo que se vende es de pago único. Quien decide es
+        // `por_checkout`, que lo calcula el servidor (core/renovacion.py).
         //
-        // Salvo el plan antiguo que el admin ha reabierto para los suyos: ese llega con
-        // `por_checkout` porque su suscripción no renueva sola (se retiró el plan), así que
-        // decirle «no tienes que hacer nada» sería dejarle sin plan y sin cobrar.
+        // Hasta el 24-08 esto se cumplía solo para el plan antiguo reabierto, así que a un
+        // cliente de nivel1, nivel2, ELM o Mantenimiento se le decía «no tienes que hacer
+        // nada más» y no se le cobraba: llegaba el fin de ciclo y se quedaba caducado
+        // creyendo que había renovado.
         if (salida.tipo === 'renovar' && !salida.por_checkout) {
             toast.success('Perfecto, seguimos. No tienes que hacer nada más.');
             navigate('/dashboard');

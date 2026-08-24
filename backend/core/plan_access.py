@@ -72,6 +72,22 @@ def has_active_access(profile: Optional[Dict[str, Any]]) -> bool:
     ahora = datetime.now(timezone.utc).isoformat()
     if access_until and access_until < ahora:
         return False
+
+    # UN PAGO ÚNICO VIVO MANDA SOBRE LA SUSCRIPCIÓN VIEJA (24-08).
+    #
+    # Desde el 20-08 todo lo que se vende es pago único: el webhook deja `access_until`
+    # en el futuro y `subscription_status` a None, pero NO borra el
+    # `stripe_subscription_id` de una suscripción anterior ya cancelada. Con eso, la
+    # rama de abajo miraba una suscripción muerta y devolvía False: el cliente pagaba y
+    # la app le decía, en el minuto siguiente, que su suscripción había terminado.
+    #
+    # Medido el 24-08: 84 de los 119 clientes que entran arrastran ese campo escrito, así
+    # que le pasaría a la mayoría. Se arregla aquí y no en los datos a propósito: mirando
+    # primero lo que de verdad dice hasta cuándo está pagado, no hace falta tocarle el
+    # perfil a nadie.
+    if access_until and access_until >= ahora:
+        return True
+
     # Perfil gestionado por Stripe: manda el estado real de la suscripción.
     if profile.get("stripe_subscription_id"):
         return (profile.get("subscription_status") or "").lower() in ACTIVE_SUBSCRIPTION_STATES

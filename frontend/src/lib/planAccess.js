@@ -58,7 +58,12 @@ export function deriveCapabilities(habilitaciones, { rutinaVisible = false } = {
         // funciona»), pero el doc lo marcó como fallo -- «Contacto: Ninguna» -- y la
         // decisión es la contraria: el Chat es del acompañamiento, no del soporte.
         // Sus incidencias van por el correo del negocio, como antes del 21-08.
-        [CAP.CHAT]: h.acompanamiento === 'con_entrenador',
+        // CUALQUIER acompañamiento con entrenador, no solo el valor exacto (24-08). Con
+        // la igualdad, el Premium -- que es `con_entrenador_y_llamadas`, el plan que MÁS
+        // acompañamiento tiene y el más caro -- se quedaba sin Chat. La decisión del
+        // 23-08 fue «el Chat sale del acompañamiento del plan», no «solo del que ponga
+        // exactamente con_entrenador». Mismo criterio que core/renovacion.py:170.
+        [CAP.CHAT]: String(h.acompanamiento || '').startsWith('con_entrenador'),
     };
 }
 
