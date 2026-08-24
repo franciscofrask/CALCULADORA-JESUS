@@ -29,6 +29,19 @@ from core.avisos_equipo import TIPOS_EQUIPO, es_de_dinero
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
+# LOS DEL CLIENTE NO SON LOS DEL EQUIPO, AUNQUE COMPARTAN COLECCIÓN.
+#
+# `db.notifications` guarda las dos cosas y solo las separa el `type`, así que hay que
+# filtrar a mano en toda consulta del cliente. Nació de un fallo gordo: la
+# campanita del cliente se llevaba por delante los avisos de staff del que la abriera: su
+# `PUT /read-all` marca leído TODO lo que tenga su `user_id`, y ahí dentro van las
+# peticiones de compra. Comprobado en dev: sembrando una rutina del mes sin leer y abriendo
+# la campanita del cliente, la petición quedaba leída sin que nadie la hubiera visto.
+#
+# El equipo tiene sus propios endpoints (`/notifications/equipo`) y su propio "marcar
+# leído": cada buzón se vacía por su lado.
+SOLO_DEL_CLIENTE = {"equipo": {"$ne": True}, "type": {"$nin": list(TIPOS_EQUIPO)}}
+
 
 async def notify(user_id: str, type: str, title: str, link: Optional[str] = None, body: Optional[str] = None):
     """Crea una notificación para un usuario. Falla en silencio: un aviso nunca
@@ -354,9 +367,16 @@ async def sincronizar_avisos(user_id: str) -> int:
         await _caducar_condicionadas(user_id, {a["clave"] for a in condicionados})
 
         # Lo ya enviado, para no repetir. Un mes cubre de sobra cualquier clave viva.
+        # SOLO LO DEL CLIENTE: los avisos del equipo (una petición de rutina, un cobro)
+        # viven en la misma colección con el `user_id` de quien los provoca, pero el
+        # cliente no los ve. Contándolos aquí, a una cuenta que es cliente Y staff -- la
+        # de Francisco, la de un entrenador que además entrena -- un aviso de staff le
+        # gastaba el cupo de «uno al día» y se quedaba sin los suyos sin que nada lo
+        # dijera. Salió probando el modo pruebas el 24-08: «Quiere la rutina del mes»
+        # tapaba «Tu ciclo acaba en una semana».
         desde = (ahora - timedelta(days=35)).isoformat()
         previas = await db.notifications.find(
-            {"user_id": user_id, "created_at": {"$gte": desde}},
+            {"user_id": user_id, "created_at": {"$gte": desde}, **SOLO_DEL_CLIENTE},
             {"_id": 0, "clave": 1, "created_at": 1, "condicionada": 1},
         ).to_list(200)
         claves = {p.get("clave") for p in previas if p.get("clave")}
@@ -752,19 +772,6 @@ async def _ventanas_de_reporte(perfil: dict, catalogo: dict, ahora: datetime) ->
                          "cierra": v["cierra"], "mandado": bool(mandado),
                          "aplazado": aplazado})
     return semana, ventanas
-
-
-# LOS DEL CLIENTE NO SON LOS DEL EQUIPO, AUNQUE COMPARTAN COLECCIÓN.
-#
-# `db.notifications` guarda las dos cosas y solo las separa el `type`. Sin este filtro, la
-# campanita del cliente se llevaba por delante los avisos de staff del que la abriera: su
-# `PUT /read-all` marca leído TODO lo que tenga su `user_id`, y ahí dentro van las
-# peticiones de compra. Comprobado en dev: sembrando una rutina del mes sin leer y abriendo
-# la campanita del cliente, la petición quedaba leída sin que nadie la hubiera visto.
-#
-# El equipo tiene sus propios endpoints (`/notifications/equipo`) y su propio "marcar
-# leído": cada buzón se vacía por su lado.
-SOLO_DEL_CLIENTE = {"equipo": {"$ne": True}, "type": {"$nin": list(TIPOS_EQUIPO)}}
 
 
 @router.get("")

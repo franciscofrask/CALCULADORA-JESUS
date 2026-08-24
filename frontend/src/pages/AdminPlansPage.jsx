@@ -192,7 +192,7 @@ const PantallasDeLaApp = () => {
 // Los estados por los que un administrador de pruebas puede pasear su propia cuenta.
 const ESCENARIOS_CUENTA = [
     { id: 'activo', label: 'Activa y al día', ayuda: 'Cuenta al día con acceso normal. El punto de partida limpio, sin ningún bloqueo.' },
-    { id: 'por_vencer', label: 'Por vencer (renovación)', ayuda: 'Tu ciclo acaba en unos 10 días: verás el aviso de renovación y la pantalla de renovar.' },
+    { id: 'por_vencer', label: 'Por vencer (renovación)', ayuda: 'Tu ciclo acaba en 5 días: verás el aviso «Tu ciclo acaba en una semana» en la campanita y la pantalla de renovar.' },
     { id: 'caducado', label: 'Suscripción caducada', ayuda: 'Suscripción terminada: la pantalla de «tu suscripción ha terminado, renueva o pasa a Mantenimiento».' },
     { id: 'sin_plan', label: 'Sin plan (elige plan)', ayuda: 'Como un registro nuevo sin plan contratado: la pantalla de «elige tu plan».' },
     { id: 'pago_a_medias', label: 'Pago a medias', ayuda: 'Empezaste un pago y no lo terminaste: el estado de pago sin completar.' },
@@ -336,7 +336,7 @@ const MiModoPruebas = () => {
                 <div className="border-t border-[#2a2a2a] pt-4 space-y-2">
                     <div>
                         <h3 className="text-sm font-bold text-white">Poner mi cuenta en un estado</h3>
-                        <p className="text-xs text-white/50">Cambia TU cuenta para ver esas pantallas. Guardo una foto antes de tocar; «Restaurar» la deja como estaba. Míralas entrando en tu panel de cliente.</p>
+                        <p className="text-xs text-white/50">Cambia TU cuenta para ver esas pantallas. Guardo una foto antes de tocar; «Restaurar» la deja como estaba. Míralas entrando en tu panel de cliente. El plan y el estado se combinan: aplica el plan y ponle el estado encima. Cada vez que pones un estado, tus avisos de cliente se vacían y se vuelven a calcular, así ves los de ese estado al momento.</p>
                     </div>
                     {escenarioActivo && (
                         <div className="flex items-center justify-between gap-2 rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-3 py-2">

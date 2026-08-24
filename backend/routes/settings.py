@@ -237,7 +237,11 @@ def _campos_de_escenario(nombre: str, plan: Optional[str]):
         # Cuenta activa; que la ventana de las 12 semanas salga se fuerza al leer el perfil.
         return {**base}
     if nombre == "por_vencer":
-        return {**base, "fin_de_ciclo": iso(10), "current_period_end": iso(10), "arranque_lunes": iso(-74)}
+        # A CINCO DÍAS, no a diez: el aviso «Tu ciclo acaba en una semana» solo sale a
+        # siete días o menos del fin (regla 8a de avisos_cliente). Con diez, el escenario
+        # caía FUERA de la ventana del aviso que se pone para ver, y la pantalla de
+        # renovación salía sin que llegara ni una notificación (Francisco, 24-08).
+        return {**base, "fin_de_ciclo": iso(5), "current_period_end": iso(5), "arranque_lunes": iso(-79)}
     if nombre == "cambiar_plan":
         destino = (plan or "").strip()
         return {**base, "plan": destino} if destino in _PLANES_ESCENARIO else None
@@ -274,14 +278,29 @@ async def poner_escenario(payload: Dict[str, Any] = Body(...), user=Depends(get_
     if not foto:
         foto = {c: perfil.get(c, _AUSENTE) for c in _CAMPOS_ESCENARIO}
         set_doc["pruebas_snapshot"] = foto
-    # EL PLAN QUE EL ESCENARIO NO FIJA VUELVE AL ORIGINAL (de la foto): así un escenario no
-    # arrastra el plan de otro anterior. Sin esto, tras «sin plan» los siguientes (caducado,
-    # pago a medias, cuestionario...) se quedaban sin plan y todos salían como «sin_plan».
+    # EL PLAN Y EL ESCENARIO SON DOS EJES DISTINTOS: «gold» y «por vencer» se combinan.
+    # Un escenario que no fija plan RESPETA EL QUE HAYA PUESTO, así se puede elegir el plan
+    # con «Aplicar plan» y luego ponerle el estado encima. Solo se recupera el plan de la
+    # foto cuando la cuenta se ha quedado SIN plan (viene de «sin plan»), que era el fallo
+    # del 22-08: entonces todos los escenarios siguientes salían como «sin plan».
     if "plan" not in cambios:
+        actual = (perfil.get("plan") or "").strip()
         original = foto.get("plan")
-        set_doc["plan"] = perfil.get("plan") if original in (None, _AUSENTE) else original
+        if actual:
+            set_doc["plan"] = perfil.get("plan")
+        elif original not in (None, _AUSENTE):
+            set_doc["plan"] = original
     set_doc["pruebas_escenario"] = nombre
     await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": set_doc})
+
+    # Y SE LIMPIA LA CAMPANITA, que si no el estado nuevo se queda mudo. Los avisos del
+    # cliente van topados a UNO AL DÍA (doc 19-08): en cuanto le ha nacido cualquiera hoy,
+    # el del estado que acabas de poner no se crea y no lo ves hasta mañana. En una cuenta
+    # de laboratorio eso hace inútil el panel, así que poner un escenario borra SUS avisos
+    # de cliente (falsos todos) y la siguiente pantalla los vuelve a evaluar desde cero.
+    # Solo los del cliente: los del equipo son de trabajo de verdad y no se tocan.
+    from routes.notifications import SOLO_DEL_CLIENTE   # aquí: notifications importa esto
+    await db.notifications.delete_many({"user_id": user["id"], **SOLO_DEL_CLIENTE})
     return {"escenario": nombre}
 
 
@@ -304,6 +323,9 @@ async def restaurar_cuenta(user=Depends(get_current_user)):
     if set_doc:
         op["$set"] = set_doc
     await db.client_profiles.update_one({"user_id": user["id"]}, op)
+    # Los avisos que nacieron de los estados de prueba eran de mentira: se van con ellos.
+    from routes.notifications import SOLO_DEL_CLIENTE
+    await db.notifications.delete_many({"user_id": user["id"], **SOLO_DEL_CLIENTE})
     return {"escenario": None}
 
 
