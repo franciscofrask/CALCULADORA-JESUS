@@ -72,15 +72,20 @@ const MiSemanaPage = () => {
     // del 23-08; los campos del servidor conservan su nombre). El tramo de entrenos
     // solo dice «X de N» cuando el registro de sesiones existe; si no, «N entrenos» a
     // secas: un «0 de 4» que nadie ha contado sería mentira.
-    const entrenosTxt = r.entrenos_hechos == null
-        ? plural(r.entrenos_total || 0, 'entreno')
-        : `${r.entrenos_hechos} de ${plural(r.entrenos_total || 0, 'entreno')}`;
+    // Y SI NO HAY NINGUNO PREVISTO, EL TRAMO NO SALE. Al que no lleva rutina con nosotros le
+    // salía «0 entrenos», que no informa de nada y encima le sugiere que debería tener
+    // alguno: ese 0 no es un entreno que se haya saltado, es que la semana no pinta ninguno.
+    const entrenosTxt = !r.entrenos_total
+        ? null
+        : r.entrenos_hechos == null
+            ? plural(r.entrenos_total, 'entreno')
+            : `${r.entrenos_hechos} de ${plural(r.entrenos_total, 'entreno')}`;
     const contador = [
         plural(r.montadas || 0, 'creada'),
         plural(r.empezadas || 0, 'empezada'),
         `${r.sin_montar || 0} sin crear`,
         entrenosTxt,
-    ].join(' · ');
+    ].filter(Boolean).join(' · ');
 
     return (
         <Wrap>

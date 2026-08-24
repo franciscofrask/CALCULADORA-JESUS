@@ -287,17 +287,25 @@ async def cierre_del_dia_hoy(fecha: Optional[str] = Query(None), user=Depends(ge
     hecho = await _cierre_de_hoy(profile["id"], fecha)
 
     # ── 1 · El entreno. Solo si hoy le tocaba y no lo ha registrado.
-    from routes.workout_logs import dia_de_rutina, log_del_dia, titulo_del_dia
+    from routes.workout_logs import (
+        dia_de_rutina, log_del_dia, tiene_rutina_puesta, titulo_del_dia)
     from routes.settings import pantalla_activa
 
     entreno = None
     # ¿Tiene rutina con nosotros? (P80, doc 23-08). Sin rutina el cierre le ofrece una
     # nota de entreno libre; con rutina, su entreno va por el registro de siempre y la
     # nota libre no sale, para no tener el mismo dato en dos sitios.
+    #
+    # EL PDF TAMBIÉN ES RUTINA (24-08). Esto miraba solo `db.routines` con status active, y
+    # al cliente que tiene la suya entregada en PDF -- que es la vía real -- el cierre le
+    # seguía sacando la caja «Si entrenaste por tu cuenta, apúntalo aquí», la del que no
+    # tiene rutina, mientras el panel del equipo ya decía «En PDF» del mismo cliente. Se
+    # pregunta con el ayudante compartido (`tiene_rutina_puesta`) y no con otra copia del
+    # criterio, que es como se quedó a medias la primera vez.
     tiene_rutina = False
     if await pantalla_activa("t3_entreno"):
         rutina = await db.routines.find_one({"client_id": profile["id"], "status": "active"}, {"_id": 0})
-        tiene_rutina = rutina is not None
+        tiene_rutina = await tiene_rutina_puesta(profile["id"])
         dia = dia_de_rutina(rutina, fecha)
         if dia and not await log_del_dia(profile["id"], fecha):
             entreno = {"dia_rutina": titulo_del_dia(dia)}
@@ -385,6 +393,24 @@ async def create_checkin(data: CheckInCreate, user = Depends(get_current_user)):
     # El peso que aporta el check-in va a la SERIE con la fecha del check-in (punto 30), y
     # el peso "actual" del perfil sale de la serie. Antes se escribia suelto en el perfil,
     # y era una de las dos vias por las que la app acababa ensenando dos pesos distintos.
+    #
+    # BORRAR EL PESO DEL CIERRE NO BORRA EL PESAJE, Y ES A PROPOSITO (24-08). Al reeditar,
+    # el cierre se sustituye entero: si el cliente vacia la casilla del peso, la fila se
+    # guarda sin peso pero el punto que ya escribio aqui SIGUE en la serie, y su grafica
+    # conserva un pesaje que el cree haber quitado. Se ha dejado asi, y no por pereza:
+    #
+    #   - La serie tiene UN punto por dia, y ese dia puede haberlo escrito tambien un
+    #     reporte, el coach o el alta (cada punto lleva su `origen`). Borrar "el del dia"
+    #     desde aqui se llevaria por delante un pesaje que no es de este formulario.
+    #   - Quitar un punto no existe hoy en `core/series_cliente` (solo hay `anotar_*`), y
+    #     esa pieza es la que sostiene el peso actual del perfil, la curva y el ritmo de
+    #     cambio: estrenarla el dia antes de que entren los clientes no toca.
+    #
+    # Lo que SI esta cerrado es que el cliente no pierda el dato sin querer: la pantalla
+    # vuelve a pintarle el peso guardado al reabrir el cierre, aunque el cierre corto lo
+    # esconda, asi que borrarlo es ahora un acto deliberado y no un efecto secundario.
+    # Cuando haya que quitarlo de verdad, la puerta es Evolucion, que es de donde sale la
+    # grafica. Lo cierra el equipo con Jesus: no es una decision de este arreglo.
     if data.weight is not None:
         await anotar_peso(profile["id"], data.weight, dia,
                           origen=f"check-in {data.type}")
@@ -416,6 +442,25 @@ async def get_my_checkins(type: Optional[str] = None, limit: int = 30, skip: int
         query["type"] = type
 
     checkins = await db.checkins.find(query, {"_id": 0}).sort("created_at", -1).skip(max(0, skip)).to_list(min(limit, 100))
+
+    # EL PESO, SANEADO ANTES DE ENSEÑARLO, TAMBIEN AQUI (24-08). Esto ya se hacia en la
+    # ficha del entrenador (`admin_get_client_checkins`, justo debajo) y en los reportes,
+    # pero la lista que ve EL CLIENTE se quedo sin ello, que es la unica que el mira: en
+    # los check-ins importados de Calma el peso vino en gramos, y son 159 filas de 18
+    # clientes en produccion. Muerde dos veces:
+    #
+    #   - En su historial le pone «68350 kg» en su propio reporte de hace un año.
+    #   - Y en el cierre del dia, donde la pantalla compara lo que escribe con el ultimo
+    #     peso que sale de ESTA lista: a 8 clientes el mas reciente les viene en gramos,
+    #     asi que al apuntar sus 80 kg les saltaba «tu ultimo peso fue 68350 kg, son 68270
+    #     de diferencia, ¿esta bien?». Todos los dias, y por un dato que no es suyo.
+    #
+    # La regla vive en un solo sitio, `sanea_peso`: si no se puede arreglar devuelve None y
+    # la entrada sale sin peso, que es mejor que un numero falso.
+    from core.series_cliente import sanea_peso
+    for c in checkins:
+        if c.get("weight") is not None:
+            c["weight"] = sanea_peso(c["weight"])
     return [CheckInResponse(**c) for c in checkins]
 
 

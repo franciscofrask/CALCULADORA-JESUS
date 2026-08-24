@@ -845,10 +845,17 @@ const AdminDashboard = () => {
                             })}
                     </div>
 
+                    {/* Esta frase nació de coletilla de la lista de arriba, y por eso empezaba
+                        por «Y». El 24-08, en producción, los 105 avisos abiertos eran TODOS de
+                        reporte vencido: la lista salía vacía y la tarjeta se quedaba con una
+                        línea suelta que arrancaba por «Y», sin nada delante a lo que sumarse.
+                        Si no hay avisos sueltos, la frase se sostiene sola. */}
                     {avisosDeReportes.length > 0 && (
-                        <p className="text-white/35 text-xs pt-3" data-testid="avisos-reportes-contados">
-                            Y {avisosDeReportes.length} reporte{avisosDeReportes.length === 1 ? '' : 's'} de coach
-                            sin marcar como enviado{avisosDeReportes.length === 1 ? '' : 's'}. Se cierran solos a las tres semanas.
+                        <p className={`text-white/35 text-xs ${avisosSueltos.length > 0 ? 'pt-3' : ''}`}
+                            data-testid="avisos-reportes-contados">
+                            {avisosSueltos.length > 0 ? 'Y' : 'Hay'} {avisosDeReportes.length} reporte{avisosDeReportes.length === 1 ? '' : 's'} de coach
+                            sin marcar como enviado{avisosDeReportes.length === 1 ? '' : 's'}.{' '}
+                            {avisosDeReportes.length === 1 ? 'Se cierra solo' : 'Se cierran solos'} a las tres semanas.
                         </p>
                     )}
                 </CardContent>
@@ -1406,7 +1413,7 @@ const AdminClientsList = () => {
                                             <span className="text-sm text-white/60" data-testid={`entrada-${client.id}`}>
                                                 {client.ultima_entrada
                                                     ? new Date(client.ultima_entrada + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
-                                                    : <span className="text-white/25">—</span>}
+                                                    : <span className="text-white/25">-</span>}
                                             </span>
                                         </TableCell>
                                         <TableCell className="hidden lg:table-cell">

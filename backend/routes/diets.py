@@ -462,9 +462,23 @@ async def get_semana(inicio: Optional[str] = None, hoy_cliente: Optional[str] = 
     grupos_pdf = await grupos_del_reparto(perfil)
 
     from routes.settings import pantalla_activa
+    # DOS CANDADOS, NO UNO (punto 59 del doc 24-08). Que la pantalla de registro de
+    # entrenos esté encendida no significa que ESTE cliente marque sus sesiones: con el
+    # interruptor como única condición, a todo el mundo le salía «0 de 5 entrenos»
+    # (en producción no había ni un solo registro de sesión), y ese cero no lo había
+    # contado nadie. Mientras el cliente no tenga NI UN registro suyo no se sabe si
+    # entrenó, así que el contador se calla y la semana dice «N entrenos» a secas: los
+    # que la semana pinta, que eso sí es verdad. La condición es POR CLIENTE: al primero
+    # que marque una sesión le aparece su contador, a los demás no. Y es de SIEMPRE, no
+    # de esta semana: al que ya sabe marcarlo, un «0 de 5» le está diciendo que esta
+    # semana no ha marcado nada, que es justo lo que queremos que lea.
     seguimiento_entrenos = await pantalla_activa("t3_entreno")
+    registra_entrenos = False
     logs = {}
     if seguimiento_entrenos and perfil.get("id"):
+        registra_entrenos = await db.workout_logs.find_one(
+            {"client_id": perfil["id"]}, {"_id": 1}) is not None
+    if registra_entrenos:
         async for l in db.workout_logs.find(
                 {"client_id": perfil["id"], "fecha": {"$gte": fechas[0], "$lte": fechas[6]}},
                 {"_id": 0, "fecha": 1, "hecho": 1}):
@@ -511,7 +525,7 @@ async def get_semana(inicio: Optional[str] = None, hoy_cliente: Optional[str] = 
         if diet and con_alimentos:
             macros = await _servido_de_las_comidas(diet, fichas=catalogo)
 
-        hecho = logs.get(fecha) if seguimiento_entrenos else None
+        hecho = logs.get(fecha) if registra_entrenos else None
         if tipo == "entrenamiento":
             entrenos_total += 1
             if hecho:
@@ -529,17 +543,25 @@ async def get_semana(inicio: Optional[str] = None, hoy_cliente: Optional[str] = 
                 # el del reparto del PDF (7.1 del 21-08). El front ya lo pinta si llega.
                 "nombre": (_nombre_del_entreno(dia_rutina) or (grupos_pdf or {}).get(i))
                           if tipo == "entrenamiento" else None,
-                # true/false solo cuando el registro de entrenos (T3) está encendido;
+                # true/false solo cuando este cliente registra sus sesiones (T3);
                 # null = todavía no hay forma de saberlo.
-                "hecho": hecho if (seguimiento_entrenos and tipo == "entrenamiento") else None,
+                "hecho": hecho if (registra_entrenos and tipo == "entrenamiento") else None,
             },
         })
 
-    # Sin rutina y sin días guardados no hay forma de saber qué días entrena ESTA
-    # semana: se cae a los días de entreno de la ficha (4 si no consta otra cosa).
-    if entrenos_total == 0 and not routine and not diets:
-        from core.dias_de_entreno import dias_de_entreno
-        entrenos_total = dias_de_entreno(perfil)
+    # AQUÍ HABÍA UN RESPALDO Y PROMETÍA ENTRENOS QUE NO SE VEÍAN (punto 59 del doc
+    # 24-08): sin rutina y sin días guardados se caía a los días de entreno de la FICHA,
+    # así que el titular decía «5 entrenos» mientras los siete días de la semana decían
+    # «Por decidir». La ficha sabe CUÁNTOS días entrena en general, no CUÁLES entrena
+    # esta semana, y un número que no se puede señalar en ningún día de la pantalla no
+    # es un dato, es ruido. El total cuenta los días que la semana pinta como entreno y
+    # nada más: en cuanto guarde un día o le pongan rutina, aparece solo.
+    #
+    # QUEDA UN CABO, Y NO ES DE AQUÍ: ese cliente lee ahora «0 entrenos», porque Mi
+    # semana pinta el tramo pase lo que pase (MiSemanaPage.jsx, `plural(entrenos_total ||
+    # 0)`). Desde el servidor no se puede esconder -- ni con 0 ni con null --, así que si
+    # a alguien le molesta el «0 entrenos», se arregla ALLÍ escondiendo el tramo, no
+    # devolviendo aquí unos entrenos que la semana no enseña por ninguna parte.
 
     return {
         "inicio": fechas[0],
@@ -551,9 +573,11 @@ async def get_semana(inicio: Optional[str] = None, hoy_cliente: Optional[str] = 
             "empezadas": empezadas,
             "sin_montar": sin_montar,
             "entrenos_total": entrenos_total,
-            # null cuando no hay seguimiento de sesiones: la pantalla enseña
-            # «N entrenos» a secas en vez de un «0 de N» que nadie ha contado.
-            "entrenos_hechos": entrenos_hechos if seguimiento_entrenos else None,
+            # null mientras este cliente no haya registrado ni una sesión: la pantalla
+            # enseña «N entrenos» a secas en vez de un «0 de N» que nadie ha contado.
+            # Y tampoco se cuenta lo que no hay: sin ningún día de entreno en la semana
+            # el titular decía «0 de 0 entrenos», que no es un dato, es un trabalenguas.
+            "entrenos_hechos": entrenos_hechos if (registra_entrenos and entrenos_total) else None,
         },
     }
 

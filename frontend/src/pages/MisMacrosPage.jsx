@@ -27,6 +27,7 @@ import { useAuth } from '../context/AuthContext';
 import { MACRO } from './ClientDashboard';
 import HistorialDeMacros, { ultimoAjusteLegible } from '../components/HistorialDeMacros';
 import { fraseDeLoQueFalta } from '../lib/datosDudosos';
+import { PERI_OPTIONS } from '../components/nutrition/ConfigSection';
 
 const fechaLarga = (iso) => {
     if (!iso) return '';
@@ -78,6 +79,52 @@ const BloqueLinea = ({ label, macros, conGrasa = true, destacado = false }) => {
 
 // La tabla del histórico vive en components/HistorialDeMacros, compartida con Evolución.
 
+// EL RÓTULO DEL PERI, CON EL MODO QUE TIENE PUESTO EL CLIENTE (punto 50 del doc 24-08).
+//
+// Aquí ponía «Perientreno (intra + post)» escrito a fuego, sin mirar su configuración:
+// Montalvo tiene «solo post» guardado en su ficha y en sus diez dietas de agosto, así que
+// Nutrición le decía «solo post» y esta pantalla «intra + post» el mismo día. Los gramos
+// no se tocan, solo el nombre.
+//
+// Las etiquetas son las del desplegable donde él lo elige (PERI_OPTIONS de ConfigSection),
+// que es la misma lista que usa la línea de configuración de Nutrición: así la misma cosa
+// se llama igual en las dos pantallas. Ojo, que hay OTRA lista `PERI_OPTIONS` en
+// components/nutrition/constants.js, con «Sin periworkout» y sin que la importe nadie:
+// renombrar ahí no cambia ni esta pantalla ni Nutrición.
+export const rotuloDelPeri = (opcionPeri) => {
+    // «Sin perientreno» no es un matiz del rótulo, es lo contrario: ahí el bloque se
+    // queda en «Perientreno» a secas. Y sin saber su modo tampoco se inventa uno: mejor
+    // no decirlo que decir el que no es, que es justo lo que pasaba. Sin modo se está
+    // solo mientras carga o si la consulta falla: al que no ha elegido nunca, el
+    // servidor le contesta `intra_post`, el mismo que da por bueno Nutrición.
+    if (!opcionPeri || opcionPeri === 'sin_peri') return 'Perientreno';
+    const etiqueta = PERI_OPTIONS.find(o => o.value === opcionPeri)?.label;
+    return etiqueta ? `Perientreno (${etiqueta.toLowerCase()})` : 'Perientreno';
+};
+
+// De dónde sale ese modo. NO de `profile`: el modelo con el que el servidor sirve
+// /clients/profile (ClientProfile) no lleva `diet_opcion_peri`, así que en el front
+// siempre llegaba undefined. Se pide a /user/diet-config, que es de donde ya lo sacan
+// Inicio (TuDietaHoy) y el chat cuando el día no está montado.
+//
+// El de la FICHA, que es su última elección: Nutrición lo guarda ahí cada vez que toca el
+// desplegable. Un día concreto puede tener guardado otro (el que había cuando se montó) y
+// eso es lo que enseña Nutrición en ESE día; aquí no se habla de un día, se habla de sus
+// macros, así que manda lo que el cliente lleva puesto.
+export const useOpcionPeri = () => {
+    const { api } = useAuth();
+    const [opcionPeri, setOpcionPeri] = useState(null);
+    useEffect(() => {
+        let vivo = true;
+        api.get('/user/diet-config')
+            .then(r => { if (vivo) setOpcionPeri(r.data?.opcion_peri || null); })
+            // Sin esto la pantalla se pinta igual, con el rótulo corto: el porqué, a la consola.
+            .catch(e => console.error('No se pudo leer la configuración del perientreno', e));
+        return () => { vivo = false; };
+    }, [api]);
+    return opcionPeri;
+};
+
 const MisMacrosPage = ({ onAjustar }) => {
     const { api, profile } = useAuth();
     const navigate = useNavigate();
@@ -89,6 +136,8 @@ const MisMacrosPage = ({ onAjustar }) => {
     const datosDudosos = profile?.datos_dudosos || [];
     // La ventana del botón Revisar: {abierta, se_abre, motivo}, del servidor (tarea 7.3).
     const ventana = profile?.ventana_revision;
+    // Su perientreno, para rotular el bloque con el que de verdad lleva (punto 50, 24-08).
+    const opcionPeri = useOpcionPeri();
 
     useEffect(() => {
         let vivo = true;
@@ -216,7 +265,7 @@ const MisMacrosPage = ({ onAjustar }) => {
                             <div className="border-t border-border pt-1">
                                 {/* El perientreno solo si lo tiene: una línea de guiones no dice
                                     «no llevas intra», dice «esto está roto». */}
-                                {vigente.peri && <BloqueLinea label="Perientreno (intra + post)" macros={vigente.peri} conGrasa={false} />}
+                                {vigente.peri && <BloqueLinea label={rotuloDelPeri(opcionPeri)} macros={vigente.peri} conGrasa={false} />}
                                 <BloqueLinea label={descansaHoy ? 'Día de entrenamiento' : 'Día de descanso'}
                                     macros={descansaHoy ? vigente.entreno : vigente.descanso} />
                             </div>

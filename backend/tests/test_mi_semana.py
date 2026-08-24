@@ -10,8 +10,11 @@ pisar datos reales, y se comprueba:
     sigue siendo «montada» con 4 de 4,
   - un día guardado como descanso sale como descanso,
   - los macros de un día montado suman de verdad (alimento real del catálogo),
-  - el resumen cuadra con los días.
+  - el resumen cuadra con los días,
+  - y el contador de entrenos (punto 59 del doc 24-08): «X de N» solo cuando ese
+    cliente registra sus sesiones, y un total que no promete entrenos invisibles.
 """
+import os
 from datetime import date, timedelta
 
 import pytest
@@ -23,6 +26,11 @@ from conftest import API
 LUNES = date(2030, 1, 7)
 assert LUNES.weekday() == 0, "el ancla del test tiene que ser un lunes"
 FECHAS = [(LUNES + timedelta(days=i)).isoformat() for i in range(7)]
+
+# Otro lunes todavía más lejos, para la semana de la que no se sabe NADA: ni dietas
+# guardadas ni rutina que la cubra.
+LUNES_VACIO = LUNES + timedelta(weeks=52)
+assert LUNES_VACIO.weekday() == 0
 
 
 def _alimento_real(cabeceras):
@@ -83,6 +91,23 @@ def _semana(cabeceras, inicio):
                      headers=cabeceras, timeout=30)
     assert r.status_code == 200, r.text
     return r.json()
+
+
+def _mongo():
+    """La base de dev. El registro de sesiones se pone y se quita a mano: el endpoint que
+    lo guarda exige rutina activa y aquí lo único que importa es que la fila EXISTA."""
+    import pymongo
+    from dotenv import dotenv_values
+    cfg = dotenv_values(os.path.join(os.path.dirname(__file__), "..", ".env"))
+    return pymongo.MongoClient(cfg["MONGO_URL"])[cfg["DB_NAME"]]
+
+
+def _client_id(cabeceras, db):
+    """El id de la FICHA del cliente: workout_logs va por client_profiles.id, no por
+    users.id (los dos ids de siempre)."""
+    me = requests.get(f"{API}/auth/me", headers=cabeceras, timeout=15).json()
+    perfil = db.client_profiles.find_one({"user_id": me["id"]}, {"_id": 0, "id": 1}) or {}
+    return perfil.get("id")
 
 
 class TestMiSemana:
@@ -160,3 +185,70 @@ class TestMiSemana:
     def test_sin_token_no_hay_semana(self, api_disponible):
         r = requests.get(f"{API}/diets/semana", timeout=15)
         assert r.status_code in (401, 403)
+
+
+class TestElContadorDeEntrenos:
+    """«0 de 5 entrenos» le mentía a todo el mundo (punto 59 del doc 24-08).
+
+    En producción la pantalla de registro de entrenos estaba encendida y la colección de
+    sesiones VACÍA, así que el titular decía «0 de N» a los 120 clientes: un cero que no
+    había contado nadie. Y el caso peor era el de quien no tiene la semana montada: «0 de
+    5 entrenos» con los siete días diciendo «Por decidir», porque ese 5 salía de la ficha.
+    """
+
+    def test_sin_ni_una_sesion_registrada_el_contador_se_calla(self, semana_montada, cabeceras_cliente):
+        """El caso de producción: ningún registro suyo, ningún contador. La semana dice
+        «N entrenos» (los previstos, que sí es verdad) y no «0 de N»."""
+        db = _mongo()
+        cid = _client_id(cabeceras_cliente, db)
+        assert cid, "el cliente de prueba no tiene ficha"
+        # Sus sesiones se apartan y se devuelven enteras (con su _id) al terminar.
+        suyos = list(db.workout_logs.find({"client_id": cid}))
+        if suyos:
+            db.workout_logs.delete_many({"client_id": cid})
+        try:
+            r = _semana(cabeceras_cliente, FECHAS[0])["resumen"]
+            assert r["entrenos_hechos"] is None, "sin sesiones registradas no se cuenta nada"
+            assert r["entrenos_total"] >= 1, "los entrenos previstos sí se dicen"
+        finally:
+            if suyos:
+                db.workout_logs.insert_many(suyos)
+
+    def test_con_una_sesion_registrada_aparece_su_contador(self, semana_montada, cabeceras_cliente):
+        """El límite: la condición es POR CLIENTE. Al que marca su primera sesión sí le
+        sale «1 de N», y ese día se pinta como hecho."""
+        db = _mongo()
+        ajustes = db.app_settings.find_one({}, {"_id": 0, "pantallas": 1}) or {}
+        if not (ajustes.get("pantallas") or {}).get("t3_entreno"):
+            pytest.skip("t3_entreno apagado en esta base: no hay registro de sesiones")
+        cid = _client_id(cabeceras_cliente, db)
+        assert cid, "el cliente de prueba no tiene ficha"
+        # Por si un run anterior se cortó antes de limpiar: (client_id, fecha) es índice
+        # ÚNICO, así que la fila superviviente haría reventar el insert de todos los runs
+        # siguientes con un error que no habla de este test.
+        db.workout_logs.delete_one({"client_id": cid, "fecha": FECHAS[0]})
+        db.workout_logs.insert_one({
+            "id": "test-mi-semana-contador", "client_id": cid, "fecha": FECHAS[0],
+            "hecho": True, "dia_rutina": None, "pesos": [],
+        })
+        try:
+            data = _semana(cabeceras_cliente, FECHAS[0])
+            assert data["resumen"]["entrenos_hechos"] == 1
+            lunes = next(d for d in data["dias"] if d["fecha"] == FECHAS[0])
+            assert lunes["entreno"]["hecho"] is True
+        finally:
+            db.workout_logs.delete_one({"id": "test-mi-semana-contador"})
+
+    def test_una_semana_de_la_que_no_se_sabe_nada_no_promete_entrenos(self, api_disponible, cabeceras_cliente):
+        """Sin dietas y sin rutina, los siete días dicen «Por decidir»: el titular no
+        puede prometer entrenos que no están pintados en ninguna parte (el respaldo que
+        se caía a los días de entreno de la ficha decía «4 entrenos» aquí)."""
+        data = _semana(cabeceras_cliente, LUNES_VACIO.isoformat())
+        # El respaldo solo entraba sin rutina y sin dietas. Si esta cuenta tiene rutina
+        # activa, la semana sí se pinta y aquí no hay nada que comprobar: se dice y se
+        # salta, que un test que pasa por no llegar a mirar es peor que no tenerlo.
+        if any(d["tipo_dia"] is not None for d in data["dias"]):
+            pytest.skip("la cuenta de prueba tiene rutina o dietas en esa semana: el respaldo no entraba ahí")
+        assert data["resumen"]["entrenos_total"] == 0, "no se prometen entrenos que la semana no pinta"
+        # Y sin ningún día de entreno tampoco se cuenta lo hecho: «0 de 0» no es un dato.
+        assert data["resumen"]["entrenos_hechos"] is None

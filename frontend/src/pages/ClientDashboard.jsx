@@ -658,7 +658,16 @@ const InicioNuevo = () => {
         });
     });
 
-    const frase = pantalla('frase_del_dia') ? appSettings?.frase_del_dia?.texto : null;
+    // LA FRASE SOLO SALE EL DÍA QUE ES SUYA. El servidor guarda una sola frase y solo la
+    // reemplaza cuando le vence otra de la cola (routes/settings.py, ajustes_app). Con la cola
+    // vacía --que es como está producción-- esto pintaba la misma frase todos los días para
+    // siempre, y una frase del día que se repite tres semanas seguidas dice que la app está
+    // muerta. Mejor que no salga: en cuanto se carguen las 84 (una por día de ciclo) vuelve
+    // sola, sin tocar nada.
+    const hoyDelCliente = hoyLocal();
+    const frase = pantalla('frase_del_dia') && appSettings?.frase_del_dia?.fecha === hoyDelCliente
+        ? appSettings.frase_del_dia.texto
+        : null;
 
     return (
         <div className="pb-6 animate-fade-in" data-testid="inicio-nuevo">

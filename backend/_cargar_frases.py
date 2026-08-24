@@ -25,7 +25,12 @@ from pymongo import MongoClient
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
-DOC_ID = "app_settings"          # el mismo DOC_ID de routes/settings.py
+# OJO CON ESTE VALOR. Es el id del ÚNICO documento de app_settings, y tiene que ser el
+# mismo que routes/settings.py:28. Estaba puesto a "app_settings" (el nombre de la
+# colección, no el del documento), así que este cargador escribía en un documento aparte
+# que la app no lee jamás: se habrían cargado las 84 frases, habría dicho «Cargadas 84» y
+# no habría pasado nada, sin un solo error. Si lo cambias aquí, cámbialo allí.
+DOC_ID = "app"                   # el mismo DOC_ID de routes/settings.py
 
 
 def leer_frases(ruta: str, desde: str):

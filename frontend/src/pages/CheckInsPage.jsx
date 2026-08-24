@@ -47,6 +47,8 @@ const fechaLarga = (iso) => {
 // El diario decía «DIARIO» (P78, doc 23-08), que es como se llama la pestaña Diario de
 // Seguimiento: dos cosas distintas con el mismo nombre. La entrada se llama como la
 // pantalla que la crea, «Cierre del día», y el Diario usa el mismo nombre.
+// Desde el 24-08 la píldora casi no se pinta: cada bloque del historial lleva su título y
+// solo sobrevive en «Reportes anteriores» cuando ahí conviven semanales y mensuales.
 const TIPO_CHECKIN = { daily: 'Cierre del día', weekly: 'Semanal', monthly: 'Mensual' };
 
 // «77,3 kg, ayer». Los decimales con coma, que es como se escriben aquí.
@@ -65,10 +67,15 @@ const cuando = (iso) => {
 // el movimiento, las comidas, los suplementos, las notas y el peso guardados pero mudos.
 // Aquí se saca TODO lo que la entrada traiga: los datos cortos como chips y los textos
 // como renglones.
-const DESGASTE_HIST = {
-    menos: 'Desgaste: menos de lo habitual',
-    igual: 'Desgaste: el de siempre',
-    mas: 'Desgaste: más de lo habitual',
+// El movimiento del día. UN SOLO VOCABULARIO CON EL FORMULARIO: esto decía «Desgaste:
+// menos de lo habitual» mientras la pregunta de arriba habla de moverse y sus botones
+// dicen «Menos» / «Como siempre» / «Más». Eran dos maneras de nombrar el mismo dato, y el
+// cliente leía en su historial una palabra que nadie le había preguntado. Los valores
+// guardados (menos/igual/mas) no cambian: esto es solo cómo se le enseña.
+const MOVIMIENTO_HIST = {
+    menos: 'Movimiento: menos',
+    igual: 'Movimiento: como siempre',
+    mas: 'Movimiento: más',
 };
 const SUPLES_HIST = { si: 'Suplementos: sí', no_todos: 'Suplementos: no todos', no: 'Suplementos: no' };
 const NOMBRE_COMIDA = (k) => {
@@ -84,7 +91,7 @@ const chipsDelCierre = (c) => {
     if (c.energy != null) chips.push(`Energía ${c.energy}/5`);
     if (c.hunger_anxiety != null) chips.push(`Hambre ${c.hunger_anxiety}/5`);
     if (c.descanso != null) chips.push(`Descanso ${c.descanso}/5`);
-    if (c.movimiento) chips.push(DESGASTE_HIST[c.movimiento] || c.movimiento);
+    if (c.movimiento) chips.push(MOVIMIENTO_HIST[c.movimiento] || c.movimiento);
     if (c.weight != null) chips.push(kilos(c.weight));
     if (c.suplementos?.respuesta) chips.push(SUPLES_HIST[c.suplementos.respuesta] || c.suplementos.respuesta);
     if (c.entreno_respuesta === 'no_entrene') chips.push('No entrenó');
@@ -112,9 +119,74 @@ const renglonesDelCierre = (c) => {
     return renglones;
 };
 
+// «22 ago 2026». La fecha de una entrada del historial, SIEMPRE SIN HORA: «la hora
+// confunde, un check-in de las 07:29 es el del día anterior» (punto 22 del doc 24-08).
+// `dia` es el día del cliente y lo llevan los cierres desde el bloque F.
+//
+// EL QUE NO TIENE `dia` NO ES EL CASO RARO, ES EL HISTORIAL ENTERO: en producción son
+// 1.595 de las 1.600 entradas (los 1.593 reportes mensuales importados de Calma, los 2
+// semanales y hasta 2 cierres de antes del bloque F). Dejarles la hora «porque es lo
+// único que traen» era dejar sin arreglar justo lo que él señala, que son esas filas. El
+// día se saca de `created_at`, que va con su «+00:00»: el navegador lo pasa a la hora del
+// cliente él solo, así que la fecha que sale es la que él vivió.
+const fechaDeEntrada = (c) => (c.dia
+    ? new Date(`${c.dia}T12:00:00`).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
+    : new Date(c.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }));
+
 // ── Subcomponentes a nivel de módulo (mantienen el foco al teclear) ──────────
 const Card = ({ className = '', children }) => (
     <div className={`bg-card border border-border rounded-2xl ${className}`}>{children}</div>
+);
+
+// Una entrada del historial. `conTipo` pinta la píldora («Semanal», «Mensual»): dentro de
+// un bloque con título no hace falta, y solo se enciende donde el título no basta.
+const EntradaDelHistorial = ({ c, conTipo = false }) => (
+    <li className="rounded-xl border border-border bg-muted p-3">
+        <div className="flex items-center justify-between mb-2">
+            {conTipo ? (
+                <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full bg-card border border-border text-foreground/60">
+                    {TIPO_CHECKIN[c.type] || c.type}
+                </span>
+            ) : <span />}
+            <span className="text-[11px] text-foreground/50">{fechaDeEntrada(c)}</span>
+        </div>
+        {c.type === 'daily' ? (
+            <>
+                {/* TODO lo que trae la entrada, no dos cosas de siete (P76): los datos
+                    como chips, los textos debajo. */}
+                {chipsDelCierre(c).length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                        {chipsDelCierre(c).map(chip => (
+                            <span key={chip}
+                                className="text-xs text-foreground/70 bg-card border border-border rounded-full px-2 py-0.5">
+                                {chip}
+                            </span>
+                        ))}
+                    </div>
+                )}
+                {renglonesDelCierre(c).map(r => (
+                    <p key={r.titulo}
+                        className="text-sm text-foreground/60 mt-2 whitespace-pre-line border-l-2 border-border pl-3">
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-foreground/40 mr-2">{r.titulo}</span>
+                        {r.texto}
+                    </p>
+                ))}
+            </>
+        ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-foreground/70">
+                {c.weight != null && <span><Scale className="w-3 h-3 inline mr-1" />{c.weight} kg</span>}
+                {c.training_compliance != null && <span>Entreno {c.training_compliance}%</span>}
+                {c.nutrition_compliance != null && <span>Nutri {c.nutrition_compliance}%</span>}
+                {c.sleep_quality != null && <span>Sueño {c.sleep_quality}/10</span>}
+                {c.body_fat_pct != null && <span>Grasa {c.body_fat_pct}%</span>}
+            </div>
+        )}
+        {c.trainer_feedback && (
+            <div className="mt-2 p-2 bg-brand/10 border border-brand/20 rounded-lg text-sm text-foreground/80">
+                <span className="text-[10px] uppercase tracking-wider text-brand font-bold mr-2">Entrenador:</span>{c.trainer_feedback}
+            </div>
+        )}
+    </li>
 );
 
 const BoolPicker = ({ icon: Icon, label, value, onChange }) => (
@@ -199,6 +271,9 @@ const Opciones = ({ opciones, value, onChange, testId, columnas = 3 }) => (
 // marca. Sin día guardado, o sin nada montado, la larga de siempre.
 
 const NUMERAL = { 1: 'una', 2: 'dos', 3: 'tres', 4: 'cuatro' };
+// Las cosas que quedan por contestar en el cierre corto, escritas. Van de cuatro (las
+// escalas y el movimiento, que salen siempre) a ocho.
+const CUANTAS = { 4: 'cuatro', 5: 'cinco', 6: 'seis', 7: 'siete', 8: 'ocho' };
 
 // Suma de `macros_efectivos` de una comida guardada, como la lista del Inicio: cuando el
 // campo falta en filas antiguas esa comida suma 0, y aquí el número es informativo.
@@ -237,9 +312,31 @@ const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado, inicial = null 
     const claves = comidasPrincipales(dia);
     const algoMontado = claves.some(k => (comidas[k]?.alimentos || []).length > 0);
     const corta = claves.length > 0 && algoMontado && claves.every(k => comidas[k]?.marcada === true);
-    // Las cinco cosas de la versión corta son cuatro para quien no tiene protocolo de
-    // suplementos: la cuenta de la cabecera dice las que van a salir de verdad.
-    const cosas = hoy?.suplementos ? 'cinco' : 'cuatro';
+
+    // ── REEDITAR NO PUEDE ESCONDER LO QUE YA CONTESTÓ (24-08) ────────────────
+    //
+    // El cierre corto esconde las notas y el peso a quien ya marcó todas sus comidas, y
+    // eso está bien la PRIMERA vez del día. Pero el cierre se puede reabrir para
+    // corregirlo (P75), y quien anotó sus notas y su peso por la mañana -- cuando aún era
+    // largo -- por la noche reabría y no los veía: no podía corregirlos, no podía
+    // borrarlos, y le quedaba la sensación de que se habían perdido. Y encima el peso
+    // seguía viajando escondido, así que «Confírmame el peso» le podía saltar por un
+    // número que la pantalla no le estaba enseñando.
+    //
+    // La regla es por campo y no en bloque: EDITANDO, lo que trae respuesta se enseña
+    // siempre; lo que viene vacío se sigue escondiendo, que para eso existe el corto.
+    const editando = inicial != null;
+    const verNotas = !corta || (editando && !!inicial?.notas?.texto);
+    const verPeso = !corta || (editando && inicial?.weight != null);
+
+    // LA CUENTA DE LA CABECERA CUENTA LO QUE VA A SALIR, ni una más. Era fija («cinco», o
+    // «cuatro» sin protocolo de suplementos) y ya mentía antes de esto: al que no tiene
+    // rutina con nosotros le sale además la nota de entreno libre, que tampoco se calla en
+    // el corto. Y desde hoy, al que reabre su cierre le vuelven las notas y el peso.
+    // Prometerle cinco y enseñarle siete es de las cosas por las que se deja de leer lo
+    // que pone la pantalla. Las cuatro fijas son descanso, energía, hambre y movimiento.
+    const cosas = CUANTAS[4 + [hoy?.suplementos, hoy?.tiene_rutina === false, verNotas, verPeso]
+        .filter(Boolean).length];
 
     const guardar = async () => {
         const algo = ['entreno_respuesta', 'suplementos', 'descanso', 'energy', 'hunger_anxiety', 'movimiento']
@@ -262,10 +359,13 @@ const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado, inicial = null 
                     : null,
                 // El check de la comida se guarda AQUÍ y ya: no toca la dieta ni le manda
                 // a Nutrición. Se anota de cuál hablaba, o el sí/no no se puede leer luego.
-                // En la versión corta esa pregunta no sale, así que tampoco se manda: los
-                // campos que no salen van vacíos, como cuando se dejan en blanco.
-                cena_hecha: !corta && hoy?.comida_pendiente ? f.cena_hecha : null,
-                comida_pendiente: (!corta && hoy?.comida_pendiente?.key) || null,
+                // LO QUE NO SE VUELVE A PREGUNTAR, NO SE BORRA: el guardado sustituye la
+                // fila entera, y mandar null aquí tiraba el «La hice» de esta mañana en
+                // cuanto la comida dejaba de estar pendiente (porque la registró después,
+                // o porque el cierre pasó a corto). Si la pregunta no sale, viaja lo que
+                // ya había contestado.
+                cena_hecha: !corta && hoy?.comida_pendiente ? f.cena_hecha : (inicial?.cena_hecha ?? null),
+                comida_pendiente: (!corta && hoy?.comida_pendiente?.key) || inicial?.comida_pendiente || null,
                 exceso_nota: f.exceso_nota.trim() || null,
                 notas: f.notas.trim() ? { texto: f.notas.trim(), compartida: f.compartida } : null,
                 weight: f.weight ? parseFloat(String(f.weight).replace(',', '.')) : null,
@@ -384,33 +484,45 @@ const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado, inicial = null 
             {/* Y luego lo de siempre, con los literales del doc 23-08 (P81). El descanso
                 se pregunta aquí, referido a la noche de ayer, y sale del reporte del mes:
                 así son 28 datos al mes en vez de uno. */}
-            <Escala titulo="¿Cómo has descansado la noche de ayer?"
+            <Escala titulo="¿Cómo descansaste la noche de ayer?"
+                subtitulo="Fundamental tener una buena rutina de sueño si no la tienes ya"
                 minLabel="fatal" maxLabel="genial" testId="cierre-descanso"
                 value={f.descanso} onChange={v => set('descanso', v)} />
-            <Escala titulo="Energía durante el día" minLabel="bajita" maxLabel="pletórico" testId="cierre-energia"
+            {/* «Fuera de tu entrenamiento»: sin eso el que acaba de entrenar contesta por
+                cómo se encontró en el gimnasio, que no es lo que se le pregunta. */}
+            <Escala titulo="Niveles de energía durante el día"
+                subtitulo="Fuera de tu entrenamiento, en tu día normal"
+                minLabel="bajita" maxLabel="pletórico" testId="cierre-energia"
                 value={f.energy} onChange={v => set('energy', v)} />
-            {/* Hambre y ansiedad, juntas: es como lo dice él y es una sola escala. */}
-            <Escala titulo="Hambre / ansiedad" minLabel="nada" maxLabel="mucha" testId="cierre-hambre"
+            {/* Hambre y ansiedad, juntas: es como lo dice él y es una sola escala. Y «con
+                la dieta», que es de lo que se pregunta y no de la ansiedad de la vida. */}
+            <Escala titulo="Hambre / ansiedad con la dieta" minLabel="nada" maxLabel="mucha" testId="cierre-hambre"
                 value={f.hunger_anxiety} onChange={v => set('hunger_anxiety', v)} />
 
             <div>
-                <span className="text-sm text-foreground/70 block">¿Tuviste más desgaste de lo normal?</span>
+                {/* LA PREGUNTA ES LA SUYA. El 23-08 la cambiamos por «¿Tuviste más
+                    desgaste de lo normal?» y no es lo que él pide: «desgaste» es palabra
+                    de entrenador, y además la respuesta se guarda en `movimiento`. */}
+                <span className="text-sm text-foreground/70 block">¿Te moviste lo suficiente?</span>
                 {/* En cursiva y sin punto final, tal cual lo pide el doc. */}
                 <p className="text-[11px] text-foreground/40 mt-0.5 mb-2 italic">
                     Moverte es salud y menos grasa: a más te muevas, más gastas
                 </p>
+                {/* Etiquetas cortas: los tres botones van en fila y en el móvil tres
+                    frases no caben -- se partían en tres renglones dentro del botón. Los
+                    valores guardados (menos/igual/mas) son los de siempre. */}
                 <Opciones testId="cierre-movimiento" value={f.movimiento} onChange={v => set('movimiento', v)}
                     opciones={[
-                        { v: 'menos', l: 'Menos de lo habitual' },
-                        { v: 'igual', l: 'Como me vengo moviendo' },
-                        { v: 'mas', l: 'Más de lo habitual' },
+                        { v: 'menos', l: 'Menos' },
+                        { v: 'igual', l: 'Como siempre' },
+                        { v: 'mas', l: 'Más' },
                     ]} />
             </div>
 
             {/* Las notas y el peso son de la versión larga: el mockup corto no los lleva.
-                Quien quiera pesarse ese día lo hace desde Evolución, y los campos que no
-                salen viajan vacíos, como cuando se dejan en blanco. */}
-            {!corta && (
+                Quien quiera pesarse ese día lo hace desde Evolución. Al REEDITAR salen
+                igualmente si ya traen respuesta (ver `verNotas` / `verPeso` arriba). */}
+            {verNotas && (
             <div>
                 <span className="text-sm text-foreground/70 block">Notas personales</span>
                 <p className="text-[11px] text-foreground/40 mt-0.5 mb-2">
@@ -428,12 +540,23 @@ const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado, inicial = null 
             </div>
             )}
 
-            {!corta && (
+            {verPeso && (
             <div>
                 <span className="text-sm text-foreground/70 block">Peso</span>
-                <p className="text-[11px] text-foreground/40 mt-0.5 mb-2">
-                    Opcional{hoy?.ultimo_peso ? ` · Último registro: ${kilos(hoy.ultimo_peso.valor)}, ${cuando(hoy.ultimo_peso.fecha)}` : ''}
-                </p>
+                {/* DOS RENGLONES, como los pide él: arriba para qué sirve pesarse aquí y
+                    debajo el último que tenemos. Iba todo en una línea que empezaba por
+                    «Opcional ·» y el «sólo para ti» -- que es lo que quita el reparo de
+                    apuntarlo -- no se decía en ninguna parte. */}
+                <div className="mt-0.5 mb-2">
+                    <p className="text-[11px] text-foreground/40">
+                        Registrarlo es opcional, sólo para ti. Te lo pediremos sólo para los reportes
+                    </p>
+                    {hoy?.ultimo_peso && (
+                        <p className="text-[11px] text-foreground/40">
+                            Último registro: {kilos(hoy.ultimo_peso.valor)} · {cuando(hoy.ultimo_peso.fecha)}
+                        </p>
+                    )}
+                </div>
                 <input type="number" step="0.1" min={PESO_MIN} max={PESO_MAX} value={f.weight}
                     onChange={e => set('weight', e.target.value)} data-testid="cierre-peso"
                     placeholder="kg" className={inputCls} />
@@ -702,6 +825,12 @@ const CheckInsPage = () => {
     // ninguna validación: entraba un 50 detrás de un 94 sin decir nada, y de esa serie
     // salen la gráfica y el ritmo de cambio. Se compara con el último peso que conocemos
     // -- el del check-in más reciente que traiga uno -- y si el salto canta, se pregunta.
+    //
+    // SALE DE LA LISTA ENTERA, NO DE LOS CIERRES. Aunque el historial se pinte en dos
+    // bloques, este peso se busca en `checkins` completo a propósito: en producción casi
+    // todos los pesos conocidos vienen de los reportes mensuales importados de Calma (los
+    // cierres del día casi nunca traen peso), así que mirar solo los cierres dejaría el
+    // aviso del 50 detrás del 94 sin nada con lo que comparar y no saltaría nunca.
     const ultimoPeso = checkins.find(c => c.weight != null)?.weight ?? null;
     const pesoAceptado = async (valor) => {
         const chequeo = revisarPeso(valor, ultimoPeso);
@@ -739,6 +868,16 @@ const CheckInsPage = () => {
             </div>
         );
     }
+
+    // Los dos bloques del historial. Se RECORTA ANTES de partir para que «Cargar más»
+    // siga contando entradas y no bloques: la paginación es la misma de siempre.
+    const visibles = checkins.slice(0, histShown);
+    const cierres = visibles.filter(c => c.type === 'daily');
+    const reportes = visibles.filter(c => c.type !== 'daily');
+    // La píldora de tipo se va: dentro de cada bloque lo dice el título. Se queda solo en
+    // «Reportes anteriores» cuando ahí conviven semanales y mensuales -- ahí el título no
+    // distingue, y sin ella dos entradas de cosas distintas se leen igual.
+    const mezclaDeReportes = new Set(reportes.map(c => c.type)).size > 1;
 
     return (
         <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1100px] mx-auto space-y-5 animate-fade-in" data-testid="checkins-page">
@@ -907,60 +1046,41 @@ const CheckInsPage = () => {
                 <PhotosSection api={api} token={token} />
             </div>
 
-            {/* Historial */}
+            {/* EL HISTORIAL, EN DOS BLOQUES (24-08).
+                Caían mezclados los cierres del día y los reportes mensuales importados de
+                Calma, cada uno con su píldora de tipo y su hora. Filtrar a los cierres a
+                secas NO vale: en producción hay 1.593 entradas mensuales y 5 cierres, y 98
+                de los 103 clientes con historial solo tienen mensuales, así que se
+                quedarían con la pantalla vacía. Su etapa anterior también es suya. */}
             <Card className="p-5">
                 <p className="text-xs font-bold text-foreground/40 uppercase tracking-wider mb-3">Historial</p>
                 {checkins.length === 0 ? (
                     <p className="text-foreground/40 text-center py-8 text-sm">Aún no tienes check-ins</p>
                 ) : (
-                    <ul className="space-y-3">
-                        {checkins.slice(0, histShown).map(c => (
-                            <li key={c.id} className="rounded-xl border border-border bg-muted p-3">
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full bg-card border border-border text-foreground/60">{TIPO_CHECKIN[c.type] || c.type}</span>
-                                    <span className="text-[11px] text-foreground/50">
-                                        {new Date(c.created_at).toLocaleString('es-ES', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                    </span>
-                                </div>
-                                {c.type === 'daily' ? (
-                                    <>
-                                        {/* TODO lo que trae la entrada, no dos cosas de siete
-                                            (P76): los datos como chips, los textos debajo. */}
-                                        {chipsDelCierre(c).length > 0 && (
-                                            <div className="flex flex-wrap gap-1.5">
-                                                {chipsDelCierre(c).map(chip => (
-                                                    <span key={chip}
-                                                        className="text-xs text-foreground/70 bg-card border border-border rounded-full px-2 py-0.5">
-                                                        {chip}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        )}
-                                        {renglonesDelCierre(c).map(r => (
-                                            <p key={r.titulo}
-                                                className="text-sm text-foreground/60 mt-2 whitespace-pre-line border-l-2 border-border pl-3">
-                                                <span className="text-[10px] uppercase tracking-wider font-bold text-foreground/40 mr-2">{r.titulo}</span>
-                                                {r.texto}
-                                            </p>
-                                        ))}
-                                    </>
-                                ) : (
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-foreground/70">
-                                        {c.weight != null && <span><Scale className="w-3 h-3 inline mr-1" />{c.weight} kg</span>}
-                                        {c.training_compliance != null && <span>Entreno {c.training_compliance}%</span>}
-                                        {c.nutrition_compliance != null && <span>Nutri {c.nutrition_compliance}%</span>}
-                                        {c.sleep_quality != null && <span>Sueño {c.sleep_quality}/10</span>}
-                                        {c.body_fat_pct != null && <span>Grasa {c.body_fat_pct}%</span>}
-                                    </div>
-                                )}
-                                {c.trainer_feedback && (
-                                    <div className="mt-2 p-2 bg-brand/10 border border-brand/20 rounded-lg text-sm text-foreground/80">
-                                        <span className="text-[10px] uppercase tracking-wider text-brand font-bold mr-2">Entrenador:</span>{c.trainer_feedback}
-                                    </div>
-                                )}
-                            </li>
-                        ))}
-                    </ul>
+                    <div className="space-y-5">
+                        {cierres.length > 0 && (
+                            <div data-testid="historial-tus-dias">
+                                <p className="text-[11px] font-bold uppercase tracking-wider text-foreground/40 mb-2">
+                                    Tus días
+                                </p>
+                                <ul className="space-y-3">
+                                    {cierres.map(c => <EntradaDelHistorial key={c.id} c={c} />)}
+                                </ul>
+                            </div>
+                        )}
+                        {reportes.length > 0 && (
+                            <div data-testid="historial-reportes">
+                                <p className="text-[11px] font-bold uppercase tracking-wider text-foreground/40 mb-2">
+                                    Reportes anteriores
+                                </p>
+                                <ul className="space-y-3">
+                                    {reportes.map(c => (
+                                        <EntradaDelHistorial key={c.id} c={c} conTipo={mezclaDeReportes} />
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                    </div>
                 )}
                 {(histShown < checkins.length || histHasMore) && (
                     <button onClick={loadMoreHistory} disabled={histLoadingMore} data-testid="checkins-load-more"

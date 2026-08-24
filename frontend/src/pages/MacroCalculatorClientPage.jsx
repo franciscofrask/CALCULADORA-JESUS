@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { seLeOfreceLaRevision } from '../lib/revision';
 import { MACRO } from './ClientDashboard';
 import DesgloseChips from '../components/DesgloseChips';
-import MisMacrosPage from './MisMacrosPage';
+import MisMacrosPage, { rotuloDelPeri, useOpcionPeri } from './MisMacrosPage';
 import { mensajeDeError } from '../lib/mensajeDeError';
 import { fraseDeLoQueFalta } from '../lib/datosDudosos';
 
@@ -107,6 +107,18 @@ const GroupCard = ({ label, group, withFat, macros, setMacro }) => (
         </div>
     </div>
 );
+
+// El bloque del peri, rotulado con el modo que lleva puesto el cliente y no con un
+// «(intra + post)» a fuego (punto 50 del doc 24-08). Va en su propio componente, y no en
+// un hook arriba de la página, porque esta pantalla devuelve «Mis macros» en dos de sus
+// tres caminos y allí el modo ya se pide una vez: puesto arriba se pedía dos veces por
+// visita para pintar el mismo rótulo. Aquí la consulta sale solo cuando el editor está
+// de verdad en pantalla. Module-level, como el resto, para que los campos no pierdan el
+// foco al escribir.
+const GroupCardPeri = (props) => {
+    const opcionPeri = useOpcionPeri();
+    return <GroupCard label={rotuloDelPeri(opcionPeri)} {...props} />;
+};
 
 // Mapa del activity_level legado (4 valores) a la escala nueva de 3 del quiz
 const mapActividadLegacy = (nivel) => {
@@ -617,7 +629,7 @@ const MacroCalculatorClientPage = () => {
                         </div>
 
                         <GroupCard label="Día entrenamiento" group="training" withFat macros={macros} setMacro={setMacro} />
-                        <GroupCard label="Perientreno (intra + post)" group="peri" withFat={false} macros={macros} setMacro={setMacro} />
+                        <GroupCardPeri group="peri" withFat={false} macros={macros} setMacro={setMacro} />
                         <GroupCard label="Día descanso" group="rest" withFat macros={macros} setMacro={setMacro} />
 
                         <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="Motivo del cambio (opcional)" className="input-light" />

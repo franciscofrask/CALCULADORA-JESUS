@@ -110,6 +110,36 @@ async def log_del_dia(client_id: str, fecha: str) -> Optional[Dict[str, Any]]:
     return await db.workout_logs.find_one({"client_id": client_id, "fecha": fecha}, {"_id": 0})
 
 
+async def tiene_rutina_puesta(client_id: str) -> bool:
+    """¿Tiene rutina puesta? La estructurada (`db.routines`) o la entregada en PDF.
+
+    UNA SOLA FORMA DE PREGUNTARLO (24-08). Cada pantalla lo preguntaba por su cuenta
+    mirando solo `db.routines` con `status: active`, y el PDF es la via de entrega real
+    ("se siguen generando como hasta ahora", bloque 11 del doc 19-08). Resultado con un
+    cliente de verdad: tenia su rutina entregada en PDF, el panel de Rutinas ya lo decia
+    ("En PDF", arreglado en bc2cba8) y el cierre del dia le seguia sacando la caja "Tu
+    entreno de hoy · Si entrenaste por tu cuenta, apuntalo aqui", que es la del que NO
+    tiene rutina con nosotros.
+
+    Esta es la version de UN cliente de lo que el panel pregunta de todos
+    (`routines._ultimo_pdf_por_cliente`): la misma fuente, sin otra copia del criterio.
+    Quien necesite saberlo, que llame aqui y no vuelva a escribir el find.
+
+    EL INDICE NO ES "PARA CUANDO CREZCA", ES PARA ESTA SEMANA. `db.rutina_pdfs` solo
+    tiene el de `_id`, asi que esto recorre la coleccion entera, y cada fila lleva el PDF
+    dentro (hasta 15 MB): medido en produccion son 2 filas y 4,7 MB, o sea 2,3 MB de media.
+    Al que NO tiene PDF -- hoy 196 de 198 -- se le leen todas antes de contestar que no, y
+    esto se llama en cada carga del cierre del dia. El doc 24-08 (punto 67) dice que a 165
+    clientes hay que subirles la suya ya: con eso serian ~390 MB recorridos por cada
+    apertura de la pantalla. El arreglo es una linea en `core/database.create_indexes`
+    (fichero de otro bloque), y el mismo indice arregla de paso los `find_one(...,
+    sort=[("uploaded_at", -1)])` de `routines.py`, que recorren lo mismo desde el 21-08.
+    """
+    if await db.routines.find_one({"client_id": client_id, "status": "active"}, {"_id": 1}):
+        return True
+    return await db.rutina_pdfs.find_one({"client_id": client_id}, {"_id": 1}) is not None
+
+
 async def pesos_de_la_ultima_vez(client_id: str, dia_rutina: Optional[str],
                                  excluye_fecha: Optional[str] = None) -> List[Dict[str, Any]]:
     """Los pesos de la ultima vez que le toco ESA misma rutina.
@@ -149,6 +179,23 @@ async def get_log_de_hoy(fecha: Optional[str] = Query(None), ctx=Depends(require
     return {
         "log": log,
         "fecha": fecha,
+        # AQUI `tiene_rutina` NO ES "¿tiene rutina puesta?", ES "¿se que te toca HOY?", y
+        # por eso NO llama a `tiene_rutina_puesta()` aunque se le parezca. Quien lo lee es
+        # Inicio (frontend/src/pages/ClientDashboard.jsx:452): con esto en true da por
+        # bueno el resto de la respuesta y decide el dia con `descanso`
+        # (`esDiaDeEntreno = !!entrenoDelDia && !entrenoDelDia.descanso`).
+        #
+        # Ponerlo en true para el que tiene su rutina en PDF -- que es la respuesta honrada
+        # a la otra pregunta -- rompe Inicio: del PDF no sale que dias entrena (el reparto
+        # y `training_weekdays` estan vacios en el unico cliente real que lo tiene hoy),
+        # asi que `descanso` seria false SIEMPRE y le diriamos "Entreno · Ver la rutina"
+        # los siete dias, tapando ademas la linea buena que ya tiene, "Tu rutina, en PDF"
+        # (esa sale de /routines/pdf/info y funciona).
+        #
+        # Para cambiarlo hay que tocar Inicio primero: que distinga "no se que te toca"
+        # (descanso null) de "hoy descansas" (descanso false/true). Mientras tanto, quien
+        # necesite saber si tiene rutina PUESTA que llame a `tiene_rutina_puesta()`, que
+        # para eso esta y ya lo usa el cierre del dia.
         "tiene_rutina": bool(routine),
         "dia_rutina": titulo if dia else None,
         "semana": profile.get("week"),

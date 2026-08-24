@@ -59,8 +59,12 @@ describe('el plazo del reporte', () => {
         const dentroDeDosDias = new Date(Date.now() + 2 * 86400000).toISOString();
         const plazo = textoPlazo(dentroDeDosDias);
         expect(plazo.pasado).toBe(false);
+        // EL NOMBRE DEL DIA LLEVA TILDE dos veces por semana. Aqui ponia `\w+`, que sin la
+        // bandera `u` no casa con la «e» de «miercoles» ni con la «a» de «sabado», asi que
+        // este test se ponia rojo solo los dias en que el plazo caia en uno de esos dos y
+        // parecia una regresion del codigo. Con `[^\s]+` da igual el dia que sea.
         expect(plazo.texto).toMatch(
-            /^Hasta el \w+ \d{1,2} a las \d{2}:\d{2}( \(\d{2}:\d{2} h España\))? · te quedan? \d+ días?$/);
+            /^Hasta el [^\s]+ \d{1,2} a las \d{2}:\d{2}( \(\d{2}:\d{2} h España\))? · te quedan? \d+ días?$/);
     });
 
     test('con el reloj del navegador fuera de Espana, la hora local y la de Espana', () => {

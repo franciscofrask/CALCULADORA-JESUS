@@ -104,8 +104,25 @@ const ListaSeleccionable = ({ titulo, sub, items, extra, vacio, onAsignar, icono
                             className="accent-[#FF671F] flex-shrink-0 cursor-pointer" />
                         <button onClick={() => navigate(`/admin/clients/${c.client_id}`)}
                             className="flex-1 min-w-0 flex items-center gap-2 text-left">
-                            <span className="flex-1 min-w-0 truncate text-sm text-white/80">{c.name}</span>
-                            <PlanBadge plan={c.plan} planName={c.plan_nombre} />
+                            {/* EL NOMBRE MANDA, EL CHIP CEDE (24-08). El nombre era lo único
+                                elástico de la fila -- el chip, el extra y la flecha entran fijos --
+                                así que el chip se metía con su ancho entero («EL LUNES EMPIEZO»
+                                mide 154 px, y es el plan de la mitad de la gente) y en las columnas
+                                estrechas el nombre se quedaba en dos letras: «J...», «F...».
+                                Ahora el chip cede dos veces: no pasa de la mitad del hueco Y suelta
+                                lo que haga falta antes de que el nombre baje de 6,5rem. El suelo va
+                                en la fila y no en la rejilla a propósito: esta lista la pintan las
+                                cuatro pestañas y no puede depender de en cuántas columnas la metan.
+                                Medido de 360 a 1920 px: el peor sitio deja 111 px de nombre (antes,
+                                12) y en ninguno se desborda la tarjeta. */}
+                            <span className="flex-1 min-w-[6.5rem] truncate text-sm text-white/80" title={c.name}>{c.name}</span>
+                            {/* El plan entero al pasar el ratón, pero sin el «(legacy)»: el chip lo
+                                quita porque es info interna (ClientDashboard, PlanBadge) y el globo
+                                no puede colarlo por la puerta de atrás. */}
+                            <span className="min-w-0 max-w-[50%] [&>span]:block [&>span]:truncate"
+                                title={(c.plan_nombre || '').replace(/\s*\(legacy\)/i, '').trim()}>
+                                <PlanBadge plan={c.plan} planName={c.plan_nombre} />
+                            </span>
                         </button>
                         {extra && <span className="flex-shrink-0">{extra(c)}</span>}
                         <ChevronRight className="w-3.5 h-3.5 text-white/20 flex-shrink-0" />
@@ -450,7 +467,11 @@ const PanelEntrenador = ({ api, user, onAsignar, irAOperaciones }) => {
             <Card className="bg-[#111111] border-[#222]">
                 <CardContent className="p-5">
                     <Titulo>El reporte semanal</Titulo>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
+                    {/* Dos columnas hasta 2xl, igual que en Operaciones y por lo mismo (el porqué,
+                        con las medidas, está en el comentario de PanelOperaciones): a un tercio de
+                        pantalla el nombre se quedaba en una letra. Aquí importa más todavía, que
+                        el entrenador solo ve ESTA pestaña. */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 mt-3">
                         <ListaSeleccionable titulo="Lo han mandado" icono={ClipboardList} color="#22C55E"
                             sub="Por revisar y contestar" items={rep.mandados} onAsignar={onAsignar} />
                         <ListaSeleccionable titulo="Les toca" icono={CalendarClock} color="#EAB308"
@@ -467,7 +488,8 @@ const PanelEntrenador = ({ api, user, onAsignar, irAOperaciones }) => {
                 </CardContent>
             </Card>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Dos columnas hasta 2xl: mismo motivo que arriba. */}
+            <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
                 <ListaSeleccionable titulo="Macros por entregar" icono={ClipboardList} color="#FF671F"
                     sub="Mandaron reporte y esperan sus macros" items={datos.macros_por_entregar} onAsignar={onAsignar}
                     extra={(c) => c.reporte_el ? <span className="text-[10px] text-white/40">desde el {c.reporte_el}</span> : null} />
@@ -548,7 +570,14 @@ const PanelOperaciones = ({ api, onAsignar }) => {
                 </CardContent>
             </Card>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* DOS COLUMNAS HASTA 2XL (24-08). Con tres, medido en pantalla: a 1440 px la
+                tarjeta se queda en 361 px y al nombre le sobran 85; a 1280, 58; a 1100, 28.
+                No hay recorte de chip que salve un tercio de pantalla con checkbox, nombre,
+                plan, tipo, hora y flecha en la misma línea. En dos columnas el nombre pasa
+                de 85 a 214 px a 1440, y las cuatro listas quedan en un 2x2 en vez de 3+1.
+                La misma regla va en las dos rejillas de Entrenador, que son iguales de
+                estrechas: si se cambia aquí, se cambia allí. */}
+            <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
                 <ListaSeleccionable titulo="Cierra hoy" icono={CalendarClock} color="#EF4444"
                     sub="Plazos que vencen hoy" items={datos.cierra_hoy} onAsignar={onAsignar} vacio="Nada cierra hoy"
                     extra={(c) => {
