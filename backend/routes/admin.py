@@ -1890,6 +1890,14 @@ async def get_todo_semana(user = Depends(get_admin_user)):
     ).to_list(len(uids) or 1)
     umap = {u["id"]: u for u in users}
 
+    # El último ajuste VIGENTE de cada uno, en una sola consulta al histórico (el porqué,
+    # en core/ultimo_ajuste): el campo del perfil se queda atrás con los migrados.
+    from core.tiempo import hoy_madrid
+    from core.ultimo_ajuste import ajuste_de, ultimos_ajustes_vigentes
+    hoy_es = hoy_madrid().isoformat()
+    ajustes_del_historico = await ultimos_ajustes_vigentes(
+        db, [p["id"] for p in profiles], hoy_es)
+
     # Rutinas activas y reportes recientes: una consulta cada uno (no N+1). De la rutina
     # se trae también su fecha: desde el doc del 19-08 la semana de RUTINA es la que
     # decide qué reporte toca, y este panel tiene que contar igual que el cliente.
@@ -1981,14 +1989,18 @@ async def get_todo_semana(user = Depends(get_admin_user)):
         # muevan los macros, y el que nunca los ha tenido movidos va arriba del todo -- que
         # es justo el que se pierde cuando esto se lleva en una hoja aparte.
         if hab.get("calculadora") == "personalizado":
-            desde_ajuste = dias_desde(p.get("ultimo_ajuste"), now)
+            # La fecha sale del HISTÓRICO cuando este va por delante del campo del perfil
+            # (core/ultimo_ajuste): la migración de Calma escribe filas sin marcar el
+            # ajuste y el panel se quedaba con la fecha vieja.
+            ajuste_vigente = ajuste_de(p, ajustes_del_historico, hoy_es)
+            desde_ajuste = dias_desde(ajuste_vigente, now)
             te_tocan.append({
                 **base,
-                "ultimo_ajuste": p.get("ultimo_ajuste"),
+                "ultimo_ajuste": ajuste_vigente,
                 "ultimo_reporte": p.get("ultimo_reporte"),
                 "dias_sin_ajuste": desde_ajuste,
                 "dias_sin_reporte": dias_desde(p.get("ultimo_reporte"), now),
-                "nunca_ajustado": not p.get("ultimo_ajuste"),
+                "nunca_ajustado": not ajuste_vigente,
             })
 
         # Reporte de esta semana pendiente (no enviado dentro de la semana que manda:

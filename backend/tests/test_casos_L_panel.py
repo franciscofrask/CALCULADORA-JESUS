@@ -421,7 +421,12 @@ def test_guardar_un_ajuste_crea_uno_solo_y_avisa_una_vez(cab_admin, cab_cliente)
             "el historial no crecio en exactamente una fila")
 
         avisos = json_ok(pedir("get", "/notifications", headers=cab_cliente), "/notifications")
-        mios = [n for n in avisos["notifications"] if (n.get("body") or "") == marca]
+        # LA NOTA VA DETRAS DEL TEXTO FIJO, no sola: es el «+ tu nota» del doc del 16-08
+        # (regla 6), y por eso se busca por el final y no por igualdad. El cuerpo fijo
+        # explica que ha pasado y lo del coach es lo que el cliente venia a leer.
+        # `GET /notifications` devuelve las ultimas 30 no caducadas: basta, porque el
+        # aviso acaba de nacer.
+        mios = [n for n in avisos["notifications"] if (n.get("body") or "").endswith(marca)]
         assert len(mios) == 1, (
             f"un ajuste guardado y {len(mios)} notificaciones con la misma nota")
         assert mios[0].get("type") == "macros"

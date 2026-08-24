@@ -472,6 +472,13 @@ async def panel_entrenador(trainer_id: Optional[str] = None, user=Depends(get_ad
     mios = [p for p in profiles if p.get("trainer_id") == tid]
     ids = [p["id"] for p in mios]
 
+    # El último ajuste VIGENTE de mis clientes, de una sola consulta al histórico: el
+    # campo del perfil se queda viejo con los migrados de Calma (core/ultimo_ajuste).
+    from core.tiempo import hoy_madrid as _hoy_madrid
+    from core.ultimo_ajuste import ajuste_de, ultimos_ajustes_vigentes
+    hoy_es_ajustes = _hoy_madrid().isoformat()
+    ajustes_del_historico = await ultimos_ajustes_vigentes(db, ids, hoy_es_ajustes)
+
     # Rutinas, últimos reportes y fotos recientes de MIS clientes, una consulta cada
     # cosa. La rutina hace falta porque desde el doc 19-08 la semana que decide el
     # reporte es la de la rutina cuando existe.
@@ -520,7 +527,10 @@ async def panel_entrenador(trainer_id: Optional[str] = None, user=Depends(get_ad
         # el último ajuste de macros es anterior al reporte, o no hay ajuste ninguno.
         # O sea: el cliente ya hizo su parte y espera la del coach.
         if reporte_en_ventana:
-            ajuste = p.get("ultimo_ajuste")
+            # Del histórico si va por delante del campo (core/ultimo_ajuste): con los
+            # migrados de Calma el campo se queda viejo y aquí saldría gente a la que ya
+            # se le ajustó.
+            ajuste = ajuste_de(p, ajustes_del_historico, hoy_es_ajustes)
             if not ajuste or str(ajuste) < reporte:
                 macros_por_entregar.append({**fila, "reporte_el": reporte})
 
