@@ -23,6 +23,16 @@ from core.database import db
 LISTA_BLANCA = {
     "francisco@test.com",      # el admin que usa Francisco a diario
     "clientedemo@test.com",    # la cuenta con la que se prueba la app como cliente
+    # LAS CUENTAS DE TRABAJO DEL QA (23-08). No son basura de una tanda de tests: son
+    # los estados que hacen falta para probar (un trainer, un cliente en semana 10, una
+    # mujer con sexo 'female', un plan mensual...). Borrarlas deja tests saltándose en
+    # silencio, que es peor que dejarlas.
+    "coach.prueba@test.com",       # el trainer con el que se prueban los candados
+    "bloque0.p70p71@test.com",     # cliente nivel2 con ciclo avanzado y dieta de hoy
+    "qa.bloque11@test.com",        # ELM, para renovación y baja
+    "qa.b10.hombre@test.com",      # objetivo volumen, para la gráfica de peso
+    "qa.b10.mujer@test.com",       # sexo 'female', para la escala de grasa de mujer
+    "p75.checkin@test.com",        # cierre del día
 }
 
 # Con qué se reconoce una cuenta de prueba. Deliberadamente estrecho: es preferible dejarse
@@ -50,7 +60,9 @@ POR_CLIENT_ID = ["reports", "checkins", "client_photos", "macro_history", "messa
 
 async def cuentas_de_prueba():
     fuera = []
-    for u in await db.users.find(PATRONES, {"_id": 0}).to_list(500):
+    # Sin tope: con 500 se limpiaba media lista y había que volver a lanzarlo, y como el
+    # resumen no lo decía parecía que las que quedaban eran cuentas buenas (23-08).
+    for u in await db.users.find(PATRONES, {"_id": 0}).to_list(None):
         if (u.get("email") or "").lower() in LISTA_BLANCA:
             continue
         perfil = await db.client_profiles.find_one({"user_id": u["id"]}, {"_id": 0, "id": 1})

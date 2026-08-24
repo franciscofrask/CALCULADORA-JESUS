@@ -183,7 +183,26 @@ async def create_checkout_session(data: CheckoutSessionRequest, user=Depends(get
     else:
         session_kwargs["allow_promotion_codes"] = True
 
-    session = await stripe_api_call(stripe_module.checkout.Session.create, **session_kwargs)
+    try:
+        session = await stripe_api_call(stripe_module.checkout.Session.create, **session_kwargs)
+    except Exception as e:                                          # noqa: BLE001
+        # EL PRICE NO CASA CON EL MODO. Pasa en dev con los planes mensuales: el price de
+        # test es recurrente y aquí se cobra a pago único, y Stripe devuelve «payment mode
+        # but passed a recurring price». Era un 500 seco en la cara del cliente; ahora
+        # dice qué pasa (a él, en humano) y deja el detalle en el log para arreglarlo
+        # donde toca, que es el price del entorno.
+        detalle = str(e)
+        logging.getLogger("uvicorn.error").error(
+            "checkout: Stripe rechazó la sesión del plan %s (price %s, modo %s): %s",
+            plan_code, stripe_price_id, session_kwargs.get("mode"), detalle)
+        if "recurring price" in detalle or "one-time price" in detalle:
+            raise HTTPException(
+                status_code=502,
+                detail="Este plan no se puede pagar ahora mismo: su precio está mal "
+                       "configurado en la pasarela. Ya lo estamos mirando.")
+        raise HTTPException(
+            status_code=502,
+            detail="No hemos podido abrir el pago. Inténtalo en un momento.")
 
     cambios = {"stripe_customer_id": customer_id, "stripe_price_id": stripe_price_id,
                "checkout_status": "created"}

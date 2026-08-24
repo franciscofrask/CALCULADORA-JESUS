@@ -88,6 +88,13 @@ class EntrenoDelReporte(BaseModel):
 
 
 # Report Models
+# LAS DIEZ MEDIDAS DE JESÚS, en el servidor (caso 51 de los 85; punto 21 del repaso del
+# 23-08). Vivían SOLO en el navegador (frontend/src/lib/medidas.js), así que el backend
+# no sabía ni cuántas eran: cualquiera podía guardar medio reporte por la API.
+DIEZ_MEDIDAS = ("hombros", "mesoesternal", "brazo_d", "brazo_i", "muslo_d", "muslo_i",
+                "cadera", "cintura", "gemelo_d", "gemelo_i")
+
+
 class ReportCreate(BaseModel):
     # El mismo rango que acepta la serie de peso, `core/series_cliente` (punto 5.4). El peso
     # del reporte es de donde salen la grafica, el ajuste del mes y lo que lee el agente: un
@@ -157,6 +164,34 @@ class ReportCreate(BaseModel):
     motivacion: Optional[int] = Field(None, ge=1, le=5)
     # MENSUAL · 13 sugerencias (opcional, y es para nosotros)
     sugerencias: Optional[str] = Field(None, max_length=4000)
+
+    def falta_para_el_mensual(self, fotos_subidas: int = 0) -> List[str]:
+        """Qué le falta a un MENSUAL para estar entero: las diez medidas y las tres fotos.
+
+        Caso 51 de los 85: «exige las diez medidas y las tres fotos, no deja mandar
+        medio». Se comprueba AQUÍ y no con un validador del modelo a propósito: el mismo
+        `ReportCreate` lo usa la vía del equipo (los Premium mandan por WhatsApp y el
+        staff lo pasa a la app, muchas veces sin fotos), y bloquear eso dejaría fuera
+        justo los reportes que hay que rescatar. La puerta se cierra en la del CLIENTE,
+        que es la que rellena el formulario.
+
+        `fotos_subidas` son las que ya tenga guardadas del reporte (se suben aparte, a
+        `client_photos`): valen igual que las que vengan en el cuerpo.
+        """
+        if (self.tipo or "") != "mensual":
+            return []
+        falta = []
+        medidas = self.measurements or {}
+        sin_medida = [m for m in DIEZ_MEDIDAS if not medidas.get(m)]
+        if sin_medida:
+            falta.append("las medidas" if len(sin_medida) == len(DIEZ_MEDIDAS)
+                         else f"{len(sin_medida)} de las diez medidas")
+        cuantas_fotos = len([f for f in (self.photos or []) if f]) + max(0, fotos_subidas)
+        if cuantas_fotos < 3:
+            falta.append("las tres fotos" if not cuantas_fotos
+                         else f"{3 - cuantas_fotos} de las tres fotos")
+        return falta
+
 
 class ReportResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")

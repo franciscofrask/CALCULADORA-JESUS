@@ -398,32 +398,44 @@ class TestCaso50CheckInDiario:
 class TestCaso51ReporteCompleto:
     """51 [CRITICO]. "Exige las diez medidas y las tres fotos. No deja mandar medio."
 
-    ESTOS TESTS FALLAN HOY, y se dejan fallando. Lo que hay:
-      - el unico campo obligatorio del backend es el peso (models/common.py::ReportCreate),
-      - las diez medidas solo se exigen en el navegador (ReportsPage.handleSubmit) y solo
-        en la semana del mensual,
-      - y las tres fotos no se exigen en ningun sitio: se suben por su cuenta a
-        `client_photos` y el reporte se guarda con `photos` a nulo.
+    RESUELTO EL 23-08 (punto 21 del repaso). Las diez medidas viven ya en el servidor
+    (`models.common.DIEZ_MEDIDAS`) y la comprobacion es `falta_para_el_mensual`, que usa
+    la puerta del CLIENTE (POST /reports devuelve 400 diciendo que falta).
+
+    NO es un validador del modelo a proposito: el mismo `ReportCreate` lo usa la via del
+    equipo -- los Premium mandan por WhatsApp y el staff lo pasa a la app, muchas veces
+    sin fotos --, y bloquear ahi dejaria fuera justo los reportes que hay que rescatar.
+    Por eso aqui se prueba la REGLA, no que el modelo reviente.
     """
 
     def _crear(self, **campos):
         from models.common import ReportCreate
-        return ReportCreate(**{"weight": 78.0, **campos})
+        return ReportCreate(**{"weight": 78.0, "tipo": "mensual", **campos})
 
     def test_51_no_deja_mandar_sin_las_diez_medidas(self):
-        from pydantic import ValidationError
-        with pytest.raises(ValidationError):
-            self._crear()          # peso y nada mas: medio reporte
-        with pytest.raises(ValidationError):
-            self._crear(measurements={"cintura": 82.0})   # una de diez
+        assert self._crear().falta_para_el_mensual()                       # medio reporte
+        assert self._crear(measurements={"cintura": 82.0}).falta_para_el_mensual()
+        # Y con las diez puestas, las medidas dejan de faltar.
+        completo = {m: 50.0 for m in DIEZ_MEDIDAS}
+        assert not [f for f in self._crear(measurements=completo).falta_para_el_mensual()
+                    if "medida" in f]
 
     def test_51_no_deja_mandar_sin_las_tres_fotos(self):
-        from pydantic import ValidationError
         completo_de_medidas = {m: 50.0 for m in DIEZ_MEDIDAS}
-        with pytest.raises(ValidationError):
-            self._crear(measurements=completo_de_medidas)          # sin fotos
-        with pytest.raises(ValidationError):
-            self._crear(measurements=completo_de_medidas, photos=["frente"])   # una de tres
+        assert self._crear(measurements=completo_de_medidas).falta_para_el_mensual()
+        assert self._crear(measurements=completo_de_medidas,
+                           photos=["frente"]).falta_para_el_mensual()
+        # Las que ya subio aparte (client_photos) valen igual que las del cuerpo.
+        assert not self._crear(measurements=completo_de_medidas).falta_para_el_mensual(
+            fotos_subidas=3)
+        # Entero: nada que reprochar.
+        assert not self._crear(measurements=completo_de_medidas,
+                               photos=["f", "l", "e"]).falta_para_el_mensual()
+
+    def test_51_el_quincenal_no_pide_medidas_ni_fotos(self):
+        """La regla es del MENSUAL: el quincenal se manda con su peso y sus cuatro."""
+        from models.common import ReportCreate
+        assert not ReportCreate(weight=78.0, tipo="quincenal").falta_para_el_mensual()
 
     def test_51_las_tres_fotos_que_sube_quedan_pegadas_al_reporte(self, cliente):
         """Las sube, y el informe dice que no hay fotos.

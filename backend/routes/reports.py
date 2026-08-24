@@ -108,6 +108,20 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
             {"_id": 0, "id": 1}).sort("uploaded_at", -1).limit(6)]
         fotos.reverse()
 
+    # NO SE MANDA MEDIO MENSUAL (caso 51 de los 85, punto 21 del repaso del 23-08): las
+    # diez medidas y las tres fotos son obligatorias, y hasta hoy solo las miraba el
+    # navegador. Se comprueba con las fotos YA recogidas arriba, que es lo que de verdad
+    # tiene el reporte. La vía del equipo (Premium por WhatsApp) no pasa por aquí: esa
+    # sigue aceptando lo que llegue, que es su razón de existir.
+    tipo_de_hoy = (state["tipos"] or [data.tipo])[0] if (state["tipos"] or data.tipo) else None
+    if tipo_de_hoy == "mensual":
+        falta = ReportCreate(**{**data.model_dump(), "tipo": "mensual"}).falta_para_el_mensual(
+            fotos_subidas=len(fotos))
+        if falta:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Para mandar el reporte del mes te faltan {' y '.join(falta)}.")
+
     report_id = str(uuid.uuid4())
     report = {
         "id": report_id,
