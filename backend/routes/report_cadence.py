@@ -432,13 +432,20 @@ def compute_client_report_state(profile: Dict[str, Any], catalog: Dict[str, Any]
         "due": bool(tipos),
         "window_open": win_open,
         "window_close": win_close,
-        # En el clon de pruebas la ventana se da por abierta siempre que esta semana toque
-        # reporte (core/config.VENTANAS_SIEMPRE_ABIERTAS). Las fechas de verdad se
-        # devuelven igual, y `abierta_por_pruebas` avisa de que esta abierta a la fuerza
-        # para que la pantalla pueda decirlo. En produccion la variable no existe.
-        "is_open": bool(tipos) and (VENTANAS_SIEMPRE_ABIERTAS or win_open <= now <= win_close),
+        # En el clon de pruebas la ventana se ADELANTA, pero no se resucita. O sea: si
+        # todavia no habia abierto, se da por abierta; si ya se cerro, sigue cerrada.
+        #
+        # Al principio abria tambien las cerradas y eso se cargaba el escenario «reporte
+        # vencido», que es un estado que hay que poder probar: con la ventana reabierta el
+        # cliente podia mandarlo y nunca se veia el rojo del panel. Lo canto la
+        # comprobacion, no se vio a ojo.
+        #
+        # `abierta_por_pruebas` avisa de que esta abierta a la fuerza, para que la pantalla
+        # lo diga con las fechas de verdad al lado. En produccion la variable no existe.
+        "is_open": bool(tipos) and now <= win_close and (
+            VENTANAS_SIEMPRE_ABIERTAS or win_open <= now),
         "abierta_por_pruebas": bool(
-            tipos and VENTANAS_SIEMPRE_ABIERTAS and not (win_open <= now <= win_close)),
+            tipos and VENTANAS_SIEMPRE_ABIERTAS and now < win_open),
     }
 
 
