@@ -163,14 +163,25 @@ class TestElIndiceDelPdfDeRutina:
         assert 'db.rutina_pdfs.find_one({"client_id": client_id}, {"_id": 1})' in trozo
 
     def test_en_routines_ninguna_consulta_de_lista_pide_el_binario(self):
-        """Los `find_one` de `rutina_pdfs` que NO sirven el archivo tienen que excluir
-        `data`. Los dos que si lo sirven son los endpoints de ver el PDF."""
+        """Los `find_one` de `rutina_pdfs` que NO sirven el archivo tienen que excluir `data`.
+
+        El binario son hasta 15 MB por fila: traerlo para responder «¿tiene rutina?» es lo
+        que ya costó siete segundos en la pantalla de Rutinas.
+
+        Desde el 25-08 la consulta del cliente vive en `_el_pdf_que_le_toca`, que decide con
+        `con_datos` si trae el binario o no. Así que lo que se vigila aquí es que quede UNA
+        sola consulta con `{"_id": 0}` a secas -- la del admin, que sirve el archivo -- y
+        que la del cliente siga siendo la parametrizada.
+        """
         with open(os.path.join(os.path.dirname(__file__), "..", "routes", "routines.py"),
                   encoding="utf-8") as f:
             codigo = f.read()
-        # `{"_id": 0}` a secas = se trae el binario. Solo vale en los dos que sirven el PDF.
+        # `{"_id": 0}` a secas = se trae el binario.
         traen_todo = re.findall(r'db\.rutina_pdfs\.find_one\([^)]*\{"_id": 0\}[^)]*\)', codigo)
-        assert len(traen_todo) == 2, traen_todo
+        assert len(traen_todo) == 1, traen_todo
+        assert 'db.rutina_pdfs.find_one({"client_id": perfil["id"]},\n' \
+               '                                         {"_id": 0, **(fuera or {})}' in codigo, \
+            "la consulta del cliente ya no decide el binario con `con_datos`"
 
 
 # ── FALLO 14: LO QUE SE COMPRA SE TIENE QUE PODER ENTREGAR ───────────────────
@@ -231,11 +242,49 @@ class TestLaCompraEntregaLoQueDeVerdadHay:
         assert b.rutina_pdfs.docs == []
 
     def test_solo_una_vigente_a_la_vez(self, base):
-        """Dos PDF del mes marcados y «la del mes» deja de significar algo."""
+        """Dos PDF del mes marcados y «la del mes» deja de significar algo.
+
+        Desde el 25-08 hay uno de hombre y uno de mujer, asi que «una vigente» es una POR
+        SEXO. Aqui se sube la de hombre encima de una antigua (de las que no llevan sexo) y
+        tiene que quedar solo la nueva: si la vieja siguiera vigente, seguiria saliendole
+        como respaldo a las mujeres, o sea que subir la de ellos les cambiaria la rutina.
+        """
         b = base(pdf_del_mes=PDF_DEL_MES)
         corre(rutinas._guardar_el_pdf_del_mes(b"otro", "septiembre.pdf", "admin-1", "2026-09"))
         vigentes = [d for d in b.rutina_mes_pdf.docs if d.get("vigente")]
         assert len(vigentes) == 1 and vigentes[0]["mes"] == "2026-09"
+
+    def test_la_de_mujer_no_tumba_la_de_hombre(self, base):
+        """El fallo que habria sido mas caro: subir la de ellas y dejar sin rutina a los 47
+        hombres en el mismo gesto, sin que nadie lo vea hasta que alguien se queja."""
+        b = base()
+        corre(rutinas._guardar_el_pdf_del_mes(b"h", "hombre.pdf", "admin-1", "2026-09",
+                                              sexo="hombre"))
+        corre(rutinas._guardar_el_pdf_del_mes(b"m", "mujer.pdf", "admin-1", "2026-09",
+                                              sexo="mujer"))
+        vigentes = {d["sexo"]: d for d in b.rutina_mes_pdf.docs if d.get("vigente")}
+        assert set(vigentes) == {"hombre", "mujer"}, vigentes
+        assert vigentes["hombre"]["filename"] == "hombre.pdf"
+
+    def test_a_cada_uno_la_suya(self, base):
+        """Y que cada sexo reciba la que le toca, no la del otro."""
+        b = base()
+        corre(rutinas._guardar_el_pdf_del_mes(b"h", "hombre.pdf", "admin-1", "2026-09",
+                                              sexo="hombre"))
+        corre(rutinas._guardar_el_pdf_del_mes(b"m", "mujer.pdf", "admin-1", "2026-09",
+                                              sexo="mujer"))
+        suya_h = corre(rutinas.pdf_del_mes_vigente(sexo="hombre"))
+        suya_m = corre(rutinas.pdf_del_mes_vigente(sexo="mujer"))
+        assert suya_h["filename"] == "hombre.pdf"
+        assert suya_m["filename"] == "mujer.pdf"
+
+    def test_si_solo_esta_la_de_hombre_ellas_no_reciben_la_de_ellos(self, base):
+        """Mejor nada que la equivocada: una mujer con la rutina de hombre es peor que una
+        mujer esperando a que suban la suya."""
+        b = base()
+        corre(rutinas._guardar_el_pdf_del_mes(b"h", "hombre.pdf", "admin-1", "2026-09",
+                                              sexo="hombre"))
+        assert corre(rutinas.pdf_del_mes_vigente(sexo="mujer")) is None
 
     def test_el_mes_se_lee_bonito(self):
         assert rutinas._nombre_del_mes("2026-08") == "La rutina de agosto de 2026"

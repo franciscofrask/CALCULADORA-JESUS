@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardContent } from '../components/ui/card';
@@ -272,6 +272,119 @@ const PonerlesRutinaAVarios = ({ api, onHecho }) => {
  * Se marcan los clientes en la tabla de abajo y se sube UN archivo para todos. No pisa nada:
  * como la subida de la ficha, guarda una entrega más y el cliente ve la última.
  */
+/**
+ * LA RUTINA DEL MES: SE DEJA EN UN SITIO Y LE SALE A QUIEN LE TOQUE.
+ *
+ * Es como lo hace Jenny y como pidió Francisco el 25-08: dos archivos, el de hombre y el de
+ * mujer, y ya está. Nadie selecciona clientes ni reparte nada.
+ *
+ * Lo de antes era subirla en dos tandas marcando gente a mano y sabiéndose de memoria quién
+ * era hombre y quién mujer. Resultado medido: de los 56 que la llevan incluida, 26 no la
+ * tenían, y 25 de ellos eran de ELM, el plan cuyo entregable principal es justo esa rutina.
+ *
+ * La cuenta de «le llega a N» va al lado del archivo a propósito: subir el PDF y que llegue
+ * a cero personas es el fallo que no se ve.
+ */
+const HuecoDelMes = ({ api, sexo, hueco, onHecho }) => {
+    const [subiendo, setSubiendo] = useState(false);
+    const pdf = hueco?.pdf;
+    const etiqueta = sexo === 'hombre' ? 'Hombre' : 'Mujer';
+
+    const subir = async (e) => {
+        const archivo = e.target.files?.[0];
+        e.target.value = '';
+        if (!archivo) return;
+        setSubiendo(true);
+        try {
+            const fd = new FormData();
+            fd.append('file', archivo);
+            fd.append('sexo', sexo);
+            const r = await api.post('/admin/routines/pdf-del-mes', fd);
+            const n = r.data?.llega_a ?? 0;
+            toast.success(n === 1 ? `Ya la ve 1 cliente (${etiqueta.toLowerCase()})`
+                                  : `Ya la ven ${n} clientes (${etiqueta.toLowerCase()})`);
+            onHecho?.();
+        } catch (err) {
+            toast.error(err?.response?.data?.detail || 'No hemos podido subir la rutina.');
+        } finally {
+            setSubiendo(false);
+        }
+    };
+
+    return (
+        <div className={`flex-1 min-w-0 rounded-lg border p-3 ${pdf ? 'border-[#333] bg-[#0A0A0A]' : 'border-dashed border-[#444] bg-transparent'}`}
+            data-testid={`hueco-del-mes-${sexo}`}>
+            <div className="flex items-center justify-between gap-2 mb-1">
+                <p className="text-white text-sm font-semibold">{etiqueta}</p>
+                <span className="text-[10px] text-white/40">
+                    le llega a {hueco?.llega_a ?? 0}
+                </span>
+            </div>
+            {pdf ? (
+                <>
+                    <p className="text-white/70 text-xs truncate" title={pdf.filename}>{pdf.filename}</p>
+                    <p className="text-[10px] text-white/30 mb-2">
+                        {pdf.nombre ? `${pdf.nombre} · ` : ''}
+                        {pdf.uploaded_at ? new Date(pdf.uploaded_at).toLocaleDateString('es-ES') : ''}
+                    </p>
+                </>
+            ) : (
+                <p className="text-white/30 text-xs mb-2">Todavía no hay ninguna</p>
+            )}
+            <div className="flex items-center gap-2">
+                <label className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg cursor-pointer
+                    ${subiendo ? 'bg-[#FF671F]/40 text-white/70' : 'bg-[#FF671F] hover:bg-[#FF671F]/90 text-white'}`}>
+                    <Upload className="w-3.5 h-3.5" />
+                    {subiendo ? 'Subiendo…' : (pdf ? 'Cambiarla' : 'Subirla')}
+                    <input type="file" accept="application/pdf" className="hidden" disabled={subiendo}
+                        onChange={subir} data-testid={`input-del-mes-${sexo}`} />
+                </label>
+                {pdf && (
+                    <button onClick={() => window.open(`${api.defaults.baseURL}/admin/routines/pdf-del-mes?sexo=${sexo}`, '_blank')}
+                        className="text-xs text-white/40 hover:text-white">verla</button>
+                )}
+            </div>
+        </div>
+    );
+};
+
+const LaRutinaDelMes = ({ api, onHecho }) => {
+    const [info, setInfo] = useState(null);
+
+    const cargar = useCallback(async () => {
+        try {
+            const r = await api.get('/admin/routines/pdf-del-mes/info');
+            setInfo(r.data || null);
+        } catch { setInfo(null); }
+    }, [api]);
+    useEffect(() => { cargar(); }, [cargar]);
+
+    const huecos = info?.huecos || {};
+    return (
+        <Card className="bg-[#111] border-[#222]" data-testid="la-rutina-del-mes">
+            <CardContent className="p-4 space-y-3">
+                <div>
+                    <p className="text-white font-semibold text-sm">La rutina del mes</p>
+                    <p className="text-white/40 text-xs">
+                        Déjala aquí y le sale sola a quien la lleve en su plan. No hay que
+                        elegir clientes: a cada uno se le da la de su sexo.
+                    </p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3">
+                    <HuecoDelMes api={api} sexo="hombre" hueco={huecos.hombre}
+                        onHecho={() => { cargar(); onHecho?.(); }} />
+                    <HuecoDelMes api={api} sexo="mujer" hueco={huecos.mujer}
+                        onHecho={() => { cargar(); onHecho?.(); }} />
+                </div>
+                <p className="text-[10px] text-white/30">
+                    Si a alguien le has subido una rutina suya, esa manda: la del mes no la pisa.
+                    Bronze y Mantenimiento no la ven, porque la compran aparte.
+                </p>
+            </CardContent>
+        </Card>
+    );
+};
+
 const SubirPdfAVarios = ({ api, ids, onHecho, onLimpiar }) => {
     const [reparto, setReparto] = useState('');
     const [semanas, setSemanas] = useState('');
@@ -448,16 +561,23 @@ const AdminRoutinesPage = () => {
                             className="ml-2 text-[#FF671F] hover:underline">verlos</button>
                     </p>
                 )}
+                {/* YA NO HAY QUE SUBÍRSELA A NADIE (25-08). Esta línea decía «a estos se
+                    les sube el mismo PDF a todos» y era verdad hasta hoy: había que
+                    marcarlos y subir en dos tandas. Desde que la del mes se deja en su
+                    caja, les llega sola, así que la lista de abajo cuenta a los que no
+                    tienen NINGÚN PDF suyo, que no es lo mismo que estar sin rutina. */}
                 {delMesPendientes.length > 0 && (
                     <p className="text-white/60 text-sm mt-1" data-testid="rutinas-del-mes-pendientes">
                         <span className="text-[#FF671F] font-semibold">{delMesPendientes.length}</span>
-                        {' '}esperan LA DEL MES: a estos se les sube el mismo PDF a todos.
+                        {' '}llevan LA DEL MES en su plan: les llega sola en cuanto esté aquí abajo.
                         <button onClick={() => { setSoloDelMes(true); setSoloPersonalizadas(false); setOnlyMissing(true); }}
                             data-testid="ver-del-mes-pendientes"
                             className="ml-2 text-[#FF671F] hover:underline">verlos</button>
                     </p>
                 )}
             </div>
+
+            <LaRutinaDelMes api={api} onHecho={recargar} />
 
             <BibliotecaDeRutinas api={api} />
 

@@ -1460,15 +1460,48 @@ def _nombre_del_mes(mes: str) -> str:
         return "La rutina del mes"
 
 
-async def pdf_del_mes_vigente(con_datos: bool = False) -> Optional[Dict[str, Any]]:
+def sexo_de(profile: Optional[Dict[str, Any]]) -> str:
+    """«hombre» o «mujer», tolerante con cómo está escrito en la base.
+
+    Gemela de `_sexo_de` en routes/supplements: la base tiene `sex` con «hombre», «mujer»
+    y tres «male» sueltos de la importación.
+    """
+    crudo = str((profile or {}).get("sexo") or (profile or {}).get("sex")
+                or (profile or {}).get("genero") or "").lower()
+    return "mujer" if ("muj" in crudo or "fem" in crudo or crudo in ("f", "female")) else "hombre"
+
+
+async def pdf_del_mes_vigente(con_datos: bool = False,
+                              sexo: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """El PDF marcado como la rutina de este mes, o None si el equipo no ha subido ninguno.
+
+    HAY UNA DE HOMBRE Y UNA DE MUJER (Francisco, 25-08). Son dos rutinas distintas -- así
+    las prepara Jesús y así las reparte Jenny -- y hasta hoy aquí solo cabía una: quien
+    subiera la segunda tumbaba la primera. Con `sexo` se pide la que toca; sin él, la más
+    reciente de cualquiera de las dos, que es lo que quiere el panel para decir «¿hay algo?».
 
     `con_datos=False` por defecto y NO por comodidad: el binario son hasta 15 MB y esto lo
     pregunta la pantalla de compra. Solo lo pide quien va a entregarlo.
     """
     fuera = None if con_datos else {"data": 0}
-    return await db.rutina_mes_pdf.find_one({"vigente": True}, {"_id": 0, **(fuera or {})},
-                                            sort=[("uploaded_at", -1)])
+    proyeccion = {"_id": 0, **(fuera or {})}
+    if not sexo:
+        return await db.rutina_mes_pdf.find_one({"vigente": True}, proyeccion,
+                                                sort=[("uploaded_at", -1)])
+    doc = await db.rutina_mes_pdf.find_one({"vigente": True, "sexo": sexo}, proyeccion,
+                                           sort=[("uploaded_at", -1)])
+    if doc:
+        return doc
+    # LAS DE ANTES DE SEPARAR POR SEXO NO LLEVAN EL CAMPO, y valían para todo el mundo. Sin
+    # esto, el día del cambio se volverían invisibles y el que ya tenía su rutina se
+    # quedaría sin ella de un deploy para otro. En produccion no hay ninguna, pero el clon
+    # y los tests sí, y no se rompe algo por venir de antes.
+    #
+    # OJO: solo la que NO tiene sexo. Si hay una de hombre y pide la de mujer, la respuesta
+    # es NADA: darle la de ellos es peor que no darle ninguna.
+    antigua = await db.rutina_mes_pdf.find_one({"vigente": True}, proyeccion,
+                                               sort=[("uploaded_at", -1)])
+    return antigua if antigua and not antigua.get("sexo") else None
 
 
 async def hay_rutina_del_mes_que_entregar() -> bool:
@@ -1481,14 +1514,58 @@ async def hay_rutina_del_mes_que_entregar() -> bool:
     return await pdf_del_mes_vigente() is not None
 
 
+async def _modo_de_rutina(plan: Optional[str]) -> str:
+    """Qué rutina le da su plan: «del_mes», «personalizada», «opcional» o «ninguna».
+
+    Del catálogo con los overrides puestos, que es lo que ve el panel: si alguien cambia
+    un plan desde Planes, esto tiene que cambiar con él.
+    """
+    from models.user import codigo_de_plan, merged_catalog
+    from routes.plans import _overrides_by_code
+    catalogo = merged_catalog(await _overrides_by_code())
+    ficha = catalogo.get(codigo_de_plan(plan)) or {}
+    return ((ficha.get("habilitaciones") or {}).get("rutina")) or "ninguna"
+
+
+async def le_toca_la_del_mes(profile: Dict[str, Any]) -> bool:
+    """¿Este cliente ve la rutina del mes sin comprarla? Solo si su plan la INCLUYE.
+
+    «opcional» (Bronze y Mantenimiento) es que NO: esos la compran aparte. Y con la compra
+    se le copia a su ficha, que es otra vía.
+    """
+    return await _modo_de_rutina((profile or {}).get("plan")) == "del_mes"
+
+
+async def _a_cuantos_les_toca(sexo: str) -> int:
+    """Cuántos clientes activos de ese sexo la llevan incluida. Para decirlo al subirla:
+    «se la acabas de poner a 47», que es la confirmación de que ha ido a alguna parte."""
+    from models.user import codigo_de_plan, merged_catalog
+    from routes.plans import _overrides_by_code
+    catalogo = merged_catalog(await _overrides_by_code())
+    del_equipo = await db.users.distinct("id", {"role": {"$in": ["admin", "trainer"]}})
+    perfiles = await db.client_profiles.find(
+        {"user_id": {"$nin": del_equipo}, "status": "activo", "es_prueba": {"$ne": True}},
+        {"_id": 0, "plan": 1, "sex": 1, "sexo": 1}).to_list(3000)
+    n = 0
+    for p in perfiles:
+        ficha = catalogo.get(codigo_de_plan(p.get("plan"))) or {}
+        if ((ficha.get("habilitaciones") or {}).get("rutina")) == "del_mes" \
+                and sexo_de(p) == sexo:
+            n += 1
+    return n
+
+
 async def _guardar_el_pdf_del_mes(contenido: bytes, filename: str, subido_por: str,
                                   mes: str, reparto: Optional[List[str]] = None,
-                                  semanas: Optional[int] = None) -> Dict[str, Any]:
-    """Deja este PDF como la rutina del mes vigente. Solo una vigente a la vez."""
+                                  semanas: Optional[int] = None,
+                                  sexo: str = "hombre") -> Dict[str, Any]:
+    """Deja este PDF como la rutina del mes vigente PARA ESE SEXO. Una de cada, a la vez."""
+    sexo = "mujer" if str(sexo).lower().startswith("muj") else "hombre"
     doc = {
         "id": str(uuid.uuid4()),
         "mes": mes,
         "nombre": _nombre_del_mes(mes),
+        "sexo": sexo,
         "filename": filename or "rutina.pdf",
         "size": len(contenido),
         "reparto": reparto,
@@ -1500,7 +1577,17 @@ async def _guardar_el_pdf_del_mes(contenido: bytes, filename: str, subido_por: s
     }
     # Las anteriores se archivan en vez de borrarse: quien compró en agosto tiene su copia,
     # pero saber qué se repartió cada mes vale más que los megas que ocupa.
-    await db.rutina_mes_pdf.update_many({"vigente": True}, {"$set": {"vigente": False}})
+    #
+    # SOLO LAS DE SU MISMO SEXO: sin el filtro, subir la de mujer archivaba la de hombre y
+    # los 47 hombres se quedaban sin rutina en el mismo gesto.
+    await db.rutina_mes_pdf.update_many({"vigente": True, "sexo": sexo},
+                                        {"$set": {"vigente": False}})
+    # Y las de ANTES de separar por sexo, que no llevan el campo: en cuanto se sube una con
+    # sexo, la vieja esta superada. Si se quedara vigente seguiria saliendo como respaldo
+    # al otro sexo, o sea que subir la de hombre le cambiaria la rutina a las mujeres.
+    # `{"sexo": None}` coge las que no tienen el campo y las que lo tienen a null.
+    await db.rutina_mes_pdf.update_many({"vigente": True, "sexo": None},
+                                        {"$set": {"vigente": False}})
     await db.rutina_mes_pdf.insert_one(doc)
     return doc
 
@@ -1511,7 +1598,7 @@ async def _entregar_el_pdf_del_mes(profile: Dict[str, Any], origen: str) -> Opti
     Lo llama `entregar_la_rutina_del_mes` cuando no hay plantilla estructurada marcada, que
     hoy es SIEMPRE (cero plantillas en producción).
     """
-    doc = await pdf_del_mes_vigente(con_datos=True)
+    doc = await pdf_del_mes_vigente(con_datos=True, sexo=sexo_de(profile))
     if not doc:
         return None
     await _guardar_pdf_de_rutina(profile["id"], bytes(doc["data"]), doc.get("filename"),
@@ -1526,47 +1613,78 @@ async def _entregar_el_pdf_del_mes(profile: Dict[str, Any], origen: str) -> Opti
 
 @admin_router.post("/pdf-del-mes")
 async def subir_el_pdf_del_mes(file: UploadFile = File(...),
+                               sexo: Optional[str] = Form(None),
                                mes: Optional[str] = Form(None),
                                reparto: Optional[str] = Form(None),
                                semanas: Optional[str] = Form(None),
                                user=Depends(get_admin_user)):
-    """Sube LA RUTINA DEL MES en PDF: la que recibe solo el que la compra por 57 €.
+    """Sube LA RUTINA DEL MES en PDF, la de hombre o la de mujer.
 
-    No se la manda a nadie: queda preparada. Para repartirla a los que ya la llevan
-    incluida está `pdf-en-bloque`, que además puede dejarla marcada aquí de una pasada.
+    SE DEJA EN UN SITIO Y LE SALE A QUIEN LE TOQUE (Francisco, 25-08). No hay que
+    seleccionar clientes ni repartir nada: el que la lleva en su plan la ve al abrir su
+    Rutina, y el servidor le da la de su sexo. Antes esto solo dejaba la rutina «preparada»
+    para el que la comprase, y a los 56 que la llevan incluida había que subírsela a mano
+    en dos tandas, sabiéndose de memoria quién era hombre y quién mujer.
+
+    La subida por cliente (`pdf/{client_id}`) se queda y MANDA sobre esta: es la vía de las
+    personalizadas, y una rutina escrita para alguien no la pisa la genérica del mes.
     """
     contenido = await _leer_el_pdf(file)
     doc = await _guardar_el_pdf_del_mes(contenido, file.filename or "rutina.pdf",
                                         subido_por=user.get("id"), mes=_mes_limpio(mes),
                                         reparto=_reparto_limpio(reparto),
-                                        semanas=_semanas_limpias(semanas))
-    return {"ok": True, **{k: doc[k] for k in ("id", "mes", "nombre", "filename", "size",
-                                               "uploaded_at", "reparto", "semanas")}}
+                                        semanas=_semanas_limpias(semanas),
+                                        sexo=sexo or "hombre")
+    return {"ok": True, **{k: doc[k] for k in ("id", "mes", "nombre", "sexo", "filename",
+                                               "size", "uploaded_at", "reparto", "semanas")},
+            "llega_a": await _a_cuantos_les_toca(doc["sexo"])}
 
 
 @admin_router.get("/pdf-del-mes/info")
 async def info_del_pdf_del_mes(user=Depends(get_admin_user)):
-    """¿Hay rutina del mes preparada, y cuál? Lo que el panel necesita para saber si la
-    compra puede entregar algo."""
+    """Qué hay cargado en cada hueco, el de hombre y el de mujer, y a cuántos les llega.
+
+    Es lo que pinta la pantalla: dos huecos, lo que hay en cada uno y la cuenta de a quién
+    le está saliendo. La cuenta importa tanto como el archivo: subir el PDF y que llegue a
+    cero personas es el fallo que no se ve.
+    """
     plantilla = await rutina_del_mes_vigente()
-    doc = await pdf_del_mes_vigente()
-    return {"hay": bool(plantilla or doc),
-            "plantilla": (plantilla or {}).get("nombre"),
+    huecos = {}
+    for sexo in ("hombre", "mujer"):
+        doc = await pdf_del_mes_vigente(sexo=sexo)
+        huecos[sexo] = {
             "pdf": {k: doc.get(k) for k in ("id", "mes", "nombre", "filename", "size",
-                                            "uploaded_at", "reparto", "semanas")} if doc else None}
+                                            "uploaded_at", "reparto", "semanas")} if doc else None,
+            "llega_a": await _a_cuantos_les_toca(sexo),
+        }
+    return {"hay": bool(plantilla or huecos["hombre"]["pdf"] or huecos["mujer"]["pdf"]),
+            "plantilla": (plantilla or {}).get("nombre"),
+            "huecos": huecos,
+            # Se mantiene `pdf` a secas por si algo viejo lo lee: el más reciente de los dos.
+            "pdf": (huecos["hombre"]["pdf"] or huecos["mujer"]["pdf"])}
 
 
 @admin_router.get("/pdf-del-mes")
-async def ver_el_pdf_del_mes(user=Depends(get_admin_user)):
-    """El PDF del mes, para comprobar que es el bueno antes de venderlo."""
-    return await _servir_pdf(await pdf_del_mes_vigente(con_datos=True))
+async def ver_el_pdf_del_mes(sexo: Optional[str] = None, user=Depends(get_admin_user)):
+    """El PDF del mes, para comprobar que es el bueno antes de repartirlo.
+
+    Con `?sexo=mujer` se mira el de ellas; sin nada, el mas reciente de los dos.
+    """
+    return await _servir_pdf(await pdf_del_mes_vigente(con_datos=True, sexo=sexo))
 
 
 @admin_router.delete("/pdf-del-mes")
-async def retirar_el_pdf_del_mes(user=Depends(get_admin_user)):
-    """Retira la rutina del mes: deja de haber nada que entregar y la compra se cierra
-    sola. Se usa cuando el PDF subido estaba mal, para que no se venda de mientras."""
-    r = await db.rutina_mes_pdf.update_many({"vigente": True}, {"$set": {"vigente": False}})
+async def retirar_el_pdf_del_mes(sexo: Optional[str] = None, user=Depends(get_admin_user)):
+    """Retira la rutina del mes: deja de verla quien la lleva incluida y la compra se
+    cierra sola. Se usa cuando el PDF subido estaba mal, para que no siga circulando.
+
+    Con `?sexo=` retira solo ese hueco; sin nada, los dos. Se pregunta explicitamente
+    porque retirar los dos cuando solo esta mal uno deja a los otros 47 sin rutina.
+    """
+    filtro = {"vigente": True}
+    if sexo:
+        filtro["sexo"] = "mujer" if str(sexo).lower().startswith("muj") else "hombre"
+    r = await db.rutina_mes_pdf.update_many(filtro, {"$set": {"vigente": False}})
     return {"ok": True, "retiradas": getattr(r, "modified_count", 0)}
 
 
@@ -1621,28 +1739,54 @@ async def ver_pdf_de_rutina_admin(client_id: str, user=Depends(get_admin_user)):
     return await _servir_pdf(doc)
 
 
+async def _el_pdf_que_le_toca(user_id: str, con_datos: bool) -> Optional[Dict[str, Any]]:
+    """El PDF de rutina de este cliente: el SUYO si se lo han subido, y si no la del mes.
+
+    LA DEL MES LE LLEGA SOLA (Francisco, 25-08: «las deja cargadas en un solo lugar y le
+    aparece a quien le tenga que aparecer»). Antes había que subírsela cliente a cliente:
+    de los 56 que la llevan incluida, 26 no la tenían -- 25 de ELM, que es el plan cuyo
+    entregable principal es justo esa rutina --. Ahora no se copia a nadie: se resuelve al
+    leer, mirando su plan y su sexo.
+
+    EL ORDEN IMPORTA. Manda el suyo: si su entrenador le subió una escrita para él, esa no
+    la pisa la genérica del mes. Y quien no la lleva en el plan no ve nada, que es el
+    candado que antes dependía de no equivocarse al seleccionar.
+    """
+    perfil = await db.client_profiles.find_one(
+        {"user_id": user_id}, {"_id": 0, "id": 1, "plan": 1, "sex": 1, "sexo": 1})
+    if not perfil:
+        return None
+    fuera = None if con_datos else {"data": 0}
+    suyo = await db.rutina_pdfs.find_one({"client_id": perfil["id"]},
+                                         {"_id": 0, **(fuera or {})},
+                                         sort=[("uploaded_at", -1)])
+    if suyo:
+        return suyo
+    if not await le_toca_la_del_mes(perfil):
+        return None
+    return await pdf_del_mes_vigente(con_datos=con_datos, sexo=sexo_de(perfil))
+
+
 @router.get("/pdf/info")
 async def info_pdf_de_rutina(user=Depends(get_current_user)):
-    """¿Tiene PDF? Para que la app enseñe el botón solo si existe. Sin gate de plan a
-    propósito: si su entrenador se lo subió, es suyo y lo puede abrir."""
-    perfil = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0, "id": 1})
-    if not perfil:
-        return {"hay": False}
-    doc = await db.rutina_pdfs.find_one({"client_id": perfil["id"]}, {"_id": 0, "data": 0},
-                                        sort=[("uploaded_at", -1)])
+    """¿Tiene PDF? Para que la app enseñe el botón solo si existe.
+
+    El suyo no lleva gate de plan a propósito: si su entrenador se lo subió, es suyo y lo
+    puede abrir. La del mes SÍ lo lleva: esa se enseña solo a quien la incluye su plan.
+    """
+    doc = await _el_pdf_que_le_toca(user["id"], con_datos=False)
     if not doc:
         return {"hay": False}
-    return {"hay": True, **{k: doc[k] for k in ("filename", "uploaded_at")},
-            "reparto": doc.get("reparto"), "semanas": doc.get("semanas")}
+    return {"hay": True, **{k: doc.get(k) for k in ("filename", "uploaded_at")},
+            "reparto": doc.get("reparto"), "semanas": doc.get("semanas"),
+            # Para que la pantalla pueda decir «Rutina del mes · Agosto» en vez de un
+            # nombre de fichero, cuando es la genérica y no la suya.
+            "del_mes": bool(doc.get("sexo")), "mes": doc.get("nombre")}
 
 
 @router.get("/pdf")
 async def ver_pdf_de_rutina(user=Depends(get_current_user)):
-    perfil = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0, "id": 1})
-    if not perfil:
-        raise HTTPException(status_code=404, detail="Perfil no encontrado")
-    doc = await db.rutina_pdfs.find_one({"client_id": perfil["id"]}, {"_id": 0},
-                                        sort=[("uploaded_at", -1)])
+    doc = await _el_pdf_que_le_toca(user["id"], con_datos=True)
     return await _servir_pdf(doc)
 
 
