@@ -4,6 +4,9 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
 import { Send, MessageCircle, Search, CheckCheck, Check, Clock } from 'lucide-react';
+import {
+    AdjuntarImagen, ImagenDelMensaje, PreviaDelAdjunto,
+} from '../components/chat/ImagenAdjunta';
 
 // EL CANAL DEL MENSAJE (doc del 21-08, apartados 13 y 20): el cliente entra al chat por
 // una de dos puertas -- «Mi suscripción» o «Algo no funciona» -- y cada mensaje llega
@@ -33,6 +36,8 @@ const AdminMessagesPage = () => {
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
     const [sending, setSending] = useState(false);
+    // La imagen ya subida y esperando a que se mande la respuesta (null si no hay).
+    const [adjunto, setAdjunto] = useState(null);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const scrollRef = useRef(null);
@@ -73,11 +78,16 @@ const AdminMessagesPage = () => {
 
     const handleSend = async (e) => {
         e.preventDefault();
-        if (!newMessage.trim() || !selected) return;
+        // Una imagen sola es una respuesta: una captura contesta mejor que un párrafo.
+        if ((!newMessage.trim() && !adjunto) || !selected) return;
         setSending(true);
         try {
-            await api.post('/messages', { receiver_id: selected, content: newMessage.trim() });
+            await api.post('/messages', {
+                receiver_id: selected, content: newMessage.trim(),
+                adjunto_id: adjunto?.id || null,
+            });
             setNewMessage('');
+            setAdjunto(null);
             fetchMessages(selected);
             fetchConversations();
         } catch (err) { toast.error('Error al enviar el mensaje'); }
@@ -187,7 +197,14 @@ const AdminMessagesPage = () => {
                                         <div key={msg.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
                                             <div className="max-w-[75%]">
                                                 <div className={`rounded-2xl px-4 py-2 ${isOwn ? 'bg-[#FF671F] text-white rounded-br-sm' : 'bg-[#1A1A1A] text-white/90 rounded-bl-sm'}`}>
-                                                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                                                    {msg.content && (
+                                                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                                                    )}
+                                                    {msg.adjunto && (
+                                                        <div className={msg.content ? 'mt-2' : ''}>
+                                                            <ImagenDelMensaje api={api} adjunto={msg.adjunto} propio={isOwn} />
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <div className={`flex items-center gap-1 mt-0.5 ${isOwn ? 'justify-end' : ''}`}>
                                                     <ChipCanal canal={msg.canal} />
@@ -200,10 +217,15 @@ const AdminMessagesPage = () => {
                                 })}
                                 {messages.length === 0 && <p className="text-white/20 text-sm text-center py-8">Sin mensajes con este cliente</p>}
                             </div>
-                            <form onSubmit={handleSend} className="p-3 border-t border-[#222] flex items-center gap-2">
+                            <div className="px-3 pt-2 border-t border-[#222]">
+                                <PreviaDelAdjunto adjunto={adjunto} onQuitar={() => setAdjunto(null)} />
+                            </div>
+                            <form onSubmit={handleSend} className="px-3 pb-3 flex items-center gap-2">
+                                <AdjuntarImagen api={api} adjunto={adjunto} onAdjunto={setAdjunto}
+                                    deshabilitado={sending} />
                                 <Input value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="Escribe tu respuesta..."
                                     className="flex-1 bg-[#0A0A0A] border-[#222] text-white" disabled={sending} data-testid="admin-message-input" />
-                                <Button type="submit" size="icon" disabled={sending || !newMessage.trim()} className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white" data-testid="admin-send-btn">
+                                <Button type="submit" size="icon" disabled={sending || (!newMessage.trim() && !adjunto)} className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white" data-testid="admin-send-btn">
                                     <Send className="w-4 h-4" />
                                 </Button>
                             </form>

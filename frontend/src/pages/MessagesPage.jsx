@@ -9,6 +9,9 @@ import {
     Send, MessageCircle, User, Check, CheckCheck, ChevronRight, ArrowLeft,
     CreditCard, Wrench
 } from 'lucide-react';
+import {
+    AdjuntarImagen, ImagenDelMensaje, PreviaDelAdjunto,
+} from '../components/chat/ImagenAdjunta';
 
 // EL CHAT CON DOS ENTRADAS (doc del 21-08, apartados 13 y 20).
 //
@@ -39,6 +42,8 @@ const MessagesPage = () => {
     const [newMessage, setNewMessage] = useState('');
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
+    // La imagen ya subida y esperando a que se mande el mensaje (null si no hay).
+    const [adjunto, setAdjunto] = useState(null);
     const scrollRef = useRef(null);
     const inputRef = useRef(null);
 
@@ -86,7 +91,8 @@ const MessagesPage = () => {
 
     const handleSend = async (e) => {
         e.preventDefault();
-        if (!newMessage.trim()) return;
+        // Una imagen sola es un mensaje: si hay adjunto, no hace falta escribir nada.
+        if (!newMessage.trim() && !adjunto) return;
 
         setSending(true);
         try {
@@ -96,8 +102,10 @@ const MessagesPage = () => {
                 // La etiqueta de la puerta por la que entró: es lo que el equipo ve
                 // como chip en su bandeja.
                 canal,
+                adjunto_id: adjunto?.id || null,
             });
             setNewMessage('');
+            setAdjunto(null);
             fetchMessages();
             inputRef.current?.focus();
         } catch (error) {
@@ -236,7 +244,16 @@ const MessagesPage = () => {
                                                     : 'bg-muted text-foreground rounded-bl-sm'
                                             }`}
                                         >
-                                            <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                                            {msg.content && (
+                                                <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                                            )}
+                                            {/* La imagen, dentro de la burbuja: con texto va
+                                                debajo, y sola es la burbuja entera. */}
+                                            {msg.adjunto && (
+                                                <div className={msg.content ? 'mt-2' : ''}>
+                                                    <ImagenDelMensaje api={api} adjunto={msg.adjunto} propio={isOwn} />
+                                                </div>
+                                            )}
                                         </div>
                                         <div className={`flex items-center gap-1 mt-1 ${isOwn ? 'justify-end' : 'justify-start'}`}>
                                             <span className="text-xs text-foreground/40">
@@ -283,7 +300,10 @@ const MessagesPage = () => {
 
             {/* Input Area */}
             <div className="p-4 border-t border-border bg-card">
+                <PreviaDelAdjunto adjunto={adjunto} onQuitar={() => setAdjunto(null)} />
                 <form onSubmit={handleSend} className="flex items-center gap-2">
+                    <AdjuntarImagen api={api} adjunto={adjunto} onAdjunto={setAdjunto}
+                        deshabilitado={sending} />
                     <Input
                         ref={inputRef}
                         value={newMessage}
@@ -296,7 +316,7 @@ const MessagesPage = () => {
                     <Button
                         type="submit"
                         size="icon"
-                        disabled={sending || !newMessage.trim()}
+                        disabled={sending || (!newMessage.trim() && !adjunto)}
                         className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white"
                         data-testid="send-message-btn"
                     >

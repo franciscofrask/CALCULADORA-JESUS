@@ -65,12 +65,20 @@ VENTANAS_SIEMPRE_ABIERTAS = os.environ.get(
 DEFAULT_BILLING_CYCLE_WEEKS = 12
 DEFAULT_BILLING_CYCLE_DAYS = DEFAULT_BILLING_CYCLE_WEEKS * 7
 
-# Cuentas que reciben el chat de "Soporte" (clientes sin entrenador asignado),
-# en orden de preferencia. Si ninguna existe se cae al primer admin que no sea uno mismo.
+# Cuentas que reciben el chat de "Soporte" (clientes sin entrenador asignado).
+#
+# LAS TRES, NO LA PRIMERA (Francisco, 25-08). El mensaje se GUARDA a nombre de la primera
+# que exista -- una conversacion tiene dos partes, no cuatro -- pero el aviso les llega a
+# todas: la bandeja del equipo es comun desde el 11-08, asi que cualquiera de las tres lo
+# abre y contesta. Antes esta lista empezaba por hola@jesusgallegopt.com, o sea que los
+# 98 clientes activos sin entrenador le escribian a Jesus y solo a el.
+#
+# Si ninguna existe se cae al primer admin que no sea uno mismo.
 SUPPORT_EMAILS = [
     e.strip().lower()
     for e in os.environ.get(
-        'SUPPORT_EMAILS', 'hola@jesusgallegopt.com,admin@jesusgallegopt.com'
+        'SUPPORT_EMAILS',
+        'jenirethroman08@gmail.com,alejandraespinosa553@gmail.com,francisco@test.com'
     ).split(',')
     if e.strip()
 ]

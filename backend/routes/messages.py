@@ -1,11 +1,14 @@
 """
 Rutas de mensajes: inbox del chat.
 """
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, File, Response, UploadFile
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 import uuid
 
+from bson import Binary
+
+from core import fotos as fotos_core
 from core.config import SUPPORT_EMAILS
 from core.database import db
 from core.security import get_current_user, get_admin_user
@@ -13,6 +16,36 @@ from models.common import MessageCreate, MessageResponse
 from routes.notifications import notify
 
 router = APIRouter(prefix="/messages", tags=["messages"])
+
+# ADJUNTOS DEL CHAT: SOLO IMÁGENES (Francisco, 25-08: «ambos chats deben permitir la carga
+# de imágenes adjuntas»).
+#
+# Los mismos tipos y el mismo tope que las fotos de progreso (routes/checkins), y por lo
+# mismo: es lo que sale de la cámara de un móvil. Deliberadamente NO se aceptan PDF ni
+# ficheros sueltos: lo que se ha pedido son imágenes, y un buzón de archivos hay que
+# vigilarlo (qué se guarda, cuánto ocupa, quién lo borra) y eso no está construido.
+TIPOS_DE_IMAGEN = {
+    "image/jpeg", "image/jpg", "image/png", "image/webp", "image/heic", "image/heif",
+}
+MAX_ADJUNTO_BYTES = 4 * 1024 * 1024  # 4 MB
+
+
+async def _ids_de_soporte(excluir: Optional[str] = None) -> List[str]:
+    """Las cuentas de soporte que existen de verdad, en el orden de `SUPPORT_EMAILS`.
+
+    El mensaje se guarda a nombre de UNA -- la primera --, porque una conversación tiene
+    dos partes; pero el aviso va a todas (ver `send_message`). La bandeja del equipo es
+    común desde el 11-08, así que cualquiera de ellas puede abrirla y contestar.
+    """
+    ids: List[str] = []
+    for email in SUPPORT_EMAILS:
+        u = await db.users.find_one(
+            {"email": email, "deleted_at": None, "id": {"$ne": excluir}},
+            {"_id": 0, "id": 1},
+        )
+        if u and u["id"] not in ids:
+            ids.append(u["id"])
+    return ids
 
 
 async def _resolve_receiver(user: dict, receiver_id: Optional[str]) -> str:
@@ -25,13 +58,9 @@ async def _resolve_receiver(user: dict, receiver_id: Optional[str]) -> str:
     profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0, "trainer_id": 1})
     if profile and profile.get("trainer_id") and profile["trainer_id"] != user["id"]:
         return profile["trainer_id"]
-    for email in SUPPORT_EMAILS:
-        support_user = await db.users.find_one(
-            {"email": email, "deleted_at": None, "id": {"$ne": user["id"]}},
-            {"_id": 0, "id": 1},
-        )
-        if support_user:
-            return support_user["id"]
+    soporte = await _ids_de_soporte(excluir=user["id"])
+    if soporte:
+        return soporte[0]
     admin_user = await db.users.find_one(
         {"role": "admin", "deleted_at": None, "id": {"$ne": user["id"]}},
         {"_id": 0, "id": 1}, sort=[("created_at", 1)]
@@ -44,6 +73,92 @@ async def _resolve_receiver(user: dict, receiver_id: Optional[str]) -> str:
     if not admin_user:
         raise HTTPException(status_code=500, detail="No hay ningún admin para recibir el mensaje")
     return admin_user["id"]
+
+
+@router.post("/adjunto")
+async def subir_adjunto(
+    file: UploadFile = File(..., description="Imagen del chat (JPEG, PNG, WebP, HEIC). Máx 4 MB."),
+    user = Depends(get_current_user),
+):
+    """Sube la imagen ANTES de mandar el mensaje y devuelve su id.
+
+    En dos pasos a propósito: así el que escribe ve la miniatura y puede quitarla o
+    cambiarla antes de enviar, y el mensaje sigue siendo JSON como siempre. El id que
+    devuelve viaja luego en `adjunto_id` al crear el mensaje.
+
+    Mientras no se mande el mensaje, la imagen queda huérfana y solo la ve quien la subió:
+    no está enganchada a ninguna conversación.
+    """
+    content_type = (file.content_type or "").lower()
+    if content_type not in TIPOS_DE_IMAGEN:
+        raise HTTPException(
+            status_code=400,
+            detail="Solo se pueden adjuntar imágenes (JPEG, PNG, WebP o HEIC).")
+
+    contenido = await file.read()
+    if not contenido:
+        raise HTTPException(status_code=400, detail="El archivo está vacío.")
+    if len(contenido) > MAX_ADJUNTO_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"La imagen pesa {len(contenido) // 1024} KB y el máximo son "
+                   f"{MAX_ADJUNTO_BYTES // (1024 * 1024)} MB.")
+
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "filename": file.filename or "imagen.jpg",
+        "content_type": content_type,
+        "size": len(contenido),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        # Se rellena al mandarlo: hasta entonces no pertenece a ninguna conversación.
+        "message_id": None,
+    }
+    # MISMO CAMINO QUE LAS FOTOS DE PROGRESO: a R2 si hay credenciales, y si no el binario
+    # en Mongo. Sin esto los adjuntos engordarían la base igual que engordaron las fotos
+    # (906 MB antes de moverlas), y con la ventaja de que la caída ya está probada.
+    clave = await fotos_core.subir_foto_nueva(
+        user_id=user["id"], client_id=user["id"], photo_id=doc["id"],
+        contenido=contenido, content_type=content_type)
+    if clave:
+        doc["en_r2"] = True
+        doc["r2_key"] = clave
+    else:
+        doc["data"] = Binary(contenido)
+    await db.message_files.insert_one(doc)
+    return {"id": doc["id"], "filename": doc["filename"],
+            "content_type": doc["content_type"], "size": doc["size"]}
+
+
+@router.get("/adjunto/{adjunto_id}")
+async def ver_adjunto(adjunto_id: str, user = Depends(get_current_user)):
+    """Sirve la imagen. Solo el que la subió, el que la recibe, o el equipo.
+
+    El equipo entra porque la bandeja es común desde el 11-08 y el hilo desde el 24-08: si
+    cualquiera del equipo puede LEER la conversación, esconderle la foto que va dentro
+    dejaría el mensaje a medias. Un cliente solo ve las de sus propias conversaciones.
+    """
+    doc = await db.message_files.find_one({"id": adjunto_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="No encontramos esa imagen.")
+
+    permitido = doc.get("user_id") == user["id"]
+    if not permitido and user.get("role") in ("admin", "trainer"):
+        permitido = True
+    if not permitido and doc.get("message_id"):
+        # El destinatario del mensaje al que va pegada.
+        msg = await db.messages.find_one({"id": doc["message_id"]},
+                                         {"_id": 0, "sender_id": 1, "receiver_id": 1})
+        permitido = bool(msg) and user["id"] in (msg.get("sender_id"), msg.get("receiver_id"))
+    if not permitido:
+        raise HTTPException(status_code=403, detail="Esta imagen no es de una conversación tuya.")
+
+    data, content_type = await fotos_core.leer_binario_de_foto_app(doc)
+    return Response(
+        content=data, media_type=content_type,
+        headers={"Cache-Control": "private, max-age=3600",
+                 "Content-Disposition": f'inline; filename="{doc.get("filename") or "imagen"}"'},
+    )
 
 
 @router.post("", response_model=MessageResponse)
@@ -64,7 +179,26 @@ async def send_message(data: MessageCreate, user = Depends(get_current_user)):
     # como los de siempre, que es lo que son los mensajes viejos y los del staff.
     if data.canal in ("suscripcion", "tecnico"):
         message["canal"] = data.canal
+
+    # LA IMAGEN QUE SE SUBIÓ ANTES. Solo se engancha si es SUYA y todavía está suelta: sin
+    # esas dos comprobaciones, mandar un id ajeno colaría la foto de otra conversación
+    # dentro de la propia, y reenviar un id ya usado la movería de sitio.
+    if data.adjunto_id:
+        adj = await db.message_files.find_one(
+            {"id": data.adjunto_id, "user_id": user["id"], "message_id": None},
+            {"_id": 0, "id": 1, "filename": 1, "content_type": 1, "size": 1})
+        if not adj:
+            raise HTTPException(
+                status_code=400,
+                detail="Esa imagen ya no está disponible. Vuelve a adjuntarla.")
+        message["adjunto"] = {"id": adj["id"], "filename": adj.get("filename"),
+                              "content_type": adj.get("content_type"),
+                              "size": adj.get("size")}
+
     await db.messages.insert_one(message)
+    if message.get("adjunto"):
+        await db.message_files.update_one({"id": message["adjunto"]["id"]},
+                                          {"$set": {"message_id": message_id}})
 
     # Avisar a quien lo recibe. Hasta hoy el mensaje se guardaba y ya: le escribías a un
     # cliente de 897 o de 1.500 y se enteraba SI entraba por su cuenta. Y ese es el canal
@@ -77,13 +211,23 @@ async def send_message(data: MessageCreate, user = Depends(get_current_user)):
     titulo = (f"{quien} te ha escrito" if quien else "Tienes un mensaje nuevo" if de_staff
               else f"{quien or 'Un cliente'} te ha escrito")
     # El propio mensaje va en el cuerpo, recortado: se lee en la campana sin tener que
-    # entrar, y si es largo se entra.
+    # entrar, y si es largo se entra. Una imagen sola no tiene texto que enseñar, así que
+    # se dice lo que es: «Sin texto» en la campana no cuenta nada.
     texto = (data.content or "").strip()
+    if not texto and message.get("adjunto"):
+        texto = "📷 Te ha enviado una imagen"
     # El enlace es el del que RECIBE: si escribe el coach, el cliente va a su panel de
     # mensajes; si escribe el cliente, el coach va al suyo, que es otra pantalla.
     destino = "/dashboard/messages" if de_staff else "/admin/messages"
-    await notify(receiver_id, "mensaje", titulo, destino,
-                 body=(texto[:140] + "…") if len(texto) > 140 else texto)
+    # SI VA A SOPORTE, LES SUENA A LAS TRES (Francisco, 25-08). El mensaje se guarda a
+    # nombre de una sola -- una conversación tiene dos partes --, pero avisar solo a esa
+    # dejaba el soporte colgando de una persona: si ese día no entra, nadie se entera. La
+    # bandeja del equipo es común, así que la que lo vea primero contesta.
+    soporte = await _ids_de_soporte(excluir=user["id"])
+    a_quienes = soporte if receiver_id in soporte else [receiver_id]
+    cuerpo = (texto[:140] + "…") if len(texto) > 140 else texto
+    for uid in a_quienes:
+        await notify(uid, "mensaje", titulo, destino, body=cuerpo)
 
     return MessageResponse(**message)
 

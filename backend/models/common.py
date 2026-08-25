@@ -418,22 +418,28 @@ class MessageCreate(BaseModel):
     # Opcional: si no se indica (o "support"), el backend lo resuelve al coach del
     # cliente o al primer admin (ver _resolve_receiver en routes/messages.py).
     receiver_id: Optional[str] = None
-    content: str
+    # Vacío cuando solo se manda una imagen: un adjunto sin texto es un mensaje.
+    content: str = ""
     # Por cuál de las dos entradas del Chat entró el mensaje (doc 21-08, apartados 13
     # y 20): "suscripcion" (cobros, renovación, baja) o "tecnico" (algo no funciona).
     # Opcional por compatibilidad: sin canal, el mensaje es como los de siempre.
     canal: Optional[str] = None
+    # Id que devolvió POST /messages/adjunto. La imagen se sube antes y se engancha aquí.
+    adjunto_id: Optional[str] = None
 
 class MessageResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
     sender_id: str
     receiver_id: str
-    content: str
+    content: str = ""
     read: bool = False
     created_at: str
     # "suscripcion" | "tecnico" | None (mensajes de antes de las dos entradas, o del staff).
     canal: Optional[str] = None
+    # {id, filename, content_type, size} de la imagen que lleva pegada, si lleva. El
+    # binario se pide aparte, a GET /messages/adjunto/{id}.
+    adjunto: Optional[Dict[str, Any]] = None
 
 # Payment Models (Mocked)
 class PaymentResponse(BaseModel):
