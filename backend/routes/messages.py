@@ -4,6 +4,7 @@ Rutas de mensajes: inbox del chat.
 from fastapi import APIRouter, HTTPException, Depends, File, Response, UploadFile
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+import logging
 import uuid
 
 from bson import Binary
@@ -14,6 +15,8 @@ from core.database import db
 from core.security import get_current_user, get_admin_user
 from models.common import MessageCreate, MessageResponse
 from routes.notifications import notify
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/messages", tags=["messages"])
 
@@ -28,6 +31,60 @@ TIPOS_DE_IMAGEN = {
     "image/jpeg", "image/jpg", "image/png", "image/webp", "image/heic", "image/heif",
 }
 MAX_ADJUNTO_BYTES = 4 * 1024 * 1024  # 4 MB
+
+# LO QUE SE GUARDA VA ENCOGIDO (Francisco, 25-08). Una foto de movil llega a 1,4 MB de
+# media -- medido sobre las 647 de progreso que hay en produccion, con una de 9 MB -- y
+# para leer una bascula o la etiqueta de un bote eso no aporta NADA. A 1.600 px de lado
+# largo se queda en 200-300 KB, seis veces menos, y en pantalla no se nota.
+#
+# Se hace ahora que el chat esta vacio y no cuando haya miles: las fotos de progreso ya
+# enseñaron lo que cuesta arreglarlo despues (906 MB metidos en Mongo).
+LADO_MAXIMO = 1600
+CALIDAD_JPEG = 82
+
+
+def _encoger(contenido: bytes, content_type: str) -> tuple:
+    """Devuelve (bytes, content_type) ya encogidos, o los de entrada si no se puede.
+
+    NUNCA revienta la subida: si Pillow no sabe abrir el formato (HEIC sin su plugin, un
+    fichero raro) se guarda el original tal cual. Es preferible una foto gorda a un
+    cliente que no puede mandar la suya.
+    """
+    try:
+        from io import BytesIO
+
+        from PIL import Image
+
+        img = Image.open(BytesIO(contenido))
+        img.load()
+        ancho, alto = img.size
+        # Con transparencia se queda en PNG: pasarlo a JPEG pintaria el fondo de negro.
+        # Ojo con esto, que la primera version lo tenia mal: en RGBA y LA la transparencia
+        # vive en el CANAL ALFA y no hay ninguna clave «transparency» en `info` -- esa es
+        # de las paletas (modo P) --, asi que pedir las dos cosas dejaba pasar a JPEG
+        # cualquier PNG normal con fondo transparente.
+        transparente = img.mode in ("RGBA", "LA") or (
+            img.mode == "P" and "transparency" in img.info)
+        if max(ancho, alto) > LADO_MAXIMO:
+            escala = LADO_MAXIMO / max(ancho, alto)
+            img = img.resize((max(1, int(ancho * escala)), max(1, int(alto * escala))),
+                             Image.LANCZOS)
+        salida = BytesIO()
+        if transparente:
+            img.save(salida, "PNG", optimize=True)
+            nuevo_tipo = "image/png"
+        else:
+            img.convert("RGB").save(salida, "JPEG", quality=CALIDAD_JPEG, optimize=True)
+            nuevo_tipo = "image/jpeg"
+        encogida = salida.getvalue()
+        # Si el "encogido" pesa mas que el original -- pasa con capturas de pantalla muy
+        # planas --, se queda el original: el objetivo es ocupar menos, no reprocesar.
+        if encogida and len(encogida) < len(contenido):
+            return encogida, nuevo_tipo
+        return contenido, content_type
+    except Exception as e:
+        logger.info("adjunto del chat: no se pudo encoger (%s), se guarda tal cual", e)
+        return contenido, content_type
 
 
 async def _ids_de_soporte(excluir: Optional[str] = None) -> List[str]:
@@ -104,12 +161,21 @@ async def subir_adjunto(
             detail=f"La imagen pesa {len(contenido) // 1024} KB y el máximo son "
                    f"{MAX_ADJUNTO_BYTES // (1024 * 1024)} MB.")
 
+    # El tope de 4 MB se mira sobre lo que SUBE el cliente; lo que se guarda va encogido.
+    original = len(contenido)
+    contenido, content_type = _encoger(contenido, content_type)
+    if len(contenido) < original:
+        logger.info("adjunto del chat encogido: %d KB -> %d KB",
+                    original // 1024, len(contenido) // 1024)
+
     doc = {
         "id": str(uuid.uuid4()),
         "user_id": user["id"],
         "filename": file.filename or "imagen.jpg",
         "content_type": content_type,
         "size": len(contenido),
+        # Lo que pesaba antes de encogerla, para poder medir si compensa.
+        "size_original": original,
         "created_at": datetime.now(timezone.utc).isoformat(),
         # Se rellena al mandarlo: hasta entonces no pertenece a ninguna conversación.
         "message_id": None,

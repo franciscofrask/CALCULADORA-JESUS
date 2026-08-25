@@ -33,3 +33,11 @@ boto3==1.35.99
 # adelante numpy pide 3.12. Si algún día se sube el Python del Dockerfile, esto se puede
 # subir con él.
 numpy==2.4.6
+
+# Pillow: encoge las imagenes que se adjuntan en el chat antes de guardarlas (25-08).
+#
+# Ya estaba instalada en el pod, pero de ARRASTRE de otra dependencia: nadie la pedia. Se
+# declara ahora porque hay codigo que depende de ella y un cambio de dependencias podria
+# habersela llevado por delante sin que nadie lo notara hasta que un cliente intentara
+# mandar una foto.
+Pillow>=10.0
