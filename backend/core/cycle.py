@@ -7,7 +7,7 @@ un contador estático. Así avanza sola con el tiempo sin necesidad de un cron.
   un nuevo ciclo (week vuelve a 1, cycle_number +1). Encaja con planes que renuevan.
 - Planes mensuales indefinidos (semanas=None): la semana cuenta desde el inicio, sin tope.
 """
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 
 from models.user import PLAN_CATALOG
@@ -30,6 +30,16 @@ def compute_cycle(profile: Dict[str, Any], now: Optional[datetime] = None) -> Di
     total = (plan.get("ciclo") or {}).get("semanas")
 
     anchor = _parse_dt(profile.get("cycle_start")) or _parse_dt(profile.get("created_at")) or now
+    # UN CICLO PAGADO POR ADELANTADO NO EMPIEZA HASTA QUE EMPIEZA (25-08).
+    #
+    # Desde hoy la renovacion escribe `cycle_start` con el arranque del ciclo pagado, y el
+    # que renueva ANTES de vencer encadena: su ciclo nuevo arranca donde acaba el viejo, o
+    # sea en el futuro. Con esa ancla por delante, `days` se quedaba a 0 por el `max` de
+    # abajo y al cliente le salia «semana 1» varios dias antes de tiempo, cuando en
+    # realidad esta acabando el anterior. Mientras no llegue, se cuenta desde el ciclo de
+    # antes, que es donde esta de verdad.
+    if total and total > 0 and anchor > now:
+        anchor = anchor - timedelta(weeks=total)
     # LOS DIAS SE CUENTAN EN HORA DE ESPAÑA, no en UTC.
     #
     # Restando los instantes en UTC, entre las 22:00 y las 00:00 de aqui -- que en Madrid ya

@@ -480,6 +480,10 @@ async def sync_profile_from_subscription(subscription, *, profile_id=None, user_
         "checkout_status": "completed" if status in {"active", "trialing", "past_due"} else profile.get("checkout_status"),
         "current_period_start": stripe_timestamp_to_iso(subscription.get("current_period_start")),
         "current_period_end": stripe_timestamp_to_iso(subscription.get("current_period_end")),
+        # Igual que en el pago unico: la semana se cuenta desde el ciclo que se esta
+        # pagando, no desde la fecha de alta. Aqui lo manda Stripe con cada periodo, asi
+        # que en cada renovacion el ancla se mueve sola.
+        "cycle_start": stripe_timestamp_to_iso(subscription.get("current_period_start")),
         "next_payment": stripe_timestamp_to_iso(subscription.get("current_period_end")),
         "cancel_at_period_end": bool(subscription.get("cancel_at_period_end")),
         "billing_cycle_days": profile.get("billing_cycle_days", DEFAULT_BILLING_CYCLE_DAYS),
@@ -596,6 +600,16 @@ async def sync_profile_from_one_time_session(session, *, user_id=None):
             "checkout_status": "completed",
             "current_period_start": start.isoformat(),
             "current_period_end": end.isoformat(),
+            # LA SEMANA SE REENGANCHA AL CICLO PAGADO (Francisco, 25-08).
+            #
+            # `compute_cycle` cuenta la semana desde `cycle_start` y, si no lo hay, desde
+            # la fecha de alta -- y hasta hoy NADIE escribia `cycle_start`: solo lo tenian
+            # los 149 que vinieron importados de Calma. O sea que el contador giraba en
+            # modulo desde una fecha de hace años, ajeno a si el cliente pagaba o no.
+            # Medido en produccion: 29 de 52 enseñaban una semana que no cuadraba con su
+            # periodo pagado, y de esa semana cuelgan el reporte que toca, su ventana y
+            # sus avisos. Al renovar, el cliente veia el mismo numero de antes.
+            "cycle_start": start.isoformat(),
             # El acceso corre desde que paga (Semana 0 incluida) hasta el fin del ciclo.
             "access_until": end.isoformat(),
             "fecha_pago": pago.isoformat(),
