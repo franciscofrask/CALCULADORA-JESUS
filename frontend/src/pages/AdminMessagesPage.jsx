@@ -40,6 +40,9 @@ const AdminMessagesPage = () => {
     const [adjunto, setAdjunto] = useState(null);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
+    // Ver solo la cola de soporte (clientes sin entrenador). Apagado por defecto: la
+    // bandeja sigue siendo la de siempre hasta que alguien decide filtrar.
+    const [soloSoporte, setSoloSoporte] = useState(false);
     const scrollRef = useRef(null);
 
     const fetchConversations = useCallback(async () => {
@@ -108,11 +111,13 @@ const AdminMessagesPage = () => {
     };
 
     const filtered = conversations.filter(c =>
-        !search || c.user?.name?.toLowerCase().includes(search.toLowerCase()) ||
-        c.user?.email?.toLowerCase().includes(search.toLowerCase())
+        (!soloSoporte || c.es_soporte) &&
+        (!search || c.user?.name?.toLowerCase().includes(search.toLowerCase()) ||
+            c.user?.email?.toLowerCase().includes(search.toLowerCase()))
     );
     const selectedConv = conversations.find(c => c.user_id === selected);
     const esperando = conversations.filter(c => c.sin_respuesta).length;
+    const deSoporte = conversations.filter(c => c.es_soporte).length;
 
     if (loading) return <div className="p-6 bg-[#0A0A0A] min-h-screen"><div className="animate-pulse space-y-4"><div className="h-8 bg-[#222] rounded w-1/4" /><div className="h-96 bg-[#111] rounded-xl" /></div></div>;
 
@@ -138,6 +143,19 @@ const AdminMessagesPage = () => {
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
                             <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar cliente..." className="pl-9 bg-[#0A0A0A] border-[#222] text-white" />
                         </div>
+                        {/* Con quince personas mirando la misma bandeja, el que lleva el
+                            soporte necesita quedarse solo con lo suyo. Solo sale si hay
+                            alguna: un filtro que no filtra nada es un botón que estorba. */}
+                        {deSoporte > 0 && (
+                            <button type="button" onClick={() => setSoloSoporte(v => !v)}
+                                data-testid="filtro-soporte"
+                                className={`mt-2 w-full text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+                                    soloSoporte
+                                        ? 'bg-sky-500/15 border-sky-500/50 text-sky-300 font-semibold'
+                                        : 'bg-[#0A0A0A] border-[#222] text-white/50 hover:text-white/80'}`}>
+                                {soloSoporte ? `Viendo solo soporte (${deSoporte})` : `Ver solo soporte (${deSoporte})`}
+                            </button>
+                        )}
                     </div>
                     <div className="flex-1 overflow-y-auto">
                         {filtered.map(c => (
@@ -148,6 +166,18 @@ const AdminMessagesPage = () => {
                                     <p className="text-white text-sm font-medium truncate min-w-0">{c.user?.name || c.user?.email || 'Sin nombre'}</p>
                                     <span className="text-white/30 text-[10px] flex-shrink-0">{formatTime(c.last_message.created_at)}</span>
                                 </div>
+                                {/* DE QUIÉN ES ESTA CONVERSACIÓN (Francisco, 25-08). La
+                                    bandeja es común para los quince del equipo y todas se
+                                    veían iguales. «Soporte» es la cola de los que no tienen
+                                    entrenador; con nombre, es de un compañero y contestar
+                                    encima suyo es pisarle. El chip de canal, al lado, dice
+                                    otra cosa: de qué va la consulta. */}
+                                <p className="text-[10px] uppercase tracking-wide mt-0.5 truncate"
+                                    data-testid={c.es_soporte ? 'conv-soporte' : 'conv-de-entrenador'}>
+                                    {c.es_soporte
+                                        ? <span className="text-sky-400 font-semibold">Soporte</span>
+                                        : <span className="text-white/30">{c.entrenador_nombre || 'Con entrenador'}</span>}
+                                </p>
                                 <div className="flex items-center justify-between gap-2 mt-0.5">
                                     <p className="text-white/40 text-xs truncate min-w-0">
                                         {c.last_message.sender_id === user.id ? 'Tú: ' : ''}{c.last_message.content}

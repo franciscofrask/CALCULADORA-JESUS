@@ -322,10 +322,42 @@ async def get_conversations(user = Depends(get_admin_user)):
         {"id": {"$in": list(convs.keys())}}, {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1}
     ).to_list(2000)
     umap = {u["id"]: u for u in users}
+
+    # ¿ESTA CONVERSACIÓN ES DE SOPORTE O ES DE ALGUIEN? (Francisco, 25-08: «si es un chat
+    # de soporte, ¿hay algún diferenciador?». No lo había.)
+    #
+    # La bandeja es común para los quince del equipo y todas las conversaciones se veían
+    # iguales. Con el soporte repartido entre tres personas eso deja de valer: hace falta
+    # saber de un vistazo cuáles son «de nadie» -- cliente sin entrenador, o sea de la
+    # cola de soporte -- y cuáles son de un compañero, para no contestar encima suyo.
+    #
+    # El chip `canal` que ya existía no responde a esto: dice de qué va la consulta
+    # («Mi suscripción», «Algo no funciona»), no de quién es la conversación.
+    perfiles = await db.client_profiles.find(
+        {"user_id": {"$in": list(convs.keys())}},
+        {"_id": 0, "user_id": 1, "trainer_id": 1},
+    ).to_list(3000)
+    entrenador_de = {p["user_id"]: p.get("trainer_id") for p in perfiles}
+    nombres_staff = {u["id"]: u.get("name") for u in await db.users.find(
+        {"id": {"$in": [t for t in entrenador_de.values() if t]}},
+        {"_id": 0, "id": 1, "name": 1}).to_list(200)}
+
     # Las conversaciones con gente que ya no existe se quedaban en la bandeja como
     # "Usuario eliminado" -- en dev son tres, restos del simulador --. No se les puede
     # contestar, así que no son bandeja de entrada: son ruido delante de las que sí.
-    out = [{**c, "user": umap[uid]} for uid, c in convs.items() if uid in umap]
+    out = []
+    for uid, c in convs.items():
+        if uid not in umap:
+            continue
+        entrenador = entrenador_de.get(uid)
+        out.append({
+            **c,
+            "user": umap[uid],
+            # Sin entrenador asignado, la conversación es de la cola de soporte. Es la
+            # misma cuenta que hace `_resolve_receiver` al mandar el mensaje.
+            "es_soporte": not entrenador,
+            "entrenador_nombre": nombres_staff.get(entrenador) if entrenador else None,
+        })
     # Las que esperan respuesta, arriba; dentro de cada grupo, la más reciente primero.
     # En dos pasadas porque el orden de Python es estable: la segunda respeta la primera.
     out.sort(key=lambda c: c["last_message"]["created_at"] or "", reverse=True)
