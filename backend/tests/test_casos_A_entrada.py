@@ -283,6 +283,30 @@ class TestCaso03DelRegistroAlCuestionario:
         assert "questionnaire_completed" in condicion, (
             "el panel manda al cuestionario sin mirar si ya esta hecho")
 
+    def test_la_ventana_del_largo_es_del_alta_y_no_del_que_ya_tiene_macros(self, api_disponible):
+        """El cuestionario largo se cierra al que se esta dando de alta, no al de siempre.
+
+        El doc del 19-08 abre el largo «al que se esta dando de alta», y dice para que: el
+        recien llegado usa la calculadora con macros PROVISIONALES, el largo cierra el
+        lunes y «el miercoles tiene sus macros». La ventana existe para que el equipo los
+        saque todos de una tacada.
+
+        Al que YA TIENE los suyos puestos -- el migrado de Calma al que nunca se le lleno
+        el perfil largo -- no le aplica: no hay nada que entregarle el miercoles. Y era lo
+        que pasaba: Inicio le decia «completa tu perfil» cada dia y la pantalla le
+        contestaba «vuelve el viernes», los siete dias de la semana.
+        """
+        q = fuente("pages/QuestionnairePage.jsx")
+        i = q.find("const yaTieneSusMacros")
+        assert i > 0, (
+            "se perdio la distincion entre el que se da de alta y el que ya tiene macros: "
+            "la ventana del largo vuelve a cerrarsele al cliente de siempre")
+        bloque = q[i:i + 500]
+        assert "ajuste_macros_completado" in bloque and "macros_puestos_por_alguien" in bloque, (
+            "ya no se mira si el cliente tiene sus macros de verdad")
+        assert "!yaTieneSusMacros" in bloque, (
+            "la puerta del largo no usa la distincion: se la vuelve a cerrar a todos")
+
     def test_el_cuestionario_esta_detras_de_la_sesion(self, api_disponible):
         r = requests.post(f"{API}/clients/questionnaire",
                           json={"goal": "definicion", "weight": 80, "body_fat": 18}, timeout=30)

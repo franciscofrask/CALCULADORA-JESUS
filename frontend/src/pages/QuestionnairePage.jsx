@@ -1764,7 +1764,20 @@ const QuestionnairePage = () => {
     // ajuste, el completar-huecos y el modo revisión del equipo pasan siempre, y el que
     // está en mitad del ALTA tampoco se corta (su puerta es la pantalla de elegir, que
     // con la ventana cerrada no le ofrece entrar).
-    if (!revision && retomandoNivel1 && ventanaLargo && !ventanaLargo.abierta) {
+    //
+    // LA VENTANA ES DEL ALTA, NO DEL PERFIL (Francisco, 25-08). El doc dice «se abre el
+    // cuestionario largo AL QUE SE ESTÁ DANDO DE ALTA», y explica para qué: el recién
+    // llegado usa la calculadora con macros PROVISIONALES, el largo cierra el lunes y
+    // «el miércoles tiene sus macros». La ventana existe para que el equipo saque los
+    // macros de todos de una tacada. Al que YA TIENE LOS SUYOS puestos -- el migrado de
+    // Calma al que nunca se le llenó el perfil largo -- esa cinta de montaje no le
+    // aplica: no hay nada que entregarle el miércoles, así que esperar al viernes no
+    // sirve para nada. Y era exactamente lo que le pasaba: Inicio le decía «completa tu
+    // perfil» todos los días y la pantalla le contestaba «vuelve el viernes».
+    const yaTieneSusMacros = !!(profile?.ajuste_macros_completado
+        || profile?.macros_puestos_por_alguien);
+    if (!revision && retomandoNivel1 && !yaTieneSusMacros
+        && ventanaLargo && !ventanaLargo.abierta) {
         return (
             <Shell progress={0}>
                 <div className="text-center" data-testid="ventana-largo-cerrada">
