@@ -30,7 +30,7 @@ import {
     AlertCircle, CheckCircle2, Pill, Plus, X, Sparkles, Pencil, Trash2, RotateCcw,
     Headphones, CalendarClock, Camera
 } from 'lucide-react';
-import { etiquetaAcompanamiento, etiquetaFrecuencia } from '../lib/planAccess';
+import { etiquetaAcompanamiento, etiquetaFrecuencia, loQueLlevaElPlan, planDelCatalogo } from '../lib/planAccess';
 import { revisarPeso } from '../lib/pesoValido';
 import { mensajeDeError } from '../lib/mensajeDeError';
 import AsignarTarea from '../components/AsignarTarea';
@@ -1290,6 +1290,17 @@ const ClientDetailPage = () => {
                             })()} />
                             <InfoItem icon={Target} label="Objetivo" value={objetivoLabel(profile?.goal)} />
                         </div>
+
+                        {/* LO QUE LLEVA Y LO QUE NO (Francisco, 25-08). Antes había que
+                            saberse el catálogo de memoria para responder a las dos preguntas
+                            de cada día: ¿a este le subo rutina?, ¿le toco yo los macros? El
+                            plan salía escrito arriba y nada más. Se pinta lo que NO lleva
+                            también, apagado: una lista de la que falta la mitad se lee como
+                            que lo lleva todo. */}
+                        <LoQueLleva plan={planDelCatalogo(planCatalog, profile?.plan)}
+                            contratoPropio={!!(profile?.calendario_reportes?.patron
+                                || profile?.ciclo_semanas)} />
+                        <CompradoAparte profile={profile} />
                     </CardContent></Card>
 
                     {/* LAS TAREAS SOBRE ESTE CLIENTE (doc 19-08, apartado 05). El registro
@@ -2416,6 +2427,130 @@ const InfoItem = ({ icon: Icon, label, value }) => (
         <div><p className="text-[10px] text-white/40 uppercase tracking-wider">{label}</p><div className="text-white text-sm font-medium">{value}</div></div>
     </div>
 );
+
+// QUÉ LLEVA ESTE CLIENTE, DE UN VISTAZO (Francisco, 25-08).
+//
+// Tres estados y no dos, porque no es lo mismo «no lo lleva» que «lo lleva del montón»:
+//   fuerte  -> lo que alguien tiene que HACER a mano (rutina personalizada, protocolo,
+//              llamadas). Naranja, que es lo que se busca al abrir la ficha.
+//   lleva   -> incluido y automático. Blanco sobre gris.
+//   no      -> no lo lleva. Apagado y tachado: se lee sin tener que compararlo con nada.
+const LoQueLleva = ({ plan, contratoPropio }) => {
+    if (!plan) return null;
+    const filas = loQueLlevaElPlan(plan);
+    return (
+        <div className="mt-5 pt-4 border-t border-[#222]" data-testid="lo-que-lleva">
+            <p className="text-[10px] text-white/40 uppercase tracking-wider mb-2">Lo que lleva su plan</p>
+            <div className="flex flex-wrap gap-1.5">
+                {filas.map(f => (
+                    <span key={f.clave} data-testid={`lleva-${f.clave}`}
+                        title={f.lleva ? 'Incluido en su plan' : 'No lo lleva'}
+                        className={`text-xs px-2 py-1 rounded-lg border ${
+                            !f.lleva ? 'bg-transparent border-[#222] text-white/30 line-through'
+                                : f.fuerte ? 'bg-[#FF671F]/10 border-[#FF671F]/40 text-[#FF671F] font-semibold'
+                                    : 'bg-[#0A0A0A] border-[#333] text-white/80'}`}>
+                        {f.etiqueta}
+                    </span>
+                ))}
+            </div>
+            {/* El contrato de un cliente puede pisar a su plan (punto 36: hay Premium
+                mensuales y de cinco semanas). Si lo pisa, esto es la plantilla, no lo que
+                le toca de verdad, y hay que decirlo o se lee como la última palabra. */}
+            {contratoPropio && (
+                <p className="text-[11px] text-white/40 mt-2" data-testid="lleva-contrato-propio">
+                    Este cliente tiene ciclo o calendario propios, que pisan a los del plan.
+                    Míralos en Seguimiento.
+                </p>
+            )}
+        </div>
+    );
+};
+
+// LO QUE HA COMPRADO APARTE (Francisco, 25-08: «si compra cosas por aparte... se podría
+// perder que un cliente compró un adicional, su entrenador no lo sabría, y una
+// notificación no basta»).
+//
+// Los tres complementos se apuntaban en la ficha de la base y NO se enseñaban en ninguna
+// de las nueve pestañas del panel. El cobro sí acaba saliendo en «Historial de pagos»,
+// pero ahí llega cuando pasa la sincronización de Stripe, y además un pago no dice si la
+// cosa está entregada. Aquí sale al momento y con su estado, que es lo que necesita el
+// que abre la ficha para trabajar.
+//
+// PENDIENTE se pinta en naranja a propósito: es trabajo sin hacer que alguien ha pagado.
+const CompradoAparte = ({ profile }) => {
+    const eur = (v) => (v == null ? null : `${Number(v).toFixed(2).replace(/\.00$/, '')} €`);
+    const dia = (v) => {
+        if (!v) return null;
+        const d = new Date(v);
+        return isNaN(d) ? null : d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+    };
+
+    const filas = [];
+    const rutina = profile?.rutina_mes_pedida;
+    if (rutina && (rutina.cobrado || rutina.cobrado === false)) {
+        const modalidad = rutina.modalidad && rutina.modalidad !== 'basica'
+            ? ` · ${rutina.modalidad}` : '';
+        filas.push({
+            clave: 'rutina-mes',
+            que: `Rutina del mes${modalidad}`,
+            importe: eur(rutina.importe_eur), cuando: dia(rutina.cuando || rutina.fecha),
+            // Que se le haya cobrado y que se le haya entregado son dos cosas distintas.
+            estado: !rutina.cobrado ? 'Cobro pendiente'
+                : rutina.rutina_puesta ? 'Entregada' : 'Pendiente de entregar',
+            urge: !rutina.cobrado || !rutina.rutina_puesta,
+        });
+    }
+    const rev = profile?.revision_suelta;
+    if (rev?.pagada_at) {
+        filas.push({
+            clave: 'revision-suelta',
+            que: 'Revisión de macros suelta',
+            importe: eur(rev.importe_eur), cuando: dia(rev.pagada_at),
+            estado: rev.estado === 'entregado' ? 'Entregada'
+                : rev.estado === 'cancelado' ? 'Cancelada' : 'Pendiente',
+            urge: !['entregado', 'cancelado'].includes(rev.estado),
+        });
+    }
+    const aj = profile?.ajuste_a_medida;
+    if (aj?.cobrado) {
+        filas.push({
+            clave: 'ajuste-a-medida',
+            que: `Ajuste a medida${aj.veces > 1 ? ` · ${aj.veces}ª vez` : ''}`,
+            importe: eur(aj.importe_eur), cuando: dia(aj.pagado_at),
+            estado: aj.estado === 'entregado' ? 'Entregado'
+                : aj.estado === 'cancelado' ? 'Cancelado'
+                    : aj.para_el_lunes ? `Para el lunes ${dia(aj.para_el_lunes)}` : 'Pendiente',
+            urge: !['entregado', 'cancelado'].includes(aj.estado),
+        });
+    }
+    if (!filas.length) return null;
+
+    return (
+        <div className="mt-4 pt-4 border-t border-[#222]" data-testid="comprado-aparte">
+            <p className="text-[10px] text-white/40 uppercase tracking-wider mb-2">
+                Comprado aparte · no entra en su plan
+            </p>
+            <div className="space-y-1.5">
+                {filas.map(f => (
+                    <div key={f.clave} data-testid={`aparte-${f.clave}`}
+                        className="flex items-center justify-between gap-3 bg-[#0A0A0A] border border-[#222] rounded-lg px-3 py-2">
+                        <div className="min-w-0">
+                            <p className="text-white text-sm font-medium truncate">{f.que}</p>
+                            <p className="text-[11px] text-white/40">
+                                {[f.importe, f.cuando].filter(Boolean).join(' · ')}
+                            </p>
+                        </div>
+                        <span className={`text-xs px-2 py-1 rounded-lg border flex-shrink-0 ${
+                            f.urge ? 'bg-[#FF671F]/10 border-[#FF671F]/40 text-[#FF671F] font-semibold'
+                                : 'bg-transparent border-[#333] text-white/50'}`}>
+                            {f.estado}
+                        </span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
 
 // Bloque de macros editable (entrenamiento / perientreno / descanso). Cuando el
 // coach cambia un valor, debajo de la etiqueta queda el que hay guardado ahora.

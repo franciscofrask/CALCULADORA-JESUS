@@ -189,6 +189,72 @@ export function queIncluyeElPlan(plan) {
     return escrito.length ? escrito : habilitacionesToList(plan?.habilitaciones);
 }
 
+// LO QUE LLEVA Y LO QUE NO, PARA EL EQUIPO (Francisco, 25-08: «en el panel, en cada cliente
+// se debería avisar si lleva rutina personalizada, si lleva seguimiento de macros, etc.»).
+//
+// `queIncluyeElPlan` NO vale aquí: esa lista solo enumera lo que SÍ trae, y al equipo lo que
+// le hace falta saber antes de ponerse con un cliente es también lo que NO. «Sin rutina» y
+// «Se los calcula él» son la respuesta a las dos preguntas que se hacen a diario: ¿a este le
+// subo rutina?, ¿le toco yo los macros? Una lista de la que falta la mitad se lee como que
+// no lleva nada, o peor, como que lleva todo.
+//
+// Sale del catálogo, igual que lo que ve el cliente, para que no puedan discrepar. Y con el
+// vocabulario del catálogo, no con el del cliente: el equipo configura casillas.
+export function loQueLlevaElPlan(plan) {
+    const h = (plan || {}).habilitaciones || {};
+    const caps = deriveCapabilities(h, { rutinaVisible: true });
+    const reportes = h.reportes || [];
+    const supl = nivelSuplementacion(h);
+    const acomp = String(h.acompanamiento || 'solo_app');
+
+    const filas = [
+        {
+            clave: 'macros',
+            lleva: caps[CAP.MACROS_PERSONALIZADOS],
+            etiqueta: caps[CAP.MACROS_PERSONALIZADOS]
+                ? 'Seguimiento de macros' : 'Se calcula los macros él',
+        },
+        {
+            clave: 'rutina',
+            lleva: !!h.rutina && h.rutina !== 'ninguna',
+            etiqueta: RUTINA_LABEL[h.rutina] || RUTINA_LABEL.ninguna,
+            // Que la rutina sea PERSONALIZADA o la del mes cambia quién la hace, así que se
+            // marca aparte: es la diferencia entre escribirla y mandar el PDF de siempre.
+            fuerte: h.rutina === 'personalizada',
+        },
+        {
+            clave: 'suplementacion',
+            lleva: supl !== 'ninguna',
+            etiqueta: supl === 'protocolo' ? 'Protocolo de suplementación'
+                : supl === 'guia' ? 'Guía de suplementación' : 'Sin suplementación',
+            fuerte: supl === 'protocolo',
+        },
+    ];
+
+    // Los tres reportes, uno a uno y con su sí o su no: el equipo necesita saber cuál le
+    // toca a este cliente, no si «lleva reportes».
+    ['quincenal', 'mensual', 'semanal'].forEach((t) => {
+        if (reportes.includes(t)) {
+            filas.push({ clave: `reporte_${t}`, lleva: true, etiqueta: REPORTE_LABEL[t] });
+        }
+    });
+    if (!reportes.length) {
+        filas.push({ clave: 'reportes', lleva: false, etiqueta: 'Sin reportes' });
+    }
+
+    filas.push({
+        clave: 'acompanamiento',
+        lleva: acomp.startsWith('con_entrenador'),
+        etiqueta: acomp === 'con_entrenador_y_llamadas' ? 'Entrenador y llamadas'
+            : acomp.startsWith('con_entrenador') ? 'Con entrenador' : 'Solo app',
+        fuerte: acomp === 'con_entrenador_y_llamadas',
+    });
+    if (caps[CAP.EDITA_MACROS]) {
+        filas.push({ clave: 'edita', lleva: true, etiqueta: 'Puede editar sus macros' });
+    }
+    return filas;
+}
+
 // Acompañamiento y frecuencia de contacto (especificación 31-07-2026): lo que separa
 // dos planes que, por lo demás, solo se diferencian en el precio.
 export const ACOMPANAMIENTO_OPTS = [

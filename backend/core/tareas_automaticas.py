@@ -100,7 +100,9 @@ async def generar_tareas_automaticas(db, forzar: bool = False) -> int:
          "subscription_status": 1, "stripe_subscription_id": 1, "access_until": 1,
          "checkout_status": 1, "status": 1, "ultimo_reporte": 1, "ultima_entrada": 1,
          "aplazamientos_seguidos": 1, "height": 1, "goal": 1, "body_fat": 1,
-         "calendario_reportes": 1, "ciclo_semanas": 1, "semana_de_entrada": 1},
+         "calendario_reportes": 1, "ciclo_semanas": 1, "semana_de_entrada": 1,
+         # Lo que ha comprado APARTE, para el bloque de complementos de mas abajo.
+         "rutina_mes_pedida": 1, "revision_suelta": 1, "ajuste_a_medida": 1},
     ).to_list(3000)
 
     nombres = {u["id"]: u.get("name") async for u in db.users.find(
@@ -265,42 +267,111 @@ async def generar_tareas_automaticas(db, forzar: bool = False) -> int:
             cerrar(f"sin_plan:{cid}")
             cerrar(f"plan_inexistente:{cid}")
 
+        # ── LO QUE HA COMPRADO APARTE Y ESTA SIN ENTREGAR ────────────────────
+        #
+        # «Que no sea tedioso ir revisando ficha por ficha» (Francisco, 25-08). Un
+        # complemento comprado no aparecia en ninguna lista de trabajo: se apuntaba en la
+        # ficha del cliente y ahi se quedaba, asi que para saber si alguien habia pagado
+        # una revision habia que abrir las fichas una a una. Ahora entra por la misma
+        # puerta que todo lo demas -- la pantalla de Tareas, que ya es «lo mio, con el
+        # cliente y un clic a su ficha» -- y desaparece sola en cuanto se entrega.
+        #
+        # Van al ENTRENADOR del cliente, que es quien las hace. Si no tiene, a operaciones:
+        # una revision pagada que no se entrega es dinero cobrado sin dar el servicio, y no
+        # puede quedarse esperando a que alguien le asigne entrenador.
+        quien_lo_hace = entrenador or operaciones
+
+        rutina_ap = p.get("rutina_mes_pedida") or {}
+        if rutina_ap.get("cobrado") and not rutina_ap.get("rutina_puesta"):
+            await tarea(a_quien=quien_lo_hace,
+                        que=f"Entregar la rutina del mes a {nombre}, que ya la ha pagado",
+                        sobre_quien=cid, sobre_quien_nombre=nombre,
+                        clave=f"comprado_rutina:{cid}:{str(rutina_ap.get('cuando'))[:10]}",
+                        origen="auto:comprado")
+        elif rutina_ap.get("rutina_puesta"):
+            cerrar_por_prefijo(f"comprado_rutina:{cid}:")
+        # Pedida y con el cobro caido: eso es dinero, y el dinero es de operaciones.
+        if rutina_ap.get("cobrado") is False and rutina_ap.get("motivo"):
+            await tarea(a_quien=jenny or operaciones,
+                        que=f"A {nombre} le falló el cobro de la rutina del mes "
+                            f"({rutina_ap.get('motivo')})",
+                        sobre_quien=cid, sobre_quien_nombre=nombre,
+                        clave=f"comprado_rutina_impagada:{cid}:{str(rutina_ap.get('cuando'))[:10]}",
+                        origen="auto:comprado")
+
+        rev_ap = p.get("revision_suelta") or {}
+        if rev_ap.get("pagada_at") and rev_ap.get("estado") not in ("entregado", "cancelado"):
+            await tarea(a_quien=quien_lo_hace,
+                        que=f"Hacerle la revisión de macros a {nombre}, que la compró suelta",
+                        sobre_quien=cid, sobre_quien_nombre=nombre,
+                        clave=f"comprado_revision:{cid}:{str(rev_ap.get('pagada_at'))[:10]}",
+                        origen="auto:comprado")
+        elif rev_ap.get("estado") in ("entregado", "cancelado"):
+            cerrar_por_prefijo(f"comprado_revision:{cid}:")
+
+        aj_ap = p.get("ajuste_a_medida") or {}
+        if aj_ap.get("cobrado") and aj_ap.get("estado") not in ("entregado", "cancelado"):
+            # El ajuste a medida se promete PARA UN LUNES, asi que la tarea lleva su fecha:
+            # es la unica de las tres que tiene un plazo dado al cliente.
+            await tarea(a_quien=quien_lo_hace,
+                        que=f"Entregar el ajuste a medida de {nombre}",
+                        para_cuando=aj_ap.get("para_el_lunes"),
+                        sobre_quien=cid, sobre_quien_nombre=nombre,
+                        clave=f"comprado_ajuste:{cid}:{str(aj_ap.get('pagado_at'))[:10]}",
+                        origen="auto:comprado")
+        elif aj_ap.get("estado") in ("entregado", "cancelado"):
+            cerrar_por_prefijo(f"comprado_ajuste:{cid}:")
+
     # ── EL TRABAJO DE LA SEMANA, POR ENTRENADOR ──────────────────────────────
-    # Con el recuento delante («Tienes 14 reportes para el miércoles»): se cuentan los
-    # reportes llegados esta semana (desde el viernes anterior) por entrenador.
+    #
+    # CON NOMBRE Y APELLIDOS, NO UN RECUENTO (Francisco, 25-08: «esos ya son dias fijos
+    # pero no tendria claro a que clientes»). Esto decia «Entregar rutinas de 7», y el
+    # entrenador sabia que le tocaban siete y no cuales eran los siete: para averiguarlo
+    # tenia que ir cliente por cliente mirando quien habia mandado reporte. Ahora es una
+    # tarea POR CLIENTE, con `sobre_quien`, asi que desde la tarea se abre su ficha y se
+    # van tachando de una en una. Es como funcionan ya las demas automaticas de este
+    # fichero; estas cuatro eran las unicas que agregaban.
+    #
+    # El volumen aguanta: medido en produccion, la semana del 25-08 fueron 6 reportes en
+    # total y todos del mismo entrenador. Si algun dia una cartera creciera hasta hacerlo
+    # incomodo, la salida no es volver al recuento sino agrupar en la pantalla.
     dia = hoy_es.weekday()
     hora_es = (a_madrid(ahora) or ahora).hour
     if dia in (0, 2, 3, 4):
         desde = hoy_es - timedelta(days=(hoy_es.weekday() - 4) % 7 or 7)   # el viernes pasado
-        por_coach: Dict[str, int] = {}
-        quincenal_por_coach: Dict[str, int] = {}
         trainer_por_cliente = {p["id"]: p.get("trainer_id") for p in perfiles if p.get("id")}
+        nombre_por_cliente = {p["id"]: nombres.get(p.get("user_id")) or "cliente"
+                              for p in perfiles if p.get("id")}
+        # Quien ha mandado reporte esta semana, con los TIPOS que mando: uno puede haber
+        # mandado el quincenal y el mensual, y el viernes solo se pide feedback del
+        # quincenal.
+        mandaron: Dict[str, Dict[str, Any]] = {}
         async for r in db.reports.find({"created_at": {"$gte": desde.isoformat()}},
                                        {"_id": 0, "client_id": 1, "tipo": 1, "created_at": 1}):
-            t = trainer_por_cliente.get(r.get("client_id"))
+            cid = r.get("client_id")
+            t = trainer_por_cliente.get(cid)
             if not t:
                 continue
-            por_coach[t] = por_coach.get(t, 0) + 1
-            if r.get("tipo") == "quincenal":
-                quincenal_por_coach[t] = quincenal_por_coach.get(t, 0) + 1
+            ficha = mandaron.setdefault(cid, {"trainer": t, "tipos": set()})
+            if r.get("tipo"):
+                ficha["tipos"].add(r["tipo"])
 
-        def _plural(n, cosa):
-            return f"{n} {cosa}" if n != 1 else f"1 {cosa[:-1] if cosa.endswith('s') else cosa}"
-
-        for t, n in por_coach.items():
+        for cid, ficha in mandaron.items():
+            t, nombre_cli = ficha["trainer"], nombre_por_cliente.get(cid, "cliente")
+            comun = {"a_quien": t, "sobre_quien": cid, "sobre_quien_nombre": nombre_cli,
+                     "origen": "auto:semana"}
             if dia == 0 and hora_es >= 18:      # lunes 18:01, al cerrar el mensual
-                await tarea(a_quien=t, que=f"Tienes {_plural(n, 'reportes')} para el miércoles",
-                            clave=f"semana_lunes:{t}:{semana_iso}", origen="auto:semana")
+                await tarea(**comun, que=f"Leer el reporte de {nombre_cli}, para el miércoles",
+                            clave=f"semana_lunes:{cid}:{semana_iso}")
             elif dia == 2:                       # miércoles: macros y suplementación
-                await tarea(a_quien=t, que=f"Entregar macros y suplementación de {n}",
-                            clave=f"semana_miercoles:{t}:{semana_iso}", origen="auto:semana")
+                await tarea(**comun, que=f"Entregar macros y suplementación a {nombre_cli}",
+                            clave=f"semana_miercoles:{cid}:{semana_iso}")
             elif dia == 3:                       # jueves: rutinas
-                await tarea(a_quien=t, que=f"Entregar rutinas de {n}",
-                            clave=f"semana_jueves:{t}:{semana_iso}", origen="auto:semana")
-        if dia == 4:                             # viernes: feedback del quincenal
-            for t, n in quincenal_por_coach.items():
-                await tarea(a_quien=t, que=f"Dar feedback del quincenal a {n}",
-                            clave=f"semana_viernes:{t}:{semana_iso}", origen="auto:semana")
+                await tarea(**comun, que=f"Entregar la rutina de {nombre_cli}",
+                            clave=f"semana_jueves:{cid}:{semana_iso}")
+            elif dia == 4 and "quincenal" in ficha["tipos"]:
+                await tarea(**comun, que=f"Dar feedback del quincenal a {nombre_cli}",
+                            clave=f"semana_viernes:{cid}:{semana_iso}")
 
     # ── EL CALENDARIO DEL EQUIPO ─────────────────────────────────────────────
     if dia == 4:
