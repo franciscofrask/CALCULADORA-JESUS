@@ -181,6 +181,28 @@ _PREPS_ORDER = ["GEN", "PRO", "FRE", "CGE", "AHU", "LAT", "POL", "PRE", "HAM", "
 # PRO tag, so we detect by name (and honor an explicit PRO token if present).
 _MARCAS_RECOMENDADAS = ("fullgas", "fitness burger", "my fitness meals")
 
+# EL ORDEN DEL INTRA, QUE ES METODO Y NO GUSTO (Francisco, 25-08).
+#
+# Dentro del bloque de hidratos rapidos (categoria 18.3) las cuatro opciones tienen
+# practicamente los mismos macros -- ciclodextrina H95, dextrosa H100, amilopectina,
+# palatinosa --, asi que el orden por encaje las deja en cualquier sitio y la ciclodextrina
+# salia tercera. Jesus la nombra por escrito como la primera opcion y la dextrosa como la
+# alternativa barata (core/guion_peri.py: INTRA y INTRA_OTRO_HIDRATO), asi que ese orden se
+# dice aqui en vez de dejarlo al azar de los decimales.
+#
+# El ajuste es pequeño a proposito (menos de 0,5) para que NUNCA saque a un alimento de su
+# bloque de categoria: solo lo coloca dentro del suyo.
+_FAVORITOS_DEL_INTRA = ("ciclodextrina", "dextrosa")
+
+
+def _favorito_del_metodo(food) -> float:
+    """Cuanto adelanta a un alimento por ser el que recomienda el metodo. 0 si no lo es."""
+    n = (food.get("nombre") or "").lower()
+    for idx, palabra in enumerate(_FAVORITOS_DEL_INTRA):
+        if palabra in n:
+            return 0.3 - idx * 0.1
+    return 0.0
+
 def _es_promocionado(food) -> bool:
     cats = {t.strip().upper() for t in str(food.get("categorias", "") or "").split("|")}
     if "PRO" in cats:
@@ -823,7 +845,23 @@ async def search_foods_endpoint(
         #   intraentreno / postentreno (peri meals): their own prioritarias lists.
         _PRIOR_LISTS = {
             "cuadrar": ("17.1.1", "17.1", "42"),
-            "intra": ("41", "18.1.1", "18.1.3", "18.1.2"),
+            # INTRA: nos separamos de Calma A PROPOSITO (Francisco, 25-08).
+            #
+            # Calma tiene ["41", "18.1.1", "18.1.3", "18.1.2"] y nosotros la copiamos tal
+            # cual, pero esa lista esta mal en el origen y por eso el intra no sugeria lo
+            # que dice el metodo:
+            #   - 18.3 (ciclodextrina, dextrosa, palatinosa) NO estaba. Es el hidrato
+            #     rapido que Jesus recomienda en el intra por escrito (core/guion_peri.py:
+            #     «Mi favorito es la ciclodextrina»), y en Calma solo aparece en la lista
+            #     del POST. Sin el, el sugeridor no lo subia nunca.
+            #   - 18.1.3 esta VACIA en nuestro catalogo: 0 alimentos. Ocupaba sitio y nada mas.
+            #
+            # El orden que queda es el del metodo: MAP primero (dentro de 41, el de FullGas
+            # sale delante solo, por el -0.5 de marca recomendada), luego la ciclodextrina y
+            # los otros hidratos rapidos, y solo despues las isotonicas: primero las que
+            # llevan azucar (18.1.1), que es la alternativa del guion, y al final las light
+            # (18.1.2), que no aportan hidratos.
+            "intra": ("41", "18.3", "18.1.1", "18.1.2"),
             "post": ("4.1.1", "4.1.2", "4.1", "4.2", "5.4", "5.2.3", "5.2.2", "5.1", "4.3",
                      "27", "21.3", "7.1.1", "7.1.2.1", "18.3", "11.5", "11.2.1", "11.2.2",
                      "11.1", "11.4", "11.6", "11.7", "21.2", "7.3.1", "8", "24", "19.1",
@@ -844,7 +882,8 @@ async def search_foods_endpoint(
                 return 0
             for idx, code in enumerate(_prior_list):
                 if food_in_cat_calma(f, code):
-                    return (idx - 0.5) if _is_pro(f) else idx
+                    p = (idx - 0.5) if _is_pro(f) else float(idx)
+                    return p - _favorito_del_metodo(f) if peri == "intra" else p
             return float('inf')
         # BUSCANDO, EL ORDEN ES EL DE CALMA Y NADA MÁS (Francisco, 17-08).
         #

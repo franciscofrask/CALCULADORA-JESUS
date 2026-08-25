@@ -17,10 +17,15 @@ import ExtrasDelDia from '../nutrition/ExtrasDelDia';
  *              lleva porque en el método la grasa del peri no cuenta.
  *  - Dieta   · la suma de lo montado: `servido_comidas` (lo cuenta el servidor, calibrado)
  *              más lo montado en el peri (P/H; la grasa del peri va fuera, como arriba).
- *  - Llevas  · la suma de las comidas MARCADAS con su casilla, MÁS los Extras del día
- *              (lo comido fuera de la dieta; el bloque vive en nutrition/ExtrasDelDia).
+ *  - Llevas  · la suma de las comidas MARCADAS con su casilla. Los Extras del día NO
+ *              entran (punto 28 del doc del 24-08): ver abajo.
  *  - Falta   · Macros menos Llevas. PUEDE quedar en negativo y se dice tal cual («Te has
  *              pasado de 12 g de hidratos»), en tono tostado, sin bronca.
+ *
+ * LOS EXTRAS NO TOCAN NADA DE ESTO. Hasta el 24-08 se sumaban en Llevas y por eso le
+ * encogían el Falta: si se comía una tarta a media tarde, la app le decía «ya no te comas
+ * la comida 4». Eso es enseñarle a compensar, que es justo lo contrario del método. Van en
+ * su lista, aparte (nutrition/ExtrasDelDia), y aquí solo se pintan.
  *
  * LA CASILLA POR COMIDA vive en el servidor: `PATCH /diets/{fecha}/comida-marcada`
  * escribe `comidas.{k}.marcada` dentro del día, así la marca viaja con la cuenta a
@@ -71,8 +76,8 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
     const [reparto, setReparto] = useState(null);
     const [marcadas, setMarcadas] = useState({});
     // Los Extras del día: lo comido fuera de la dieta. Llegan con el documento del día
-    // (`extras`), y añadir o quitar actualiza aquí -- este estado es el que suma en
-    // Llevas, así que vive en este componente y no en el bloque que los pinta.
+    // (`extras`) y el estado se queda aquí, en el padre, para que la lista sobreviva a un
+    // repintado del bloque; añadir o quitar avisa hacia arriba. No se suman en ningún sitio.
     const [extrasDia, setExtrasDia] = useState([]);
     useEffect(() => { setExtrasDia((dieta?.exists && dieta.extras) || []); }, [dieta]);
 
@@ -102,6 +107,14 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
         });
     };
 
+    // EL DOCUMENTO DEL DÍA PUEDE EXISTIR SIN DIETA MONTADA. Desde el 24-08 apuntar un extra
+    // es un campo de texto y un toque, y ese POST hace upsert del día: quien apunta el café
+    // de las 10:00 antes de montar nada ya tiene documento, con `exists: true` y sin
+    // configuración dentro. Si eso se diera por «día configurado», a quien tiene 3 comidas
+    // le pintaríamos 4 vacías. El marcador bueno es `num_comidas`, que lo escribe siempre
+    // `upsert_diet_doc` en cuanto se guarda una dieta de verdad.
+    const diaConfigurado = Boolean(dieta?.exists && dieta.num_comidas);
+
     // El reparto se pide UNA vez con la configuración del día: la de la dieta si está
     // guardada y, si no, la que el cliente tiene puesta (`/user/diet-config`), que es la
     // misma precedencia que aplica el servidor al resolver `objetivo_comidas`.
@@ -110,7 +123,7 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
         const cargar = async () => {
             try {
                 let cfg;
-                if (dieta?.exists) {
+                if (diaConfigurado) {
                     cfg = {
                         tipo_dia: dieta.tipo_dia || 'entrenamiento',
                         num_comidas: dieta.num_comidas || 4,
@@ -163,8 +176,9 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
         G: servido?.G || 0,
     };
 
-    // Qué comidas tiene el día, en su orden. Del reparto si llegó; si no, de lo guardado.
-    const numComidas = dieta?.exists ? (dieta.num_comidas || 4)
+    // Qué comidas tiene el día, en su orden. De lo guardado si el día lleva su
+    // configuración dentro; si no, del reparto (que salió de la del cliente).
+    const numComidas = diaConfigurado ? dieta.num_comidas
         : (reparto?.comidas ? Object.keys(reparto.comidas).length : 4);
     const esUnica = numComidas === 1;
     const claves = ['C1', 'C2', 'C3', 'C4'].slice(0, Math.max(1, Math.min(4, numComidas)));
@@ -180,19 +194,11 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
         H: acc.H + montadoPorComida[k].H,
         G: acc.G + montadoPorComida[k].G,
     }), { P: 0, H: 0, G: 0 });
-    // Los Extras del día cuentan en Llevas y NO tocan la dieta: por eso se suman aquí
-    // (donde se cuenta lo comido) y no en `totalDieta` (donde se cuenta lo montado).
-    // Sus macros vienen calculados del servidor, del añadirlos.
-    const deExtras = extrasDia.reduce((acc, e) => ({
-        P: acc.P + (e.macros?.P || 0),
-        H: acc.H + (e.macros?.H || 0),
-        G: acc.G + (e.macros?.G || 0),
-    }), { P: 0, H: 0, G: 0 });
-    const llevas = {
-        P: deComidas.P + deExtras.P,
-        H: deComidas.H + deExtras.H,
-        G: deComidas.G + deExtras.G,
-    };
+    // «Llevas» son las comidas marcadas y nada más: los extras NO se suman (punto 28 del
+    // doc del 24-08). Ya mordió una vez -- sumarlos encogía el «Falta» del resto del día y
+    // la app acababa diciéndole que se saltara una comida por haberse comido una tarta --,
+    // así que si alguien vuelve a plantearlo, la respuesta es que no.
+    const llevas = deComidas;
 
     const falta = conPeri ? {
         P: Math.round(conPeri.P - llevas.P),
@@ -225,9 +231,9 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
 
     const valoresDeVista = { macros: conPeri, dieta: totalDieta, llevas, falta };
     const valores = valoresDeVista[vista];
-    // Un extra apuntado también es «llevar algo»: con extras, Llevas enseña números
-    // aunque no haya ninguna comida marcada.
-    const nadaMarcado = hechas.length === 0 && extrasDia.length === 0;
+    // Con un extra apuntado y ninguna comida marcada, Llevas vuelve a decir «Todavía no
+    // has marcado nada»: desde que los extras no suman, el número sería un 0 pelado.
+    const nadaMarcado = hechas.length === 0;
 
     const irANutricion = () => navigate('/dashboard/nutrition');
     // El peri aterriza EN el peri (P32 del 23-08): pinchar su tarjeta te dejaba en la
@@ -319,13 +325,11 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
                                 </div>
                             )}
                             {vista === 'llevas' ? (
+                                /* Solo las comidas: los extras no se nombran aquí porque no
+                                   entran en la cuenta, y verlos al lado del número sería
+                                   volver a prometer que suman. */
                                 <p className="text-xs text-muted-foreground text-center mt-3">
-                                    {[
-                                        hechas.length === 1 ? '1 comida marcada' : `${hechas.length} comidas marcadas`,
-                                        extrasDia.length > 0
-                                            ? (extrasDia.length === 1 ? '1 extra' : `${extrasDia.length} extras`)
-                                            : null,
-                                    ].filter(Boolean).join(' · ')}
+                                    {hechas.length === 1 ? '1 comida marcada' : `${hechas.length} comidas marcadas`}
                                 </p>
                             ) : PIE_DE_VISTA[vista] ? (
                                 <p className="text-xs text-muted-foreground text-center mt-3">{PIE_DE_VISTA[vista]}</p>
@@ -417,8 +421,8 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
             </section>
 
             {/* «EXTRAS DEL DÍA», debajo de las comidas y del peri: lo comido fuera de la
-                dieta. Cuentan en Llevas (la suma de arriba) y no tocan la dieta. */}
-            <ExtrasDelDia api={api} fecha={fecha} extras={extrasDia}
+                dieta. Su lista y ya: no entran en ninguna de las cuatro cuentas de arriba. */}
+            <ExtrasDelDia api={api} fecha={fecha} extras={extrasDia} origen="inicio"
                 onAnadido={(e) => setExtrasDia((prev) => [...prev, e])}
                 onQuitado={(id) => setExtrasDia((prev) => prev.filter((x) => x.id !== id))} />
         </>

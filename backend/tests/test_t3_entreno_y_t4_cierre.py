@@ -9,7 +9,7 @@ de Inicio y de los reportes.
 import pytest
 import requests
 
-from routes.checkins import ETIQUETA_COMIDA, _comida_sin_registrar, _orden_de_comidas
+from routes.checkins import ETIQUETA_COMIDA, _comidas_sin_registrar, _orden_de_comidas
 from routes.workout_logs import DIAS_SEMANA, dia_de_rutina, numero_de_rutina, titulo_del_dia
 
 
@@ -82,25 +82,26 @@ class TestLaComidaQueFalta:
     def test_sin_peri_son_las_comidas_y_ya(self):
         assert _orden_de_comidas({"num_comidas": 3, "opcion_peri": "sin_peri"}) == ["C1", "C2", "C3"]
 
-    def test_se_pregunta_por_la_ultima_que_falta(self):
-        """La que está cerrando cuando entra aquí, no la primera del día."""
+    def test_salen_TODAS_las_que_faltan_y_en_orden(self):
+        """El aviso de arriba del cierre las lista («Comida 3 · Comida 4», punto 16 del
+        doc 24-08). Devolvía solo la última porque antes se preguntaba por una sola."""
         dieta = {"num_comidas": 3, "comidas": {
             "C1": {"alimentos": [{"nombre": "Avena"}]},
             "C2": {"alimentos": []},
             "C3": {"alimentos": []},
         }}
-        assert _comida_sin_registrar(dieta) == "C3"
+        assert _comidas_sin_registrar(dieta) == ["C2", "C3"]
 
-    def test_si_esta_todo_registrado_no_se_pregunta(self):
+    def test_si_esta_todo_registrado_no_se_avisa_de_nada(self):
         dieta = {"num_comidas": 2, "comidas": {
             "C1": {"alimentos": [{"nombre": "Avena"}]},
             "C2": {"alimentos": [{"nombre": "Pollo"}]},
         }}
-        assert _comida_sin_registrar(dieta) is None
+        assert _comidas_sin_registrar(dieta) == []
 
-    def test_sin_dieta_no_se_pregunta(self):
+    def test_sin_dieta_no_se_avisa(self):
         """Un día sin dieta montada no tiene nada a medias: no hay nada que reclamarle."""
-        assert _comida_sin_registrar(None) is None
+        assert _comidas_sin_registrar(None) == []
 
     def test_a_la_comida_se_la_llama_por_su_numero(self):
         # Decisión del 09-08: al cliente no se le dice "cena" ni "desayuno". El literal
@@ -176,9 +177,20 @@ class TestElCierreDelDia:
         r = requests.get(f"{api_disponible}/checkins/hoy", headers=cabeceras_cliente, timeout=20)
         assert r.status_code == 200
         d = r.json()
-        for clave in ("fecha", "hecho", "entreno", "suplementos", "comida_pendiente",
-                      "exceso", "ultimo_peso"):
+        for clave in ("fecha", "hecho", "entreno", "suplementos", "comidas_pendientes",
+                      "ultimo_peso",
+                      # NUEVA (24-08): cuantos dias atras acepta el servidor que se feche un
+                      # pesaje. Viaja para que el desplegable de la pantalla ofrezca
+                      # exactamente lo que se acepta; si deja de venir, el desplegable se
+                      # inventa su propio tope y vuelve a haber dos reglas.
+                      "peso_dias_atras"):
             assert clave in d, f"falta {clave}"
+        # `exceso` YA NO VIENE, y no es un olvido: la pregunta del exceso de macros dejó de
+        # existir con las once de Jesús (fallo 8 del repaso del 24-08) y con ella se fue el
+        # cálculo del servidor. Se comprueba que NO está para que no vuelva a colarse un
+        # dato que ya no se le enseña a nadie y que costaba una consulta de la dieta entera
+        # cada vez que se abría el cierre.
+        assert "exceso" not in d
         # La fecha es la del cliente (España), en formato de día.
         assert len(d["fecha"]) == 10
 

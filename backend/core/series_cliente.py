@@ -21,7 +21,7 @@ Reglas:
   - Cada punto lleva de donde salio (`origen`: reporte, check-in, ajuste del coach, alta),
     porque no todos valen igual: el peso de un reporte lo ha mirado el coach.
 """
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from core.database import db
@@ -74,9 +74,37 @@ def sanea_peso(w: Any) -> Optional[float]:
     return round(w, 1) if minimo < w < maximo else None
 
 
+# LOS ORIGENES QUE NO SON UN PESAJE (24-08). El peso de un reporte no sale de la bascula de
+# ese dia: es un numero que el cliente escribe para resumir la semana -- y que casi siempre
+# es la media que le propone la propia app -- y que se archiva con la fecha DEL DOCUMENTO.
+# Todo lo demas (el cierre del dia, el alta, el coach) si fecha un pesaje.
+ORIGENES_DE_REPORTE = ("reporte", "reporte (lo metió el equipo)")
+
+
 def poner_en_serie(serie: Optional[List[Dict[str, Any]]], fecha: str, valor: float,
-                   origen: Optional[str] = None) -> List[Dict[str, Any]]:
-    """La serie con `valor` en `fecha`, sustituyendo lo que hubiera ese dia. Ordenada."""
+                   origen: Optional[str] = None, *,
+                   pisa_pesajes: bool = True) -> List[Dict[str, Any]]:
+    """La serie con `valor` en `fecha`, sustituyendo lo que hubiera ese dia. Ordenada.
+
+    `pisa_pesajes=False` para lo que NO es un pesaje (ver `ORIGENES_DE_REPORTE`): si ese dia
+    ya tiene punto y lo escribio otra puerta, la serie se devuelve tal cual.
+
+    POR QUE EXISTE ESTE CANDADO (fallo 5 del repaso del 24-08). Enviar el reporte llamaba a
+    `anotar_peso(..., dia_reporte, origen="reporte")` y esto sustituia el punto de ese dia:
+    con jueves 80,0 y viernes 82,0 el reporte propone 81,0 (la media de la pareja), y al
+    enviarlo la serie quedaba jueves 80,0 y viernes 81,0. El 82,0 que el cliente se peso de
+    verdad desaparecia, el peso de la semana pasaba a 80,5 y cada reenvio lo movia otra vez
+    (80,2...). Mordia justo al Premium, que es para quien se escribio la regla del peso: la
+    ventana del semanal abre en VIERNES y dos de las tres parejas de Jesus llevan viernes.
+
+    Un reporte SI corrige el punto que escribio otro reporte: eso no es perder un pesaje,
+    es el mismo documento reenviado. Y un punto sin `origen` (los importados de Calma) se
+    trata como pesaje: ante la duda, no se borra un dato que no sabemos de donde vino.
+    """
+    if not pisa_pesajes:
+        previo = next((x for x in (serie or []) if _dia(x.get("fecha")) == fecha), None)
+        if previo is not None and previo.get("origen") not in ORIGENES_DE_REPORTE:
+            return list(serie or [])
     fuera = [x for x in (serie or []) if _dia(x.get("fecha")) != fecha]
     punto: Dict[str, Any] = {"fecha": fecha, "valor": valor}
     if origen:
@@ -150,12 +178,165 @@ def curva_de_peso(serie: Optional[List[Dict[str, Any]]],
     return [{"fecha": f, "peso": p} for f, p in sorted(por_dia.items())]
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# EL PESO DE LA SEMANA (punto 34 del doc del 24-08)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# «La primera pareja de días seguidos desde el miércoles. Miércoles-jueves,
+#  jueves-viernes o viernes-sábado. En cuanto los tiene, hace la media.»
+#
+# Esa es la regla de Jesus y manda cuando existe, pero medida contra produccion se cumple
+# en el 0,35 % de las semanas-cliente: la gente no se pesa dos dias seguidos. Por eso la
+# decision del 24-08 es una CASCADA de tres ramas, para que la semana tenga peso casi un
+# tercio de las veces (32,0 % de 4.576 semanas-cliente; 44 de 260 en los diez Premium):
+#
+#   a) la pareja de Jesus,
+#   b) si no hay pareja, la media de TODOS los pesajes de esa semana (18,1 %),
+#   c) si tampoco, el ultimo peso conocido de los ultimos 14 dias, y entonces hay que
+#      poder enseñar SU FECHA, porque no es de esta semana.
+#
+# Siempre se devuelve de que rama sale: la pantalla lo tiene que decir, y un numero que el
+# cliente no sabe de donde viene es un numero que no se cree.
+
+# Los dias que forman pareja, con el indice de `weekday()` (0 = lunes). Se buscan EN ESTE
+# ORDEN: la primera que exista gana, no la mejor ni la mas reciente.
+PAREJAS_DESDE_EL_MIERCOLES = ((2, 3), (3, 4), (4, 5))
+
+# La memoria de la rama c. Es el mismo tope que se midio contra produccion: con 21 dias la
+# cobertura sube al 23 % y con 30 al 30 %, pero un peso de hace un mes ya no describe la
+# semana de la que habla el reporte.
+DIAS_DEL_ULTIMO_PESO = 14
+
+
+def _media(valores: List[float]) -> float:
+    return round(sum(valores) / len(valores), 1)
+
+
+def peso_semanal(serie: Optional[List[Dict[str, Any]]], dia: date,
+                 apuntes: Optional[List[Dict[str, Any]]] = None) -> Optional[Dict[str, Any]]:
+    """El peso de la semana de `dia` y DE DONDE SALE, con la cascada de arriba.
+
+    `dia` es cualquier dia de la semana que se quiere resumir: se lleva a su lunes. La
+    semana va de lunes a domingo, como la ISO y como el resto de la app.
+
+    Devuelve `None` si no hay nada que enseñar, o:
+
+        {"valor": 81.4,                     el kilo que sale
+         "regla": "pareja" | "media" | "ultimo",
+         "fechas": ["2026-08-19", "2026-08-20"],   los pesajes que entran en la cuenta
+         "fecha": "2026-08-20",             el ultimo de ellos
+         "de_esta_semana": True}            False solo en la rama c
+
+    Los pesajes salen de `curva_de_peso`, que es LA UNICA CURVA de la app: asi el peso
+    semanal cuenta con los mismos puntos que «Mis macros» y la tarjeta de renovacion, y de
+    paso hereda el saneado (en produccion hay 0,0 kg y errores de coma) y el corte en hoy
+    (hay pesajes fechados en 2027 y 2028, de pruebas).
+    """
+    lunes = dia - timedelta(days=dia.weekday())
+    puntos: Dict[date, float] = {}
+    for p in curva_de_peso(serie, apuntes):
+        try:
+            puntos[date.fromisoformat(p["fecha"])] = p["peso"]
+        except (ValueError, TypeError):      # una fecha rota no tumba la semana entera
+            continue
+
+    de_la_semana = {k: puntos[lunes + timedelta(days=k)]
+                    for k in range(7) if (lunes + timedelta(days=k)) in puntos}
+
+    def _sale(valor: float, regla: str, dias: List[date], de_esta_semana: bool = True):
+        return {"valor": valor, "regla": regla,
+                "fechas": [d.isoformat() for d in dias],
+                "fecha": max(dias).isoformat(),
+                "de_esta_semana": de_esta_semana}
+
+    # a) La pareja de dias seguidos desde el miercoles.
+    for a, b in PAREJAS_DESDE_EL_MIERCOLES:
+        if a in de_la_semana and b in de_la_semana:
+            return _sale(_media([de_la_semana[a], de_la_semana[b]]), "pareja",
+                         [lunes + timedelta(days=a), lunes + timedelta(days=b)])
+
+    # b) La media de todos los pesajes de la semana. Con uno solo, la media es ese.
+    if de_la_semana:
+        return _sale(_media(list(de_la_semana.values())), "media",
+                     [lunes + timedelta(days=k) for k in sorted(de_la_semana)])
+
+    # c) El ultimo conocido, mirando hacia atras DESDE EL SABADO. El sabado y no hoy porque
+    # asi el peso de una semana YA PASADA no cambia segun el dia en que se mire: la semana
+    # es un periodo cerrado y su resumen tiene que ser siempre el mismo.
+    #
+    # PERO EN LA SEMANA EN CURSO EL CORTE ES HOY, y esto no es un detalle: el reporte se
+    # pide siempre de la semana de hoy (`datos_del_reporte` llama con el ultimo dia del
+    # periodo, que es hoy), asi que con el sabado a secas el lunes solo se miraban NUEVE
+    # dias hacia atras -- los catorce menos los cinco que faltan para el sabado -- y a quien
+    # se peso hace diez dias se le decia que no hay peso. Los catorce dias son catorce
+    # contados desde el dia en que se abre el reporte. Mirar hasta el sabado que aun no ha
+    # llegado no aporta nada: `curva_de_peso` ya corta en hoy y ahi no hay ningun punto.
+    from core.tiempo import hoy_madrid
+
+    hasta = min(lunes + timedelta(days=5), hoy_madrid())
+    for i in range(DIAS_DEL_ULTIMO_PESO + 1):
+        d = hasta - timedelta(days=i)
+        if d in puntos:
+            return _sale(puntos[d], "ultimo", [d], de_esta_semana=False)
+    return None
+
+
+# Cuanto hacia atras se acepta un pesaje que el cliente apunta a mano con su fecha.
+#
+# LA REGLA VIVE AQUI Y SOLO AQUI (fallo 7 del repaso del 24-08). Estaba escrita en tres
+# sitios con tres numeros: 30 aqui, 14 en `routes/checkins.py` (el camino vivo) y 8 dias en
+# el desplegable de la pantalla, que es lo unico que el cliente podia elegir. Ahora el
+# servidor la aplica desde este modulo y ademas se la dice a la pantalla
+# (`peso_dias_atras` en GET /checkins/hoy), asi que el desplegable ofrece exactamente lo
+# que el servidor acepta.
+#
+# El numero son los mismos 14 dias con los que la regla del peso semanal busca «el ultimo
+# conocido»: fechar mas atras no le sirve a nadie -- ese pesaje ya no entra en ninguna
+# semana -- y si abre la puerta a rehacer la curva de hace un mes.
+DIAS_ATRAS_PARA_UN_PESAJE = DIAS_DEL_ULTIMO_PESO
+
+
+def fecha_de_pesaje_valida(fecha: Optional[str], hoy: Optional[date] = None) -> Optional[str]:
+    """La fecha de un pesaje apuntado a mano, en ISO, o None si no se puede aceptar.
+
+    ES LA PUERTA DE ENTRADA de la casilla de peso CON FECHA del cierre del dia (punto 34
+    del doc del 24-08): hasta hoy el peso se archivaba con la fecha del documento y no con
+    la del pesaje, y sin esto no puede existir nunca la pareja de dias seguidos.
+
+    La serie ya admite un pesaje de otro dia sin romperse -- `poner_en_serie` sustituye el
+    punto de ESE dia y `actual` sigue devolviendo el ultimo hasta hoy --, asi que lo unico
+    que falta es que no se cuele lo que no es un pesaje:
+
+      - del FUTURO no entra nada. Un pesaje de mañana no es el peso de nadie, y ademas se
+        quedaria escondido en la serie hasta que llegara su dia (ver `actual`).
+      - de hace mas de `DIAS_ATRAS_PARA_UN_PESAJE` tampoco.
+
+    Sin fecha devuelve la de hoy, que es el caso normal: quien no toca la casilla se esta
+    pesando ahora. Quien llama decide que decirle al cliente cuando sale None; aqui no se
+    escriben mensajes.
+    """
+    from core.tiempo import hoy_madrid
+
+    hoy = hoy or hoy_madrid()
+    if not fecha:
+        return hoy.isoformat()
+    try:
+        d = date.fromisoformat(str(fecha)[:10])
+    except (ValueError, TypeError):
+        return None
+    if d > hoy or (hoy - d).days > DIAS_ATRAS_PARA_UN_PESAJE:
+        return None
+    return d.isoformat()
+
+
 async def _anotar(cual, client_id: Optional[str], valor: Any,
-                  fecha: Optional[str] = None, origen: Optional[str] = None) -> Optional[float]:
+                  fecha: Optional[str] = None, origen: Optional[str] = None, *,
+                  pisa_pesajes: bool = True) -> Optional[float]:
     """Mete un valor en la serie y deja el campo 'actual' en el ultimo de la serie.
 
     Devuelve el valor actual resultante (que puede NO ser el que se acaba de anotar: si se
-    anota un pesaje de hace un mes, el actual sigue siendo el de la semana pasada).
+    anota un pesaje de hace un mes, el actual sigue siendo el de la semana pasada; y con
+    `pisa_pesajes=False`, si ese dia ya tenia pesaje, no se anota nada en absoluto).
     """
     campo_serie, campo_actual, minimo, maximo = cual
     if not client_id:
@@ -167,7 +348,8 @@ async def _anotar(cual, client_id: Optional[str], valor: Any,
     perfil = await db.client_profiles.find_one({"id": client_id}, {"_id": 0, campo_serie: 1})
     if perfil is None:
         return None
-    serie = poner_en_serie(perfil.get(campo_serie), _dia(fecha), v, origen)
+    serie = poner_en_serie(perfil.get(campo_serie), _dia(fecha), v, origen,
+                           pisa_pesajes=pisa_pesajes)
     ahora = actual(serie)
     await db.client_profiles.update_one(
         {"id": client_id},
@@ -177,9 +359,14 @@ async def _anotar(cual, client_id: Optional[str], valor: Any,
 
 
 async def anotar_peso(client_id: Optional[str], valor: Any, fecha: Optional[str] = None,
-                      origen: Optional[str] = None) -> Optional[float]:
-    """Un pesaje. `fecha` es la del PESAJE, no la del dia en que se apunta."""
-    return await _anotar(PESO, client_id, valor, fecha, origen)
+                      origen: Optional[str] = None, *,
+                      pisa_pesajes: bool = True) -> Optional[float]:
+    """Un pesaje. `fecha` es la del PESAJE, no la del dia en que se apunta.
+
+    `pisa_pesajes=False` para el peso que llega dentro de un reporte, que no es un pesaje de
+    ese dia: ver `poner_en_serie`.
+    """
+    return await _anotar(PESO, client_id, valor, fecha, origen, pisa_pesajes=pisa_pesajes)
 
 
 async def anotar_grasa(client_id: Optional[str], valor: Any, fecha: Optional[str] = None,

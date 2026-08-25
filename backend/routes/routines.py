@@ -132,14 +132,29 @@ async def estado_de_la_peticion(user = Depends(get_current_user)):
             "modalidad": pedida.get("modalidad"),
             # Del cobro solo se habla cuando consta que NO entró. De la pedida en el reporte
             # aquí no sabemos si se cobró (eso vive en el aviso del equipo), y decirle «se
-            # quedó pendiente» a quien ya pagó asusta para nada.
-            "cobro_pendiente": pedida.get("cobrado") is False}
+            # quedó pendiente» a quien ya pagó asusta para nada. La cuenta de laboratorio
+            # tampoco tiene nada pendiente: no se le cobra a propósito.
+            "cobro_pendiente": (pedida.get("cobrado") is False
+                                and pedida.get("motivo") != "cuenta_de_pruebas"),
+            # Si ya se le ha puesto la rutina del mes vigente, cuál es.
+            "rutina_puesta": pedida.get("rutina_puesta")}
 
 
 @router.post("/quiero-la-rutina")
 async def quiero_la_rutina(data: dict, user = Depends(get_current_user)):
-    """«Quiero mi rutina» (P72 del doc 23-08, DECIDIDO): el plan que no lleva rutina
-    puede comprar la rutina del mes desde la pantalla de Rutina.
+    """«Quiero mi rutina» (P72 del doc 23-08): cobro directo a la tarjeta que ya tiene.
+
+    HOY NO LO LLAMA NADIE (24-08). Desde que la rutina del mes se compra por Stripe Checkout
+    (`POST /billing/rutina-del-mes/checkout`), Mi rutina usa esa puerta y este endpoint se
+    quedó sin ninguna pantalla detrás: aquí solo podía comprar el que tuviera tarjeta
+    guardada, y al que no la tiene -- el que viene de Calma, el de Calculadora -- se le
+    apuntaba la petición sin cobrar y se quedaba esperando a que alguien le escribiera.
+    Y ojo con lo que NO es: el «Sí» del reporte mensual tampoco pasa por aquí, llama
+    directamente a `core.rutina_del_mes.cobrar` (`routes/reports.py`). Se deja vivo porque
+    cobrar en la tarjeta que ya está guardada sigue siendo válido el día que se quiera
+    ofrecer sin sacar al cliente de la app; lo que no puede es cobrar dos veces, y de eso se
+    encarga `_peticion_viva`, que consultan las dos puertas antes de cobrar.
+    El GET de al lado sí se usa: es el que lee la pantalla.
 
     Reutiliza EXACTAMENTE el circuito del reporte mensual del Bronze (19-08):
     `core/rutina_del_mes.cobrar` (57 EUR en la tarjeta guardada, con el freno de las
@@ -168,6 +183,18 @@ async def quiero_la_rutina(data: dict, user = Depends(get_current_user)):
         raise HTTPException(
             status_code=400,
             detail="Ya nos pediste tu rutina y estamos con ella. Te llega en unos días.")
+
+    # NO SE COBRA LO QUE NO SE PUEDE ENTREGAR (verificación 24-08, fallo 14). El mismo
+    # candado que la puerta de Stripe (`billing.comprar_la_rutina_del_mes`), y por la misma
+    # razón: sin plantilla marcada ni PDF del mes preparado, aquí se pasaban 57 EUR por la
+    # tarjeta y lo único que pasaba después era un aviso pidiendo entregarla a mano.
+    if not await hay_rutina_del_mes_que_entregar():
+        logging.getLogger("uvicorn.error").warning(
+            "Rutina del mes: %s quiso comprarla y no hay ninguna preparada", profile.get("id"))
+        raise HTTPException(
+            status_code=409,
+            detail="La rutina de este mes todavía no está lista. En cuanto la tengamos "
+                   "podrás comprarla desde aquí.")
 
     from core.avisos_equipo import avisar_al_equipo
     from core.rutina_del_mes import PRECIO_EUR, cobrar
@@ -281,16 +308,27 @@ admin_router = APIRouter(prefix="/admin/routines", tags=["admin-routines"])
 #
 # UNA SOLA FORMA DE PREGUNTARLO, y agrupando EN LA BASE: en `rutina_pdfs` cada fila lleva el
 # PDF entero dentro (hasta `MAX_PDF_BYTES`, 15 MB), así que lo que no se pida no viaja y
-# vuelve una fila por cliente en vez de una por PDF. Lo que falta es el ÍNDICE por
-# `client_id`: sin él esto recorre la colección entera, y esta es justo la pantalla donde ya
-# hubo que arreglar siete segundos (ver `_los_que_no_tienen_rutina`). El índice va en
-# `core/database.create_indexes` -- fichero de otro bloque -- y de paso arregla los
-# `find_one(..., sort=[("uploaded_at", -1)])` del PDF, que recorren lo mismo desde el 21-08.
+# vuelve una fila por cliente en vez de una por PDF. Esta es justo la pantalla donde ya hubo
+# que arreglar siete segundos (ver `_los_que_no_tienen_rutina`).
+#
+# EL ÍNDICE YA ESTÁ (repaso 24-08). Este comentario decía «lo que falta es el índice por
+# client_id», y era verdad hasta el 24-08: en producción `index_information()` solo devolvía
+# `_id_`. Se creó en `core/database.create_indexes`, compuesto `("client_id", 1),
+# ("uploaded_at", -1)`, y con él los `find_one(..., sort=[("uploaded_at", -1)])` del PDF
+# salen por IXSCAN y sin ordenar en memoria (comprobado con explain en dev: `totalDocsExamined
+# 0`). Se crea al arrancar el backend, así que en producción aparece con el próximo deploy.
+# Este `aggregate` recorre la colección entera a propósito: los quiere todos.
 async def _ultimo_pdf_por_cliente() -> Dict[str, str]:
     """{client_id: fecha del último PDF de rutina que se le subió}."""
     fuera: Dict[str, str] = {}
+    # El `$project` va DELANTE del `$group` a propósito: sin él la tubería arrastra el
+    # documento entero de cada PDF (el binario, hasta 15 MB) para acabar quedándose con dos
+    # campos. Con la entrega mensual ya subida -- 35 filas en producción hoy y 165 clientes
+    # a los que les toca -- eso es medio giga moviéndose por dentro de Mongo cada vez que se
+    # abre el panel de Rutinas.
     async for fila in db.rutina_pdfs.aggregate(
-            [{"$group": {"_id": "$client_id", "ultimo": {"$max": "$uploaded_at"}}}]):
+            [{"$project": {"client_id": 1, "uploaded_at": 1}},
+             {"$group": {"_id": "$client_id", "ultimo": {"$max": "$uploaded_at"}}}]):
         if fila.get("_id"):
             fuera[fila["_id"]] = fila.get("ultimo") or ""
     return fuera
@@ -910,12 +948,19 @@ def _dias_limpios(dias: Any) -> List[Dict[str, Any]]:
     el día de mañana, desde la importación de las rutinas de Drive.
     """
     SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+    # SIN TILDES TAMBIÉN VALE (24-08). Se comparaba con el nombre tal cual, así que un
+    # «Miercoles» sin tilde -- lo que escribe cualquiera que llame a la API a mano, y lo que
+    # va a traer la importación de las rutinas de Drive -- no casaba con ninguno de los
+    # siete y ese día se perdía ENTERO, sin un solo error: la plantilla se guardaba con un
+    # día menos y nadie se enteraba hasta que el cliente abría su rutina.
+    _llanos = str.maketrans("áéíóúüÁÉÍÓÚÜ", "aeiouuAEIOUU")
+    canonico = {n.translate(_llanos).lower(): n for n in SEMANA}
     porNombre = {}
     for d in (dias or []):
         if not isinstance(d, dict):
             continue
-        nombre = str(d.get("day") or "").strip().capitalize()
-        if nombre not in SEMANA:
+        nombre = canonico.get(str(d.get("day") or "").strip().translate(_llanos).lower())
+        if not nombre:
             continue
         ejercicios = []
         for e in (d.get("exercises") or []):
@@ -952,7 +997,12 @@ async def listar_biblioteca(user = Depends(get_admin_user)):
         dias = r.get("days") or []
         r["dias_de_entreno"] = len([d for d in dias if not d.get("is_rest")])
         r["ejercicios"] = sum(len(d.get("exercises") or []) for d in dias)
+        # Siempre presente aunque la plantilla sea de antes de que existiera la marca: la
+        # pantalla pinta un interruptor con esto y `undefined` le dejaría el botón mudo.
+        r["del_mes"] = bool(r.get("del_mes"))
         fuera.append(r)
+    # La del mes, la primera: es la que se entrega sola y la que hay que poder cambiar.
+    fuera.sort(key=lambda r: not r["del_mes"])
     return {"rutinas": fuera}
 
 
@@ -1010,6 +1060,38 @@ async def borrar_de_biblioteca(rutina_id: str, user = Depends(solo_admin_borra_c
     return {"borrada": True}
 
 
+async def _ponerle_la_plantilla(plantilla: Dict[str, Any], profile: Dict[str, Any],
+                                origen: str, puesta_por: Optional[str] = None) -> None:
+    """Copia una plantilla de la biblioteca en la rutina activa de un cliente.
+
+    Se COPIA, no se enlaza: si luego se le cambia un ejercicio a ese cliente, no se le
+    toca la rutina a los otros veinte que la tienen puesta.
+    """
+    client_id = profile["id"]
+    await db.routines.update_many({"client_id": client_id, "status": "active"},
+                                  {"$set": {"status": "inactive"}})
+    await db.routines.insert_one({
+        "id": str(uuid.uuid4()),
+        "client_id": client_id,
+        # También aquí: en la biblioteca pueden quedar plantillas guardadas antes de que
+        # las series se saneasen al escribir, y esa copia es la que va a abrir el cliente.
+        "days": _rutina_pintable(plantilla.get("days", [])),
+        "trainer_notes": plantilla.get("trainer_notes"),
+        "status": "active",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        # De dónde salió: para saber cuál se puso a mano, cuál la IA y cuál la biblioteca.
+        "origen": origen,
+        "plantilla_id": plantilla.get("id"),
+        "plantilla_nombre": plantilla.get("nombre"),
+        "puesta_por": puesta_por,
+    })
+    # Con `.get`: hay fichas de la migración de Calma sin `user_id` (nadie ha entrado nunca
+    # con esa cuenta). Con el corchete, la entrega de la rutina ya comprada reventaba DESPUÉS
+    # de escribirla, y arriba se le decía al equipo que había que ponérsela a mano.
+    if profile.get("user_id") and await rutina_visible_para_el_cliente():
+        await avisar_rutina_nueva(profile["user_id"])
+
+
 @admin_router.post("/biblioteca/{rutina_id}/asignar")
 async def asignar_de_biblioteca(rutina_id: str, data: Dict[str, Any],
                                 user = Depends(get_admin_user)):
@@ -1024,27 +1106,76 @@ async def asignar_de_biblioteca(rutina_id: str, data: Dict[str, Any],
     profile = await db.client_profiles.find_one({"id": client_id})
     assert_client_access(user, profile)
 
-    await db.routines.update_many({"client_id": client_id, "status": "active"},
-                                  {"$set": {"status": "inactive"}})
-    rutina = {
-        "id": str(uuid.uuid4()),
-        "client_id": client_id,
-        # También aquí: en la biblioteca pueden quedar plantillas guardadas antes de que
-        # las series se saneasen al escribir, y esa copia es la que va a abrir el cliente.
-        "days": _rutina_pintable(plantilla.get("days", [])),
-        "trainer_notes": plantilla.get("trainer_notes"),
-        "status": "active",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        # De dónde salió: para saber cuál se puso a mano, cuál la IA y cuál la biblioteca.
-        "origen": "biblioteca",
-        "plantilla_id": rutina_id,
-        "plantilla_nombre": plantilla.get("nombre"),
-        "puesta_por": user.get("id"),
-    }
-    await db.routines.insert_one(dict(rutina))
-    if await rutina_visible_para_el_cliente():
-        await avisar_rutina_nueva(profile["user_id"])
+    await _ponerle_la_plantilla(plantilla, profile, "biblioteca", puesta_por=user.get("id"))
     return {"asignada": True, "nombre": plantilla.get("nombre")}
+
+
+# ── CUÁL ES «LA RUTINA DEL MES» (24-08) ──────────────────────────────────────────────
+#
+# Faltaba el concepto. La app vende «la rutina del mes» por 57 € en tres sitios -- el
+# reporte mensual, la pantalla de Rutina y el catálogo de Inicio -- y en la base no había
+# forma de preguntar CUÁL es la de este mes: la biblioteca es una lista plana de
+# plantillas sin fecha ni marca, y las de Jesús ni siquiera están ahí (viven en Drive y se
+# entregan en PDF). Resultado: el cliente pagaba y lo único que pasaba era un aviso al
+# equipo para que se la mandara a mano.
+#
+# La marca es UNA en toda la biblioteca (`del_mes: true`): el equipo dice cuál es la de
+# este mes y, a partir de ahí, quien la compra la tiene puesta al volver de pagar. Sin
+# ninguna marcada esto devuelve None y el circuito de compra sigue funcionando como hasta
+# hoy -- cobra y avisa al equipo --, que es lo que no se puede romper.
+async def rutina_del_mes_vigente() -> Optional[Dict[str, Any]]:
+    """La plantilla marcada como rutina del mes, o None si el equipo no ha marcado ninguna."""
+    return await db.routine_templates.find_one({"del_mes": True}, {"_id": 0},
+                                               sort=[("updated_at", -1)])
+
+
+# ── LO QUE SE VENDE TIENE QUE PODER ENTREGARSE (verificación 24-08, fallo 14) ────────
+#
+# La marca de arriba (`routine_templates.del_mes`) se quedó a medias: en producción hay CERO
+# plantillas en la biblioteca y ninguna marcada, mientras que la entrega real del negocio es
+# un PDF -- los 32 de agosto se subieron así, a `db.rutina_pdfs` --. O sea que la única vía
+# que sabía entregar la compra era la que nunca se usa, y alguien podía pagar 57 € y no
+# recibir nada automáticamente.
+#
+# Se entrega LO QUE DE VERDAD HAY, y en este orden:
+#   1. la plantilla ESTRUCTURADA marcada «la del mes», si el equipo ha marcado alguna
+#      (es mejor producto: el cliente puede marcar series y pesos), y
+#   2. si no, EL PDF DEL MES VIGENTE, que es como se entrega hoy de hecho.
+#
+# `_entregar_el_pdf_del_mes` está definido más abajo, en el bloque del PDF (necesita
+# `_guardar_pdf_de_rutina`): en Python el nombre se resuelve al llamar, no al definir.
+async def entregar_la_rutina_del_mes(client_id: str, origen: str = "compra") -> Optional[str]:
+    """Le entrega la rutina del mes vigente a quien acaba de comprarla.
+
+    Devuelve el nombre de lo que se le ha puesto (la plantilla o el PDF), o None si no hay
+    NADA preparado y entonces se la entrega el equipo a mano.
+    """
+    profile = await db.client_profiles.find_one({"id": client_id}, {"_id": 0, "id": 1, "user_id": 1})
+    if not profile:
+        return None
+    plantilla = await rutina_del_mes_vigente()
+    if plantilla:
+        await _ponerle_la_plantilla(plantilla, profile, origen)
+        return plantilla.get("nombre")
+    return await _entregar_el_pdf_del_mes(profile, origen)
+
+
+@admin_router.post("/biblioteca/{rutina_id}/del-mes")
+async def marcar_la_rutina_del_mes(rutina_id: str, data: Optional[Dict[str, Any]] = None,
+                                   user = Depends(get_admin_user)):
+    """Marca (o desmarca) qué plantilla es LA RUTINA DEL MES: la que se le entrega sola a
+    quien la compre desde la app."""
+    plantilla = await db.routine_templates.find_one({"id": rutina_id}, {"_id": 0, "id": 1, "nombre": 1})
+    if not plantilla:
+        raise HTTPException(status_code=404, detail="Esa rutina ya no está")
+    quitarla = (data or {}).get("del_mes") is False
+    if quitarla:
+        await db.routine_templates.update_one({"id": rutina_id}, {"$set": {"del_mes": False}})
+        return {"del_mes": False, "nombre": plantilla.get("nombre")}
+    # Solo una a la vez: si hubiera dos marcadas, «la del mes» dejaría de significar algo.
+    await db.routine_templates.update_many({"id": {"$ne": rutina_id}}, {"$set": {"del_mes": False}})
+    await db.routine_templates.update_one({"id": rutina_id}, {"$set": {"del_mes": True}})
+    return {"del_mes": True, "nombre": plantilla.get("nombre")}
 
 
 def _get_default_routine():
@@ -1120,9 +1251,13 @@ def _semanas_limpias(valor: Any) -> Optional[int]:
     return n if 1 <= n <= 52 else None
 
 
-async def _guardar_pdf_de_rutina(client_id: str, file: UploadFile, subido_por: str,
-                                 reparto: Optional[List[str]] = None,
-                                 semanas: Optional[int] = None) -> dict:
+async def _leer_el_pdf(file: UploadFile) -> bytes:
+    """El archivo en memoria, ya comprobado.
+
+    Separado de guardarlo porque la subida EN BLOQUE lo lee una vez y lo escribe para N
+    clientes: `file.read()` solo devuelve el contenido la primera vez, y llamarlo dentro
+    del bucle le habría guardado un PDF vacío a todos menos al primero.
+    """
     if (file.content_type or "").lower() != "application/pdf" \
             and not (file.filename or "").lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="La rutina tiene que ser un PDF.")
@@ -1132,20 +1267,43 @@ async def _guardar_pdf_de_rutina(client_id: str, file: UploadFile, subido_por: s
     if len(contenido) > MAX_PDF_BYTES:
         raise HTTPException(status_code=413,
                             detail=f"El PDF pesa demasiado; el máximo es {MAX_PDF_BYTES // (1024 * 1024)} MB.")
+    return contenido
+
+
+async def _guardar_pdf_de_rutina(client_id: str, contenido: bytes, filename: str,
+                                 subido_por: str,
+                                 reparto: Optional[List[str]] = None,
+                                 semanas: Optional[int] = None,
+                                 origen: Optional[str] = None) -> dict:
     doc = {
         "id": str(uuid.uuid4()),
         "client_id": client_id,
-        "filename": file.filename or "rutina.pdf",
+        "filename": filename or "rutina.pdf",
         "size": len(contenido),
         "subido_por": subido_por,
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
         # El reparto de grupos por día de entreno y las semanas que dura (7.1 del 21-08).
         "reparto": reparto,
         "semanas": semanas,
+        # Quién lo puso ahí: "compra" cuando lo entrega sola la compra de la rutina del mes,
+        # None cuando lo sube el entrenador desde la ficha (que es lo de siempre). Sirve para
+        # saber en la ficha si esa entrega la hizo una persona o el circuito de pago.
+        "origen": origen,
         "data": Binary(contenido),
     }
     await db.rutina_pdfs.insert_one(doc)
     return doc
+
+
+async def _avisar_de_la_rutina_en_pdf(user_id: Optional[str]) -> None:
+    """El aviso de entrega, el mismo que mandan las tres vías estructuradas y que aquí
+    faltaba: el PDF se quedaba guardado sin que el cliente supiera que lo tenía. Mismo
+    candado que ellas (t3_entreno) y máximo uno al día, que es la regla de los avisos de
+    entrega: resubirlo para corregir una errata no puede sonarle dos veces."""
+    if not user_id:
+        return
+    if await rutina_visible_para_el_cliente() and not await _hay_aviso_de_hoy(user_id, "rutina_nueva"):
+        await avisar_rutina_nueva(user_id)
 
 
 @admin_router.post("/pdf/{client_id}")
@@ -1162,19 +1320,261 @@ async def subir_pdf_de_rutina(client_id: str, file: UploadFile = File(...),
     perfil = await db.client_profiles.find_one({"id": client_id}, {"_id": 0, "id": 1, "user_id": 1})
     if not perfil:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
-    doc = await _guardar_pdf_de_rutina(client_id, file, subido_por=user.get("id"),
+    contenido = await _leer_el_pdf(file)
+    doc = await _guardar_pdf_de_rutina(client_id, contenido, file.filename or "rutina.pdf",
+                                       subido_por=user.get("id"),
                                        reparto=_reparto_limpio(reparto),
                                        semanas=_semanas_limpias(semanas))
-    # El aviso de entrega, el mismo que mandan las tres vías estructuradas y que aquí
-    # faltaba: el PDF se quedaba guardado sin que el cliente supiera que lo tenía. Mismo
-    # candado que ellas (t3_entreno) y máximo uno al día, que es la regla de los avisos
-    # de entrega: resubirlo para corregir una errata no puede sonarle dos veces.
-    if perfil.get("user_id") and await rutina_visible_para_el_cliente() \
-            and not await _hay_aviso_de_hoy(perfil["user_id"], "rutina_nueva"):
-        await avisar_rutina_nueva(perfil["user_id"])
+    await _avisar_de_la_rutina_en_pdf(perfil.get("user_id"))
     return {"ok": True, "id": doc["id"], "filename": doc["filename"],
             "size": doc["size"], "uploaded_at": doc["uploaded_at"],
             "reparto": doc.get("reparto"), "semanas": doc.get("semanas")}
+
+
+# ── LA MISMA RUTINA A VARIOS DE GOLPE (24-08) ────────────────────────────────────────
+#
+# «La del mes solo a los que se le incluyen, la personalizada se le da una personalizada,
+# debemos agregar eso» (Jesús, 24-08). En producción hay 58 clientes con plan de rutina
+# PERSONALIZADA y 58 sin rutina: ponérsela de una en una desde la ficha son 58 vueltas de
+# ficha, subir, volver. La entrega mensual de agosto hubo que hacerla por un script suelto
+# (`backend/_subir_rutina_del_mes.py`) justamente porque esto no existía.
+#
+# Se sube UN archivo y se escribe una fila por cliente, igual que la subida de la ficha: el
+# PDF entero dentro de cada documento. No es lo más fino -- treinta copias del mismo
+# binario -- pero es EXACTAMENTE lo que ya hace la app, y una entrega mensual no es sitio
+# para estrenar almacenamiento compartido: el día que se cambie, se cambia para las dos.
+MAX_CLIENTES_EN_BLOQUE = 300
+
+
+@admin_router.post("/pdf-en-bloque")
+async def subir_pdf_de_rutina_a_varios(file: UploadFile = File(...),
+                                       clientes: str = Form(...),
+                                       reparto: Optional[str] = Form(None),
+                                       semanas: Optional[str] = Form(None),
+                                       del_mes: Optional[str] = Form(None),
+                                       user=Depends(get_admin_user)):
+    """Sube el mismo PDF de rutina a varios clientes a la vez.
+
+    `clientes` son los id separados por comas. El reparto y las semanas, si vienen, se le
+    ponen a todos: es la misma rutina, así que dura lo mismo y reparte igual.
+
+    `del_mes=true` deja además este mismo PDF preparado como LA RUTINA DEL MES, que es lo
+    que recibe el que la compra por 57 €. Es el gesto natural del día de la entrega: el
+    archivo ya está subido, y sin esto la compra no tiene nada que entregar (fallo 14).
+
+    NO PISA NADA: como la subida de uno en uno, guarda una entrega más en el histórico y
+    el cliente ve la última. Y a cada uno le suena su aviso de rutina nueva.
+    """
+    ids = [c.strip() for c in (clientes or "").split(",") if c.strip()]
+    # Sin duplicados y respetando el orden en que llegan (una selección de la tabla puede
+    # traer el mismo id dos veces y serían dos entregas iguales al mismo cliente).
+    ids = list(dict.fromkeys(ids))
+    if not ids:
+        raise HTTPException(status_code=400, detail="No has elegido a nadie.")
+    if len(ids) > MAX_CLIENTES_EN_BLOQUE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Son demasiados de una vez; el máximo es {MAX_CLIENTES_EN_BLOQUE}.")
+
+    contenido = await _leer_el_pdf(file)
+    lista = _reparto_limpio(reparto)
+    cuantas = _semanas_limpias(semanas)
+    guardar_del_mes = str(del_mes or "").strip().lower() in ("1", "true", "si", "sí", "on")
+    if guardar_del_mes:
+        await _guardar_el_pdf_del_mes(contenido, file.filename or "rutina.pdf",
+                                      subido_por=user.get("id"), mes=_mes_limpio(None),
+                                      reparto=lista, semanas=cuantas)
+
+    perfiles = await db.client_profiles.find(
+        {"id": {"$in": ids}}, {"_id": 0, "id": 1, "user_id": 1}).to_list(len(ids))
+    porId = {p["id"]: p for p in perfiles}
+
+    subidas, sin_perfil = [], []
+    for client_id in ids:
+        perfil = porId.get(client_id)
+        if not perfil:
+            # Uno que ya no está no puede tumbar la entrega de los otros cincuenta.
+            sin_perfil.append(client_id)
+            continue
+        # De uno en uno y no con `insert_many`: cada fila lleva el PDF dentro y treinta de
+        # 4,6 MB en un solo lote se pasan del tamaño máximo de una operación de Mongo.
+        await _guardar_pdf_de_rutina(client_id, contenido, file.filename or "rutina.pdf",
+                                     subido_por=user.get("id"),
+                                     reparto=lista, semanas=cuantas)
+        await _avisar_de_la_rutina_en_pdf(perfil.get("user_id"))
+        subidas.append(client_id)
+
+    return {"ok": True, "subidas": len(subidas), "clientes": subidas,
+            "sin_perfil": sin_perfil, "filename": file.filename,
+            "reparto": lista, "semanas": cuantas,
+            "del_mes": guardar_del_mes}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EL PDF DE LA RUTINA DEL MES (verificación 24-08, fallo 14)
+#
+# QUÉ PASABA. La compra de los 57 € solo sabía entregar una plantilla ESTRUCTURADA de la
+# biblioteca marcada `del_mes`. En producción hay CERO plantillas y ninguna marcada,
+# mientras que la entrega de verdad del negocio es un PDF (los 32 de agosto se subieron
+# así). Resultado: se cobraba y no se entregaba nada; quedaba un aviso al equipo diciendo
+# «hay que entregársela a mano».
+#
+# LA FORMA MÁS SIMPLE QUE FUNCIONA. Una colección con UNA fila vigente, `db.rutina_mes_pdf`,
+# que guarda el PDF del mes tal cual (el mismo formato que `rutina_pdfs`: el binario dentro
+# del documento, que es lo que ya hace toda la app). Cuando alguien la compra, ese PDF se
+# COPIA a su `rutina_pdfs` -- exactamente lo mismo que hace la entrega en bloque -- y a
+# partir de ahí lo ve por el camino que ya funciona: `GET /routines/pdf/info`, la pantalla
+# de Rutina y `tiene_rutina_puesta()`. No hace falta nada nuevo en el cliente.
+#
+# Se copia y no se enlaza por la misma razón que se copian las plantillas: el mes que viene
+# se sube otro PDF y al que compró en agosto no se le puede cambiar la rutina debajo.
+#
+# CÓMO SE PONE. Dos vías, las dos aquí:
+#   - `POST /admin/routines/pdf-del-mes` sube el PDF del mes, y
+#   - `POST /admin/routines/pdf-en-bloque` con `del_mes=true` guarda de paso como PDF del
+#     mes el mismo que se le acaba de repartir a los clientes, que es el gesto natural del
+#     equipo el día de la entrega mensual.
+# EL PANEL TODAVÍA NO TIENE BOTÓN para esto (el frontend de admin es de otro bloque): hasta
+# que lo tenga se pone por API o desde `backend/_subir_rutina_del_mes.py`.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _mes_limpio(valor: Any) -> str:
+    """El mes al que corresponde la rutina, «YYYY-MM». Sin él, el mes de hoy en España."""
+    texto = str(valor or "").strip()
+    if re.fullmatch(r"\d{4}-\d{2}", texto):
+        return texto
+    from core.tiempo import hoy_madrid
+    return hoy_madrid().strftime("%Y-%m")
+
+
+MESES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
+         "septiembre", "octubre", "noviembre", "diciembre")
+
+
+def _nombre_del_mes(mes: str) -> str:
+    """«2026-08» -> «La rutina de agosto». Es lo que lee el cliente en su aviso."""
+    try:
+        anio, numero = mes.split("-")
+        return f"La rutina de {MESES[int(numero) - 1]} de {anio}"
+    except (ValueError, IndexError):
+        return "La rutina del mes"
+
+
+async def pdf_del_mes_vigente(con_datos: bool = False) -> Optional[Dict[str, Any]]:
+    """El PDF marcado como la rutina de este mes, o None si el equipo no ha subido ninguno.
+
+    `con_datos=False` por defecto y NO por comodidad: el binario son hasta 15 MB y esto lo
+    pregunta la pantalla de compra. Solo lo pide quien va a entregarlo.
+    """
+    fuera = None if con_datos else {"data": 0}
+    return await db.rutina_mes_pdf.find_one({"vigente": True}, {"_id": 0, **(fuera or {})},
+                                            sort=[("uploaded_at", -1)])
+
+
+async def hay_rutina_del_mes_que_entregar() -> bool:
+    """¿Hay algo preparado para el que compre la rutina del mes? Plantilla marcada o PDF.
+
+    Es el candado del dinero: sin esto el botón cobraba 57 € a ciegas (fallo 14).
+    """
+    if await rutina_del_mes_vigente():
+        return True
+    return await pdf_del_mes_vigente() is not None
+
+
+async def _guardar_el_pdf_del_mes(contenido: bytes, filename: str, subido_por: str,
+                                  mes: str, reparto: Optional[List[str]] = None,
+                                  semanas: Optional[int] = None) -> Dict[str, Any]:
+    """Deja este PDF como la rutina del mes vigente. Solo una vigente a la vez."""
+    doc = {
+        "id": str(uuid.uuid4()),
+        "mes": mes,
+        "nombre": _nombre_del_mes(mes),
+        "filename": filename or "rutina.pdf",
+        "size": len(contenido),
+        "reparto": reparto,
+        "semanas": semanas,
+        "subido_por": subido_por,
+        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        "vigente": True,
+        "data": Binary(contenido),
+    }
+    # Las anteriores se archivan en vez de borrarse: quien compró en agosto tiene su copia,
+    # pero saber qué se repartió cada mes vale más que los megas que ocupa.
+    await db.rutina_mes_pdf.update_many({"vigente": True}, {"$set": {"vigente": False}})
+    await db.rutina_mes_pdf.insert_one(doc)
+    return doc
+
+
+async def _entregar_el_pdf_del_mes(profile: Dict[str, Any], origen: str) -> Optional[str]:
+    """Le copia el PDF del mes vigente a un cliente. Devuelve cómo se llama, o None.
+
+    Lo llama `entregar_la_rutina_del_mes` cuando no hay plantilla estructurada marcada, que
+    hoy es SIEMPRE (cero plantillas en producción).
+    """
+    doc = await pdf_del_mes_vigente(con_datos=True)
+    if not doc:
+        return None
+    await _guardar_pdf_de_rutina(profile["id"], bytes(doc["data"]), doc.get("filename"),
+                                 subido_por=doc.get("subido_por"),
+                                 reparto=doc.get("reparto"), semanas=doc.get("semanas"),
+                                 origen=origen)
+    # El mismo aviso que le suena cuando se la sube su entrenador: acaba de pagarla, tiene
+    # que enterarse de que ya la tiene.
+    await _avisar_de_la_rutina_en_pdf(profile.get("user_id"))
+    return doc.get("nombre") or doc.get("filename") or "La rutina del mes"
+
+
+@admin_router.post("/pdf-del-mes")
+async def subir_el_pdf_del_mes(file: UploadFile = File(...),
+                               mes: Optional[str] = Form(None),
+                               reparto: Optional[str] = Form(None),
+                               semanas: Optional[str] = Form(None),
+                               user=Depends(get_admin_user)):
+    """Sube LA RUTINA DEL MES en PDF: la que recibe solo el que la compra por 57 €.
+
+    No se la manda a nadie: queda preparada. Para repartirla a los que ya la llevan
+    incluida está `pdf-en-bloque`, que además puede dejarla marcada aquí de una pasada.
+    """
+    contenido = await _leer_el_pdf(file)
+    doc = await _guardar_el_pdf_del_mes(contenido, file.filename or "rutina.pdf",
+                                        subido_por=user.get("id"), mes=_mes_limpio(mes),
+                                        reparto=_reparto_limpio(reparto),
+                                        semanas=_semanas_limpias(semanas))
+    return {"ok": True, **{k: doc[k] for k in ("id", "mes", "nombre", "filename", "size",
+                                               "uploaded_at", "reparto", "semanas")}}
+
+
+@admin_router.get("/pdf-del-mes/info")
+async def info_del_pdf_del_mes(user=Depends(get_admin_user)):
+    """¿Hay rutina del mes preparada, y cuál? Lo que el panel necesita para saber si la
+    compra puede entregar algo."""
+    plantilla = await rutina_del_mes_vigente()
+    doc = await pdf_del_mes_vigente()
+    return {"hay": bool(plantilla or doc),
+            "plantilla": (plantilla or {}).get("nombre"),
+            "pdf": {k: doc.get(k) for k in ("id", "mes", "nombre", "filename", "size",
+                                            "uploaded_at", "reparto", "semanas")} if doc else None}
+
+
+@admin_router.get("/pdf-del-mes")
+async def ver_el_pdf_del_mes(user=Depends(get_admin_user)):
+    """El PDF del mes, para comprobar que es el bueno antes de venderlo."""
+    return await _servir_pdf(await pdf_del_mes_vigente(con_datos=True))
+
+
+@admin_router.delete("/pdf-del-mes")
+async def retirar_el_pdf_del_mes(user=Depends(get_admin_user)):
+    """Retira la rutina del mes: deja de haber nada que entregar y la compra se cierra
+    sola. Se usa cuando el PDF subido estaba mal, para que no se venda de mientras."""
+    r = await db.rutina_mes_pdf.update_many({"vigente": True}, {"$set": {"vigente": False}})
+    return {"ok": True, "retiradas": getattr(r, "modified_count", 0)}
+
+
+@router.get("/rutina-del-mes/disponible")
+async def la_rutina_del_mes_esta_lista(user=Depends(get_current_user)):
+    """¿Se puede comprar hoy la rutina del mes? Lo pregunta la pantalla de Rutina para no
+    enseñar un botón de 57 € que el servidor va a rechazar (fallo 14 de la verificación)."""
+    return {"disponible": await hay_rutina_del_mes_que_entregar()}
 
 
 @admin_router.patch("/pdf/{client_id}/detalles")
@@ -1325,6 +1725,42 @@ async def grupos_del_reparto(perfil: Dict[str, Any]) -> Optional[Dict[int, str]]
     if not reparto:
         return None
     return _grupos_por_dia(indices, reparto, None)
+
+
+# ── QUÉ LE TOCA HOY AL QUE TIENE LA RUTINA EN PDF (punto 69, 24-08) ──────────────────
+#
+# El cabo que quedó del 69. `tiene_rutina_puesta()` (workout_logs) ya cuenta el PDF, pero
+# GET /workout-logs/hoy devuelve otro `tiene_rutina` que significa otra cosa -- «¿sé qué te
+# toca HOY?» -- y ahí sigue mirando solo la rutina estructurada, con este motivo escrito al
+# lado: «del PDF no sale qué días entrena, así que `descanso` sería false SIEMPRE y le
+# diríamos "Entreno · Ver la rutina" los siete días».
+#
+# Del PDF SÍ sale, cuando tiene reparto y el cliente tiene sus días puestos: es lo mismo
+# que ya pinta la tira de Mi rutina. Esto lo deja en una función para que quien la llame no
+# tenga que copiar el criterio, y devuelve TRES estados, que es lo que hacía falta:
+#
+#     None                                -> no se sabe (sin reparto o sin días suyos)
+#     {"entrena": False, "grupo": None}   -> hoy descansa
+#     {"entrena": True, "grupo": "Empuje"} -> hoy le toca eso
+#
+# Lo que falta para cerrarlo del todo NO está en este fichero: `routes/workout_logs.py`
+# tiene que llamar aquí (import dentro de la función, que routines ya importa workout_logs
+# y al revés sería circular) y `ClientDashboard.jsx` tiene que distinguir el None -- «no sé
+# qué te toca» -- del «hoy descansas», que hoy son el mismo `descanso: false`.
+async def dia_de_entreno_del_pdf(perfil: Dict[str, Any],
+                                 fecha: str) -> Optional[Dict[str, Any]]:
+    """Qué le toca a este cliente el día `fecha` (YYYY-MM-DD) según el reparto de su PDF."""
+    if not (perfil or {}).get("id"):
+        return None
+    grupos = await grupos_del_reparto(perfil)
+    if not grupos:
+        return None
+    try:
+        indice = date.fromisoformat(str(fecha)).weekday()
+    except (TypeError, ValueError):
+        return None
+    grupo = grupos.get(indice)
+    return {"entrena": bool(grupo), "grupo": grupo}
 
 
 async def _plan_de_la_semana(perfil: Dict[str, Any]) -> Dict[str, Any]:

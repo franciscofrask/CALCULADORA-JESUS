@@ -281,6 +281,150 @@ const MenuFinder = ({ api, clientId, clientUserId, clientName }) => {
 // EL PDF DE LA RUTINA (bloque 11, doc 19-08): se sigue generando fuera, como hasta ahora;
 // aquí solo se sube, y el cliente lo abre desde Entreno. Se abre vía blob porque el visor
 // del navegador no manda la cabecera de autenticación.
+// EL CICLO DE ESTE CLIENTE, CUANDO NO ES EL DE SU PLAN (punto 44 del doc del 24-08).
+//
+// «El catálogo define un solo ciclo por plan y hay Premium mensuales y de 5 semanas.» Los
+// tres campos que pisan el plan existían desde el punto 36 y estaban vacíos en los 198
+// perfiles de producción, porque no había ni una pantalla para ponerlos: esta es.
+//
+// La pantalla dice lo que mueve ANTES de guardar, que no es poco: de aquí cuelgan qué
+// reporte le toca cada semana, la ventana para mandarlo y la del ajuste. A quien esté a
+// mitad de ventana se le puede abrir o cerrar un reporte de golpe.
+const TIPOS_DE_REPORTE = [
+    ['', 'ninguno'], ['semanal', 'semanal'], ['quincenal', 'quincenal'],
+    ['mensual', 'mensual'], ['trimestral', 'trimestral'],
+];
+
+const CicloDelCliente = ({ api, clientId, profile, onGuardado }) => {
+    const cal = profile?.calendario_resuelto || {};
+    const [abierto, setAbierto] = useState(false);
+    const [semanas, setSemanas] = useState('');
+    const [entrada, setEntrada] = useState('');
+    const [patron, setPatron] = useState([]);
+    const [patronTocado, setPatronTocado] = useState(false);
+    const [guardando, setGuardando] = useState(false);
+
+    // Al abrir se parte de lo que hay HOY resuelto (su contrato si lo tiene, y si no el de
+    // su plan): así se ve de qué se parte en vez de un formulario en blanco.
+    useEffect(() => {
+        if (!abierto) return;
+        setSemanas(profile?.ciclo_semanas != null ? String(profile.ciclo_semanas) : '');
+        setEntrada(profile?.semana_de_entrada != null ? String(profile.semana_de_entrada) : '');
+        setPatron([...(cal.patron || [])]);
+        setPatronTocado(false);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [abierto, profile]);
+
+    const propio = profile?.ciclo_semanas != null || profile?.semana_de_entrada != null
+        || !!profile?.calendario_reportes;
+
+    const guardar = async (volverAlPlan = false) => {
+        setGuardando(true);
+        try {
+            const cuerpo = volverAlPlan
+                ? { ciclo_semanas: null, semana_de_entrada: null, calendario_reportes: null }
+                : {
+                    ciclo_semanas: semanas.trim() === '' ? null : Number(semanas),
+                    semana_de_entrada: entrada.trim() === '' ? null : Number(entrada),
+                    ...(patronTocado ? { calendario_reportes: { ...(profile?.calendario_reportes || {}), patron } } : {}),
+                };
+            await api.put(`/admin/clients/${clientId}/ciclo`, cuerpo);
+            toast.success(volverAlPlan ? 'Vuelve al ciclo de su plan' : 'Ciclo guardado');
+            setAbierto(false);
+            onGuardado?.();
+        } catch (e) {
+            toast.error(mensajeDeError(e, 'No se pudo guardar el ciclo'));
+        } finally {
+            setGuardando(false);
+        }
+    };
+
+    return (
+        <div className="mt-4 border-t border-[#222] pt-3" data-testid="ciclo-del-cliente">
+            <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                    <p className="text-xs text-white/40 uppercase tracking-wider">Su ciclo</p>
+                    <p className="text-sm text-white/80">
+                        {cal.duracion_semanas ? `${cal.duracion_semanas} semanas` : 'sin ciclo declarado'}
+                        {cal.semana_de_entrada ? ` · entra en la semana ${cal.semana_de_entrada}` : ''}
+                        <span className="text-white/40"> · {propio ? 'suyo, pisa al plan' : 'el de su plan'}</span>
+                    </p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => setAbierto(a => !a)}
+                    data-testid="editar-ciclo"
+                    className="bg-transparent border-[#333] text-white/80 hover:bg-white/5 text-xs">
+                    <CalendarClock className="w-3.5 h-3.5 mr-1" /> {abierto ? 'Cerrar' : 'Cambiar el ciclo'}
+                </Button>
+            </div>
+
+            {abierto && (
+                <div className="mt-3 space-y-3 bg-[#0A0A0A] border border-[#222] rounded-lg p-3">
+                    <p className="text-xs text-white/50">
+                        Esto es el contrato de ESTE cliente y pisa lo que diga su plan. Mueve qué
+                        reporte le toca cada semana, la ventana para mandarlo y la del ajuste, así
+                        que si está a mitad de una ventana se le puede abrir o cerrar de golpe.
+                        Déjalo en blanco para volver a lo que diga su plan.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <Label className="text-white/60 text-xs">Semanas del ciclo</Label>
+                            <Input value={semanas} onChange={e => setSemanas(e.target.value.replace(/\D/g, ''))}
+                                inputMode="numeric" placeholder={cal.duracion_semanas ? String(cal.duracion_semanas) : '12'}
+                                data-testid="ciclo-semanas"
+                                className="bg-[#111] border-[#333] text-white mt-1" />
+                        </div>
+                        <div>
+                            <Label className="text-white/60 text-xs">Entra en la semana</Label>
+                            <Input value={entrada} onChange={e => setEntrada(e.target.value.replace(/\D/g, ''))}
+                                inputMode="numeric" placeholder="1"
+                                data-testid="ciclo-entrada"
+                                className="bg-[#111] border-[#333] text-white mt-1" />
+                        </div>
+                    </div>
+                    {patron.length > 0 && (
+                        <div>
+                            <Label className="text-white/60 text-xs">Qué reporte le toca cada semana</Label>
+                            <div className="flex flex-wrap gap-2 mt-1">
+                                {patron.map((t, i) => (
+                                    <div key={i} className="flex items-center gap-1">
+                                        <span className="text-[11px] text-white/40">S{i + 1}</span>
+                                        <select value={t || ''} data-testid={`ciclo-patron-${i}`}
+                                            onChange={e => {
+                                                const nuevo = [...patron];
+                                                nuevo[i] = e.target.value;
+                                                setPatron(nuevo);
+                                                setPatronTocado(true);
+                                            }}
+                                            className="bg-[#111] border border-[#333] text-white text-xs rounded-lg px-2 py-1">
+                                            {TIPOS_DE_REPORTE.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                                        </select>
+                                    </div>
+                                ))}
+                            </div>
+                            <p className="text-[11px] text-white/30 mt-1">
+                                El día de envío de cada tipo lo sigue poniendo su plan.
+                            </p>
+                        </div>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Button size="sm" onClick={() => guardar(false)} disabled={guardando}
+                            data-testid="guardar-ciclo"
+                            className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white text-xs">
+                            {guardando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Guardar el ciclo'}
+                        </Button>
+                        {propio && (
+                            <Button size="sm" variant="outline" onClick={() => guardar(true)} disabled={guardando}
+                                className="bg-transparent border-[#333] text-white/70 hover:bg-white/5 text-xs">
+                                Volver al ciclo de su plan
+                            </Button>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
 const PdfDeRutina = ({ api, clientId, onInfo }) => {
     const [info, setInfo] = useState(null);
     const [subiendo, setSubiendo] = useState(false);
@@ -693,6 +837,34 @@ const ClientDetailPage = () => {
         try { await api.put(`/admin/users/${uid}`, { plan: plan || null, comp_plan: comp }); toast.success('Plan actualizado'); fetchClient(); }
         catch (e) { toast.error(mensajeDeError(e, 'No se pudo actualizar el plan')); }
     };
+    // RESTABLECER LA CONTRASEÑA DESDE LA FICHA (punto 48 del doc del 24-08).
+    //
+    // El endpoint existía y funciona con clientes, pero no había botón en ninguna parte:
+    // Usuarios solo lista al equipo, así que para dar acceso a un cliente que no puede
+    // entrar no había ni una pantalla. La clave temporal se enseña UNA vez y se copia: el
+    // servidor no la guarda en claro y no hay forma de volver a verla.
+    //
+    // Y AVISA ANTES: al cliente que vino de Calma le borra el hash heredado de Firebase
+    // (admin.py), o sea que su clave de siempre deja de valer sin que él lo sepa. Ese aviso
+    // es el motivo de que esto sea un diálogo y no un botón a secas.
+    const [claveTemporal, setClaveTemporal] = useState(null);
+    const restablecerClave = async () => {
+        const uid = client?.user?.id; if (!uid) return;
+        if (!await confirm({
+            title: '¿Restablecer la contraseña?',
+            description: 'Se genera una clave temporal nueva y se te enseña aquí para que se la pases tú. '
+                + 'Ojo: la contraseña que tenía deja de funcionar en ese momento, también la de siempre '
+                + 'si vino de la plataforma anterior. No se le avisa por correo.',
+            confirmLabel: 'Restablecer', danger: true,
+        })) return;
+        try {
+            const r = await api.post(`/admin/users/${uid}/reset-password`);
+            setClaveTemporal(r.data?.temp_password || null);
+        } catch (e) {
+            toast.error(mensajeDeError(e, 'No se pudo restablecer la contraseña'));
+        }
+    };
+
     const toggleUserBaja = async () => {
         const uid = client?.user?.id; if (!uid) return;
         if (client.user.deleted_at) {
@@ -1121,7 +1293,7 @@ const ClientDetailPage = () => {
                     </CardContent></Card>
 
                     {/* LAS TAREAS SOBRE ESTE CLIENTE (doc 19-08, apartado 05). El registro
-                        que sustituye al WhatsApp: qué se le pidió, quién lo hizo y cuándo —
+                        que sustituye al WhatsApp: qué se le pidió, quién lo hizo y cuándo:
                         «el mes que viene, al abrir esta ficha, se ve que se le contactó». */}
                     <TareasDelCliente api={api} clientId={clientId}
                         nombre={user?.name || user?.email} />
@@ -1318,7 +1490,7 @@ const ClientDetailPage = () => {
                                 <div className="flex items-center gap-2">
                                     <Sparkles className="w-4 h-4 text-[#FF671F]" />
                                     <p className="text-xs font-bold text-white uppercase tracking-wider">Ajuste sugerido por el asistente</p>
-                                    <span className="text-white/30 text-[10px] ml-auto">confianza: {sugerencia.confianza || '—'}{sugerencia._modelo ? ` · ${sugerencia._modelo}` : ''}</span>
+                                    <span className="text-white/30 text-[10px] ml-auto">confianza: {sugerencia.confianza || '-'}{sugerencia._modelo ? ` · ${sugerencia._modelo}` : ''}</span>
                                 </div>
                                 {/* Perfil derivado del camino del cliente (motor x respondedor) */}
                                 {sugerencia.perfil && (
@@ -1584,11 +1756,31 @@ const ClientDetailPage = () => {
                                 <input type="checkbox" checked={!!profile?.comp_plan} onChange={e => setUserPlan(profile?.plan || '', e.target.checked)} className="accent-[#FF671F] w-4 h-4" />
                                 Plan de cortesía (sin pago)
                             </label>
-                            <div className="pt-1">
+                            {/* DAR ACCESO SIN SALIR DE LA FICHA (punto 48). El aviso del hash de
+                                Firebase va en el diálogo, antes de tocar nada. */}
+                            <div className="pt-1 flex flex-wrap items-center gap-2">
                                 {user?.deleted_at
                                     ? <Button onClick={toggleUserBaja} className="bg-green-600 hover:bg-green-700 text-white text-sm"><RotateCcw className="w-4 h-4 mr-1" /> Reactivar usuario</Button>
                                     : <Button onClick={toggleUserBaja} variant="outline" className="bg-transparent border-red-500/40 text-red-400 hover:bg-red-500/10 text-sm"><Trash2 className="w-4 h-4 mr-1" /> Dar de baja (lógica)</Button>}
+                                <Button onClick={restablecerClave} variant="outline" data-testid="restablecer-clave"
+                                    className="bg-transparent border-[#333] text-white/80 hover:bg-white/5 text-sm">
+                                    <Shield className="w-4 h-4 mr-1" /> Restablecer contraseña
+                                </Button>
                             </div>
+                            {claveTemporal && (
+                                <div className="rounded-lg border border-[#FF671F]/40 bg-[#FF671F]/10 p-3 space-y-1" data-testid="clave-temporal">
+                                    <p className="text-sm text-white">
+                                        Clave temporal: <b className="font-mono tracking-wide">{claveTemporal}</b>
+                                    </p>
+                                    <p className="text-xs text-white/60">
+                                        Pásasela tú: no se le manda ningún correo y esta pantalla es el único
+                                        sitio donde se puede leer. Si vino de la plataforma anterior, su clave
+                                        de siempre ya no le vale.
+                                    </p>
+                                    <button type="button" onClick={() => { navigator.clipboard?.writeText(claveTemporal); toast.success('Clave copiada'); }}
+                                        className="text-xs text-[#FF671F] hover:underline">Copiar</button>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                     )}
@@ -1605,6 +1797,21 @@ const ClientDetailPage = () => {
                             <InfoItem icon={Calendar} label="Inicio" value={profile?.created_at ? new Date(profile.created_at).toLocaleDateString('es-ES') : '-'} />
                             <InfoItem icon={Calendar} label="Próx. cobro" value={profile?.next_payment ? new Date(profile.next_payment).toLocaleDateString('es-ES') : '-'} />
                         </div>
+                        {/* SI HA ENTRADO ALGUNA VEZ (la otra mitad del punto 48: «no hay
+                            ninguna pantalla que diga quién ha entrado alguna vez»). El dato
+                            lo escribe la campanita y ya viajaba a la lista de Clientes; en la
+                            ficha, que es donde se mira antes de llamar a alguien, no estaba.
+                            Sin él, «no le llega nada» y «nunca ha abierto la app» son el
+                            mismo silencio y se tratan igual. */}
+                        <p className="mt-3 text-xs text-white/40" data-testid="ultima-entrada">
+                            {profile?.ultima_entrada
+                                // Del día, a mediodía: la campanita lo guarda como día suelto
+                                // («2026-08-24») y el navegador lee eso como medianoche UTC,
+                                // que en España es el día anterior por la tarde. Los `slice`
+                                // son por si algún registro viejo trae la hora pegada.
+                                ? `Última entrada en la app: ${new Date(String(profile.ultima_entrada).slice(0, 10) + 'T12:00:00').toLocaleDateString('es-ES')}`
+                                : 'No consta que haya entrado nunca en la app'}
+                        </p>
                         {/* Punto 39: aquí es donde se mira antes de cobrar, y aquí es donde la
                             excepción tiene que estar delante. El caso que costó dinero fue
                             exactamente este: cobrarle la renovación a quien tenía un mes
@@ -1614,6 +1821,129 @@ const ClientDetailPage = () => {
                                 <AlertCircle className="w-4 h-4 text-[#FF671F] shrink-0 mt-0.5" />
                                 <p className="text-sm text-white"><b className="text-[#FF671F]">Antes de cobrarle:</b> {profile.excepcion}</p>
                             </div>
+                        )}
+
+                        {/* LO QUE DE VERDAD SE LE COBRA, AL LADO DEL PRECIO DE LA FICHA
+                            (punto 43 del doc del 24-08). La ficha de Montalvo dice 1.500 € y
+                            Stripe le cobra 250: hasta hoy no había forma de ver la diferencia
+                            sin salirse de la pantalla. Manda el cobro real.
+
+                            Y OJO: el precio de la ficha NO se corrige solo. Los clientes que
+                            vienen del sistema anterior conservan su plan y su precio congelado
+                            (Jesús, 24-08); las tarifas nuevas son para los clientes nuevos. */}
+                        <div className="mt-4 border-t border-[#222] pt-3 space-y-2" data-testid="cobro-real">
+                            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                                <span className="text-xs text-white/40 uppercase tracking-wider">Último cobro</span>
+                                {profile?.ultimo_cobro ? (
+                                    <span className="text-sm text-white">
+                                        <b>{Number(profile.ultimo_cobro.importe).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</b>
+                                        {' el '}{new Date(profile.ultimo_cobro.fecha).toLocaleDateString('es-ES')}
+                                        {profile.ultimo_cobro.origen ? ` · ${profile.ultimo_cobro.origen}` : ''}
+                                        {profile.cadencia?.real ? ` · ${profile.cadencia.real}` : ''}
+                                    </span>
+                                ) : (
+                                    <span className="text-sm text-white/40">no consta ninguno; el precio sale de su ficha</span>
+                                )}
+                                {/* LO QUE ESTE CLIENTE DEJA AL MES, y es el mismo número que
+                                    suma la «Factura al mes» de Dirección y el MRR del Inicio
+                                    (punto 46): el servidor ya lo mandaba y la ficha no lo
+                                    enseñaba, así que para saber por cuánto contaba un cliente
+                                    había que hacer la división a mano y salía distinta. */}
+                                {profile?.euros_al_mes != null && (
+                                    <span className="text-xs text-white/40" data-testid="euros-al-mes">
+                                        {Number(profile.euros_al_mes).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}/mes
+                                        {' '}para el negocio
+                                        {/* El 0 de la cortesía se explica DONDE se lee. Sin esto se leía
+                                            «0,00 €/mes» a secas debajo de un cobro de 291,01 € y parecía
+                                            un fallo de la cuenta. */}
+                                        {profile?.precio_cortesia && ' · plan de cortesía'}
+                                    </span>
+                                )}
+                            </div>
+                            {/* EL AVISO TIENE QUE RESPETAR LA CORTESÍA (fallo 11 de la verificación
+                                del 24-08). Este aviso nació en el punto 43 mirando solo la
+                                diferencia entre el precio de la ficha y el último cobro, y por eso
+                                en las fichas de cortesía decía lo contrario que el propio código:
+                                arriba «Cortesía» y «0,00 €/mes para el negocio», y justo debajo «la
+                                ficha dice 0,00 € y se le cobraron 291,01 €». No hay tal
+                                descuadre: `importe_de_ciclo` (backend/routes/admin.py) devuelve 0 y
+                                «cortesia» ANTES de mirar nada más, o sea que el 0 es una decisión
+                                tomada, no un dato que falte. En producción eran 7 fichas con un
+                                cobro antiguo a sus espaldas (Andrés Cano, 291,01 €; Francisco
+                                Javier Marcos, 625,57 €; Ricardo Rodríguez, 87,00 €...).
+                                Si se vuelve a tocar este bloque: cualquier aviso de dinero se
+                                pregunta primero si hay cortesía, porque la cortesía gana. */}
+                            {profile?.precio_cortesia ? (
+                                /* Lo único que SÍ hay que avisar de una cortesía: que Stripe le
+                                   siga cobrando por detrás. Ahí el 0 del panel es mentira y hay que
+                                   decidir cuál de las dos cosas sobra. Hoy en producción no le pasa
+                                   a ninguno, y por eso mismo conviene que salte el día que pase. */
+                                profile?.renueva_solo?.via === 'stripe' ? (
+                                    <p className="text-xs text-amber-400/90" data-testid="cortesia-con-stripe">
+                                        Está marcado como plan de cortesía y a la vez tiene una suscripción
+                                        viva en Stripe. Para el negocio cuenta 0 € porque manda la cortesía:
+                                        si Stripe le está cobrando de verdad, quítale la cortesía o cancela
+                                        la suscripción, que si no ese dinero no lo suma nadie.
+                                    </p>
+                                ) : profile?.ultimo_cobro ? (
+                                    <p className="text-xs text-white/40" data-testid="cortesia-explicada">
+                                        Tiene el plan de cortesía: no se le cobra, y por eso para el negocio
+                                        cuenta 0 €. El cobro de arriba es su historial, no lo que se le va a
+                                        cobrar.
+                                    </p>
+                                ) : null
+                            ) : profile?.ultimo_cobro && profile?.precio_ciclo != null
+                                && Math.abs(Number(profile.precio_ciclo) - Number(profile.ultimo_cobro.importe)) >= 1 ? (
+                                <p className="text-xs text-amber-400/90" data-testid="cobro-no-cuadra">
+                                    La ficha dice {Number(profile.precio_ciclo).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })} por
+                                    ciclo y lo último que se le cobró fueron {Number(profile.ultimo_cobro.importe).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}.
+                                    Para el negocio manda el cobro real; el precio de la ficha se deja como está,
+                                    que los clientes de antes conservan el suyo congelado.
+                                </p>
+                            ) : null}
+                            {/* La cadencia real contra la que dice su plan (punto 44): Montalvo
+                                cuenta «semana 3 de 12» y Stripe le cobra del 8 de agosto al 8 de
+                                septiembre. */}
+                            {profile?.cadencia?.discrepan && (
+                                <p className="text-xs text-amber-400/90" data-testid="cadencia-no-cuadra">
+                                    A este se le cobra {profile.cadencia.real} y su plan cuenta ciclos
+                                    de {profile.cadencia.plan}. Si su contrato es el de Stripe, cámbiale el
+                                    ciclo aquí abajo: de eso cuelgan su semana, su reporte y su ajuste.
+                                </p>
+                            )}
+                            {/* QUIÉN RENUEVA SOLO (punto 45): no había ni una palabra en toda la
+                                ficha, y es lo primero que se pregunta antes de llamar a nadie. */}
+                            <p className="text-sm" data-testid="renovacion-ficha">
+                                <span className="text-xs text-white/40 uppercase tracking-wider mr-2">Renovación</span>
+                                {profile?.renueva_solo?.automatica && profile?.renueva_solo?.via === 'stripe' ? (
+                                    <span className="text-emerald-400">
+                                        Se renueva sola: Stripe le cobra
+                                        {profile?.next_payment ? ` el ${new Date(profile.next_payment).toLocaleDateString('es-ES')}` : ''}
+                                    </span>
+                                ) : profile?.precio_cortesia ? (
+                                    /* Misma raíz que el fallo 11: sin esto, a un cliente de
+                                       cortesía la ficha le decía «la renovación la confirma él» o
+                                       «hoy no se le cobra solo», que es exactamente lo que se lee
+                                       antes de llamar a alguien para pedirle el pago. No hay pago
+                                       que pedir. */
+                                    <span className="text-white/60" data-testid="renovacion-cortesia">
+                                        Plan de cortesía: cuando le toque renovar no hay nada que cobrarle
+                                    </span>
+                                ) : profile?.renueva_solo?.automatica ? (
+                                    <span className="text-amber-400">
+                                        Su plan dice que renueva automático, pero no tiene suscripción viva
+                                        en Stripe: hoy no se le cobra solo
+                                    </span>
+                                ) : (
+                                    <span className="text-white/60">La renovación la confirma él: no se cobra sola</span>
+                                )}
+                            </p>
+                        </div>
+
+                        {/* El ciclo por cliente (punto 44). Es contrato, así que solo el admin. */}
+                        {adminUser?.role === 'admin' && (
+                            <CicloDelCliente api={api} clientId={clientId} profile={profile}
+                                onGuardado={fetchClient} />
                         )}
                     </CardContent></Card>
                     <Card className="bg-[#111] border-[#222]"><CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider">Historial de pagos</CardTitle></CardHeader>

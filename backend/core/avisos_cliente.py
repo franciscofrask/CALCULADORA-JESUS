@@ -258,7 +258,8 @@ def avisos_condicionados(*, ahora: datetime,
                          dias_en_mantenimiento: Optional[int] = None,
                          mantenimiento_desde: Optional[str] = None,
                          rutina_mes_aplazada_hasta: Optional[str] = None,
-                         con_ajuste: bool = True) -> List[Dict[str, Any]]:
+                         con_ajuste: bool = True,
+                         plan_con_cierre_dia: bool = True) -> List[Dict[str, Any]]:
     """Las cuatro del doc 16-08 y una quinta del 18-08, en su orden de prioridad.
 
     LA QUINTA la pide Francisco el 18-08 contestando a la pregunta del documento del
@@ -391,7 +392,13 @@ def avisos_condicionados(*, ahora: datetime,
     # 3) Cinco dias sin cerrar el dia. El titulo dice "5 dias" y se queda en cinco aunque
     #    lleve doce: es el umbral del doc, no un contador. Un numero que crece cada dia
     #    solo sirve para que el aviso pese mas cuanto peor va la cosa.
-    if dias_sin_cerrar is not None and dias_sin_cerrar >= 5:
+    #
+    #    CON LA LLAVE DEL PLAN, igual que «Cierra tu dia» (ver `plan_con_cierre_dia` en
+    #    `avisos_de_calendario_doc`): tambien manda a /dashboard/checkins, asi que si el
+    #    plan no abre esa pantalla el cliente no puede cerrar el dia -- por eso lleva cinco
+    #    sin hacerlo -- y regañarle por ello y mandarle a una puerta cerrada es el mismo
+    #    fallo por la otra puerta. El dato lo calcula routes/notifications.py.
+    if plan_con_cierre_dia and dias_sin_cerrar is not None and dias_sin_cerrar >= 5:
         fuera.append({
             "clave": f"sin_cerrar:{semana_iso}",
             "familia": "sin_cerrar",
@@ -492,6 +499,7 @@ def avisos_de_calendario_doc(*, ahora_es: datetime,
                              arranque: Optional[date] = None,
                              cerro_hoy: bool = True,
                              quiere_cierre_dia: bool = True,
+                             plan_con_cierre_dia: bool = True,
                              ventanas: Optional[List[Dict[str, Any]]] = None,
                              semana: Optional[int] = None,
                              semanas_ciclo: Optional[int] = None,
@@ -499,8 +507,11 @@ def avisos_de_calendario_doc(*, ahora_es: datetime,
                              ciclo_vencido: bool = False,
                              fin_de_ciclo: Optional[date] = None,
                              vencio_el: Optional[date] = None,
-                             con_correo_de_novedades: bool = False) -> List[Dict[str, Any]]:
-    """Los ocho del calendario. Siempre salen: no gastan el cupo de las condicionadas.
+                             con_correo_de_novedades: bool = False,
+                             es_premium: bool = False,
+                             se_peso_miercoles: bool = False,
+                             se_peso_jueves: bool = False) -> List[Dict[str, Any]]:
+    """Los del calendario. Siempre salen: no gastan el cupo de las condicionadas.
 
     `ventanas` son las ventanas de reporte que le tocan (la de esta semana de ciclo y la
     de la anterior, que es la que sostiene el aviso del martes), cada una con
@@ -508,6 +519,28 @@ def avisos_de_calendario_doc(*, ahora_es: datetime,
 
     `vencio_el` es la fecha en que se le acabo lo pagado: va DENTRO de la clave de «Tu
     ciclo ha terminado» para que ese aviso vuelva a poder nacer si renueva y caduca otra vez.
+
+    LAS DOS LLAVES DEL CIERRE DEL DIA SON DOS COSAS DISTINTAS y hacen falta las dos:
+      - `quiere_cierre_dia`: el interruptor DEL CLIENTE (`profile.avisos.cierre_dia`), que
+        el apaga desde su perfil porque no quiere que se le recuerde cada noche.
+      - `plan_con_cierre_dia`: si SU PLAN abre esa pantalla (la feature `cierre_dia`, ver
+        `cierre_del_dia_incluido` en models/user.py). Se calcula en routes/notifications.py
+        y se pasa aqui, como `rutina_visible` o `es_premium`: las reglas son puras y no
+        tocan base. Sin el, un plan con `cierre_dia: False` recibiria un aviso que lleva a
+        una pantalla que `CapabilityRoute` cierra en silencio, que es el fallo que la
+        decision D-D del 24-08 venia a matar (habia 16 avisos vivos en produccion
+        acabando en pared, cuatro de ellos al mismo cliente).
+        `plan_con_cierre_dia` NO ES SOLO LA CASILLA DEL PLAN: routes/notifications.py lo
+        pone tambien en False cuando el cliente no tiene plan contratado, porque a ese la
+        app le cierra la pantalla igual. Ver el comentario de alli.
+
+    LOS AVISOS DE REPORTE SIGUEN SIN CANDADO Y ES A PROPOSITO. Desde el 24-08
+    /dashboard/reports va con esta misma llave, asi que un plan con `cierre_dia: False`
+    dejaria tambien esos avisos contra la pared. No se les pone el candado porque un plan
+    que VENDE reportes y tiene el cierre apagado es una ficha mal configurada, y callarle
+    los avisos al cliente esconde el error en vez de enseñarlo: lo que hay que impedir es
+    esa combinacion en el panel (routes/plans.py), no taparla aqui. Con el cierre del dia
+    no pasa: ese no se vende, lo lleva todo el mundo.
 
     TODOS LOS DEFECTOS DE AQUI SON «NO SALE». Sin dato no hay aviso: sin `arranque` no hay
     «Mañana empiezas», sin `ventanas` no hay reporte, `cerro_hoy=True` calla el diario.
@@ -787,9 +820,87 @@ def avisos_de_calendario_doc(*, ahora_es: datetime,
             "calendario": True,
         })
 
+    # 11 · LOS AVISOS DEL PESO DEL PREMIUM (punto 35 del doc del 24-08). Los textos son
+    # LITERALES de Jesús. Donde llevan dos frases, la primera es el título y la segunda el
+    # cuerpo: es el corte de la propia frase, no una redacción nueva.
+    #
+    # SON TRES Y NO CUATRO. El doc los pide «en cascada» y el cuarto era el del viernes
+    # («No registraste peso ayer tampoco»); Jesús lo quitó el 24-08 porque su semana no
+    # nacía nunca: el viernes el Premium ya tiene dos candidatos por delante -- «Tu reporte
+    # semanal está abierto» (10:00) y «Te hemos mandado el correo de novedades» (12:00) --
+    # y solo nace UN aviso al día.
+    #
+    # SOLO PREMIUM, Y GATEADO POR EL PLAN. Mirar «¿tiene reporte semanal?» parecía más
+    # limpio y metía también a plan_6m, que lleva semanal en sus habilitaciones y tiene dos
+    # clientes en producción: dos personas recibiendo un método que su plan no vende.
+    #
+    # VAN AQUÍ ABAJO, JUSTO ANTES DE «Cierra tu día», POR LA REGLA DE UNO AL DÍA: no pueden
+    # comerse ninguna entrega ni ningún aviso de reporte (esos son candidatos un solo día y
+    # lo que pierden lo pierden para siempre), pero sí ganan al recordatorio diario, que es
+    # el único que puede volver a nacer mañana. Simulado un ciclo entero de Premium: el
+    # miércoles y el jueves no hay ninguna ventana de reporte abierta, así que caben.
+    #
+    # El día que ya se pesó no se le dice que se pese: el aviso se calla, igual que «Cierra
+    # tu día» con el día cerrado.
+    #
+    # Y DESDE LAS 8:00, como todos los de aquí. Sin hora nacían a las 00:00, y eso ya mordió
+    # una vez (ver el comentario de `sincronizar_avisos` sobre la pasada de fondo): el aviso
+    # que nace de madrugada CIERRA EL DÍA -- solo nace uno -- y se lleva por delante al que
+    # tenía su hora más tarde, que era candidato ese día y solo ese. A las 8:00 el aviso
+    # sigue llegando a tiempo: el pesaje es de por la mañana, y quien ya se pesó no lo recibe.
+    #
+    # Y CON LA LLAVE DEL PLAN, como el de abajo: estos dos tambien mandan a
+    # /dashboard/checkins, asi que al plan que tenga el cierre apagado se le estaria
+    # ensenando la puerta cerrada. Hoy no cambia nada -- el Premium lo lleva --, pero la
+    # regla es «ningun aviso lleva a una pantalla que el plan no abre» y no «ninguno menos
+    # estos dos».
+    if plan_con_cierre_dia and es_premium and ahora_es.weekday() == 2 and ahora_es.hour >= 8 and not se_peso_miercoles:
+        fuera.append({
+            "clave": f"peso_miercoles:{hoy}",
+            "familia": "peso_miercoles",
+            "tipo": "checkin",
+            "titulo": "Hoy toca pesarte y mañana también.",
+            "cuerpo": "Hacemos la media y ese será tu peso semanal, lo que debes registrar "
+                      "semana a semana.",
+            "link": "/dashboard/checkins",
+            "calendario": True,
+        })
+    if plan_con_cierre_dia and es_premium and ahora_es.weekday() == 3 and ahora_es.hour >= 8 and not se_peso_jueves:
+        if se_peso_miercoles:
+            fuera.append({
+                "clave": f"peso_jueves:{hoy}",
+                "familia": "peso_jueves",
+                "tipo": "checkin",
+                "titulo": "Recuerda pesarte hoy también.",
+                "cuerpo": None,
+                "link": "/dashboard/checkins",
+                "calendario": True,
+            })
+        else:
+            # La misma clave que el de arriba a propósito: es el aviso del jueves, y solo
+            # cambia el texto según se pesara ayer o no. Con dos claves, el que entra por la
+            # mañana sin haberse pesado y vuelve por la tarde ya pesado se llevaría los dos.
+            fuera.append({
+                "clave": f"peso_jueves:{hoy}",
+                "familia": "peso_jueves",
+                "tipo": "checkin",
+                "titulo": "Ayer te tocaba pesarte y no registraste el dato.",
+                "cuerpo": "Hazlo hoy y mañana, no te olvides.",
+                "link": "/dashboard/checkins",
+                "calendario": True,
+            })
+
     # 2 · "Cierra tu día". Cada día a las 20:00 si no lo ha cerrado. Es el único que el
     # cliente puede apagar (`profile.avisos.cierre_dia`): es diario, y un aviso diario que
     # no se puede callar acaba con la campanita silenciada entera.
+    #
+    # Y ADEMÁS DEL INTERRUPTOR DEL CLIENTE, LA LLAVE DE SU PLAN (`plan_con_cierre_dia`).
+    # Aquí solo se miraba lo que quería el cliente, así que el día que alguien apagara el
+    # cierre para un plan desde el panel, este aviso seguiría naciendo y llevaría a
+    # /dashboard/checkins, que `CapabilityRoute` cierra sin decir nada: un aviso contra una
+    # pared. Es exactamente lo que la decisión D-D del 24-08 vino a matar, y no hacía falta
+    # esperar a que pasara para dejarlo cerrado. Hoy los 21 planes llevan `cierre_dia`, así
+    # que este candado no le quita el aviso a nadie: es para el día que se toque el panel.
     #
     # VA EL ÚLTIMO A PROPÓSITO (24-08). Estaba el segundo, y como `elegir_avisos` manda el
     # PRIMERO sin mandar y solo deja nacer uno al día, se comía a los del reporte: todas
@@ -800,7 +911,7 @@ def avisos_de_calendario_doc(*, ahora_es: datetime,
     # cierra_dia contra 1 aviso de reporte. Es la regla del doc del 19-08 -- «primero el de
     # entrega, después el de recordatorio» -- y además el único que puede volver a nacer
     # mañana es este: cualquier otro que pierda hoy, se pierde.
-    if quiere_cierre_dia and not cerro_hoy and ahora_es.hour >= 20:
+    if plan_con_cierre_dia and quiere_cierre_dia and not cerro_hoy and ahora_es.hour >= 20:
         fuera.append({
             "clave": f"cierra_dia:{hoy}",
             "familia": "cierra_dia",

@@ -21,7 +21,8 @@ from core.fotos import listar_fotos_de, abrir_foto, es_ref_calma
 from core import fotos as fotos_core
 from core.security import get_current_user, get_admin_user, assert_client_access
 from core.plan_access import plan_grants_feature
-from core.series_cliente import actual as actual_de_serie, anotar_peso, anotar_grasa
+from core.series_cliente import (
+    DIAS_ATRAS_PARA_UN_PESAJE, actual as actual_de_serie, anotar_peso, anotar_grasa)
 from core.tiempo import hoy_madrid
 from models.common import CheckInCreate, CheckInResponse
 
@@ -143,9 +144,28 @@ async def _dieta_y_entreno_del_dia(profile: dict, fecha: str) -> Dict[str, Any]:
 # ==================== EL CIERRE DEL DÍA (T4) ====================
 #
 # "Lo primero que sale es lo que no ha marcado". El orden lo manda el documento: entreno,
-# suplementos, comida sin registrar y macros. Todo se calcula AQUÍ, en un solo sitio, para
-# que la pantalla solo tenga que pintar: son cuatro preguntas condicionales y cada una
-# necesita mirar una colección distinta.
+# suplementos y comida sin registrar. Todo se calcula AQUÍ, en un solo sitio, para que la
+# pantalla solo tenga que pintar: cada pregunta condicional necesita mirar una colección
+# distinta.
+#
+# SE FUE LA PREGUNTA DEL EXCESO DE MACROS, Y ES A PROPÓSITO (fallo 8 del repaso del 24-08).
+# El cierre preguntaba «hoy te has pasado 40 g de hidratos, ¿qué pasó?» (T4 del doc 16-08).
+# Al rehacer el cierre en tarjetas con las ONCE preguntas de Jesús (doc 24-08) esa caja se
+# cayó de la pantalla y nadie lo escribió, pero el servidor la siguió calculando en TODAS
+# las cargas de GET /checkins/hoy: `_se_ha_pasado` resolvía los macros del día y consultaba
+# db.foods alimento por alimento para un dato que ya no pintaba nadie.
+#
+# La decisión es que NO vuelve, y por tres motivos:
+#
+#   - Las once preguntas del cierre son las de Jesús, y el exceso no es ninguna de ellas.
+#   - La 07, «¿Se te ha escapado algo más hoy?», cubre lo mismo por el otro lado: se le
+#     pregunta por lo que comió de más, no por el gramo que le sobra.
+#   - Y el gramo que le sobra ya se lo dice Nutrición, en la cabecera del día y con el
+#     mismo criterio (`frontend/src/lib/exceso.js`), que es donde está mirando la comida.
+#
+# Con ella se van `_se_ha_pasado`, `_consumido_del_dia` y `NOMBRE_MACRO`, que no los usaba
+# nadie más. Lo que SÍ se queda es el campo `exceso_nota` del check-in: hay cierres viejos
+# con esa nota escrita y se conservan al reeditar.
 
 # Las comidas del día como se llaman en `db.diets` y como se le dicen al cliente. Ojo: al
 # cliente NO se le dice "cena" ni "desayuno" (decisión del 09-08); su comida se llama por
@@ -155,7 +175,6 @@ ETIQUETA_COMIDA = {
     "C1": "comida 1", "C2": "comida 2", "C3": "comida 3", "C4": "comida 4",
     "Intra": "intra-entreno", "Post": "post-entreno",
 }
-NOMBRE_MACRO = {"P": "proteína", "H": "hidratos", "G": "grasa"}
 
 
 def _orden_de_comidas(dieta: dict) -> List[str]:
@@ -171,101 +190,85 @@ def _orden_de_comidas(dieta: dict) -> List[str]:
     return base
 
 
-def _comida_sin_registrar(dieta: Optional[dict]) -> Optional[str]:
-    """La comida que le queda por registrar, o None.
+def _comidas_sin_registrar(dieta: Optional[dict]) -> List[str]:
+    """TODAS las comidas del día que se han quedado vacías, en el orden en que se comen.
 
-    Se coge la ÚLTIMA del día que esté vacía: es la que está cerrando cuando entra aquí, y
-    el doc pregunta por una, no por la lista. Si ese día no tiene dieta montada no se
-    pregunta nada: no hay nada planificado que se le haya quedado a medias.
+    Devolvía solo la última (`vacias[-1]`) porque el cierre preguntaba por una, con su
+    casilla «La hice». Desde el doc 24-08 (punto 16) el cierre abre con el aviso entero,
+    «Te quedan 2 comidas sin registrar · Comida 3 · Comida 4», así que hace falta la lista
+    y no la cola de la lista. Si ese día no tiene dieta montada no hay nada que avisar: no
+    hay nada planificado que se le haya quedado a medias.
     """
-    if not dieta:
-        return None
-    comidas = dieta.get("comidas") or {}
-    vacias = [k for k in _orden_de_comidas(dieta) if not (comidas.get(k) or {}).get("alimentos")]
-    return vacias[-1] if vacias else None
+    comidas = (dieta or {}).get("comidas") or {}
+    # SIN `comidas` NO HAY DIA MONTADO, y no basta con que exista el documento: desde el
+    # 24-08 apuntar un extra hace `upsert` en `db.diets`, asi que un dia al que solo le
+    # pusieron «dos cañas» tiene documento y ni una comida. Sin este corte, el cierre le
+    # avisaria de «cuatro comidas sin registrar» de un dia que nunca planifico.
+    if not comidas:
+        return []
+    return [k for k in _orden_de_comidas(dieta) if not (comidas.get(k) or {}).get("alimentos")]
 
 
-async def _consumido_del_dia(dieta: Optional[dict]) -> Dict[str, float]:
-    """Los macros que se ha comido hoy, con el motor de conteo único.
+def _dia_del_pesaje(elegida: Optional[str], dia_del_cierre: str) -> str:
+    """De qué día es el peso que acaba de apuntar.
 
-    Lo guardado en `macros_efectivos` es solo un atajo: falta en la mayoría de los
-    alimentos (3.731 de 4.166 medidos el 11-08), así que leerlo a secas devuelve un día
-    entero a cero y "te has pasado" no saltaría nunca.
+    LA CASILLA DE PESO LLEVA FECHA (doc 24-08). El peso se archivaba con el día del
+    cierre, y quien se pesaba por la mañana y lo apuntaba de madrugada -- o se pesó ayer y
+    lo apunta hoy -- metía el dato en el día que no era. Con la regla del peso semanal eso
+    deja de ser un detalle: la media sale de la pareja de días SEGUIDOS desde el miércoles,
+    y un pesaje corrido de día rompe la pareja sin que nada avise.
+
+    LA REGLA NO SE ESCRIBE AQUÍ (fallo 7 del repaso del 24-08). Este fichero tenía su propio
+    `DIAS_ATRAS_PARA_UN_PESAJE = 14` mientras `core/series_cliente.py` declaraba 30 en una
+    función que no llamaba nadie y la pantalla ofrecía 8 días: tres sitios y tres números
+    para la misma decisión. Ahora la regla vive donde vive la serie y este camino -- que es
+    el vivo -- la usa a través de `fecha_de_pesaje_valida`, que además ya sabe decir que no
+    a una fecha del futuro y a una que no es una fecha.
+
+    El «hoy» de la regla es EL DÍA DEL CIERRE, no el del servidor: el cierre del día se
+    escribe con el reloj del cliente (bloque F), y con el del servidor un cliente en América
+    se comería un «esa fecha es del futuro» con su propio hoy.
+
+    Lo que no vale, se ignora en silencio y manda el día del cierre: una fecha rara no
+    puede tumbar el cierre del día de nadie.
     """
-    total = {"P": 0.0, "H": 0.0, "G": 0.0}
-    if not dieta:
-        return total
-    alimentos = [a for m in (dieta.get("comidas") or {}).values() for a in (m.get("alimentos") or [])]
-    ids = [a.get("alimento_id") for a in alimentos if a.get("alimento_id") is not None]
-    catalogo = {}
-    if ids:
-        async for f in db.foods.find({"id": {"$in": ids}}, {"_id": 0}):
-            catalogo[f["id"]] = f
-    from calma_suggest import macros_efectivos as _efectivos
-    for a in alimentos:
-        me = a.get("macros_efectivos")
-        if not (me and any((me.get(r) or 0) > 0 for r in ("P", "H", "G"))):
-            food = catalogo.get(a.get("alimento_id"))
-            try:
-                me = _efectivos(food, float(a.get("cantidad_g") or 0)) if food else (me or {})
-            except Exception:
-                me = me or {}
-        for r in ("P", "H", "G"):
-            total[r] += float((me or {}).get(r) or 0)
-    return total
+    from core.series_cliente import fecha_de_pesaje_valida
 
-
-async def _se_ha_pasado(profile: dict, dieta: Optional[dict], fecha: str) -> Optional[Dict[str, Any]]:
-    """"Hoy te has pasado 40 g de hidratos": el macro que más se le ha ido, si se le ha ido.
-
-    El listón es el mismo que usa la calculadora para decir "Válido" (MARGEN_VALIDO): por
-    debajo de eso el día está dentro y no hay nada que contarle.
-    """
-    if not dieta:
-        return None
+    if not elegida:
+        return dia_del_cierre
     try:
-        from calma_suggest import MARGEN_VALIDO
-        from macro_distribution import leer_macro
-        from macros_por_fecha import resolver
-
-        training, rest, _peri = await resolver(db, profile, fecha)
-        # Las claves conviven en inglés y en castellano en la misma base: se leen las dos.
-        objetivo_doc = rest if (dieta.get("tipo_dia") == "descanso") else training
-        objetivo = {
-            "P": leer_macro(objetivo_doc, "protein", "proteinas"),
-            "H": leer_macro(objetivo_doc, "carbs", "hidratos"),
-            "G": leer_macro(objetivo_doc, "fat", "grasas"),
-        }
-        if not any(v > 0 for v in objetivo.values()):
-            return None
-        consumido = await _consumido_del_dia(dieta)
-        excesos = [(r, consumido[r] - objetivo[r]) for r in ("P", "H", "G")
-                   if objetivo[r] > 0 and consumido[r] - objetivo[r] > MARGEN_VALIDO]
-        if not excesos:
-            return None
-        macro, gramos = max(excesos, key=lambda x: x[1])
-        return {"macro": NOMBRE_MACRO[macro], "gramos": int(round(gramos))}
-    except Exception as e:
-        # Un día sin macros resueltos no puede tumbar el cierre del día: se calla la
-        # pregunta y ya. El detalle, a la consola del servidor.
-        print(f"[cierre-dia] no se pudo mirar el exceso de macros: {e}")
-        return None
+        cierre = datetime.strptime(dia_del_cierre, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return dia_del_cierre
+    return fecha_de_pesaje_valida(elegida, hoy=cierre) or dia_del_cierre
 
 
 async def _cierre_de_hoy(client_id: str, fecha: str) -> Optional[dict]:
-    """El cierre del día de hoy, si ya lo hizo.
+    """El cierre de ESE día, si ya lo hizo.
 
-    Los cierres nuevos llevan `dia` (el día del cliente, hora de España). Los de antes
-    del 16-08 no lo tienen y hay que mirarles el `created_at`, que va en UTC: uno de las
-    23:30 de Madrid está guardado con la fecha del día siguiente.
+    SE BUSCA POR `dia`, NO POR EL ÚLTIMO QUE HAYA (24-08). Esto miraba el cierre más
+    reciente del cliente y comparaba SU día con el pedido, y con eso el mismo día podía
+    acabar con dos filas. Pasa en la frontera de medianoche, que el bloque F permite a
+    propósito: el cliente en América vive todavía el día 24 mientras en España ya es el
+    25, así que su cierre de las 22:00 se guarda con `dia` 24, el de otra pestaña con el
+    25, y a partir de ahí el de las 22:30 del día 24 ya no encuentra al suyo -- el más
+    reciente es el del 25 -- y se inserta otra vez. Dos filas del mismo día cuentan doble
+    en todo lo que lea la colección. Medido en dev: paso justo al probar esto.
+
+    Los cierres de antes del 16-08 no llevan `dia` y hay que mirarles el `created_at`, que
+    va en UTC: uno de las 23:30 de Madrid está guardado con la fecha del día siguiente.
     """
     from core.tiempo import a_madrid
+    del_dia = await db.checkins.find_one(
+        {"client_id": client_id, "type": "daily", "dia": fecha}, {"_id": 0},
+        sort=[("created_at", -1)])
+    if del_dia:
+        return del_dia
     ultimo = await db.checkins.find_one(
-        {"client_id": client_id, "type": "daily"}, {"_id": 0}, sort=[("created_at", -1)])
+        {"client_id": client_id, "type": "daily", "dia": {"$in": [None, ""]}}, {"_id": 0},
+        sort=[("created_at", -1)])
     if not ultimo:
         return None
-    if ultimo.get("dia"):
-        return ultimo if ultimo["dia"] == fecha else None
     cuando = a_madrid(ultimo.get("created_at"))
     return ultimo if cuando and cuando.date().isoformat() == fecha else None
 
@@ -310,16 +313,26 @@ async def cierre_del_dia_hoy(fecha: Optional[str] = Query(None), user=Depends(ge
         if dia and not await log_del_dia(profile["id"], fecha):
             entreno = {"dia_rutina": titulo_del_dia(dia)}
 
-    # ── 2 · Los suplementos. Solo a quien tenga protocolo vigente: al que no le hemos
-    # pautado nada no se le pregunta si se lo ha tomado.
-    from routes.supplements import vigente_en
-    proto = await db.supplement_protocols.find_one({"client_id": profile["id"]}, {"_id": 0})
-    version = vigente_en((proto or {}).get("versiones") or [], fecha)
-    suplementos = bool((version or {}).get("items"))
+    # ── 2 · Los suplementos. Dos condiciones, no una:
+    #
+    #   a) Que su PLAN incluya suplementación. Esto faltaba (punto 06 del doc 24-08): la
+    #      pregunta miraba solo si había protocolo escrito, y a cuatro clientes activos
+    #      con protocolo de su etapa anterior y plan sin suplementación el cierre les
+    #      preguntaba todas las noches por unos suplementos que su pantalla no les deja
+    #      ni ver (`require_access("suplementacion")` en routes/supplements.py). El
+    #      candado del cierre es ahora el mismo que el de la pantalla.
+    #   b) Que tenga protocolo VIGENTE ese día: al que no le hemos pautado nada tampoco se
+    #      le pregunta si se lo ha tomado.
+    suplementos = False
+    if plan_grants_feature(profile.get("plan"), "suplementacion"):
+        from routes.supplements import vigente_en
+        proto = await db.supplement_protocols.find_one({"client_id": profile["id"]}, {"_id": 0})
+        version = vigente_en((proto or {}).get("versiones") or [], fecha)
+        suplementos = bool((version or {}).get("items"))
 
-    # ── 3 y 4 · La dieta del día: la comida que falta y si se ha pasado de macros.
+    # ── 3 y 4 · La dieta del día: las comidas que faltan y si se ha pasado de macros.
     dieta = await db.diets.find_one({"user_id": profile.get("user_id"), "fecha": fecha}, {"_id": 0})
-    pendiente = _comida_sin_registrar(dieta)
+    pendientes = _comidas_sin_registrar(dieta)
 
     ultimo = actual_de_serie(profile.get("pesos"))
 
@@ -330,11 +343,62 @@ async def cierre_del_dia_hoy(fecha: Optional[str] = Query(None), user=Depends(ge
         "entreno": entreno,
         "tiene_rutina": tiene_rutina,
         "suplementos": suplementos,
-        "comida_pendiente": ({"key": pendiente, "etiqueta": ETIQUETA_COMIDA.get(pendiente, "comida")}
-                             if pendiente else None),
-        "exceso": await _se_ha_pasado(profile, dieta, fecha),
+        # La LISTA entera, para el aviso de arriba del cierre («Te quedan 2 comidas sin
+        # registrar · Comida 3 · Comida 4»). Con mayúscula, que es como se lee en la
+        # pantalla; la etiqueta en minúscula de `comida_pendiente` iba dentro de una frase.
+        "comidas_pendientes": [
+            {"key": k, "etiqueta": ETIQUETA_COMIDA.get(k, "comida").capitalize()}
+            for k in pendientes
+        ],
+        # Se queda por compatibilidad: hay cierres guardados con `comida_pendiente` y la
+        # ficha del entrenador los lee. La pantalla ya no lo usa.
+        "comida_pendiente": ({"key": pendientes[-1],
+                              "etiqueta": ETIQUETA_COMIDA.get(pendientes[-1], "comida")}
+                             if pendientes else None),
+        # LA PREGUNTA DEL EXCESO DE MACROS YA NO EXISTE, Y AQUÍ TAMPOCO SE CALCULA (fallo 8
+        # del repaso del 24-08). Ver la nota larga donde vivía `_se_ha_pasado`.
         "ultimo_peso": ultimo,
+        # Hasta cuántos días atrás acepta el servidor que se feche un pesaje. Se manda para
+        # que el desplegable de la pantalla ofrezca exactamente lo que se acepta y la regla
+        # siga estando en un solo sitio (fallo 7 del 24-08).
+        "peso_dias_atras": DIAS_ATRAS_PARA_UN_PESAJE,
     }
+
+
+# Lo que escribe el servidor en cada guardado y NO se hereda del cierre anterior: o se
+# vuelve a calcular (`nutrition_followed` sale de la dieta de ese día, así que si hoy no hay
+# dieta la respuesta es que no consta, no la de ayer) o se recoloca a mano justo encima
+# (`id`, `created_at`, `trainer_feedback`).
+_LO_QUE_PONE_EL_SERVIDOR = {
+    "_id", "id", "client_id", "dia", "created_at", "updated_at", "trainer_feedback",
+    "autorrelleno", "nutrition_followed",
+}
+
+# LO QUE EL CIERRE DEL DÍA LE PREGUNTA AL CLIENTE HOY: las once de Jesús (doc 24-08) más las
+# dos cajas opcionales del final, las notas y el peso con su fecha.
+#
+# Esta lista existe para poder distinguir dos cosas que se veían iguales desde aquí
+# (fallo 9 del repaso del 24-08):
+#
+#   - Un campo que el formulario SÍ pregunta y que no llega: el cliente lo ha dejado en
+#     blanco al reeditar, y se queda en blanco. Es la regla de P75 («el segundo envío
+#     sustituye la fila»), y es la que hace que borrar una respuesta funcione.
+#   - Un campo que el formulario NO pregunta y que no llega: nadie lo ha borrado, es que
+#     esta pantalla no sabe que existe. Ahí borrarlo es perder un dato del cliente.
+#
+# Lo segundo pasaba con `comido_hoy` y `mood`, del check-in de mayo: se guardaban y al
+# reeditar el día desaparecían. Se había tapado campo a campo desde la pantalla -- que
+# reenvía `cena_hecha`, `comida_pendiente`, `exceso_nota` y `entreno_nota` copiados --, y
+# esos cuatro se acordaron y estos dos no.
+#
+# Al añadir una pregunta NUEVA al cierre hay que apuntarla aquí. Si se olvida, lo único que
+# pasa es que esa respuesta no se podrá dejar en blanco reeditando; nunca se pierde nada,
+# que es el error que importa.
+_LO_QUE_PREGUNTA_EL_CIERRE = {
+    "sensaciones", "entreno_respuesta", "entreno_estrellas", "cardio", "movimiento",
+    "descanso", "energy", "hunger_anxiety", "suplementos", "extras_respuesta",
+    "notas", "weight", "peso_fecha",
+}
 
 
 # El decorador estaba pegado a la funcion de arriba, que es una ayudante interna. Con eso, la
@@ -349,8 +413,19 @@ async def create_checkin(data: CheckInCreate, user = Depends(get_current_user)):
     profile = await db.client_profiles.find_one({"user_id": user["id"]})
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
-    if not plan_grants_feature(profile.get("plan"), "reportes"):
-        raise HTTPException(status_code=403, detail="Tu plan no incluye check-ins de seguimiento.")
+    # EL CIERRE DEL DÍA TIENE LLAVE PROPIA, Y NO LA DE «reportes» (decisión de Jesús,
+    # 24-08). Esto exigía «reportes» para los tres tipos, así que los 81 clientes de ELM,
+    # Mantenimiento, Calculadora JP y Básica -- cuyo plan no vende reportes -- entraban a
+    # la pantalla (la puerta de la app ya va por `cierre_dia`, ver App.js), contestaban las
+    # once preguntas y al Guardar se comían un 403. La puerta de la app no vale sin la del
+    # servidor. El semanal y el mensual SÍ se venden por plan y se quedan con su llave: por
+    # eso son dos y no una.
+    llave = "cierre_dia" if data.type == "daily" else "reportes"
+    if not plan_grants_feature(profile.get("plan"), llave):
+        raise HTTPException(
+            status_code=403,
+            detail=("Tu plan no incluye el cierre del día." if llave == "cierre_dia"
+                    else "Tu plan no incluye check-ins de seguimiento."))
 
     # El día DEL RELOJ DEL CLIENTE (bloque F, 23-08): lo manda el front y aquí se valida.
     # Sin él, el de España (lo de siempre). `created_at` sigue siendo el instante UTC.
@@ -386,6 +461,31 @@ async def create_checkin(data: CheckInCreate, user = Depends(get_current_user)):
         checkin["created_at"] = previo["created_at"]
         checkin["trainer_feedback"] = previo.get("trainer_feedback")
         checkin["updated_at"] = datetime.now(timezone.utc).isoformat()
+        # LO QUE LA PANTALLA NO PREGUNTA, NO SE BORRA (fallo 9 del repaso del 24-08).
+        #
+        # «Se sustituye entero» sigue valiendo para las preguntas del cierre: si el cliente
+        # deja una en blanco al reeditar, se queda en blanco. El agujero era otro: los campos
+        # que esta pantalla ni siquiera nombra -- `comido_hoy` y `mood`, del check-in de mayo
+        # -- desaparecían al reeditar el día. Medido por API: se guarda un cierre con los dos,
+        # se reenvía como lo arma la pantalla, y los dos se van.
+        #
+        # Se había tapado campo a campo desde el front (`cena_hecha`, `comida_pendiente`,
+        # `exceso_nota` y `entreno_nota` viajan copiados de `inicial`), y eso obliga a
+        # acordarse uno por uno. Aquí se tapa de raíz: lo que no es una pregunta del cierre y
+        # no viene en esta petición, se conserva del día anterior. Un campo huérfano nuevo
+        # queda protegido sin tocar nada.
+        #
+        # `model_fields_set` distingue «no lo he mandado» de «lo mando en blanco», que
+        # `model_dump(exclude_none=True)` deja igual de vacíos. No hace falta para las
+        # preguntas -- esas nunca se heredan -- pero sí para que un huérfano se pueda vaciar
+        # a propósito el día que alguien tenga que hacerlo.
+        enviados = set(data.model_fields_set)
+        for campo, valor in previo.items():
+            if (campo in checkin or campo in enviados
+                    or campo in _LO_QUE_PREGUNTA_EL_CIERRE
+                    or campo in _LO_QUE_PONE_EL_SERVIDOR):
+                continue
+            checkin[campo] = valor
         await db.checkins.replace_one({"id": previo["id"]}, checkin)
     else:
         await db.checkins.insert_one(checkin)
@@ -412,7 +512,7 @@ async def create_checkin(data: CheckInCreate, user = Depends(get_current_user)):
     # Cuando haya que quitarlo de verdad, la puerta es Evolucion, que es de donde sale la
     # grafica. Lo cierra el equipo con Jesus: no es una decision de este arreglo.
     if data.weight is not None:
-        await anotar_peso(profile["id"], data.weight, dia,
+        await anotar_peso(profile["id"], data.weight, _dia_del_pesaje(data.peso_fecha, dia),
                           origen=f"check-in {data.type}")
     # El % graso del check-in mensual, si viene. La pantalla YA NO LO PIDE (punto 53 del
     # doc del 07-08: "hoy la app lo pide cada mes" y no debe): es un dato que estima Jesus

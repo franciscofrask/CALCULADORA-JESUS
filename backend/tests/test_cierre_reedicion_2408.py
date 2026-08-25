@@ -129,51 +129,44 @@ class TestElCierreLoPreguntaPorLaPuertaBuena:
 class TestReeditarNoBorra:
     """El caso: notas y peso escritos por la manana, cierre CORTO por la noche.
 
-    El formulario decide que enseña con `corta`, y al guardar hace un POST que SUSTITUYE
-    la fila entera. Si el corto esconde un campo que ya tiene respuesta, el cliente ni lo
-    ve ni lo puede tocar, y cualquier campo que ademas no se reenvie se pierde.
+    El formulario decidia que enseñar con `corta`, y al guardar hace un POST que SUSTITUYE
+    la fila entera: si el corto escondia un campo que ya tenia respuesta, el cliente ni lo
+    veia ni lo podia tocar, y ademas se perdia al reenviar.
+
+    EL ARREGLO DEL 24-08 POR LA MAÑANA ERA UN PARCHE (`verNotas` / `verPeso`) y se cae con
+    el rediseño del doc del 24: las once preguntas salen a todos todos los dias, asi que
+    ya no hay cierre corto ni nada escondido, y lo que no se puede esconder no se puede
+    perder. Estas pruebas vigilan que no vuelva.
     """
 
-    def test_las_notas_se_pintan_si_ya_traen_respuesta(self):
+    def test_ya_no_hay_cierre_corto_que_esconda_nada(self):
         pantalla = _fuente(PANTALLA)
-        assert "const verNotas = !corta || (editando && !!inicial?.notas?.texto);" in pantalla
-        assert "{verNotas && (" in pantalla, "el bloque de notas sigue colgado solo de !corta"
+        for parche in ("const verNotas =", "const verPeso =", "const corta ="):
+            assert parche not in pantalla, f"volvio {parche}, y con el lo que se escondia"
 
-    def test_el_peso_se_pinta_si_ya_trae_respuesta(self):
+    def test_las_notas_y_el_peso_se_pintan_siempre(self):
+        """Sin condicion delante: son opcionales, pero salen a todo el mundo."""
         pantalla = _fuente(PANTALLA)
-        assert "const verPeso = !corta || (editando && inicial?.weight != null);" in pantalla
-        assert "{verPeso && (" in pantalla, "el bloque del peso sigue colgado solo de !corta"
+        assert "{verNotas && (" not in pantalla and "{verPeso && (" not in pantalla
+        assert 'data-testid="cierre-notas"' in pantalla
+        assert 'data-testid="cierre-peso"' in pantalla
 
-    def test_el_corto_SIGUE_existiendo_para_el_cierre_en_blanco(self):
-        """No vale con enseñarlo todo siempre: el corto existe a proposito para el que ya
-        marco sus comidas. Sin `inicial` (cierre nuevo del dia) manda `corta` y nada mas."""
+    def test_lo_que_ya_no_se_pregunta_no_se_borra(self):
+        """El "La hice" de la comida pendiente y la nota del exceso de macros se dejaron
+        de preguntar con el doc 24-08, pero hay cierres que los tienen escritos. Mandar
+        null a pelo aqui se los llevaria por delante: el POST sustituye la fila entera."""
         pantalla = _fuente(PANTALLA)
-        assert "const editando = inicial != null;" in pantalla
-        for regla in ("const verNotas = !corta ||", "const verPeso = !corta ||"):
-            i = pantalla.find(regla)
-            assert i > 0
-            assert "editando &&" in pantalla[i:i + 120], (
-                "la excepcion tiene que ser solo para lo que se esta EDITANDO")
+        assert "cena_hecha: inicial?.cena_hecha ?? null," in pantalla
+        assert "comida_pendiente: inicial?.comida_pendiente ?? null," in pantalla
+        assert "exceso_nota: inicial?.exceso_nota || null," in pantalla
 
-    def test_la_comida_pendiente_no_se_borra_cuando_ya_no_se_pregunta(self):
-        """El "La hice" de esta manana se iba en cuanto la comida dejaba de estar
-        pendiente: el payload mandaba null a pelo y el replace lo dejaba vacio."""
+    def test_al_reabrir_vuelven_las_respuestas_viejas_del_entreno(self):
+        """«Si, pero no lo puse» y «No entrene» son los dos valores de antes del 24-08. Si
+        no se traducen a la pregunta nueva, al reabrir un cierre sale en blanco."""
         pantalla = _fuente(PANTALLA)
-        assert "cena_hecha: !corta && hoy?.comida_pendiente ? f.cena_hecha : (inicial?.cena_hecha ?? null)," in pantalla
-        assert "comida_pendiente: (!corta && hoy?.comida_pendiente?.key) || inicial?.comida_pendiente || null," in pantalla
-
-    def test_la_cabecera_del_corto_cuenta_lo_que_va_a_salir(self):
-        """"Solo quedan cinco cosas" era un numero fijo y ya mentia antes de esto: al que
-        no tiene rutina con nosotros le sale ademas la nota de entreno libre, que en el
-        corto tampoco se calla. Y al que reabre su cierre le vuelven las notas y el peso,
-        asi que podian ser ocho. Prometer cinco y enseñar siete es de las cosas por las que
-        se deja de leer lo que pone la pantalla.
-        """
-        pantalla = _fuente(PANTALLA)
-        assert "const cosas = hoy?.suplementos ? 'cinco' : 'cuatro';" not in pantalla
-        assert ("const cosas = CUANTAS[4 + [hoy?.suplementos, hoy?.tiene_rutina === false, "
-                "verNotas, verPeso]") in pantalla
-        assert "const CUANTAS = { 4: 'cuatro', 5: 'cinco', 6: 'seis', 7: 'siete', 8: 'ocho' };" in pantalla
+        assert "const ENTRENO_DE_VUELTA = { si_no_lo_puse: 'si', no_entrene: 'no' };" in pantalla
+        modelo = _fuente("backend/models/common.py")
+        assert 'pattern="^(si|no|descanso|si_no_lo_puse|no_entrene)$"' in modelo
 
     def test_el_servidor_le_da_a_la_pantalla_con_que_repintarlo(self):
         """La pantalla solo puede repintar lo guardado si `/checkins/hoy` se lo devuelve
@@ -208,9 +201,18 @@ class TestElReplaceQueSeLoLLevaTodo:
 
         guardado = _pedir("GET", "/checkins/hoy", headers=cabeceras_cliente).json()["checkin"]
         assert guardado["energy"] == 5, "la correccion vale"
+        # SIGUE VALIENDO DESPUES DEL ARREGLO DEL 24-08 POR LA TARDE, y hay que decir por que.
+        # Ese arreglo hizo que al reeditar NO se pierda lo que la pantalla ni siquiera
+        # pregunta (`comido_hoy` y `mood`, del check-in de mayo, se iban). Pero el P75 no se
+        # toco: una RESPUESTA del formulario que no llega es una respuesta borrada, y por eso
+        # se sigue yendo. La frontera son las dos listas de backend/routes/checkins.py:
+        # `_LO_QUE_PREGUNTA_EL_CIERRE` (se borra) y todo lo demas (se hereda). `notas` y
+        # `weight` estan en la primera, asi que este test comprueba justo el lado que no
+        # cambio: si algun dia se cae, es que una pregunta se ha salido de esa lista y
+        # entonces el cliente ya no puede borrar su propia respuesta reeditando.
         assert guardado.get("notas") is None and guardado.get("weight") is None, (
             "si esto empieza a conservarse, el arreglo de la pantalla se puede simplificar; "
-            "mientras el POST sustituya la fila entera, repintar es la unica defensa")
+            "mientras el POST sustituya las RESPUESTAS, repintar es la unica defensa")
 
 
 class TestElPesoDelHistorialDelCliente:
@@ -260,11 +262,13 @@ class TestLoQuePreguntaElCierre:
 
     def test_el_historial_habla_el_mismo_idioma_que_los_botones(self):
         """Acortar los botones y dejar el historial diciendo «Desgaste: menos de lo
-        habitual» son dos vocabularios para el mismo dato."""
+        habitual» son dos vocabularios para el mismo dato. Desde el punto 21 del doc 24-08
+        el detalle lleva el nombre y el valor por separado («Movimiento · Como siempre»),
+        asi que el valor tiene que ser LITERALMENTE la etiqueta del boton."""
         pantalla = _fuente(PANTALLA)
         assert "DESGASTE_HIST" not in pantalla
-        for etiqueta in ("Movimiento: menos", "Movimiento: como siempre", "Movimiento: más"):
-            assert f"'{etiqueta}'" in pantalla
+        assert ("const MOVIMIENTO_VALOR = { menos: 'Menos', igual: 'Como siempre', mas: 'Más' };"
+                in pantalla)
 
     def test_los_valores_guardados_no_se_tocan(self):
         """Lo que cambia es como se le pregunta, no lo que se guarda: `menos|igual|mas`
@@ -345,9 +349,10 @@ class TestElHistorialPartidoEnDos:
         cuando ahi conviven semanales y mensuales (pasa con 2 clientes en produccion)."""
         pantalla = _fuente(PANTALLA)
         assert "const mezclaDeReportes = new Set(reportes.map(c => c.type)).size > 1;" in pantalla
-        assert "<EntradaDelHistorial key={c.id} c={c} />" in pantalla, (
-            "los cierres van sin pildora: lo dice «Tus días»")
         assert "conTipo={mezclaDeReportes}" in pantalla
+        # «Tus dias» ya no pinta entradas sueltas: es una linea por dia (punto 19), y ahi
+        # la pildora no aparece por ninguna parte.
+        assert "<HistorialDeDias cierres={cierres}" in pantalla
 
     def test_el_aviso_del_peso_raro_sigue_mirando_la_lista_entera(self):
         """LO QUE MUERDE AL PARTIR LA LISTA: en produccion casi todos los pesos conocidos

@@ -13,6 +13,14 @@ export const CAP = {
     // Mantenimiento no tiene entrenador Y edita; un Gold tiene entrenador y NO edita.
     EDITA_MACROS: 'edita_macros',
     REPORTES: 'reportes',
+    // El cierre del día («¿Cómo fuiste hoy?») y su historial en Seguimiento. LLAVE PROPIA,
+    // NO LA DE REPORTES (decisión de Jesús del 24-08). El cierre vivía detrás de
+    // CAP.REPORTES y 81 perfiles no la tienen -- ELM, Mantenimiento, Calculadora JP,
+    // Básica --, así que no podían contar su día. Darles «reportes» no valía: les
+    // encendería un calendario de reportes que su plan no vende. Su gemela del servidor es
+    // la feature `cierre_dia` de `derive_features` (backend/models/user.py), y como allí,
+    // si el plan no dice nada es que SÍ: lo llevan todos.
+    CIERRE_DIA: 'cierre_dia',
     // Chat con el entrenador. Sale del `acompanamiento` del plan, que es el único campo de
     // la matriz que no se estaba mirando: al plan «solo app», que por definición no lleva
     // entrenador, se le enseñaba el Chat igual, y lo que encontraba dentro era «Soporte
@@ -87,6 +95,11 @@ export function deriveCapabilities(habilitaciones, { rutinaVisible = false } = {
             ? !!h.edita_macros
             : h.calculadora !== 'personalizado',
         [CAP.REPORTES]: reportes.length > 0,
+        // Todos los planes, también los cuatro sin reportes. Se pregunta con `!== false`
+        // porque ninguna ficha del catálogo declara el campo y los overrides guardados en
+        // db.plan_overrides tampoco: con el valor por defecto apagado, la llave nueva
+        // habría dejado fuera justo a los planes que alguien tocó desde el panel.
+        [CAP.CIERRE_DIA]: h.cierre_dia !== false,
         // SOLO CON ENTRENADOR DETRÁS (P73 del doc 23-08, decidido por Francisco el
         // mismo día): a Calculadora, ELM y Mantenimiento se les QUITA el Chat. El
         // 21-08 se había abierto a todos como canal de soporte (cobros, «algo no

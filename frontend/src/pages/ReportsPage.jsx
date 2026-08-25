@@ -189,7 +189,8 @@ const _cuantoQueda = (iso) => {
     return dias === 1 ? 'te queda 1 día' : `te quedan ${dias} días`;
 };
 
-const PortadaSeguimiento = ({ windowState, vencido, conDiario, onRevision, onEvolucion, onHistorial, onDiario }) => {
+const PortadaSeguimiento = ({ windowState, vencido, conDiario, puedeMandarReporte,
+                             onRevision, onEvolucion, onHistorial, onDiario }) => {
     // Le toca reporte y no lo ha mandado: es lo único que va arriba y en naranja.
     // LA FECHA LÍMITE VA EN LA TARJETA: la ventana son cuatro días y sin fecha nadie sabe
     // cuánto margen tiene («hasta el jueves 15», Jesús 11-08). El servidor ya mandaba
@@ -209,13 +210,17 @@ const PortadaSeguimiento = ({ windowState, vencido, conDiario, onRevision, onEvo
     // PASADA LA HORA, EL REPORTE DESAPARECE. Un reporte vencido en la portada es una puerta
     // que no lleva a ningún sitio: el servidor lo rechaza fuera de plazo. Se cae de aquí
     // igual que de Inicio, y en su lugar queda lo que sí puede hacer: lo siguiente.
-    const proximo = windowState?.proximo;
+    // SEGUIMIENTO EN MODO LECTURA (decisión de Jesús del 24-08). El que no vende ningún
+    // reporte entra aquí a ver lo suyo -- su historial, su Evolución y su Diario -- pero
+    // no tiene reporte que mandar: ni la tarjeta del formulario ni el calendario del
+    // «lo próximo es...», que sería anunciarle una cita que su plan no incluye.
+    const proximo = puedeMandarReporte ? windowState?.proximo : null;
     const yaPuede = windowState?.is_open !== false;
     const yaMandado = !!windowState?.submitted;
-    const tocaRevision = !!windowState?.due && !yaMandado && yaPuede && !vencido;
+    const tocaRevision = puedeMandarReporte && !!windowState?.due && !yaMandado && yaPuede && !vencido;
     // Le toca este periodo pero la ventana todavía no ha abierto.
-    const aunNoAbre = !!windowState?.due && !yaMandado && !yaPuede && !vencido;
-    const hayReporteALaVista = tocaRevision || yaMandado || aunNoAbre;
+    const aunNoAbre = puedeMandarReporte && !!windowState?.due && !yaMandado && !yaPuede && !vencido;
+    const hayReporteALaVista = puedeMandarReporte && (tocaRevision || yaMandado || aunNoAbre);
     // El plazo, en hora de España y con lo que queda: la ventana son unos días y sin fecha
     // nadie sabe cuánto margen tiene (Jesús, 11-08).
     const plazo = _plazoDelCliente(windowState?.closes_at);
@@ -300,13 +305,20 @@ const VENTANA_DE_MENTIRA = (tipo) => ({
 });
 
 const ReportsPage = () => {
-    const { api, token, profile, user, pantalla } = useAuth();
+    const { api, token, profile, user, pantalla, can } = useAuth();
     // La Evolución completa (medidas y comparativa) va detrás de su interruptor del panel
     // (T6). Con él apagado se queda la gráfica de peso, que es lo que hay hoy en producción.
     const evolucionCompleta = pantalla('t6_evolucion');
     const diarioActivo = pantalla('t5_diario');
     const revision = verComo(user);
     const tipoRevision = ['mensual', 'quincenal', 'semanal'].includes(revision) ? revision : null;
+    // QUIÉN PUEDE MANDAR UN REPORTE. La pantalla la abre ahora la llave del cierre del día
+    // (CAP.CIERRE_DIA, decisión del 24-08), que la lleva todo el mundo: sin esto, los 81
+    // clientes cuyo plan no vende reportes entrarían al formulario de uno. El envío no
+    // depende solo de esto -- el servidor lo rechaza igual --, pero enseñar un formulario
+    // que va a rebotar es prometer algo que no hay.
+    // El modo revisión del equipo sigue entrando: es para repasar los textos.
+    const puedeMandarReporte = can('reportes') || !!tipoRevision;
     const [reports, setReports] = useState([]);
     const [evolution, setEvolution] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -328,11 +340,17 @@ const ReportsPage = () => {
     // (doc 19-08, bloque 09).
     // Y «?aplazar=1» aterriza en el formulario con el aplazamiento abierto: es el camino
     // desde «No puedo esta semana» del aviso (doc 19-08, bloque 11).
+    // Y «?abrir=diario» aterriza en el Diario (24-08): el cierre del día enlaza aquí con
+    // «Ver mi diario», y sin esto el enlace dejaba al cliente en la portada a buscarlo.
     const abrirPedida = new URLSearchParams(window.location.search).get('abrir');
     const aplazarPedido = new URLSearchParams(window.location.search).get('aplazar') === '1';
     const [seccionAbierta, setSeccionAbierta] = useState(
-        tipoRevision || aplazarPedido ? 'form' : abrirPedida === 'evolucion' ? 'evolution' : null);
-    const vista = seccionAbierta;
+        tipoRevision || aplazarPedido ? 'form'
+            : abrirPedida === 'evolucion' ? 'evolution'
+                : abrirPedida === 'diario' ? 'diario' : null);
+    // EL FORMULARIO NO SE ABRE SIN LLAVE (24-08): ni por «?aplazar=1» ni por un enlace
+    // viejo. Al que solo tiene Seguimiento en lectura se le deja en la portada.
+    const vista = seccionAbierta === 'form' && !puedeMandarReporte ? null : seccionAbierta;
     const [windowState, setWindowState] = useState(null);   // ventana de envío (la de su cadencia)
     // Si el plazo ya pasó. Lo dice el servidor en `items[].overdue` y no se calcula aquí:
     // la hora buena es la suya, no la del reloj del teléfono. Pasada la hora, el reporte
@@ -459,11 +477,12 @@ const ReportsPage = () => {
                 desplegado: peso, las diez medidas, los huecos, las notas, tres preguntas,
                 las fotos y enviar. 3.770 px, cuatro pantallas y media de móvil, tanto si le
                 tocaba reporte como si no. */}
-            {!seccionAbierta && (
+            {!vista && (
                 <PortadaSeguimiento
                     windowState={windowState}
                     vencido={vencido}
                     conDiario={diarioActivo}
+                    puedeMandarReporte={puedeMandarReporte}
                     onRevision={() => setSeccionAbierta('form')}
                     onEvolucion={() => setSeccionAbierta('evolution')}
                     onHistorial={() => setSeccionAbierta('history')}
@@ -472,7 +491,7 @@ const ReportsPage = () => {
             )}
 
             {/* Al entrar en una sección, la portada deja sitio y aparece la vuelta. */}
-            {seccionAbierta && (
+            {vista && (
                 <button onClick={() => setSeccionAbierta(null)} data-testid="volver-seguimiento"
                     className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground">
                     <ChevronLeft className="w-4 h-4" /> Seguimiento

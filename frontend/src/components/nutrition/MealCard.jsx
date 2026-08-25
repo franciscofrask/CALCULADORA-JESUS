@@ -6,7 +6,7 @@ import { num1, numMedio, alMedio, alDecima } from '../../lib/numeros';
 import { TOPE_GRAMOS } from '../../lib/cantidades';
 import ContadorFamilia from './ContadorFamilia';
 import {
-    ChevronDown, ChevronUp, Plus, Trash2, Minus, Zap, Wrench, RefreshCw, ArrowUp, Lock, Download
+    ChevronDown, ChevronUp, Plus, Trash2, Minus, Zap, Wrench, RefreshCw, ArrowUp, Lock, Download, Star
 } from 'lucide-react';
 
 const MACRO = { P: '#FF671F', H: '#2196F3', G: '#FFA500' };
@@ -343,6 +343,9 @@ const MealCard = ({
     // alimento. Viene de `mealCardProps` y es el mismo para todas las comidas: desde el
     // 13-08 el tramo lo decide el total del dia, no la comida (ver `ContadorFamilia`).
     acumFamilias = null,
+    // Abre las favoritas DE ESTA COMIDA (25-08). Si no llega, los botones no se pintan:
+    // la tarjeta se usa tambien desde sitios que no tienen ese modal.
+    abrirFavoritasDeComida = null,
 }) => {
     const isExpanded = forceExpanded ? true : expandedMeals[mealKey];
     const target = getMealTarget(mealKey);
@@ -602,7 +605,7 @@ const MealCard = ({
                                 onClick={() => loadMenuOptions(mealKey)} data-testid={`menu-options-${mealKey}`}>
                                 <Zap className="w-5 h-5" /> Sugiéreme un menú
                             </button>
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className={`grid gap-2 ${abrirFavoritasDeComida ? 'grid-cols-3' : 'grid-cols-2'}`}>
                                 <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 text-sm"
                                     onClick={() => setBuildMealModal({ open: true, mealKey, mode: 'normal' })} data-testid={`build-meal-${mealKey}`}>
                                     <Wrench className="w-4 h-4" /> Lo hago yo
@@ -611,23 +614,69 @@ const MealCard = ({
                                     onClick={() => openRepeatModal(mealKey)} data-testid={`repeat-meal-${mealKey}`}>
                                     <RefreshCw className="w-4 h-4" /> Repetir
                                 </button>
+                                {/* Traer una comida guardada, sin arrastrar el día entero. */}
+                                {abrirFavoritasDeComida && (
+                                    <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 text-sm"
+                                        onClick={() => abrirFavoritasDeComida(mealKey)} data-testid={`fav-comida-vacia-${mealKey}`}>
+                                        <Star className="w-4 h-4" /> Favoritas
+                                    </button>
+                                )}
                             </div>
                         </div>
                         )
                     )}
-                    {/* Peri (Intra/Post): sugeridor de biblioteca (solo menús Peri, separados
-                        server-side por tipo_comida) + constructor manual */}
+                    {/* EL INTRA Y EL POST NO SE COMPORTAN IGUAL (Francisco, 25-08).
+                        En los dos se ha quitado el botón de menús: la biblioteca son comidas
+                        de clientes y en el peri no pinta nada.
+                        - INTRA: «Prepárame el intra» abre el constructor con sus categorías
+                          ya puestas, así que la lista sale sola y en el orden del método
+                          (MAP primero, luego la ciclodextrina). Ahí sí prepara.
+                        - POST: se monta como una comida normal. Tenía el mismo botón y era
+                          mentira: el post abre sin categorías y lo primero que salía era
+                          «Selecciona una categoría arriba», o sea el buscador de siempre.
+                          Antes que prometer lo que no hace, se llama por su nombre.
+                        «Lo hago yo» abre igualmente en modo post, que es lo que hace valer
+                        sus reglas (universo de la categoría 25 y sin objetivo de grasa). */}
                     {foods.length === 0 && isPeri && !isLocked && (
-                        <div className={denso ? 'grid grid-cols-1 sm:grid-cols-2 gap-2' : 'space-y-2'}>
-                            <button className={`btn-brand flex items-center justify-center gap-2 uppercase tracking-wide ${denso ? 'h-11 text-sm' : 'w-full h-12'}`}
-                                onClick={() => loadMenuOptions(mealKey)} data-testid={`menu-options-${mealKey}`}>
-                                <Zap className={denso ? 'w-4 h-4' : 'w-5 h-5'} /> Sugiéreme un menú
-                            </button>
-                            <button className={`rounded-xl bg-brand/10 border border-brand text-brand font-semibold hover:bg-brand hover:text-white transition-colors flex items-center justify-center gap-1.5 ${denso ? 'h-11 text-sm' : 'w-full h-11'}`}
-                                onClick={() => setBuildMealModal({ open: true, mealKey, mode: mealKey === 'Intra' ? 'intra' : 'post' })}>
-                                <Zap className="w-4 h-4" /> Crear {mealKey === 'Intra' ? 'Intra' : 'Post'}
-                            </button>
-                        </div>
+                        mealKey === 'Intra' ? (
+                            <div className="space-y-2">
+                                <button className={`btn-brand flex items-center justify-center gap-2 uppercase tracking-wide ${denso ? 'h-11 text-sm w-full' : 'w-full h-12'}`}
+                                    onClick={() => setBuildMealModal({ open: true, mealKey, mode: 'intra' })}
+                                    data-testid={`build-peri-${mealKey}`}>
+                                    <Zap className={denso ? 'w-4 h-4' : 'w-5 h-5'} /> Prepárame el intra
+                                </button>
+                                <div className={`grid gap-2 ${abrirFavoritasDeComida ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                                    <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 text-sm"
+                                        onClick={() => openRepeatModal(mealKey)} data-testid={`repeat-meal-${mealKey}`}>
+                                        <RefreshCw className="w-4 h-4" /> Repetir
+                                    </button>
+                                    {abrirFavoritasDeComida && (
+                                        <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 text-sm"
+                                            onClick={() => abrirFavoritasDeComida(mealKey)} data-testid={`fav-comida-vacia-${mealKey}`}>
+                                            <Star className="w-4 h-4" /> Favoritas
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className={`grid gap-2 ${abrirFavoritasDeComida ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                                <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 text-sm"
+                                    onClick={() => setBuildMealModal({ open: true, mealKey, mode: 'post' })}
+                                    data-testid={`build-meal-${mealKey}`}>
+                                    <Wrench className="w-4 h-4" /> Lo hago yo
+                                </button>
+                                <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 text-sm"
+                                    onClick={() => openRepeatModal(mealKey)} data-testid={`repeat-meal-${mealKey}`}>
+                                    <RefreshCw className="w-4 h-4" /> Repetir
+                                </button>
+                                {abrirFavoritasDeComida && (
+                                    <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 text-sm"
+                                        onClick={() => abrirFavoritasDeComida(mealKey)} data-testid={`fav-comida-vacia-${mealKey}`}>
+                                        <Star className="w-4 h-4" /> Favoritas
+                                    </button>
+                                )}
+                            </div>
+                        )
                     )}
 
                     {/* Ingredients */}
@@ -682,6 +731,16 @@ const MealCard = ({
                                     <Plus className="w-4 h-4" /> Añadir ingrediente
                                 </button>
                                 {!isLocked && onCuadrar && <button className="text-xs font-semibold text-brand border border-brand rounded-xl px-3 py-2.5 hover:bg-brand hover:text-white transition-colors" onClick={() => onCuadrar(mealKey)} title="Ajustar las cantidades a tus macros sin pasarse (respetando el mínimo de cada alimento)">Cuadrar</button>}
+                                {/* Guardar SOLO esta comida (25-08). Antes había que guardar
+                                    el día entero y borrar lo que sobraba. */}
+                                {!isLocked && abrirFavoritasDeComida && (
+                                    <button className="text-muted-foreground hover:text-brand px-2 py-2.5 transition-colors"
+                                        onClick={() => abrirFavoritasDeComida(mealKey)}
+                                        title="Guardar esta comida en favoritas"
+                                        data-testid={`fav-comida-${mealKey}`}>
+                                        <Star className="w-4 h-4" />
+                                    </button>
+                                )}
                                 {!isLocked && <button className="text-xs text-muted-foreground hover:text-red-500 px-3 py-2.5 transition-colors" onClick={() => clearMeal(mealKey)}>Vaciar</button>}
                             </div>
                         </div>

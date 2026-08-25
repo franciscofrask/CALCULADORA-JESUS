@@ -42,6 +42,14 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 # leído": cada buzón se vacía por su lado.
 SOLO_DEL_CLIENTE = {"equipo": {"$ne": True}, "type": {"$nin": list(TIPOS_EQUIPO)}}
 
+# LOS DOS CÓDIGOS DEL PREMIUM. «Sólo Premium, que es el único con control semana a semana»
+# (punto 35 del doc del 24-08), y el Premium son dos fichas del catálogo: la que se vende
+# hoy (`nivel3`) y la vieja de especiales (`premium`), que quedó en legacy, sigue siendo
+# asignable y es la que llevaban los nueve de siempre. Se mira el CÓDIGO y no «¿tiene
+# reporte semanal?» porque por ahí entraba también `plan_6m`, que lo lleva en sus
+# habilitaciones y tiene dos clientes en producción: un método que su plan no vende.
+CODIGOS_PREMIUM = ("nivel3", "premium")
+
 
 async def notify(user_id: str, type: str, title: str, link: Optional[str] = None, body: Optional[str] = None):
     """Crea una notificación para un usuario. Falla en silencio: un aviso nunca
@@ -358,6 +366,9 @@ async def sincronizar_avisos(user_id: str, marcar_entrada: bool = True,
                 arranque=datos["arranque"],
                 cerro_hoy=datos["cerro_hoy"],
                 quiere_cierre_dia=datos["quiere_cierre_dia"],
+                # El interruptor del cliente y la llave de su plan son dos candados
+                # distintos y hacen falta los dos: ver `avisos_de_calendario_doc`.
+                plan_con_cierre_dia=datos["plan_con_cierre_dia"],
                 ventanas=datos["ventanas"],
                 semana=datos["semana"],
                 semanas_ciclo=datos["semanas_ciclo"],
@@ -366,6 +377,9 @@ async def sincronizar_avisos(user_id: str, marcar_entrada: bool = True,
                 fin_de_ciclo=datos.get("fin_de_ciclo"),
                 vencio_el=datos.get("vencio_el"),
                 con_correo_de_novedades=datos.get("newsletter_mandada", False),
+                es_premium=datos.get("es_premium", False),
+                se_peso_miercoles=datos.get("se_peso_miercoles", False),
+                se_peso_jueves=datos.get("se_peso_jueves", False),
             )
         condicionados = avisos_condicionados(
             ahora=ahora,
@@ -380,6 +394,8 @@ async def sincronizar_avisos(user_id: str, marcar_entrada: bool = True,
             mantenimiento_desde=datos.get("mantenimiento_desde"),
             rutina_mes_aplazada_hasta=datos.get("rutina_mes_aplazada_hasta"),
             con_ajuste=datos.get("con_ajuste", True),
+            # «Llevas 5 días sin apuntar nada» también manda a /dashboard/checkins.
+            plan_con_cierre_dia=datos.get("plan_con_cierre_dia", True),
         )
 
         # LA PASADA DE FONDO NO CREA CONDICIONADAS (ver `solo_calendario` arriba). Se
@@ -540,16 +556,58 @@ async def _datos_para_avisos(perfil: dict, ahora: datetime,
     proximo_ajuste = None
     semana = None
     con_ajuste = True
+    es_premium = False
+    # ¿SU PLAN LE ABRE EL CIERRE DEL DÍA? Por defecto SÍ, que es lo que dice
+    # `cierre_del_dia_incluido`: si la ficha del plan no declara el campo, lo lleva. Ese
+    # defecto también cubre el caso de que el catálogo no se pueda leer (el `except` de
+    # abajo): mejor mandarle el aviso que callárselo por una consulta que falló.
+    plan_con_cierre_dia = True
     ventanas: List[Dict[str, Any]] = []
     try:
         from routes.plans import _overrides_by_code
-        from models.user import merged_catalog, codigo_de_plan
+        from models.user import merged_catalog, codigo_de_plan, cierre_del_dia_incluido
         catalogo = merged_catalog(await _overrides_by_code())
-        plan = catalogo.get(codigo_de_plan(perfil.get("plan")) or "", {})
+        codigo = codigo_de_plan(perfil.get("plan")) or ""
+        plan = catalogo.get(codigo, {})
         semanas_ciclo = (plan.get("ciclo") or {}).get("semanas")
+        # Los avisos del peso (punto 35 del doc del 24-08) son SOLO del Premium: los dos
+        # códigos, el que se vende y el legacy (ver `CODIGOS_PREMIUM` arriba).
+        es_premium = codigo in CODIGOS_PREMIUM
         # Regla 1 del doc 19-08: los avisos leen las habilitaciones del plan. Al que su
         # plan no le incluye ajuste no se le dice que lleva semanas sin ajustar.
         con_ajuste = (plan.get("habilitaciones") or {}).get("frecuencia_ajuste") not in (None, "", "ninguna")
+        # La misma regla 1 aplicada al cierre del día: los avisos que llevan a
+        # /dashboard/checkins solo salen si el plan abre esa pantalla. Se lee del catálogo
+        # MEZCLADO con `db.plan_overrides`, que es donde escribe el panel: si se leyera el
+        # del código, apagar el cierre desde el panel cambiaría la puerta y no el aviso, y
+        # volveríamos a tener avisos contra una pared. La función es la misma que usan las
+        # otras dos puertas (`derive_features` y CAP.CIERRE_DIA), para que no haya tres
+        # criterios distintos para la misma llave.
+        plan_con_cierre_dia = cierre_del_dia_incluido(plan.get("habilitaciones") or {})
+        # Y ADEMÁS, QUE TENGA UN PLAN. Mirar solo las habilitaciones dejaba la mitad del
+        # agujero abierta, y esta mitad NO es hipotética: la app le cierra la pantalla a
+        # todo el que no tiene plan contratado (`myPlan` sale null en AuthContext y
+        # `can()` devuelve false para todo), y a ese cliente el catálogo no le decía nada
+        # en contra, así que `cierre_del_dia_incluido({})` respondía «lo lleva» y el aviso
+        # nacía igual. El 24-08 había en producción un «Cierra tu día» vivo, sin leer, de
+        # un perfil sin plan: el aviso llevaba al mismo sitio que `CapabilityRoute` cierra
+        # sin decir nada. Comprobado en el navegador con una cuenta de dev a la que se le
+        # quitó el plan: /dashboard/checkins acaba en /dashboard y sin formulario.
+        #
+        # Los tres casos son los mismos que mira la app, y por eso se copian aquí en vez de
+        # inventar otro criterio: sin código de plan, con un código que el catálogo no
+        # conoce (`plan` sale vacío) o con un checkout de Stripe a medias.
+        #
+        # Y NO VALE `estado_de_acceso`, que está aquí al lado y parece lo mismo: ese
+        # también da «no activo» al CADUCADO, y al caducado la app sí le abre el cierre del
+        # día (comprobado en el navegador: con el perfil en `caducado` la pantalla entra
+        # igual, porque `myPlan` solo se cae con el pago a medias). Con ese criterio le
+        # quitaríamos el aviso a gente que sí puede cerrar su día, que es peor que el fallo
+        # que se arregla.
+        pago_a_medias = (perfil.get("status") == "pendiente_pago"
+                         and perfil.get("checkout_status") in ("draft", "created"))
+        if not plan or pago_a_medias:
+            plan_con_cierre_dia = False
         semana, ventanas = await _ventanas_de_reporte(perfil, catalogo, ahora)
     except Exception:
         pass
@@ -563,6 +621,11 @@ async def _datos_para_avisos(perfil: dict, ahora: datetime,
 
     hoy = hoy_madrid()
     cerro_hoy, dias_sin_cerrar = await _cierres_del_cliente(client_id, hoy)
+
+    # ¿SE PESÓ EL MIÉRCOLES Y EL JUEVES DE ESTA SEMANA? Es lo único que le falta al motor de
+    # avisos para los tres del peso (punto 35). Sale del `pesos` que ya viene dentro del
+    # perfil, así que no cuesta ni una consulta más.
+    lunes = hoy - timedelta(days=hoy.weekday())
 
     # CUÁNDO ATERRIZÓ EN MANTENIMIENTO. Sale una sola vez porque se usa dos veces: para
     # contar el mes que dispara «¿Volvemos?» y para meterla DENTRO de su clave, que es lo
@@ -653,7 +716,26 @@ async def _datos_para_avisos(perfil: dict, ahora: datetime,
         "arranque": (a_madrid(perfil.get("cycle_start") or perfil.get("created_at")) or ahora).date(),
         # Activado por defecto: el cliente lo apaga desde su perfil, no al revés.
         "quiere_cierre_dia": bool((perfil.get("avisos") or {}).get("cierre_dia", True)),
+        # Y si su PLAN abre esa pantalla, que es otra cosa: uno es lo que el cliente
+        # quiere y el otro lo que ha comprado. Ver arriba.
+        "plan_con_cierre_dia": plan_con_cierre_dia,
+        "es_premium": es_premium,
+        "se_peso_miercoles": _se_peso_el(perfil, lunes + timedelta(days=2)),
+        "se_peso_jueves": _se_peso_el(perfil, lunes + timedelta(days=3)),
     }
+
+
+def _se_peso_el(perfil: dict, dia: date) -> bool:
+    """¿Tiene un pesaje de ese día? Se mira en la serie que ya viene dentro del perfil.
+
+    Con `sanea_peso` por delante: en la serie de producción hay 0,0 kg y errores de coma, y
+    un 0,0 no es haberse pesado. Es la misma regla que usa la curva.
+    """
+    from core.series_cliente import sanea_peso
+
+    return any(str(p.get("fecha") or "")[:10] == dia.isoformat()
+               and sanea_peso(p.get("valor")) is not None
+               for p in (perfil.get("pesos") or []))
 
 
 async def _fotos_o_medidas_viejas(perfil: dict, hoy) -> Optional[list]:

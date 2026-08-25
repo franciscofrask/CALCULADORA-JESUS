@@ -16,16 +16,18 @@ const SupplementCard = ({ item }) => {
     const [imgError, setImgError] = useState(false);
     return (
     <div className="surface p-0 overflow-hidden flex flex-col sm:flex-row" data-testid="supplement-card">
-        <div className="hidden sm:flex sm:w-32 items-center justify-center bg-muted/40 p-3 flex-shrink-0">
+        {/* En móvil la foto iba oculta y la tarjeta se quedaba en puro texto. Ahora
+            sale también ahí, como una banda arriba, y en escritorio como columna. */}
+        <div className="flex h-28 sm:h-auto sm:w-44 items-center justify-center bg-muted/40 p-3 flex-shrink-0">
             {item.imagen && !imgError ? (
                 <img
                     src={item.imagen}
                     alt={item.titulo}
-                    className="max-h-24 object-contain"
+                    className="max-h-full max-w-full object-contain"
                     onError={() => setImgError(true)}
                 />
             ) : (
-                <Pill className="w-8 h-8 text-brand/50" />
+                <Pill className="w-10 h-10 text-brand/50" />
             )}
         </div>
         <div className="flex-1 p-4">
@@ -73,10 +75,12 @@ const LineaSuplemento = ({ item }) => {
     const pauta = [item.cuanto, item.cuando].map((t) => (t || '').trim()).filter(Boolean).join(' · ');
     return (
         <div className="surface p-4 flex items-start gap-4" data-testid="supplement-card">
-            <div className="w-12 h-12 rounded-xl bg-muted/40 flex items-center justify-center flex-shrink-0 overflow-hidden">
+            {/* Del tamaño al que se ven en Calma, no el sello de 48 px de antes: el
+                bote se reconoce de un vistazo, que es para lo que está la foto. */}
+            <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-xl bg-muted/40 flex items-center justify-center flex-shrink-0 overflow-hidden p-2">
                 {item.imagen && !imgError
-                    ? <img src={item.imagen} alt={item.titulo} className="max-h-12 object-contain" onError={() => setImgError(true)} />
-                    : <Pill className="w-6 h-6 text-brand/50" />}
+                    ? <img src={item.imagen} alt={item.titulo} className="max-h-full max-w-full object-contain" onError={() => setImgError(true)} />
+                    : <Pill className="w-12 h-12 text-brand/50" />}
             </div>
             <div className="min-w-0 flex-1">
                 <p className="font-bold text-foreground text-sm">{item.titulo}</p>
@@ -105,10 +109,10 @@ const FichaDeLaGuia = ({ ficha }) => {
     const [imgError, setImgError] = useState(false);
     return (
         <div className="surface p-4 flex items-start gap-4" data-testid="ficha-guia">
-            <div className="w-12 h-12 rounded-xl bg-muted/40 flex items-center justify-center flex-shrink-0 overflow-hidden">
+            <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-xl bg-muted/40 flex items-center justify-center flex-shrink-0 overflow-hidden p-2">
                 {ficha.imagen && !imgError
-                    ? <img src={ficha.imagen} alt={ficha.nombre} className="max-h-12 object-contain" onError={() => setImgError(true)} />
-                    : <Pill className="w-6 h-6 text-brand/50" />}
+                    ? <img src={ficha.imagen} alt={ficha.nombre} className="max-h-full max-w-full object-contain" onError={() => setImgError(true)} />
+                    : <Pill className="w-12 h-12 text-brand/50" />}
             </div>
             <div className="min-w-0 flex-1">
                 <p className="font-bold text-foreground text-sm">{ficha.nombre}</p>

@@ -9,7 +9,36 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { Star, Trash2, Download } from 'lucide-react';
+import { Star, Trash2, Download, ChevronDown, ChevronUp } from 'lucide-react';
+import { ListaDeAlimentos } from './FavoritasDeComida';
+
+const NOMBRE_COMIDA = {
+    C1: 'Comida 1', C2: 'Comida 2', C3: 'Comida 3', C4: 'Comida 4',
+    C5: 'Comida 5', C6: 'Comida 6', Intra: 'Intra', Post: 'Post',
+};
+
+/** Lo que lleva un día guardado, comida a comida. Sin abrirlo no había forma de saberlo. */
+const DetalleDelDia = ({ comidas }) => {
+    const conAlgo = Object.entries(comidas || {})
+        .filter(([, m]) => (m?.alimentos || []).length > 0);
+    if (!conAlgo.length) {
+        return <p className="mt-2 pt-2 border-t border-border text-xs text-muted-foreground">
+            Esta favorita no tiene comidas guardadas.
+        </p>;
+    }
+    return (
+        <div className="mt-2 pt-2 border-t border-border space-y-2">
+            {conAlgo.map(([clave, m]) => (
+                <div key={clave}>
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                        {NOMBRE_COMIDA[clave] || clave}
+                    </p>
+                    <ListaDeAlimentos alimentos={m.alimentos} />
+                </div>
+            ))}
+        </div>
+    );
+};
 
 const esDescanso = (t) => t === 'descanso';
 const etiqueta = (t) => esDescanso(t) ? 'descanso' : 'entreno';
@@ -25,6 +54,8 @@ const FavoritesModal = ({ open, onClose, favorites, onSave, onApply, onDelete, t
     const [saving, setSaving] = useState(false);
     // Favorita con el panel "adaptar o aplicar como se guardó" desplegado.
     const [confirmId, setConfirmId] = useState(null);
+    // Favorita desplegada para ver lo que lleva dentro, comida a comida.
+    const [detalleId, setDetalleId] = useState(null);
 
     // DOS FAVORITAS CON EL MISMO NOMBRE NO SIRVEN DE NADA (Jesús, 15-08, fallo 35): «dos
     // "dieta nueva", una de 4 comidas y otra de 6, sin fecha ni macros que las distingan».
@@ -100,14 +131,22 @@ const FavoritesModal = ({ open, onClose, favorites, onSave, onApply, onDelete, t
                         return (
                             <div key={fav.id} className="bg-muted rounded-lg p-2">
                                 <div className="flex items-center gap-2">
-                                    <div className="flex-1 min-w-0">
+                                    {/* El nombre abre el detalle: hasta ahora, para saber qué
+                                        llevaba un día guardado había que aplicarlo. */}
+                                    <button className="flex-1 min-w-0 text-left"
+                                        onClick={() => setDetalleId(prev => prev === fav.id ? null : fav.id)}
+                                        data-testid={`fav-ver-${fav.id}`}>
                                         {/* El nombre entero al pasar por encima: recortado no
                                             hay manera de distinguir dos favoritas parecidas. */}
-                                        <p className="text-sm font-semibold text-foreground truncate" title={fav.name}>{fav.name}</p>
+                                        <p className="text-sm font-semibold text-foreground truncate flex items-center gap-1" title={fav.name}>
+                                            {fav.name}
+                                            {detalleId === fav.id ? <ChevronUp className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                                                : <ChevronDown className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />}
+                                        </p>
                                         <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                                             {n === 1 ? '1 comida' : `${n} comidas`} <TipoDiaBadge tipo={favTipo} />
                                         </p>
-                                    </div>
+                                    </button>
                                     <Button variant="outline" size="sm" className="rounded-full border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white shrink-0"
                                         onClick={() => handleApplyClick(fav)} title="Aplicar a este día" data-testid={`fav-apply-${fav.id}`}>
                                         <Download className="w-4 h-4 mr-1" /> Aplicar
@@ -117,6 +156,8 @@ const FavoritesModal = ({ open, onClose, favorites, onSave, onApply, onDelete, t
                                         <Trash2 className="w-4 h-4" />
                                     </Button>
                                 </div>
+
+                                {detalleId === fav.id && <DetalleDelDia comidas={fav.comidas} />}
 
                                 {/* Tipo de día distinto: adaptar o aplicar como se guardó */}
                                 {confirmId === fav.id && (

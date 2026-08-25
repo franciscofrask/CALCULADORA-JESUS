@@ -3,6 +3,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '../ui/button';
 import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 
+// El intra y el post son comidas de otra naturaleza: no se mezclan con las normales
+// ni entre ellas. Un intra solo se repite desde otro intra, y un post desde otro post.
+const esPeri = (k) => ['Intra', 'Post'].includes(k);
+
 const RepeatMealModal = ({
     open,
     mealKey,
@@ -98,7 +102,15 @@ const RepeatMealModal = ({
                             </h3>
 
                             <div className="space-y-2">
-                                {Object.entries(selectedDiet.comidas_resumen || {}).map(([key, resumen]) => (
+                                {Object.entries(selectedDiet.comidas_resumen || {})
+                                    // NO SE PUEDE COPIAR CUALQUIER COMIDA AQUÍ (Francisco, 25-08).
+                                    // Estando en el Intra ofrecía copiar la Comida 1, 2, 3 o 4:
+                                    // un desayuno no es un intra, y un intra -MAP con hidrato
+                                    // rápido, sin grasa- no es una comida normal. En el peri solo
+                                    // se ofrece ESE mismo peri de otros días, y en una comida
+                                    // normal, solo comidas normales.
+                                    .filter(([key]) => (esPeri(mealKey) ? key === mealKey : !esPeri(key)))
+                                    .map(([key, resumen]) => (
                                     <button
                                         key={key}
                                         className="w-full text-left p-3 bg-muted hover:bg-brand-orange/10 rounded-xl transition-all border-2 border-transparent hover:border-brand-orange"
@@ -119,9 +131,13 @@ const RepeatMealModal = ({
                                     </button>
                                 ))}
 
-                                {Object.keys(selectedDiet.comidas_resumen || {}).length === 0 && (
+                                {Object.keys(selectedDiet.comidas_resumen || {})
+                                    .filter(key => (esPeri(mealKey) ? key === mealKey : !esPeri(key)))
+                                    .length === 0 && (
                                     <p className="text-center text-muted-foreground py-4">
-                                        No hay comidas guardadas este día
+                                        {esPeri(mealKey)
+                                            ? `Ese día no tiene ${mealInfo[mealKey]?.name || mealKey} guardado`
+                                            : 'No hay comidas guardadas este día'}
                                     </p>
                                 )}
                             </div>

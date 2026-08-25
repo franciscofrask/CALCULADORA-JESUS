@@ -168,7 +168,7 @@ function AppRoutes() {
                         {/* Una sola pantalla de planes. /onboarding es la vieja: se hizo
                             para los planes de antes y listaba cualquier plan activo con
                             precio, así que al añadir los tres niveles cogió el Nivel 3
-                            con botón de pagar — cuando el documento dice que se contrata
+                            con botón de pagar, cuando el documento dice que se contrata
                             hablando. Además le faltaban los textos de los niveles nuevos.
                             Manda /planes, que es la que cumple el documento.
                             Se conserva la query para no perder la vuelta de Stripe de un
@@ -236,12 +236,47 @@ function AppRoutes() {
                 {/* Mi semana (rediseño 21-08). Puertas: barra de abajo del móvil y menú
                     lateral del escritorio, las dos detrás de t1_inicio_nuevo. */}
                 <Route path="semana" element={<MiSemanaPage />} />
-                <Route path="reports" element={<CapabilityRoute cap="reportes"><ReportsPage /></CapabilityRoute>} />
+                {/* SEGUIMIENTO SE ABRE A TODOS, EN MODO LECTURA (decisión de Jesús del
+                    24-08). Pedía «reportes» y 81 clientes no la tienen, así que su
+                    historial -- 1.195 reportes de la etapa anterior en 72 de ellos -- y su
+                    curva de peso estaban detrás de una puerta cerrada. La llave pasa a ser
+                    la del cierre del día, que la lleva todo el mundo; MANDAR un reporte
+                    sigue siendo de quien tiene `reportes` y eso lo decide la pantalla (y el
+                    servidor, que rechaza el envío igual). */}
+                <Route path="reports" element={<CapabilityRoute cap="cierre_dia"><ReportsPage /></CapabilityRoute>} />
                 <Route path="messages" element={<MessagesPage />} />
                 <Route path="profile" element={<ProfilePage />} />
                 <Route path="chatbot" element={<ChatbotPage />} />
                 <Route path="supplements" element={<CapabilityRoute cap="suplementacion"><SupplementsPage /></CapabilityRoute>} />
-                <Route path="checkins" element={<CapabilityRoute cap="reportes"><CheckInsPage /></CapabilityRoute>} />
+                {/* El cierre del día, con su llave propia: CAP.CIERRE_DIA aquí (ver
+                    lib/planAccess.js) y la feature `cierre_dia` de `derive_features` en el
+                    servidor (backend/models/user.py). LAS DOS PUERTAS VAN POR LA MISMA
+                    LLAVE desde el 24-08: esta ruta y el cerrojo del `POST /checkins`
+                    (backend/routes/checkins.py, `llave = "cierre_dia" if data.type ==
+                    "daily" else "reportes"`).
+                    POR QUÉ UNA LLAVE NUEVA Y NO «reportes»: el cierre vivía detrás de esa,
+                    y los 81 clientes de ELM, Mantenimiento, Calculadora JP y Básica no la
+                    tienen, así que no podían contar su día. Darles «reportes» no valía: les
+                    encendería de paso un calendario de reportes que su plan no vende. La
+                    llave nueva la lleva todo el mundo salvo que a un plan se le ponga
+                    `cierre_dia: False` en sus habilitaciones.
+                    LA MISMA LLAVE, PERO NO EL MISMO CATÁLOGO: el cerrojo del servidor la
+                    busca en el catálogo del código (`plan_grants_feature`), que no lee
+                    `db.plan_overrides`, y esta puerta sí los lee. Comprobado en dev: con
+                    el cierre apagado para un plan desde el panel, la pantalla ya no abre
+                    y el `POST /checkins` de ese mismo cliente sigue respondiendo 200. O
+                    sea que la que cierra de verdad al apagar el interruptor del panel es
+                    ESTA; el servidor solo para al que no lo lleva por catálogo. Si algún
+                    día eso importa, el cambio es `plan_grants_feature_vivo` allí.
+                    ESTE COMENTARIO DECÍA LO CONTRARIO Y YA NO ERA VERDAD. Avisaba en
+                    mayúsculas de que el servidor seguía pidiendo «reportes» y de que el
+                    Guardar devolvía un 403; se arregló el mismo 24-08 y la nota se quedó
+                    vieja, que es como se manda al siguiente a tocar lo que ya está bien.
+                    Comprobado en dev con una cuenta de plan ELM: la pantalla abre y el
+                    `POST /checkins` de tipo `daily` responde 200, mientras el `weekly` --
+                    que sí se vende por plan -- le sigue respondiendo 403. Si tocas una de
+                    las dos puertas, toca la otra Y ESTA NOTA. */}
+                <Route path="checkins" element={<CapabilityRoute cap="cierre_dia"><CheckInsPage /></CapabilityRoute>} />
                 <Route path="macro-calculator" element={<MacroCalculatorClientPage />} />
                 {/* LOS DOS NOMBRES QUE LA GENTE ESCRIBE (punto 22 del 17-08). `/dashboard/macros`
                     y `/dashboard/my-macros` no estaban declaradas, así que caían en el comodín y

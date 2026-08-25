@@ -39,6 +39,9 @@ const ESTADO = {
     confirmado:    { texto: 'Confirmado',    clase: 'text-emerald-400', punto: 'bg-emerald-400' },
     por_confirmar: { texto: 'Por confirmar', clase: 'text-amber-400',   punto: 'bg-amber-400' },
     a_mano:        { texto: 'A mano',        clase: 'text-sky-400',     punto: 'bg-sky-400' },
+    // El de cortesía no es que esté por confirmar: es que no paga, y sumarle su último
+    // cobro de hace un año hinchaba la previsión (punto 46).
+    cortesia:      { texto: 'Cortesía',      clase: 'text-white/50',    punto: 'bg-white/30' },
 };
 
 const PuntoEstado = ({ estado }) => (
@@ -278,6 +281,24 @@ const PanelDireccion = ({ api, onAsignar }) => {
                     detalle={`${datos.a_cero || 0} activos a cero`}
                     abierto={abierto === 'factura'} onToggle={() => toggle('factura')} />
             </div>
+
+            {/* POR QUÉ ESTOS NÚMEROS SON MÁS BAJOS QUE ANTES (punto 46 del doc del 24-08).
+                Hasta hoy esta pantalla contaba a todo el que llevara la etiqueta «activo»,
+                y ahí dentro iban los caducados: gente que ni entra en la app ni paga.
+                Medido en producción el 24-08: la cartera baja de 156 a 126. Esa caída no es
+                del negocio: es que se dejó de contar a los que ya no están. Se dice aquí,
+                al lado de la cifra, y no en un correo que nadie va a recordar dentro de un
+                mes -- pero SIN cifras escritas a mano en el texto: las de la frase salen del
+                dato de hoy, que una cifra clavada en el código envejece y acaba mintiendo. */}
+            {cartera.caducados_fuera > 0 && (
+                <p className="text-xs text-white/40 -mt-1" data-testid="aviso-caducados-fuera">
+                    Aquí solo cuentan los {cartera.con_acceso} clientes que pueden entrar hoy.
+                    Se quedan fuera {cartera.caducados_fuera} con la etiqueta «activo» a los que
+                    se les acabó el acceso: por eso la cartera y la factura del mes salen más
+                    bajas que antes, no porque haya caído el negocio. Son los mismos clientes y
+                    la misma cuenta que el MRR del Inicio del panel.
+                </p>
+            )}
 
             {/* La lista del número pinchado. */}
             {abierto === 'entra' && (

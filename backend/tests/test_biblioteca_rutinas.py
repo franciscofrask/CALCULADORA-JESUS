@@ -65,3 +65,17 @@ def test_lo_que_no_es_un_dia_no_revienta():
     """A esta función también se le llamará desde la importación de las rutinas de Drive."""
     assert len(_dias_limpios(None)) == 7
     assert len(_dias_limpios(["Lunes", 42, None])) == 7
+
+
+def test_el_dia_sin_tilde_es_el_mismo_dia():
+    """«Miercoles» sin tilde perdia el dia ENTERO y en silencio: la plantilla se guardaba
+    con un dia menos y nadie se enteraba. Pasa al llamar a la API a mano y va a pasar con
+    la importacion de las rutinas de Drive."""
+    dias = _dias_limpios([
+        {"day": "miercoles", "exercises": [{"name": "Sentadilla", "sets": 4}]},
+        {"day": "SÁBADO", "exercises": [{"name": "Remo", "sets": 3}]},
+    ])
+    porNombre = {d["day"]: d for d in dias}
+    assert porNombre["Miércoles"]["exercises"][0]["name"] == "Sentadilla"
+    assert porNombre["Sábado"]["exercises"][0]["name"] == "Remo"
+    assert len(dias) == 7

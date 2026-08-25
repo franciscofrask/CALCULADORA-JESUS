@@ -76,6 +76,15 @@ def lista_desde_texto(v):
 #                       enseña la pestaña «Mis macros» (fallo 08 del doc del 19-08)
 #       rutina          personalizada | del_mes | ninguna | opcional
 #       reportes        lista de: quincenal, mensual, semanal
+#       cierre_dia      bool · el cierre del día («¿Cómo fuiste hoy?») y su historial en
+#                       Seguimiento. LLAVE PROPIA, NO LA DE «REPORTES» (decisión de Jesús
+#                       del 24-08): el cierre del día lo tenían solo los planes con algún
+#                       reporte, y 81 perfiles -- ELM, Mantenimiento, Calculadora JP,
+#                       Básica -- se quedaban fuera. Darles «reportes» les encendería un
+#                       calendario de reportes que su plan no vende, así que el cierre
+#                       tiene su propio interruptor y lo llevan TODOS los planes. Se lee
+#                       con `cierre_del_dia_incluido`: si la ficha no lo dice, es que sí
+#                       (los overrides guardados antes de hoy tampoco lo traen)
 #       suplementacion  ninguna | guia | protocolo (fallo 10: eran un sí/no y son dos
 #                       cosas distintas; True/False viejos se leen con
 #                       `suplementacion_incluida`)
@@ -558,13 +567,17 @@ PLAN_CATALOG = {
     "rutina_mes": {
         "name": "Rutina del Mes", "estado": "complemento", "asignable": False,
         "ciclo": {"tipo": "unico", "semanas": None},
-        # DOS PRECIOS (doc 19-08): 57 EUR dentro de un plan -- el que se cobra desde el
-        # reporte mensual, vive en `core/rutina_del_mes.PRECIO_EUR` y un test vigila que
-        # no se separen -- y 67 EUR suelta, para el que no tiene ningún plan que la
-        # incluya. «Calculadora y Bronze la llevan a 57. Suelta, cualquiera.»
-        "precio": 57.0, "precio_nota": "57€ dentro de un plan · 67€ suelta",
+        # UN SOLO PRECIO, 57 EUR (decisión de Jesús del 24-08). Eran dos -- 57 dentro de un
+        # plan y 67 suelta, del doc 19-08 --, y por eso Inicio le decía 67 al de
+        # Mantenimiento (lee la tarifa «Suelta») mientras la pantalla de Rutina y el cobro
+        # del reporte decían 57. El importe que se cobra vive en
+        # `core/rutina_del_mes.PRECIO_EUR` y un test vigila que no se separen.
+        # Las dos filas se quedan porque son las dos formas de llevársela -- incluida en el
+        # plan o comprada suelta -- y la app busca la suya por la etiqueta; lo que ya no
+        # cambia es el número.
+        "precio": 57.0, "precio_nota": "57€ · dentro de un plan o suelta",
         "precios": [{"label": "Dentro de un plan", "importe": 57.0, "periodo": "único"},
-                    {"label": "Suelta", "importe": 67.0, "periodo": "único"}],
+                    {"label": "Suelta", "importe": 57.0, "periodo": "único"}],
         "responsable": "Jesús",
         "habilitaciones": {"calculadora": "sin_ajuste", "rutina": "del_mes",
                            "reportes": [], "suplementacion": "ninguna"},
@@ -693,6 +706,19 @@ def suplementacion_incluida(habilitaciones: Dict[str, Any]) -> bool:
     return bool(v)
 
 
+def cierre_del_dia_incluido(habilitaciones: Dict[str, Any]) -> bool:
+    """Si el plan abre el cierre del día y su historial (decisión de Jesús, 24-08).
+
+    LO LLEVAN TODOS: sin campo escrito, es que sí. Se pregunta así -- y no `h.get(...)` a
+    pelo -- porque ninguna de las 21 fichas lo declara y los overrides de `db.plan_overrides`
+    guardados antes de hoy tampoco: con el valor por defecto en False, encender la llave
+    habría dejado fuera justo a los planes que alguien tocó desde el panel.
+
+    Se puede apagar para un plan poniéndole `cierre_dia: False` en sus habilitaciones.
+    """
+    return (habilitaciones or {}).get("cierre_dia", True) is not False
+
+
 def nivel_suplementacion(habilitaciones: Dict[str, Any]) -> str:
     """ninguna | guia | protocolo, tolerando el booleano viejo de los overrides.
 
@@ -743,6 +769,11 @@ def derive_features(habilitaciones: Dict[str, Any]) -> List[str]:
         features.append("rutina")
     if reportes:
         features.append("reportes")  # feature genérica: el plan incluye algún reporte/check-in
+    # EL CIERRE DEL DÍA VA SUELTO (24-08). Iba dentro de «reportes» -- el cerrojo del
+    # servidor y la ruta de la app pedían esa feature --, así que los planes sin ningún
+    # reporte no podían contar su día. Es su propia llave y la lleva todo el mundo.
+    if cierre_del_dia_incluido(h):
+        features.append("cierre_dia")
     if "quincenal" in reportes:
         features.append("reporte_quincenal")
     if "mensual" in reportes:
@@ -1037,11 +1068,62 @@ def merged_catalog(overrides_by_code: Optional[Dict[str, Dict[str, Any]]] = None
     return out
 
 
+def tarifa_del_plan(plan: Dict[str, Any], alta: Optional[str] = None) -> float:
+    """La tarifa del plan PARA QUIEN ENTRÓ EL DÍA `alta`, no la de hoy.
+
+    EL PRECIO DE LOS QUE YA ESTÁN NO SE TOCA (decisión de Jesús del 24-08: «los clientes que
+    vienen del sistema anterior conservan su plan y su precio; las tarifas nuevas solo
+    aplican a clientes nuevos»). Su catálogo lo dice igual de los planes que ya no se
+    venden: «se mantienen para quienes los contrataron originalmente, respetando el precio
+    de la primera vez».
+
+    Por qué hace falta esto: `precio_de_ciclo` cae en la tarifa del catálogo cuando el perfil
+    no trae precio propio, y en producción son 69 clientes de pago (medido el 24-08: 116 con
+    precio en la ficha, 69 sin él, 13 de cortesía). Subir un importe aquí -- que es un cambio
+    de código, no una casilla del panel: `precio` no está en PLAN_EDITABLE_FIELDS a
+    propósito -- les habría subido el precio a los 69 de golpe, en su «Mi perfil» y en la
+    caja del panel, sin que nadie tocara sus fichas.
+
+    CÓMO SE SUBE UNA TARIFA A PARTIR DE AHORA: se escribe la nueva en `precio` y la vieja
+    baja a `precios_anteriores`, con el día en que dejó de venderse:
+
+        "precio": 297.0,
+        "precios_anteriores": [{"hasta": "2026-09-01", "importe": 247.0}],
+
+    y el que se dio de alta antes del 1 de septiembre sigue en 247. Sin `precios_anteriores`
+    -- que es como están hoy las 21 fichas -- devuelve el `precio` de siempre, así que esto
+    no mueve ni un número de los de hoy: es el candado para el siguiente cambio.
+
+    Sin fecha de alta (14 perfiles de producción no tienen `created_at`) se le da la tarifa
+    MÁS ANTIGUA de las declaradas: no saber cuándo entró alguien nunca puede ser el motivo
+    de cobrarle más.
+    """
+    plan = plan or {}
+    try:
+        vigente = float(plan.get("precio") or 0)
+    except (TypeError, ValueError):
+        vigente = 0.0
+    anteriores = plan.get("precios_anteriores") or []
+    if not anteriores:
+        return vigente
+    # De la más vieja a la más nueva: la primera que se acabó DESPUÉS de su alta es la suya.
+    for tramo in sorted(anteriores, key=lambda t: str(t.get("hasta") or "")):
+        hasta = str(tramo.get("hasta") or "")
+        try:
+            importe = float(tramo.get("importe"))
+        except (TypeError, ValueError):
+            continue
+        if not alta or str(alta)[:10] < hasta:
+            return importe
+    return vigente
+
+
 def precio_de_ciclo(perfil: Dict[str, Any], catalogo: Dict[str, Any]) -> float:
     """Lo que paga este cliente cada ciclo.
 
     El `price` del perfil manda -- ahí van los precios pactados --, pero cuando está a cero
-    o no está, el precio es el de SU PLAN en el catálogo. Eso era lo que enseñaba «0 €/ciclo»
+    o no está, el precio es el de SU PLAN en el catálogo, CON LA TARIFA DE CUANDO ENTRÓ
+    (`tarifa_del_plan`). Eso era lo que enseñaba «0 €/ciclo»
     a clientes de pago sin cortesía marcada: los que vinieron de Calma llegaron con el campo
     a cero, y son **168 de los 174 activos**.
 
@@ -1064,10 +1146,9 @@ def precio_de_ciclo(perfil: Dict[str, Any], catalogo: Dict[str, Any]) -> float:
         except (TypeError, ValueError):
             pass
     plan = (catalogo or {}).get(perfil.get("plan") or "") or {}
-    try:
-        return float(plan.get("precio") or 0)
-    except (TypeError, ValueError):
-        return 0.0
+    # Su alta, no la de su ciclo: `cycle_start` se reinicia cada renovación y con él la
+    # tarifa dejaría de estar congelada justo al renovar, que es cuando más duele.
+    return tarifa_del_plan(plan, perfil.get("created_at"))
 
 
 # Auth Models

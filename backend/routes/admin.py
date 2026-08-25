@@ -1,7 +1,7 @@
 """
 Rutas de administración: clientes, dashboard, entrenadores.
 """
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Body, HTTPException, Depends
 from fastapi.responses import FileResponse, Response
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Any, Optional
@@ -194,16 +194,293 @@ async def _ajustes_al_dia(perfiles: List[Dict[str, Any]]) -> None:
 # De cuántos meses es cada ciclo, para poder sumar peras con peras.
 _MESES_DE_CICLO = {"mensual": 1, "bimestral": 2, "trimestral": 3, "semestral": 6}
 
+# Semanas que tiene un mes de media (365.25 / 12 / 7). Es lo que convierte un cobro de
+# cada N semanas en un «al mes» comparable entre planes.
+SEMANAS_POR_MES = 4.345
 
-def precio_mensual(perfil: Dict[str, Any], catalogo: Dict[str, Any]) -> float:
+
+# ==================== LOS EUROS AL MES DE UN CLIENTE: UNA SOLA FUNCIÓN ====================
+#
+# EL PUNTO 46 DEL DOC DEL 24-08. El Inicio del panel decía «MRR 20.062 €» y Paneles >
+# Dirección decía «Factura al mes 31.945 €» de los mismos clientes y el mismo día. Eran dos
+# cuentas escritas en dos sitios (`precio_mensual` aquí y `_eur_mes` en routes/paneles.py)
+# que se diferenciaban en tres cosas: a quién contaban, qué precio usaban y cómo pasaban el
+# ciclo a mes. Desde hoy la respuesta a «cuánto deja este cliente al mes» se da UNA vez, en
+# `euros_al_mes`, y las dos pantallas la llaman: dos funciones para la misma pregunta acaban
+# siempre contradiciéndose, y esta vez la contradicción eran 11.000 € en la misma pantalla.
+#
+# Decisión de Jesús (24-08): manda el COBRO REAL. Y por encima de todo: **los clientes que
+# vienen del sistema anterior conservan su plan y su precio congelado**, así que el precio de
+# la ficha nunca se corrige solo hacia la tarifa nueva del catálogo.
+
+
+async def ultimos_cobros_por_email(emails: List[str]) -> Dict[str, Dict[str, Any]]:
+    """El último cobro REAL de cada correo, en una sola agregación.
+
+    Mismos filtros obligatorios que routes/pagos_historicos.py: sin las copias
+    (`duplicado_de`) y solo lo que fue dinero (`es_dinero` != false). Sin ellos, un intento
+    de cobro fallido o una factura duplicada inflarían la cuenta.
+
+    Vive aquí y no en el panel porque de ella comen las tres pantallas que hablan de dinero
+    (el Inicio, la lista de Clientes y Dirección).
+
+    EL CORREO SE NORMALIZA AQUÍ DENTRO, y la respuesta viene siempre en minúscula. Mongo
+    compara mayúsculas y minúsculas como cosas distintas: la ficha ya buscaba con
+    `email.lower()` y la lista mandaba el correo tal cual, así que el día que entre un
+    «Nombre@Correo.com» la ficha le vería el cobro y el panel no. Es exactamente la clase
+    de grieta que hizo que dos pantallas del mismo panel dieran 11.000 € distintos.
+    """
+    limpios = sorted({(e or "").lower().strip() for e in emails if (e or "").strip()})
+    if not limpios:
+        return {}
+    from routes.pagos_historicos import SIN_COPIAS, SOLO_DINERO
+    out: Dict[str, Dict[str, Any]] = {}
+    cursor = db.pagos_historicos.aggregate([
+        {"$match": {**SIN_COPIAS, **SOLO_DINERO,
+                    "email": {"$in": limpios}, "importe": {"$gt": 0}}},
+        {"$sort": {"fecha": 1}},
+        # La clave sale en minúscula pase lo que pase, para que case con `cobro_de`.
+        {"$group": {"_id": {"$toLower": "$email"}, "importe": {"$last": "$importe"},
+                    "fecha": {"$last": "$fecha"}, "concepto": {"$last": "$concepto"},
+                    "origen": {"$last": "$origen"}}},
+    ])
+    async for doc in cursor:
+        out[doc["_id"]] = doc
+    return out
+
+
+def cobro_de(cobros: Dict[str, Dict[str, Any]], email: Optional[str]) -> Optional[Dict[str, Any]]:
+    """El cobro de un correo con la misma normalización con la que se guardó en el mapa.
+
+    Una línea tonta, pero es la que impide que una pantalla busque «Ana@x.com» en un mapa
+    con las claves en minúscula y concluya que Ana no ha pagado nunca.
+    """
+    return cobros.get((email or "").lower().strip())
+
+
+def _stripe_vivo(perfil: Dict[str, Any]) -> bool:
+    """¿Tiene una suscripción de Stripe cobrando hoy? Es la pregunta de la que cuelga todo
+    lo demás del dinero: «manda Stripe, y donde no hay Stripe, el cobro que haya»."""
+    return bool(perfil.get("stripe_subscription_id")) and \
+        (perfil.get("subscription_status") or "").lower() == "active"
+
+
+def importe_de_ciclo(perfil: Dict[str, Any], catalogo: Dict[str, Any],
+                     pago: Optional[Dict[str, Any]] = None) -> (float, str):
+    """Lo que paga este cliente CADA CICLO y de dónde sale esa cifra.
+
+    La cascada, en orden de confianza:
+      (a) Cortesía (`comp_plan`): no paga, y punto. Va la primera porque el que tiene el
+          plan regalado hoy pudo pagar el año pasado, y ese cobro viejo no es un ingreso.
+      (b) CON SUSCRIPCIÓN VIVA EN STRIPE, su último cobro real. El doc del 24-08 lo dice
+          con estas palabras: «La regla, para todo esto: manda Stripe». La ficha de
+          Montalvo decía 1.500 € y Stripe le cobra 250: el bueno es el 250, y ni el lápiz
+          del panel puede taparlo, que es justo lo que pide el punto 43 («no dejar
+          editarlo a mano», o el panel sigue mintiendo sobre lo que se ingresa).
+      (c) `renovacion_importe_prevision`: lo puso una persona a mano (el lápiz de
+          Dirección). Es para el que NO pasa por Stripe -- las transferencias --, que es
+          la otra mitad de la regla: «donde no hay Stripe, el cobro que haya».
+      (d) Su último cobro real, cuando no hay suscripción viva (Holded, ThriveCart, un
+          Stripe cancelado): son 353 + 19 cobros según el propio documento.
+      (e) `precio_de_ciclo`: el precio de SU ficha y, solo si no tiene, la tarifa de su
+          plan. Aquí es donde se respeta el precio congelado de los que vienen de Calma:
+          al que nunca pagó por la app no se le pone la tarifa nueva si su ficha dice otra
+          cosa.
+    """
+    if perfil.get("comp_plan"):
+        return 0.0, "cortesia"
+    importe_pagado = float(pago.get("importe") or 0) if pago else 0.0
+    if _stripe_vivo(perfil) and importe_pagado > 0:
+        return round(importe_pagado, 2), "cobro_real"
+    a_mano = perfil.get("renovacion_importe_prevision")
+    if isinstance(a_mano, (int, float)) and not isinstance(a_mano, bool):
+        return round(float(a_mano), 2), "a_mano"
+    if importe_pagado > 0:
+        return round(importe_pagado, 2), "cobro_real"
+    return round(precio_de_ciclo(perfil, catalogo), 2), "ficha"
+
+
+def _plan_del_perfil(perfil: Dict[str, Any], catalogo: Dict[str, Any]) -> Dict[str, Any]:
+    """La entrada del catálogo de su plan, resolviendo los alias («CalMa»)."""
+    from models.user import codigo_de_plan
+    return (catalogo or {}).get(codigo_de_plan(perfil.get("plan"))) or {}
+
+
+def _dias_de_stripe(perfil: Dict[str, Any]) -> Optional[int]:
+    """Cuántos días dura el periodo que Stripe está cobrando ahora mismo, o None.
+
+    Solo con suscripción viva: `current_period_start`/`_end` también los escribe la
+    renovación de la casa para el que no pasa por Stripe, y ahí no describen un cobro.
+    """
+    if not _stripe_vivo(perfil):
+        return None
+    desde, hasta = perfil.get("current_period_start"), perfil.get("current_period_end")
+    if not (desde and hasta):
+        return None
+    try:
+        d1 = datetime.fromisoformat(str(desde)[:10])
+        d2 = datetime.fromisoformat(str(hasta)[:10])
+    except ValueError:
+        return None
+    dias = (d2 - d1).days
+    return dias if 7 <= dias <= 400 else None
+
+
+# Los meses que cubre un cobro, por su duración en días. Se redondea a la cadencia de
+# verdad (28-31 días es UN mes, no 1,02) porque si no la suma del año no cierra.
+_MESES_POR_DIAS = ((28, 31, 1.0), (59, 62, 2.0), (89, 93, 3.0),
+                   (178, 190, 6.0), (360, 370, 12.0))
+
+
+def meses_de_cobro(perfil: Dict[str, Any], plan: Dict[str, Any]) -> float:
+    """Cuántos meses cubre UN cobro de este cliente. El divisor del «al mes».
+
+    MANDA STRIPE (doc del 24-08, la regla de todo el bloque del dinero). Un Premium de
+    plan trimestral al que Stripe le cobra del 8 de agosto al 8 de septiembre paga cada
+    MES, no cada 12 semanas: el caso Montalvo del punto 44. Repartir sus 250 € entre las
+    12 semanas del catálogo lo contaba a 90,52 €/mes, o sea le quitaba al negocio dos
+    terceras partes de lo que ese cliente ingresa. En producción son trece clientes.
+
+    El periodo de Stripe solo se usa cuando dice una cadencia LIMPIA (un número de meses
+    redondo o un número de semanas justo). Un periodo de 67 días es un cobro movido a
+    mano, no un contrato de 67 días, y ahí vale más lo que diga el plan.
+
+    Sin Stripe, el ciclo del catálogo:
+      · Plan MENSUAL: un mes. El catálogo les pone `billing_cycle_weeks: 4`, que es una
+        aproximación, y contarlo como 4/4,345 de mes les inventaba un 8,6 % de más --
+        eran 13 pagos al año donde Stripe hace 12 («at 60.50 € / month» dice su factura).
+      · El resto: las semanas de su ciclo (12 semanas no son 3 meses justos: son
+        12/4,345 de mes, y ahí Stripe sí cobra cada 84 días).
+      · Sin ciclo declarado, el tipo del catálogo; y si tampoco, un mes, que es el caso
+        por defecto de la casa.
+    """
+    dias = _dias_de_stripe(perfil)
+    if dias:
+        for desde, hasta, meses in _MESES_POR_DIAS:
+            if desde <= dias <= hasta:
+                return meses
+        if min(dias % 7, 7 - dias % 7) <= 1:      # un número de semanas justo
+            return dias / 7 / SEMANAS_POR_MES
+    tipo = str((plan.get("ciclo") or {}).get("tipo") or "").lower()
+    if tipo == "mensual":
+        return 1.0
+    semanas = plan.get("billing_cycle_weeks")
+    if semanas:
+        return float(semanas) / SEMANAS_POR_MES
+    if tipo in _MESES_DE_CICLO:
+        return float(_MESES_DE_CICLO[tipo])
+    return 1.0
+
+
+def euros_al_mes(perfil: Dict[str, Any], catalogo: Dict[str, Any],
+                 pago: Optional[Dict[str, Any]] = None) -> float:
+    """Lo que deja este cliente AL MES. La única definición de la casa (punto 46).
+
+    Sumar importes de ciclo tal cual mezcla trimestres con meses y la cifra no significa
+    nada: lo que se cobra, partido por los meses que cubre ese cobro (`meses_de_cobro`).
+    """
+    importe, _ = importe_de_ciclo(perfil, catalogo, pago)
+    meses = meses_de_cobro(perfil, _plan_del_perfil(perfil, catalogo))
+    return importe / max(meses, 0.25)
+
+
+def _plan_con_entrenador(plan: Optional[Dict[str, Any]]) -> bool:
+    """True si el plan lleva entrenador detrás (`habilitaciones.acompanamiento`).
+
+    Es el criterio de la casa para saber si a un cliente le FALTA entrenador: ELM y
+    Mantenimiento son `solo_app` y no tienen entrenador que asignar. Un plan que no está en
+    el catálogo cuenta como solo_app: si no se sabe qué incluye, no se le apunta trabajo a
+    nadie (P64 del doc del 23-08).
+    """
+    hab = (plan or {}).get("habilitaciones") or {}
+    return (hab.get("acompanamiento") or "solo_app") != "solo_app"
+
+
+def _renueva_solo(perfil: Dict[str, Any], catalogo: Dict[str, Any]) -> Dict[str, Any]:
+    """¿A este se le cobra solo, o hay que pedírselo? (punto 45).
+
+    Se distinguen dos cosas que hasta hoy salían del mismo color en Dirección: que Stripe
+    tenga la suscripción VIVA (a ese se le cobra solo de verdad) y que su plan diga que
+    renueva automático (que es una intención del catálogo, no un cobro). Con la suscripción
+    viva manda la suscripción.
+    """
+    if _stripe_vivo(perfil):
+        return {"automatica": True, "via": "stripe"}
+    if (_plan_del_perfil(perfil, catalogo).get("renovacion") or {}).get("automatica"):
+        return {"automatica": True, "via": "plan"}
+    return {"automatica": False, "via": None}
+
+
+def _dias_a_palabras(dias: Optional[int]) -> Optional[str]:
+    """«cada mes», «cada 12 semanas», «cada 45 días». Nada de "P1M" en pantalla."""
+    if not dias or dias <= 0:
+        return None
+    if 28 <= dias <= 31:
+        return "cada mes"
+    if 59 <= dias <= 62:
+        return "cada 2 meses"
+    if 89 <= dias <= 93:
+        return "cada 3 meses"
+    if dias % 7 == 0:
+        return f"cada {dias // 7} semanas"
+    return f"cada {dias} días"
+
+
+def _cadencia_de_cobro(perfil: Dict[str, Any], catalogo: Dict[str, Any]) -> Dict[str, Any]:
+    """Cada cuánto se le cobra DE VERDAD y cada cuánto dice su plan (punto 44 del 24-08).
+
+    «El catálogo define un solo ciclo por plan y hay Premium mensuales y de 5 semanas.»
+    Montalvo está puesto en «semana 3 de 12» porque su plan es trimestral, mientras Stripe
+    le cobra del 8 de agosto al 8 de septiembre. La cadencia real no está en ningún campo:
+    se saca del periodo que manda Stripe (`current_period_start` -> `current_period_end`),
+    que es el único dato que sabe lo que se le cobra a ESTE cliente. `billing_cycle_days`
+    no vale: en producción son 84 en los 94 perfiles que lo tienen, o sea las 12 semanas
+    del catálogo copiadas, no el mes de Stripe.
+
+    Devuelve las dos y si discrepan, para poder avisarlo en la ficha sin tocar nada.
+    """
+    plan = _plan_del_perfil(perfil, catalogo)
+    semanas_plan = (plan.get("ciclo") or {}).get("semanas") or plan.get("billing_cycle_weeks")
+    dias_plan = int(semanas_plan) * 7 if semanas_plan else None
+    if not dias_plan and (plan.get("ciclo") or {}).get("tipo") == "mensual":
+        dias_plan = 30
+
+    dias_reales = None
+    desde, hasta = perfil.get("current_period_start"), perfil.get("current_period_end")
+    if desde and hasta:
+        try:
+            d1 = datetime.fromisoformat(str(desde)[:10])
+            d2 = datetime.fromisoformat(str(hasta)[:10])
+            dias_reales = (d2 - d1).days
+        except ValueError:
+            dias_reales = None
+
+    # Se avisa solo cuando la diferencia es de verdad: un mes de 30 y otro de 31 días no es
+    # que el contrato diga otra cosa, es el calendario. Y la holgura crece con el ciclo,
+    # que si no un trimestral de 84 días con un periodo de 92 salta un aviso que dice «se
+    # le cobra cada 3 meses y su plan cuenta 12 semanas»: son lo mismo. Con el 20 % saltan
+    # los catorce de producción que sí cambian de cadencia y ninguno de los dos que no.
+    holgura = max(4.0, 0.2 * dias_plan) if dias_plan else 0.0
+    discrepan = bool(dias_plan and dias_reales and abs(dias_reales - dias_plan) > holgura)
+    return {
+        "dias_reales": dias_reales,
+        "real": _dias_a_palabras(dias_reales),
+        "dias_plan": dias_plan,
+        "plan": _dias_a_palabras(dias_plan),
+        "discrepan": discrepan,
+        "desde": str(desde)[:10] if desde else None,
+        "hasta": str(hasta)[:10] if hasta else None,
+    }
+
+
+def precio_mensual(perfil: Dict[str, Any], catalogo: Dict[str, Any],
+                   pago: Optional[Dict[str, Any]] = None) -> float:
     """Lo que aporta este cliente AL MES. Es lo que hay que sumar para un MRR.
 
-    El MRR sumaba los `price` tal cual, y son precios de CICLO: un gold son 450 € cada
-    trimestre, no cada mes. Mezclado con los mensuales, la cifra no significaba nada.
+    Se queda como nombre de siempre para no romper a quien la llama, pero por dentro ya es
+    `euros_al_mes`: una sola cuenta para el Inicio, la lista de Clientes y Dirección.
     """
-    plan = (catalogo or {}).get(perfil.get("plan") or "") or {}
-    meses = _MESES_DE_CICLO.get(((plan.get("ciclo") or {}).get("tipo") or "mensual"), 1)
-    return precio_de_ciclo(perfil, catalogo) / max(meses, 1)
+    return euros_al_mes(perfil, catalogo, pago)
 
 
 async def _fuera_el_equipo(salvo: Optional[str] = None) -> Dict[str, Any]:
@@ -318,6 +595,11 @@ async def get_all_clients(
                    "cycle_start": 1, "status": 1, "trainer_id": 1, "created_at": 1,
                    "ultimo_ajuste": 1, "ultimo_reporte": 1, "pesos": 1,
                    "stripe_subscription_id": 1, "subscription_status": 1, "access_until": 1,
+                   # Los DOS extremos del periodo de Stripe. Con solo el final no se sabe
+                   # cada cuanto se le cobra, y sin eso el «al mes» de la fila reparte el
+                   # cobro mensual de un Premium entre las 12 semanas de su plan: era el
+                   # caso Montalvo, 250 EUR al mes contados como 90,52 (puntos 44 y 46).
+                   "current_period_start": 1,
                    "current_period_end": 1, "checkout_status": 1,
                    # «Tiempo dentro de la app» (columna del 19-08): lo más cercano que se
                    # registra hoy es su última entrada (la escribe la campanita). El
@@ -331,7 +613,12 @@ async def get_all_clients(
                    # La excepcion viaja en el listado (punto 39): si solo estuviera dentro
                    # de la ficha, para verla habria que entrar en las 232, que es lo mismo
                    # que tenerla en una hoja aparte.
-                   "excepcion": 1}
+                   "excepcion": 1,
+                   # Los dos campos que decide el dinero (punto 46): la cortesia y el
+                   # importe puesto a mano. Sin `comp_plan` en la proyeccion, la lista le
+                   # ponia al de cortesia la tarifa de su plan, que es justo lo que
+                   # `precio_de_ciclo` esta escrito para no hacer.
+                   "comp_plan": 1, "renovacion_importe_prevision": 1}
     profiles = await db.client_profiles.find(query, LIST_FIELDS).to_list(1000)
 
     uids = [p["user_id"] for p in profiles]
@@ -358,6 +645,12 @@ async def get_all_clients(
     from routes.plans import _overrides_by_code
     from models.user import codigo_de_plan, merged_catalog
     catalogo = merged_catalog(await _overrides_by_code())
+
+    # Y EL «AL MES» SALE DEL COBRO REAL (punto 46). La misma consulta que usa Dirección, en
+    # una sola agregación para toda la lista: si aquí se contara con otro precio, la
+    # columna de la fila y el total del panel volverían a discrepar.
+    cobros = await ultimos_cobros_por_email(
+        [u["email"] for u in umap.values() if u.get("email")])
 
     # LA SEMANA DE RUTINA, EN BLOQUE (doc 19-08, apartado 04): «es la que manda: en la
     # semana 2 recibe el quincenal y en la 3 el mensual». Una consulta para toda la lista.
@@ -388,11 +681,27 @@ async def get_all_clients(
             # no se deja que lo deduzca el panel: dos criterios para la misma pregunta
             # siempre acaban contradiciéndose, y esta vez le dijeron cosas distintas al
             # equipo y al cliente el mismo día.
+            cobro = cobro_de(cobros, user_data.get("email"))
             fila = {**enrich_cycle(profile), "user": user_data,
                     "price": precio_de_ciclo(profile, catalogo),
-                    "precio_mensual": round(precio_mensual(profile, catalogo), 2),
+                    "precio_mensual": round(euros_al_mes(profile, catalogo, cobro), 2),
+                    # DE DÓNDE SALE ESE «al mes» (punto 43): con el cobro real, la fila
+                    # enseña 450 € de ficha y 306 €/mes de un cobro de 847, y sin decirlo
+                    # parece una división mal hecha.
+                    "precio_fuente": importe_de_ciclo(profile, catalogo, cobro)[1],
                     "acceso": estado_de_acceso(profile),
                     "semaforo": _semaforo_del_cliente(profile, hablado, ahora)}
+            # QUIÉN RENUEVA SOLO (punto 45). No lo deduce el navegador: es la misma regla
+            # que usa Dirección para su punto de color, y hasta hoy no había ni una
+            # pantalla que contestara «¿a este se le cobra solo o hay que pedírselo?».
+            fila["renueva_solo"] = _renueva_solo(profile, catalogo)
+            # Y SI LE FALTA ENTRENADOR DE VERDAD (punto 61). Al de ELM o Mantenimiento no
+            # le falta nadie: su plan es sin acompañamiento. Contando solo `trainer_id`, la
+            # pestaña «Sin entrenador» decía 83 donde Operaciones decía 10, y los 73 de
+            # diferencia estaban exactamente como su plan manda. Lo manda calculado el
+            # servidor para que las dos pantallas no puedan volver a discrepar.
+            fila["sin_entrenador"] = (not profile.get("trainer_id")) and _plan_con_entrenador(
+                catalogo.get(codigo_de_plan(profile.get("plan"))))
             # LAS COLUMNAS DEL 19-08. La semana de rutina (None sin rutina cargada), las
             # recogidas del lunes sin reporte nuevo, y cuántos reportes le tocaban por su
             # calendario y no mandó. La semana que decide los reportes es la de rutina si
@@ -439,6 +748,13 @@ async def get_all_clients(
                 "week": None,
                 "status": "registro_incompleto",
                 "trainer_id": None,
+                # NO LE FALTA ENTRENADOR: no ha elegido plan, asi que no hay nada que
+                # asignarle todavia. Sin este campo el navegador cae al criterio viejo
+                # (`!trainer_id`, ver leFaltaEntrenador en AdminDashboard.jsx:1054) y los
+                # mete a todos en la cartera «Sin entrenador», que es la que se abre por
+                # defecto: en produccion eran 118 filas de gente que ni siquiera es cliente
+                # tapando a los que de verdad hay que repartir.
+                "sin_entrenador": False,
                 "created_at": u.get("created_at"),
                 "user": u,
             })
@@ -542,8 +858,37 @@ async def get_client_detail(client_id: str, user = Depends(get_admin_user)):
     # cliente al que la lista le pone su precio.
     from routes.plans import _overrides_by_code
     from models.user import merged_catalog
-    profile["precio_ciclo"] = precio_de_ciclo(profile, merged_catalog(await _overrides_by_code()))
+    catalogo_ficha = merged_catalog(await _overrides_by_code())
+    profile["precio_ciclo"] = precio_de_ciclo(profile, catalogo_ficha)
     profile["precio_cortesia"] = bool(profile.get("comp_plan"))
+
+    # LO QUE DE VERDAD SE LE COBRA (punto 43 del doc del 24-08).
+    #
+    # «La ficha de Montalvo dice 1.500 € y Stripe le cobra 250.» El precio de la ficha sale
+    # de `client_profiles.price` o de la tarifa del catálogo, y Stripe no se consultaba en
+    # ningún momento: quien miraba la ficha antes de cobrar no tenía forma de ver la
+    # diferencia sin salirse de la pantalla. Aquí van el último cobro real y la cadencia
+    # REAL, para poder compararlos con lo que dice la ficha.
+    #
+    # Esto es PANTALLA, no corrección: el precio de la ficha no se toca. Los clientes que
+    # vienen del sistema anterior conservan su plan y su precio congelado (Jesús, 24-08), y
+    # las tarifas nuevas solo aplican a los clientes nuevos.
+    cobro = next((p for p in payments
+                  if p.get("es_dinero") is not False and float(p.get("importe") or 0) > 0), None)
+    profile["ultimo_cobro"] = {
+        "importe": round(float(cobro["importe"]), 2),
+        "fecha": cobro.get("fecha"),
+        "origen": cobro.get("origen"),
+        "concepto": cobro.get("concepto"),
+    } if cobro else None
+    profile["euros_al_mes"] = round(euros_al_mes(profile, catalogo_ficha, cobro), 2)
+    profile["renueva_solo"] = _renueva_solo(profile, catalogo_ficha)
+    profile["cadencia"] = _cadencia_de_cobro(profile, catalogo_ficha)
+    # El calendario YA RESUELTO (su contrato pisando a su plan), que es lo que la pantalla
+    # del ciclo tiene que enseñar: lo que va a pasar, no lo que alguien tecleó.
+    from core.calendario_reportes import calendario_del_cliente
+    profile["calendario_resuelto"] = calendario_del_cliente(
+        profile, _plan_del_perfil(profile, catalogo_ficha))
 
     # TODOS LOS PESOS DE LA FICHA, EN KILOS.
     #
@@ -1078,6 +1423,104 @@ async def assign_client_trainer(client_id: str, data: TrainerAssign, user = Depe
         client_name = (client_user or {}).get("name") or (client_user or {}).get("email") or client_id
         await audit(user, "coach", f"Coach de {client_name}: {trainer_name or 'sin asignar'}")
     return {"ok": True, "trainer_id": new_trainer, "trainer_name": trainer_name}
+
+@router.put("/clients/{client_id}/ciclo")
+async def poner_ciclo_del_cliente(client_id: str, data: Dict[str, Any] = Body(...),
+                                  user=Depends(get_admin_only_user)):
+    """El ciclo y el calendario de ESTE cliente, cuando su contrato no es el de su plan.
+
+    PUNTO 44 DEL DOC DEL 24-08. «El catálogo define un solo ciclo por plan y hay Premium
+    mensuales y de 5 semanas.» Los tres campos que pisan el plan existían desde el punto 36
+    -- los lee `core/calendario_reportes.calendario_del_cliente` -- pero estaban vacíos en
+    los 198 perfiles de producción porque NO HABÍA PANTALLA para ponerlos. Esta es la
+    puerta de esa pantalla.
+
+    Qué mueve, y por eso la ficha lo avisa antes de guardar: de `ciclo_semanas` cuelgan qué
+    reporte toca cada semana, la ventana en la que se puede mandar y la del ajuste, o sea
+    los avisos que salen de ahí. A quien esté a mitad de ventana se le puede abrir o cerrar
+    un reporte de golpe.
+
+    Solo admin: es el contrato del cliente, no el seguimiento.
+
+    Se manda null en cualquiera de los tres para volver a lo que diga su plan.
+    """
+    profile = await db.client_profiles.find_one({"id": client_id}, {"_id": 0, "id": 1, "user_id": 1})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+    set_, unset = {}, {}
+
+    if "ciclo_semanas" in data:
+        v = data.get("ciclo_semanas")
+        if v in (None, ""):
+            unset["ciclo_semanas"] = ""
+        else:
+            if isinstance(v, bool) or not isinstance(v, int) or not 1 <= v <= 52:
+                raise HTTPException(status_code=400,
+                                    detail="El ciclo tiene que ser un número de semanas entre 1 y 52")
+            set_["ciclo_semanas"] = v
+
+    if "semana_de_entrada" in data:
+        v = data.get("semana_de_entrada")
+        if v in (None, ""):
+            unset["semana_de_entrada"] = ""
+        else:
+            if isinstance(v, bool) or not isinstance(v, int) or not 1 <= v <= 52:
+                raise HTTPException(status_code=400,
+                                    detail="La semana de entrada tiene que estar entre 1 y 52")
+            set_["semana_de_entrada"] = v
+
+    if "calendario_reportes" in data:
+        cal = data.get("calendario_reportes")
+        if cal in (None, "", {}):
+            unset["calendario_reportes"] = ""
+        else:
+            if not isinstance(cal, dict):
+                raise HTTPException(status_code=400, detail="El calendario tiene que ser un objeto")
+            patron = cal.get("patron")
+            if patron is not None:
+                # Los tipos que la app sabe mandar. Un patrón con una palabra que no
+                # existe deja al cliente sin reportes y sin que nadie se entere.
+                validos = {"", "semanal", "quincenal", "mensual", "trimestral"}
+                if not isinstance(patron, list) or not 1 <= len(patron) <= 52 \
+                        or any(str(t or "") not in validos for t in patron):
+                    raise HTTPException(
+                        status_code=400,
+                        detail="El patrón tiene que ser una lista de semanas con los tipos de reporte de la app")
+                cal["patron"] = [str(t or "") for t in patron]
+            set_["calendario_reportes"] = cal
+
+    if not set_ and not unset:
+        raise HTTPException(status_code=400, detail="No hay nada que cambiar")
+
+    cambio: Dict[str, Any] = {}
+    if set_:
+        cambio["$set"] = set_
+    if unset:
+        cambio["$unset"] = unset
+    await db.client_profiles.update_one({"id": client_id}, cambio)
+
+    cliente = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "name": 1, "email": 1})
+    quien = (cliente or {}).get("name") or (cliente or {}).get("email") or client_id
+    detalle = ", ".join([f"{k}={v}" for k, v in set_.items()]
+                        + [f"{k}=plan" for k in unset])
+    await audit(user, "ciclo", f"Ciclo de {quien}: {detalle}")
+
+    fresco = await db.client_profiles.find_one({"id": client_id}, {"_id": 0})
+    from routes.plans import _overrides_by_code
+    from models.user import merged_catalog
+    from core.calendario_reportes import calendario_del_cliente
+    catalogo = merged_catalog(await _overrides_by_code())
+    return {
+        "ok": True,
+        "ciclo_semanas": fresco.get("ciclo_semanas"),
+        "semana_de_entrada": fresco.get("semana_de_entrada"),
+        "calendario_reportes": fresco.get("calendario_reportes"),
+        # El calendario ya resuelto, para que la ficha enseñe lo que va a pasar de verdad
+        # y no lo que se acaba de teclear.
+        "calendario": calendario_del_cliente(fresco, _plan_del_perfil(fresco, catalogo)),
+    }
+
 
 @router.put("/clients/{client_id}/body-fat")
 async def anotar_body_fat(client_id: str, data: dict, user = Depends(get_admin_user)):
@@ -1703,7 +2146,13 @@ async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
          "cycle_start": 1, "status": 1, "ultimo_ajuste": 1, "ultimo_reporte": 1, "pesos": 1,
          "stripe_subscription_id": 1, "subscription_status": 1, "access_until": 1,
          "current_period_end": 1, "checkout_status": 1, "updated_at": 1,
-         "ultimo_contacto_externo": 1},
+         "ultimo_contacto_externo": 1,
+         # Los que deciden el dinero (punto 46): la cortesia no suma, el importe puesto a
+         # mano vale donde no hay Stripe, y los dos extremos del periodo dicen cada cuanto
+         # se le cobra de verdad. Sin `current_period_start` este MRR contaria el cobro
+         # mensual de un Premium como si cubriera 12 semanas y la «Factura al mes» de
+         # Direccion -- que si lo proyecta -- volveria a discrepar.
+         "comp_plan": 1, "renovacion_importe_prevision": 1, "current_period_start": 1},
     ).to_list(5000)
     total = len(todos)
     # Los cuatro cajones, excluyentes y en este orden, para que el total cuadre siempre
@@ -1790,13 +2239,22 @@ async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
     # el precio del cliente casi nunca está en su perfil (168 de 174 lo tienen vacío) y hay
     # que normalizar el ciclo a meses. Sumando `price` a secas salían 2.115 € con 184
     # activos -- 11,50 € por cliente y mes, con planes que van de 60 a 1.500 €.
+    #
+    # Y CON EL COBRO REAL, IGUAL QUE DIRECCIÓN (punto 46 del 24-08): este MRR y la «Factura
+    # al mes» del panel salen ya de la misma función, `euros_al_mes`. Antes esta cuenta
+    # usaba el precio de la ficha y la de Dirección el último cobro, y de ahí los 11.000 €
+    # de diferencia entre dos pantallas del mismo panel.
     from routes.plans import _overrides_by_code
     from models.user import merged_catalog
     catalogo = merged_catalog(await _overrides_by_code())
+    correos = {u["id"]: u.get("email") for u in await db.users.find(
+        {"id": {"$in": [p["user_id"] for p in active_profiles if p.get("user_id")]}},
+        {"_id": 0, "id": 1, "email": 1}).to_list(len(active_profiles) or 1)}
+    cobros = await ultimos_cobros_por_email([c for c in correos.values() if c])
     for p in active_profiles:
         plan = p.get("plan") or "sin_plan"
         plans[plan] = plans.get(plan, 0) + 1
-        mrr += precio_mensual(p, catalogo)
+        mrr += euros_al_mes(p, catalogo, cobro_de(cobros, correos.get(p.get("user_id"))))
     mrr = round(mrr, 2)
 
     salida = {
@@ -1836,6 +2294,19 @@ async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
     # directamente no viajan si quien pregunta no es admin.
     if user.get("role") == "admin":
         salida["mrr"] = mrr
+        # De dónde sale ese número, en la pantalla y no en un comentario (punto 46): son los
+        # mismos clientes y la misma cuenta que la «Factura al mes» de Paneles > Dirección.
+        salida["mrr_criterio"] = {
+            "clientes": active,
+            # Los que cuentan POR SU COBRO, no los que tienen algún cobro apuntado: si no,
+            # el pie diría «120 con cobro real» de un total en el que la mitad sale del
+            # precio de la ficha.
+            "cobro_real": sum(
+                1 for p in active_profiles
+                if importe_de_ciclo(p, catalogo,
+                                    cobro_de(cobros, correos.get(p.get("user_id"))))[1]
+                == "cobro_real"),
+        }
         # Revenue: suma en la base de datos, no en Python
         rev = await db.payments.aggregate([
             {"$match": {"status": "success"}},
@@ -2040,7 +2511,7 @@ async def get_todo_semana(user = Depends(get_admin_user)):
             })
 
         # Reporte de esta semana pendiente (no enviado dentro de la semana que manda:
-        # la de su rutina si la tiene, la de ciclo si no — doc 19-08).
+        # la de su rutina si la tiene, la de ciclo si no, doc 19-08).
         state = compute_client_report_state(p, catalog, now,
                                             rutina=rutina_por_cliente.get(p["id"]))
         if state["due"]:

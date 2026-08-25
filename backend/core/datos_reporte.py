@@ -43,6 +43,56 @@ def fecha_larga(iso: Optional[str]) -> Optional[str]:
     return f"{d.day} de {MESES[d.month - 1]}"
 
 
+def _dia_y_mes(iso: str, con_mes: bool) -> str:
+    """"26" o "26 de agosto", segun haga falta desambiguar el mes."""
+    d = datetime.fromisoformat(str(iso)[:10]).date()
+    return f"{d.day} de {MESES[d.month - 1]}" if con_mes else str(d.day)
+
+
+def _kilos(valor: Any) -> str:
+    """«80 kg», «80,5 kg». El cero de mas no aporta nada y se lee peor."""
+    texto = f"{float(valor):.1f}"
+    if texto.endswith(".0"):
+        texto = texto[:-2]
+    return f"{texto.replace('.', ',')} kg"
+
+
+def de_donde_sale_el_peso(ps: Optional[Dict[str, Any]]) -> Optional[str]:
+    """La linea que va debajo del peso del reporte: de donde ha salido el numero.
+
+    Jesus no escribio este texto -- el punto 34 del doc del 24-08 solo decide la regla --,
+    asi que es la forma acordada con Francisco: la frase dice la cuenta y las fechas, y
+    nada mas. El campo sigue siendo editable, y si el cliente lo cambia manda el suyo: por
+    eso la linea explica el numero puesto, no lo defiende.
+
+    LOS KILOS SOLO EN LA RAMA «ultimo» (fallo 6 del repaso del 24-08). En las ramas «pareja»
+    y «media» el numero ya esta escrito en la casilla, asi que repetirlo aqui es decir dos
+    veces lo mismo. En la rama «ultimo» NO: ese peso no es de esta semana y por eso la
+    casilla se deja vacia a proposito, de modo que esta frase es el unico sitio donde el
+    cliente puede ver cuanto pesaba. Sin los kilos se le pedia el peso sin recordarle el
+    suyo, que es justo lo que hacia la linea «Ultimo registro: 80 kg, el 24 de agosto» de
+    antes. Le pasa al 13,94 % de las semanas-cliente en produccion (8,65 % en los Premium).
+    """
+    if not ps or ps.get("valor") is None:
+        return None
+    fechas = ps.get("fechas") or []
+    try:
+        if ps.get("regla") == "pareja" and len(fechas) == 2:
+            # El mes solo se nombra cuando la pareja lo cruza (31 de agosto y 1 de
+            # septiembre); dentro del mismo mes, "del 26 y el 27" se lee mejor.
+            cruza = str(fechas[0])[:7] != str(fechas[1])[:7]
+            return (f"La media de tus pesajes del {_dia_y_mes(fechas[0], cruza)} y "
+                    f"el {_dia_y_mes(fechas[1], True)}")
+        if ps.get("regla") == "media":
+            if len(fechas) == 1:
+                return f"Tu peso del {_dia_y_mes(fechas[0], True)}"
+            return f"La media de tus {len(fechas)} pesajes de esta semana"
+        return (f"Tu último peso: {_kilos(ps['valor'])}, "
+                f"del {_dia_y_mes(ps.get('fecha'), True)}")
+    except (ValueError, TypeError, IndexError):
+        return None
+
+
 def _dias(d0: date, d1: date) -> List[str]:
     """Los días del periodo, en ISO, del primero al último incluidos."""
     return [(d0 + timedelta(days=n)).isoformat() for n in range((d1 - d0).days + 1)]
@@ -329,13 +379,23 @@ async def datos_del_reporte(perfil: Dict[str, Any], tipo: str,
     El quincenal solo necesita el entreno y el último peso: sus otras tres preguntas no
     salen de ningún dato. El mensual los necesita todos.
     """
-    from core.series_cliente import actual
+    from core.series_cliente import actual, peso_semanal
 
     peso = actual(perfil.get("pesos"))
+    # EL PESO DE LA SEMANA, YA HECHO (punto 34 del doc del 24-08). Va en TODOS los reportes:
+    # «el campo es idéntico para los cinco planes, sólo cambian los avisos». La semana es la
+    # del ÚLTIMO día del periodo, que es la que el cliente está cerrando cuando rellena.
+    #
+    # Se calcula aquí y no en la pantalla porque la regla es una cascada de tres ramas y el
+    # formulario tiene que poder decir de cuál sale sin volver a razonarla.
+    semanal = peso_semanal(perfil.get("pesos"), d1)
     datos: Dict[str, Any] = {
         "periodo": {"desde": d0.isoformat(), "hasta": d1.isoformat()},
         "peso_ultimo": ({"valor": peso["valor"], "fecha": peso["fecha"],
                          "fecha_label": fecha_larga(peso["fecha"])} if peso else None),
+        "peso_semanal": ({**semanal,
+                          "fecha_label": fecha_larga(semanal["fecha"]),
+                          "de_donde": de_donde_sale_el_peso(semanal)} if semanal else None),
         "entreno": await datos_entreno(perfil, d0, d1),
     }
     if tipo != "mensual":

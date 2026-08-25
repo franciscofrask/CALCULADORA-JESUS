@@ -183,7 +183,18 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
     set_perfil = {"ultimo_reporte": dia_reporte}
     # El peso NO se escribe aqui: va a la serie con la fecha del reporte, y el "actual"
     # sale de la serie (punto 30). Es lo que arregla los dos pesos distintos del punto 9.
-    await anotar_peso(profile["id"], data.weight, dia_reporte, origen="reporte")
+    #
+    # PERO NO PISA UN PESAJE DE VERDAD (fallo 5 del repaso del 24-08). Lo que viene en el
+    # reporte no es un pesaje de hoy: es el numero que el cliente escribe para resumir la
+    # semana, y casi siempre es la media que le propone la propia app. Como se archivaba con
+    # la fecha del documento y `poner_en_serie` sustituye el punto de ese dia, enviar el
+    # reporte un VIERNES -- que es cuando abre la ventana del semanal -- borraba el pesaje
+    # del viernes: con jueves 80,0 y viernes 82,0 la serie quedaba jueves 80,0 y viernes
+    # 81,0, el peso de la semana pasaba de 81,0 a 80,5 y cada reenvio lo movia otra vez.
+    # Con `pisa_pesajes=False` el reporte solo escribe si ese dia esta libre (o si el punto
+    # lo puso otro reporte, que entonces es una correccion del mismo documento).
+    await anotar_peso(profile["id"], data.weight, dia_reporte, origen="reporte",
+                      pisa_pesajes=False)
     # Y EL % DE GRASA, cuando toca (cada 12 semanas). Va a su serie igual que el peso, con la
     # fecha del reporte: es un dato que se estima mirando fotos, y sin fecha no hay forma de
     # saber si el que se está usando para calcular macros es de hace un mes o de hace un año.
@@ -317,8 +328,28 @@ async def _avisar_de_lo_que_pidio(profile: dict, user: dict, data: ReportCreate,
         from core.rutina_del_mes import PRECIO_EUR, cobrar
         cobro = await cobrar(profile, entreno.rutina_del_mes, report_id)
 
+        # SI HAY ALGO PREPARADO, SE LE ENTREGA AQUÍ MISMO (verificación 24-08, fallo 14).
+        #
+        # Este camino solo cobraba y avisaba al equipo para que se la mandara a mano, porque
+        # cuando se escribió (19-08) no existía «la rutina del mes vigente»: no había nada que
+        # entregar. Desde el 24-08 sí lo hay -- una plantilla marcada o el PDF del mes -- y la
+        # otra puerta, el botón de la pantalla de Rutina, ya la entrega sola. Que el mismo
+        # producto llegue solo o a mano según por dónde lo pidas no tiene defensa.
+        #
+        # Si no hay nada preparado NO se deja de cobrar, y es deliberado: aquí el cliente ya ha
+        # dicho que sí dentro de su reporte y el circuito manual existe desde el principio. Lo
+        # que no puede pasar es que nadie se entere, así que el aviso lo dice con todas las
+        # letras y por eso se lee distinto según haya llegado o no.
+        entregada = None
         if cobro["cobrado"]:
-            estado = f"Cobrados {PRECIO_EUR:.0f} € en su tarjeta."
+            from core.rutina_del_mes import _entregarsela
+            entregada = await _entregarsela(profile.get("id"))
+
+        if cobro["cobrado"] and entregada:
+            estado = f"Cobrados {PRECIO_EUR:.0f} € en su tarjeta y ya la tiene puesta ({entregada})."
+        elif cobro["cobrado"]:
+            estado = (f"Cobrados {PRECIO_EUR:.0f} € en su tarjeta. NO HAY NADA PREPARADO este mes: "
+                      "hay que montársela y mandársela a mano.")
         else:
             porques = {
                 "sin_tarjeta": "no tiene tarjeta guardada",
@@ -337,6 +368,10 @@ async def _avisar_de_lo_que_pidio(profile: dict, user: dict, data: ReportCreate,
             client_id=profile["id"], trainer_id=profile.get("trainer_id"),
             extra={"modalidad": entreno.rutina_del_mes, "cobrado": cobro["cobrado"],
                    "motivo": cobro.get("motivo"), "payment_intent": cobro.get("payment_intent"),
+                   # `entregada` es el nombre de lo que se le ha puesto, o None si no había
+                   # nada preparado y se la tiene que mandar alguien. Lo que decide si esta
+                   # fila es trabajo pendiente para el equipo o solo una venta apuntada.
+                   "entregada": entregada,
                    "importe_eur": PRECIO_EUR},
         )
     if entreno.rutina_del_mes == "aplazar_una_semana":
@@ -420,8 +455,12 @@ async def crear_reporte_por_el_cliente(client_id: str, data: ReportCreate,
             set_perfil["goal"] = data.proximo_objetivo
             set_perfil["fase_desde"] = dia_reporte
     await db.client_profiles.update_one({"id": client_id}, {"$set": set_perfil})
-    # El peso, a su serie con la fecha del reporte (punto 30).
-    await anotar_peso(client_id, data.weight, dia_reporte, origen="reporte (lo metió el equipo)")
+    # El peso, a su serie con la fecha del reporte (punto 30), y sin pisar un pesaje de
+    # verdad de ese dia: mismo motivo que en la via del cliente (fallo 5 del 24-08), y aqui
+    # mas todavia, porque el equipo pasa a la app un reporte que el Premium mando por
+    # WhatsApp dias antes.
+    await anotar_peso(client_id, data.weight, dia_reporte,
+                      origen="reporte (lo metió el equipo)", pisa_pesajes=False)
 
     # EL INFORME TAMBIÉN POR ESTA VÍA (punto 41 del doc del 23-08): los Premium mandan
     # por WhatsApp, el equipo lo pasa a la app, y como el informe solo se generaba en el

@@ -638,6 +638,126 @@ async def comprar_ajuste_a_medida(payload: Dict[str, Any] = Body(default={}),
             "importe_eur": PRECIO_EUR}
 
 
+@router.post("/rutina-del-mes/checkout")
+async def comprar_la_rutina_del_mes(payload: Dict[str, Any] = Body(default={}),
+                                    user=Depends(get_current_user)):
+    """Comprar la rutina del mes desde la app (Jesús, 24-08: «que se compre directamente»).
+
+    Hasta hoy la única forma de pagarla era el cargo a la tarjeta ya guardada
+    (`POST /routines/quiero-la-rutina`), así que el que no tiene tarjeta -- el que viene de
+    Calma, el de Calculadora -- no podía comprarla: se le apuntaba la petición y se le
+    decía que el equipo le escribiría. Con el checkout puede pagar cualquiera, con la
+    tarjeta que quiera y con factura, que es como ya se venden la revisión suelta y el
+    ajuste a medida. Mismo patrón que ellos: precio EN LÍNEA, sin producto de Stripe.
+
+    Al volver del pago, `sync_checkout_session` (y el webhook, el que llegue antes) llaman
+    a `rutina_del_mes.activar_tras_pago`, que es quien se la ENTREGA.
+    """
+    from core.rutina_del_mes import (
+        DESCRIPCION, NOMBRE_PRODUCTO, PRECIO_EUR, activar_tras_pago, importe_centimos,
+        su_plan_ya_la_lleva)
+    from routes.routines import _peticion_viva, hay_rutina_del_mes_que_entregar
+
+    modalidad = str((payload or {}).get("modalidad") or "").strip()
+    if modalidad not in ("basica", "avanzada"):
+        raise HTTPException(status_code=400, detail="Dinos si la quieres básica o avanzada.")
+
+    profile = await db.client_profiles.find_one({"user_id": user["id"]})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+    if await su_plan_ya_la_lleva(profile.get("plan")):
+        raise HTTPException(status_code=400, detail="Tu plan ya incluye la rutina: no tienes que comprarla.")
+    # El que YA tiene rutina activa no compra otra por error. LA QUE SE COMPRÓ ÉL NO CUENTA
+    # (24-08): desde que el pago ENTREGA la rutina del mes, la compra de agosto le deja una
+    # rutina activa y esta misma línea le cerraba la de septiembre para siempre. Y es «del
+    # mes», así que se vende todos los meses. Lo que frena el segundo cargo del MISMO mes es
+    # `_peticion_viva`, que es el candado de dinero y va justo debajo.
+    if await db.routines.find_one({"client_id": profile["id"], "status": "active",
+                                   "origen": {"$ne": "rutina_del_mes"}}, {"_id": 1}):
+        raise HTTPException(status_code=400, detail="Ya tienes una rutina activa.")
+    # Ni el que ya la pidió este mes, por cualquiera de las puertas (la pantalla de Rutina
+    # o el «Sí» de su reporte mensual): el segundo cargo de 57 € es el fallo caro.
+    from core.tiempo import hoy_madrid
+    if await _peticion_viva(profile, hoy_madrid()):
+        raise HTTPException(status_code=409,
+                            detail="Ya nos pediste tu rutina y estamos con ella. Te llega en unos días.")
+
+    # EL CANDADO DE LAS CUENTAS DE PRUEBA: una cuenta de laboratorio NUNCA llega a Stripe,
+    # aunque el modo live esté abierto (es la misma regla que frena el cobro del reporte
+    # mensual, `rutina_del_mes.cobrar`). Se le entrega la rutina igual, que es lo que se
+    # está probando, y queda apuntado que no hubo cobro.
+    if user.get("es_pruebas") or profile.get("es_pruebas"):
+        await activar_tras_pago(profile, 0.0, modalidad, session_id=None, cobrado=False,
+                                motivo="cuenta_de_pruebas")
+        # «Ya tienes la rutina puesta» solo si de verdad se le ha puesto: sin nada preparado
+        # no hay nada que entregar, y decir que sí es justo lo que hace que una prueba se dé
+        # por buena sin serlo.
+        puesto = await db.client_profiles.find_one({"id": profile["id"]},
+                                                   {"_id": 0, "rutina_mes_pedida": 1})
+        puesta = ((puesto or {}).get("rutina_mes_pedida") or {}).get("rutina_puesta")
+        return {"sin_pago": True, "importe_eur": PRECIO_EUR, "rutina_puesta": puesta,
+                "mensaje": ("Cuenta de pruebas: no se ha cobrado nada y ya tienes la rutina puesta."
+                            if puesta else
+                            "Cuenta de pruebas: no se ha cobrado nada. No hay ninguna rutina "
+                            "del mes preparada, así que no se te ha puesto ninguna.")}
+
+    # NO SE COBRA LO QUE NO SE PUEDE ENTREGAR (verificación 24-08, fallo 14).
+    #
+    # Esta puerta cobraba 57 € a ciegas: mandaba al checkout de Stripe, apuntaba la compra y
+    # dejaba un aviso al equipo que decía con todas las letras «hay que entregársela a
+    # mano». En producción, el 24-08, no había NADA que entregar -- cero plantillas marcadas
+    # «la del mes» y ningún PDF del mes preparado --, así que cualquiera podía pagar 57 € y
+    # no recibir nada automáticamente.
+    #
+    # Ahora la compra solo se abre cuando hay algo preparado: una plantilla marcada o el PDF
+    # del mes (`routes/routines.hay_rutina_del_mes_que_entregar`). La pantalla de Rutina
+    # pregunta esto mismo antes de enseñar el botón; esto es el cinturón, para el hueco entre
+    # que se pinta el botón y se pulsa.
+    #
+    # VA JUSTO ANTES DE STRIPE Y DESPUÉS DEL CANDADO DE LAS CUENTAS DE PRUEBA: es un candado
+    # de DINERO y una cuenta de laboratorio no llega a pagar nunca. Ahí arriba ya se le dice
+    # al que prueba que no se le ha puesto ninguna rutina, que es la información que
+    # necesita; cerrarle además la puerta solo le impediría probar el circuito.
+    if not await hay_rutina_del_mes_que_entregar():
+        # A la consola: cada uno de estos es una venta de 57 € que se cae por no tener la
+        # rutina del mes subida.
+        logger.warning("Rutina del mes: %s quiso comprarla y no hay ninguna preparada",
+                       profile.get("id"))
+        raise HTTPException(
+            status_code=409,
+            detail="La rutina de este mes todavía no está lista. En cuanto la tengamos "
+                   "podrás comprarla desde aquí.")
+
+    stripe_module = get_stripe_module()
+    require_stripe_test_mode("La compra de la rutina del mes")
+
+    customer_id = await get_or_create_stripe_customer(user, profile)
+    metadata = {"user_id": user["id"], "profile_id": profile["id"],
+                "tipo": "rutina_del_mes", "modalidad": modalidad}
+    session = await stripe_api_call(
+        stripe_module.checkout.Session.create,
+        customer=customer_id,
+        client_reference_id=profile["id"],
+        mode="payment",
+        line_items=[{
+            "price_data": {
+                "currency": "eur",
+                "unit_amount": importe_centimos(),
+                "product_data": {"name": NOMBRE_PRODUCTO, "description": DESCRIPCION},
+            },
+            "quantity": 1,
+        }],
+        invoice_creation={"enabled": True},
+        payment_intent_data={"metadata": metadata},
+        success_url=build_frontend_url(payload.get("success_path") or "/dashboard/routine?rutina=ok",
+                                       include_session_placeholder=True),
+        cancel_url=build_frontend_url(payload.get("cancel_path") or "/dashboard/routine"),
+        metadata=metadata,
+    )
+    return {"checkout_url": session["url"], "session_id": session["id"],
+            "importe_eur": PRECIO_EUR}
+
+
 @router.post("/checkout-session/sync")
 async def sync_checkout_session(payload: Dict[str, Any] = Body(...), user=Depends(get_current_user)):
     """Llamado por el frontend al volver de Stripe (?checkout=success&session_id=...),
@@ -697,7 +817,18 @@ async def sync_checkout_session(payload: Dict[str, Any] = Body(...), user=Depend
             synced_profile = await db.client_profiles.find_one({"id": synced_profile["id"]}, {"_id": 0})
 
     if not synced_profile and session.get("mode") == "payment":
-        if (session.get("metadata") or {}).get("tipo") == "revision_suelta":
+        # NADA SE ENTREGA SIN QUE LA SESIÓN ESTÉ PAGADA. Vale para las tres ramas de abajo y la
+        # razón está explicada entera en la de la rutina del mes: aquí se entra con un
+        # `session_id` que manda el NAVEGADOR, y el endpoint de checkout se lo devuelve al
+        # cliente antes de que pague, así que basta con abrir el pago, cerrar Stripe y llamar
+        # aquí. En la rutina se cerró el 24-08; la revisión suelta (47 €) y el ajuste a medida
+        # (87 €) tenían el mismo agujero y se cierran ahora, con la misma comprobación.
+        pagada = session.get("payment_status") == "paid"
+        tipo = (session.get("metadata") or {}).get("tipo")
+        if tipo in ("revision_suelta", "ajuste_a_medida", "rutina_del_mes") and not pagada:
+            logger.warning("%s: sync de la sesion %s con payment_status=%s; no se entrega nada",
+                           tipo, session_id, session.get("payment_status"))
+        elif tipo == "revision_suelta":
             # Revisión suelta: no cambia el plan. Se activa aquí también (además del webhook)
             # para que el cliente vuelva de Stripe y ya la vea en marcha; activar_tras_pago no
             # duplica si el webhook llegó antes.
@@ -706,7 +837,7 @@ async def sync_checkout_session(payload: Dict[str, Any] = Body(...), user=Depend
             if perfil:
                 await activar_tras_pago(perfil, (session.get("amount_total") or 0) / 100.0)
                 synced_profile = await db.client_profiles.find_one({"id": perfil["id"]}, {"_id": 0})
-        elif (session.get("metadata") or {}).get("tipo") == "ajuste_a_medida":
+        elif tipo == "ajuste_a_medida":
             # El ajuste a medida de 87 €, igual: no cambia el plan, entra en la cola del
             # lunes. Se activa aquí además de en el webhook para que al volver de Stripe ya
             # lo vea en marcha, y `activar_tras_pago` no duplica si el webhook llegó antes.
@@ -714,6 +845,26 @@ async def sync_checkout_session(payload: Dict[str, Any] = Body(...), user=Depend
             perfil = await db.client_profiles.find_one({"user_id": user["id"]})
             if perfil:
                 await activar_ajuste(perfil, (session.get("amount_total") or 0) / 100.0)
+                synced_profile = await db.client_profiles.find_one({"id": perfil["id"]}, {"_id": 0})
+        elif tipo == "rutina_del_mes":
+            # La rutina del mes comprada desde la pantalla de Rutina: tampoco toca el plan.
+            # Se activa aquí además de en el webhook para que al volver de Stripe ya la
+            # tenga puesta; `activar_tras_pago` no la entrega dos veces (mira el session_id).
+            #
+            # EL «SOLO SI ESTÁ PAGADA» YA LO HACE EL GUARDA DE ARRIBA, que cubre las tres. Lo
+            # que pasó aquí el 24-08, y por lo que existe ese guarda: bastaba con abrir el
+            # pago, cerrar Stripe y llamar con ese `session_id`; la sesión volvía con
+            # `payment_status: unpaid` y aun así se entregaba el PDF, se apuntaba en la ficha
+            # `cobrado: true, importe_eur: 57` y al equipo le sonaba «ha pagado la rutina del
+            # mes básica (57 €)», o sea una venta que no existe metida en la caja del día.
+            #
+            # El webhook llega igual cuando el pago sí entra, así que no se pierde nada.
+            from core.rutina_del_mes import activar_tras_pago as activar_rutina
+            perfil = await db.client_profiles.find_one({"user_id": user["id"]})
+            if perfil:
+                await activar_rutina(perfil, (session.get("amount_total") or 0) / 100.0,
+                                     (session.get("metadata") or {}).get("modalidad") or "basica",
+                                     session_id=session_id)
                 synced_profile = await db.client_profiles.find_one({"id": perfil["id"]}, {"_id": 0})
         else:
             # Checkout de pago único (p.ej. reto60): no hay suscripción que sincronizar.
@@ -869,6 +1020,26 @@ async def _process_stripe_event(event: Dict[str, Any]) -> None:
                 perfil = await db.client_profiles.find_one({"id": metadata.get("profile_id")})
                 if perfil:
                     await activar_ajuste(perfil, (obj.get("amount_total") or 0) / 100.0)
+            elif metadata.get("tipo") == "rutina_del_mes":
+                # La rutina del mes: no toca el plan ni el acceso. Se le apunta la compra y
+                # se le pone la rutina del mes vigente, si el equipo ha marcado alguna.
+                #
+                # El mismo cerrojo que en el `sync` de arriba (repaso 24-08). Con tarjeta,
+                # `checkout.session.completed` ya llega pagada, así que esto no cambia nada
+                # hoy; está por si algún día se abre un medio de pago diferido (Bizum,
+                # transferencia), donde Stripe manda este evento SIN cobrar todavía y el
+                # bueno es `checkout.session.async_payment_succeeded`, que este fichero no
+                # escucha. Antes de abrir uno de esos hay que añadir ese evento.
+                if obj.get("payment_status") != "paid":
+                    logger.warning("Rutina del mes: %s llega con payment_status=%s; no se "
+                                   "entrega nada", obj.get("id"), obj.get("payment_status"))
+                else:
+                    from core.rutina_del_mes import activar_tras_pago as activar_rutina
+                    perfil = await db.client_profiles.find_one({"id": metadata.get("profile_id")})
+                    if perfil:
+                        await activar_rutina(perfil, (obj.get("amount_total") or 0) / 100.0,
+                                             metadata.get("modalidad") or "basica",
+                                             session_id=obj.get("id"))
             else:
                 # Pago único (p.ej. reto60): activa el perfil con acceso hasta fin de ciclo.
                 await sync_profile_from_one_time_session(obj)

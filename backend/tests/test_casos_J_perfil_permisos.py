@@ -104,6 +104,10 @@ def _capacidades(habilitaciones: dict) -> dict:
         "suplementacion": supl_incluida,
         "macros_personalizados": h.get("calculadora") == "personalizado",
         "reportes": len(reportes) > 0,
+        # EL CIERRE DEL DÍA TIENE LLAVE PROPIA (decisión de Jesús del 24-08) y la llevan
+        # todos los planes: sin campo escrito, es que sí. De ella cuelgan ahora el cierre
+        # del día y Seguimiento (en lectura para quien no vende reportes).
+        "cierre_dia": h.get("cierre_dia") is not False,
         "harbiz": bool(h.get("harbiz")),
         # EL CHAT SALE DEL ACOMPAÑAMIENTO DEL PLAN (decisión de Francisco del 23-08, P73).
         # Antes lo veían los siete planes: al de «solo app», que por definición no lleva
@@ -135,6 +139,7 @@ def test_las_reglas_del_front_siguen_siendo_estas():
     for regla in ("[CAP.RUTINA]: !!rutinaVisible && !!h.rutina && h.rutina !== 'ninguna'",
                   "[CAP.SUPLEMENTACION]: suplementacionIncluida(h)",
                   "[CAP.REPORTES]: reportes.length > 0",
+                  "[CAP.CIERRE_DIA]: h.cierre_dia !== false",
                   "[CAP.CHAT]: String(h.acompanamiento || '').startsWith('con_entrenador')"):
         assert regla in src, (
             f"cambió una regla de deriveCapabilities ({regla}): actualiza `_capacidades` "

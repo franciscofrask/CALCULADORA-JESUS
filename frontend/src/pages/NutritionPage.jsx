@@ -21,6 +21,7 @@ import BuildMealModal from '../components/nutrition/BuildMealModal';
 import RepeatMealModal from '../components/nutrition/RepeatMealModal';
 import CopyDietModal from '../components/nutrition/CopyDietModal';
 import FavoritesModal from '../components/nutrition/FavoritesModal';
+import FavoritasDeComida from '../components/nutrition/FavoritasDeComida';
 import DayHeader from '../components/nutrition/DayHeader';
 import MealCard, { MealSelectorItem, MealTab } from '../components/nutrition/MealCard';
 import { VistaComidasSelector, leerVista, guardarVista } from '../components/nutrition/VistaComidas';
@@ -271,6 +272,10 @@ const NutritionPage = () => {
     const [copyModalOpen, setCopyModalOpen] = useState(false);
     const [favoritesModalOpen, setFavoritesModalOpen] = useState(false);
     const [dietFavorites, setDietFavorites] = useState([]);
+    // Favoritas de UNA comida (25-08). Van aparte de las de día: son otra cosa y se
+    // piden al servidor con ?ambito=comida.
+    const [favComidaModal, setFavComidaModal] = useState({ open: false, mealKey: null });
+    const [comidaFavoritas, setComidaFavoritas] = useState([]);
     const [copyDate, setCopyDate] = useState('');
     const [buildMealModal, setBuildMealModal] = useState({ open: false, mealKey: null });
     const [repeatMealModal, setRepeatMealModal] = useState({ open: false, mealKey: null });
@@ -485,8 +490,9 @@ const NutritionPage = () => {
     const versionDiaRef = useRef(null);
     const loadDietRef = useRef(null);
 
-    // Extras del día (bloque 6.3): lo comido fuera del plan. Cuentan en Llevas del
-    // Inicio y no tocan la Dieta; aquí solo se pintan y se editan.
+    // Extras del día (bloque 6.3): lo comido fuera del plan. NO CUENTAN EN NINGUNA PARTE
+    // desde el punto 28 del doc del 24-08: van en su lista, aparte, y no mueven ni el
+    // «Llevas» del Inicio ni la Dieta. Aquí solo se pintan y se editan.
     const [extrasDia, setExtrasDia] = useState([]);
 
     // Load saved diet - returns { targets, config } where config has the diet's day values
@@ -1792,7 +1798,9 @@ const NutritionPage = () => {
     // ── Dietas favoritas (Calma guardarFavorita / favoritas) ──────────────────
     const loadDietFavorites = async () => {
         try {
-            const res = await api('/api/diets/favorites');
+            // Solo las de DÍA: desde el 25-08 conviven con las de comida en la misma
+            // colección y sin el filtro se colaban aquí, donde no se pueden aplicar.
+            const res = await api('/api/diets/favorites?ambito=dia');
             setDietFavorites(res.favorites || []);
         } catch (err) { setDietFavorites([]); }
     };
@@ -2027,6 +2035,122 @@ const NutritionPage = () => {
         } catch (err) {
             console.error('[borrar favorita]', err);
             toast.error('No hemos podido borrar la favorita. Inténtalo de nuevo.');
+        }
+    };
+
+    // ── Favoritas de UNA comida (25-08) ───────────────────────────────────────
+    const abrirFavoritasDeComida = async (mealKey) => {
+        setFavComidaModal({ open: true, mealKey });
+        try {
+            const res = await api('/api/diets/favorites?ambito=comida');
+            setComidaFavoritas(res.favorites || []);
+        } catch (err) {
+            console.error('[favoritas de comida]', err);
+            setComidaFavoritas([]);
+        }
+    };
+
+    const guardarComidaFavorita = async (name) => {
+        const mealKey = favComidaModal.mealKey;
+        const alimentos = (mealsData[mealKey]?.alimentos) || [];
+        try {
+            await api('/api/diets/favorites', {
+                method: 'POST',
+                body: JSON.stringify({
+                    name,
+                    ambito: 'comida',
+                    comida: mealKey,
+                    tipo_dia: tipoDia,
+                    alimentos,
+                    macros_snapshot: calculateMealMacros(mealKey),
+                }),
+            });
+            toast.success(`Guardada · "${name}" ya es una de tus comidas`, {
+                description: 'La tienes en Favoritas de cualquier comida, no solo de esta.',
+                duration: 6000,
+            });
+            const res = await api('/api/diets/favorites?ambito=comida');
+            setComidaFavoritas(res.favorites || []);
+        } catch (err) {
+            console.error('[guardar comida favorita]', err);
+            toast.error('No hemos podido guardar la comida. Inténtalo de nuevo.');
+        }
+    };
+
+    const aplicarComidaFavorita = async (fav) => {
+        const mealKey = favComidaModal.mealKey;
+        const alimentos = fav.alimentos || [];
+        setFavComidaModal({ open: false, mealKey: null });
+
+        // En el peri no se cuadra (igual que el botón «Cuadrar», que ahí no se pinta):
+        // se vuelca tal cual y el cliente ajusta con el sugeridor.
+        if (['Intra', 'Post'].includes(mealKey)) {
+            setMealsData(prev => ({ ...prev, [mealKey]: { alimentos } }));
+            toast.success(`"${fav.name}" puesta tal cual`);
+            return;
+        }
+        // Los gramos guardados son los de OTRO día: se re-cuadran a los macros de hoy,
+        // igual que hace la favorita de día. Si el refit falla, se vuelca tal cual y se
+        // dice, que es mejor que dejar la comida vacía.
+        try {
+            const res = await api('/api/calculator/refit-diet', {
+                method: 'POST',
+                body: JSON.stringify({
+                    fecha: currentDate,
+                    tipo_dia: tipoDia, num_comidas: numComidas,
+                    momento_entreno: momentoEntreno, opcion_peri: opcionPeri,
+                    comidas: { [mealKey]: { alimentos } },
+                }),
+            });
+            const refit = res.comidas?.[mealKey];
+            setMealsData(prev => ({ ...prev, [mealKey]: refit || { alimentos } }));
+            setDistribTargetsOverlay(null);   // los macros de HOY, no los del día guardado
+            if (!refit) {
+                toast.success(`"${fav.name}" puesta con las cantidades guardadas`);
+                return;
+            }
+            // NO SE DICE «CUADRADA» SI NO LO ESTÁ. Una comida guardada en otro sitio puede
+            // no caber en el objetivo de esta (p. ej. 33 g de hidratos en una comida de 10),
+            // y cuadrar no quita ingredientes: los reparte lo mejor que puede. Mismo
+            // criterio de desfase que el botón «Cuadrar», para que no digan cosas distintas.
+            const d = res.desfases?.[mealKey];
+            const nombre = { P: 'proteína', H: 'hidratos', G: 'grasa' };
+            const falla = d ? ['P', 'H', 'G'].filter(m => Math.abs(d[m]) > 4) : [];
+            if (!falla.length) {
+                toast.success(`"${fav.name}" puesta y cuadrada a esta comida`);
+                return;
+            }
+            const texto = falla.map(m => `${d[m] > 0 ? 'sobran' : 'faltan'} `
+                + `${num1(Math.abs(d[m]))} g de ${nombre[m]}`).join(' y ');
+            toast.warning(`"${fav.name}" puesta, pero no cuadra aquí: ${texto}.`, {
+                description: 'Venía de una comida con otro objetivo. Ajusta o quita algo.',
+                duration: 9000,
+            });
+        } catch (err) {
+            console.error('[aplicar comida favorita]', err);
+            setMealsData(prev => ({ ...prev, [mealKey]: { alimentos } }));
+            toast.success(`"${fav.name}" puesta con las cantidades guardadas`, {
+                description: 'No hemos podido ajustarlas a los macros de hoy: revisa las cantidades.',
+            });
+        }
+    };
+
+    const borrarComidaFavorita = async (id) => {
+        const fav = comidaFavoritas.find(f => f.id === id);
+        const adelante = await confirm({
+            title: `¿Borrar "${fav?.name || 'esta comida'}"?`,
+            description: 'Se borra para siempre. Los días donde ya la usaste no se tocan.',
+            confirmLabel: 'Borrar',
+            danger: true,
+        });
+        if (!adelante) return;
+        try {
+            await api(`/api/diets/favorites/${id}`, { method: 'DELETE' });
+            setComidaFavoritas(prev => prev.filter(f => f.id !== id));
+            toast.success('Comida borrada de favoritas');
+        } catch (err) {
+            console.error('[borrar comida favorita]', err);
+            toast.error('No hemos podido borrarla. Inténtalo de nuevo.');
         }
     };
 
@@ -2309,7 +2433,7 @@ const NutritionPage = () => {
         getMealStatus, loadMenuOptions, setBuildMealModal, openRepeatModal, removeFood, moveFoodUp,
         updateFoodQuantity, updateFoodQuantityDirect, editingQuantity, setEditingQuantity,
         getQuantityIncrement, clearMeal, getFoodEmoji, formatFoodQuantity, setMealMode,
-        modoMacros, esPorUnidad, pesoUnidad,
+        modoMacros, esPorUnidad, pesoUnidad, abrirFavoritasDeComida,
         // Lo que lleva el día de cada familia calibrada, para el contador de la línea del
         // alimento (`ContadorFamilia`). Va en los props comunes porque el contador es el
         // mismo en todas las comidas: el tramo lo decide el día entero.
@@ -2644,9 +2768,20 @@ const NutritionPage = () => {
                                 </div>
 
                                 {/* Extras del día (bloque 6.3): debajo de las comidas y del
-                                    peri. Cuentan en Llevas del Inicio y no tocan la Dieta.
+                                    peri. No cuentan en ningún sitio (punto 28 del doc del
+                                    24-08): ni en «Llevas» del Inicio ni en la Dieta.
                                     El componente habla axios (api.get/post/delete): se le
-                                    adapta el fetch de esta página. */}
+                                    adapta el fetch de esta página.
+
+                                    `origen="nutricion"`: el bloque se monta en dos sitios
+                                    (Inicio y aquí) y el componente NO trae valor por
+                                    defecto a propósito, para que uno no se apunte como el
+                                    otro. Aquí faltaba y todo lo apuntado desde Nutrición se
+                                    guardaba con origen vacío: la mitad de los extras sin
+                                    procedencia y sin forma de saber por dónde los apunta la
+                                    gente. Si este bloque se monta en un tercer sitio, ese
+                                    sitio pone su origen (y lo acepta `_ORIGENES_EXTRA` en
+                                    backend/routes/diets.py). */}
                                 <ExtrasDelDia
                                     api={{
                                         get: (url, cfg) => api(`/api${url}?${new URLSearchParams(cfg?.params || {})}`).then((data) => ({ data })),
@@ -2654,6 +2789,7 @@ const NutritionPage = () => {
                                         delete: (url) => api(`/api${url}`, { method: 'DELETE' }).then((data) => ({ data })),
                                     }}
                                     fecha={currentDate}
+                                    origen="nutricion"
                                     extras={extrasDia}
                                     onAnadido={(extra) => setExtrasDia((prev) => [...prev, extra])}
                                     onQuitado={(id) => setExtrasDia((prev) => prev.filter((e) => e.id !== id))}
@@ -2799,6 +2935,18 @@ const NutritionPage = () => {
                 tipoDia={tipoDia}
                 // Para no dejar guardar un día sin comidas como favorita.
                 diaVacio={diaVacio}
+            />
+
+            <FavoritasDeComida
+                open={favComidaModal.open}
+                onClose={() => setFavComidaModal({ open: false, mealKey: null })}
+                mealKey={favComidaModal.mealKey}
+                mealLabel={mealInfo?.[favComidaModal.mealKey]?.name || 'esta comida'}
+                favorites={comidaFavoritas}
+                comidaLlena={((mealsData[favComidaModal.mealKey]?.alimentos) || []).length > 0}
+                onSave={guardarComidaFavorita}
+                onApply={aplicarComidaFavorita}
+                onDelete={borrarComidaFavorita}
             />
 
             {/* Diet Calendar Modal */}

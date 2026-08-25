@@ -222,13 +222,50 @@ async def save_diet(data: dict, user = Depends(get_current_user)):
 # Declaradas ANTES de /{fecha} para que "/favorites" no caiga en el path param.
 @router.post("/favorites")
 async def save_favorite(data: dict, user = Depends(get_current_user)):
-    """Guardar el día actual como plantilla favorita con un nombre."""
+    """Guardar como favorita, con un nombre: el día entero o UNA comida suelta.
+
+    FAVORITAS POR COMIDA (Francisco, 25-08). Hasta ahora una favorita era siempre el día
+    completo, con su número de comidas, su momento de entreno y su peri: para guardar «mi
+    desayuno de siempre» había que guardar el día entero y luego borrar lo que sobraba. Se
+    veía en los datos: de las 1.245 favoritas de producción, 72 tenían UNA sola comida con
+    alimentos. La gente ya lo estaba usando así.
+
+    Se distingue con `ambito`, y se añade sin migrar nada: las que ya existen no lo llevan
+    y se leen como "dia", que es lo que son.
+    """
     if not isinstance(data, dict):
         raise HTTPException(status_code=400, detail="Cuerpo inválido")
     name = data.get("name")
     name = name.strip() if isinstance(name, str) else ""
     if not name:
         raise HTTPException(status_code=400, detail="Nombre requerido")
+
+    if (data.get("ambito") or "dia") == "comida":
+        comida = (data.get("comida") or "").strip()
+        alimentos = data.get("alimentos")
+        if not comida:
+            raise HTTPException(status_code=400, detail="Falta saber de qué comida es")
+        if not isinstance(alimentos, list) or not alimentos:
+            # Mismo criterio que el día: una favorita vacía no es una favorita.
+            raise HTTPException(
+                status_code=400,
+                detail="Esta comida está vacía. Ponle algo antes de guardarla.")
+        fav = {
+            "id": str(uuid.uuid4()),
+            "user_id": user["id"],
+            "name": name[:60],
+            "ambito": "comida",
+            # De qué comida salió. Es informativo: una favorita de la Comida 2 se puede
+            # aplicar a la 3 sin problema, y la pantalla lo dice para que no despiste.
+            "comida_origen": comida,
+            "tipo_dia": data.get("tipo_dia", "entrenamiento"),
+            "alimentos": alimentos,
+            "macros_snapshot": data.get("macros_snapshot"),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.diet_favorites.insert_one(dict(fav))
+        return {"message": "Comida guardada en favoritas", "favorite": fav}
+
     # UNA FAVORITA VACÍA NO ES UNA FAVORITA (punto 15 del documento del 17-08). Se podía
     # guardar el día sin haber puesto nada, y quedaba en la lista una plantilla con «0
     # comidas» que al aplicarla no hace nada: seis de las 1.211 de producción están así. El
@@ -243,6 +280,7 @@ async def save_favorite(data: dict, user = Depends(get_current_user)):
         "id": str(uuid.uuid4()),
         "user_id": user["id"],
         "name": name[:60],
+        "ambito": "dia",
         "tipo_dia": data.get("tipo_dia", "entrenamiento"),
         "num_comidas": data.get("num_comidas", 4),
         "momento_entreno": data.get("momento_entreno", 1),
@@ -257,11 +295,22 @@ async def save_favorite(data: dict, user = Depends(get_current_user)):
 
 
 @router.get("/favorites")
-async def list_favorites(user = Depends(get_current_user)):
-    """Lista las plantillas favoritas del usuario."""
+async def list_favorites(ambito: Optional[str] = None, user = Depends(get_current_user)):
+    """Lista las favoritas del usuario. Con `ambito` se piden solo las de día o las de comida.
+
+    Las 1.245 guardadas antes del 25-08 no llevan `ambito`: son de día y se filtran como
+    tales, sin tocarlas en la base.
+    """
+    filtro = {"user_id": user["id"]}
+    if ambito == "comida":
+        filtro["ambito"] = "comida"
+    elif ambito == "dia":
+        filtro["ambito"] = {"$ne": "comida"}
     favs = await db.diet_favorites.find(
-        {"user_id": user["id"]}, {"_id": 0}
-    ).sort("created_at", -1).to_list(100)
+        filtro, {"_id": 0}
+    ).sort("created_at", -1).to_list(200)
+    for f in favs:
+        f.setdefault("ambito", "dia")
     return {"favorites": favs}
 
 
@@ -691,21 +740,85 @@ async def marcar_comida(fecha: str, data: dict, user = Depends(get_current_user)
 # dentro: así nadie que cuente comidas los ve. `_servido_de_las_comidas`, la calibración y
 # los helpers de `core.dieta_para_ver` (`alimentos_de`, `ids_de`) recorren `diet["comidas"]`
 # y solo eso, y el `$set` de `upsert_diet_doc` escribe campos con nombre, así que un guardado
-# desde Nutrición o el chat tampoco los pisa. Cuentan en «Llevas» (los suma la pantalla del
-# Inicio), no tocan la dieta ni el reparto, y con ellos «Falta» puede quedar en negativo y
-# se dice tal cual («te has pasado de 40 g de hidratos»), no se deja en cero.
+# desde Nutrición o el chat tampoco los pisa.
 #
-# Los macros son los de la ETIQUETA (`macros_reales`), calculados al añadir y guardados en
-# el propio extra: un donut que no está en el método no tiene macros «efectivos» que valgan,
-# y lo que hace falta saber es lo que se ha comido de verdad.
+# UN EXTRA NO TOCA NADA (puntos 27 y 28 del doc del 24-08). Hasta el 24-08 se sumaban en
+# «Llevas» y eso le encogía el «Falta»: si se comía una tarta a media tarde, la app le decía
+# que ya no se comiera la comida 4, o sea que le enseñaba a compensar. Ya no: van en su
+# lista, aparte, y ni la dieta ni el reparto ni «Llevas» se mueven. Aquí no se cuenta nada,
+# solo se guarda lo que dice.
+#
+# Y SE APUNTA ESCRIBIENDO, no buscando en el catálogo. Un extra es por definición lo que NO
+# estaba en la dieta -- el pincho del bar, la tarta del cumpleaños --, justo lo que no va a
+# encontrar en db.foods; y si no lo encuentra, no lo apunta. El dato lo confirmó: con la
+# función viva desde el 21-08 y 198 clientes, en toda la base de producción había UN solo
+# extra apuntado. Así que la puerta buena es `{"texto": "dos cañas y un pincho de tortilla"}`
+# y ese extra NO lleva macros (`macros: None`): no hay ficha de la que sacarlos y ya no
+# cuentan para ninguna suma. La puerta vieja del catálogo (`alimento_id` + cantidad) sigue
+# abierta con sus macros de etiqueta: hay un extra así en producción y no se va a quedar sin
+# pintar por un cambio de formulario.
+#
+# QUIÉN ESCRIBE AQUÍ. El campo del Inicio y el de Nutrición, y desde el 24-08 también la
+# pregunta de la noche del check-in («¿se te ha escapado algo más hoy?», punto 32): es UNA
+# sola lista y no dos sitios donde buscar. Por eso la fecha es la del path y nunca «hoy»:
+# el check-in de las 23:50 tiene que caer en el día de la dieta que se estaba comiendo, y
+# quien llama manda su día (el del reloj del CLIENTE, no el del servidor).
+
+
+_ORIGENES_EXTRA = ("inicio", "nutricion", "checkin")
+_LARGO_MAX_EXTRA = 300
+# Lo más largo que se puede pedir de un tirón en `/extras/periodo`. Un quincenal son 15
+# días y un mensual 30; un año es de sobra para cualquier ficha y pone techo a la consulta.
+_MAX_DIAS_PERIODO_EXTRAS = 366
 
 
 @router.post("/{fecha}/extras")
 async def anadir_extra(fecha: str, data: dict, user = Depends(get_current_user)):
-    """Apuntar un extra del día: un alimento del catálogo y cuánto ha sido."""
+    """Apuntar un extra del día.
+
+    Dos puertas: `{"texto": "..."}` (la de las pantallas, sin catálogo y sin macros) y la
+    vieja `{"alimento_id": ..., "cantidad_g"|"unidades": ...}`, que sigue viva porque hay
+    extras así guardados. `origen` es opcional y solo dice desde dónde se apuntó (el campo
+    del Inicio, el de Nutrición o la pregunta del check-in).
+    """
     _validar_fecha(fecha)
     if not isinstance(data, dict):
         raise HTTPException(status_code=400, detail="Cuerpo inválido")
+
+    origen = data.get("origen") if data.get("origen") in _ORIGENES_EXTRA else None
+
+    # LA PUERTA BUENA: texto libre. Va primero porque es la que usan las pantallas; si
+    # llega texto no se mira el catálogo para nada.
+    texto = data.get("texto")
+    if isinstance(texto, str) and texto.strip():
+        texto = " ".join(texto.split())  # sin saltos de línea ni dobles espacios
+        if len(texto) > _LARGO_MAX_EXTRA:
+            raise HTTPException(
+                status_code=400,
+                detail="Eso es muy largo para un extra. Resúmelo en una línea.")
+        extra = {
+            "id": str(uuid.uuid4()),
+            "texto": texto,
+            # El mismo texto en `nombre`: es lo que pinta la lista, y así lo que ya lee
+            # `nombre` (la pantalla, el visor del panel) no necesita saber de qué puerta vino.
+            "nombre": texto,
+            "alimento_id": None,
+            "macros": None,  # sin ficha no hay macros, y ya no cuentan para ninguna suma
+            "origen": origen,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.diets.update_one(
+            {"user_id": user["id"], "fecha": fecha},
+            {"$push": {"extras": extra},
+             "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
+            upsert=True,
+        )
+        return {"fecha": fecha, "extra": extra}
+
+    if data.get("alimento_id") is None:
+        # Ni texto ni alimento: vino por la puerta nueva y en blanco. Eso se dice con la
+        # frase de la puerta nueva, no con un 404 de catálogo que ya no viene a cuento.
+        raise HTTPException(status_code=400, detail="Escribe qué te has comido.")
 
     # El id puede llegar como número o como texto (según la puerta por la que entre).
     alimento_id = data.get("alimento_id")
@@ -744,6 +857,7 @@ async def anadir_extra(fecha: str, data: dict, user = Depends(get_current_user))
         "cantidad_texto": _para_ver.cantidad_de(
             {"alimento_id": food["id"], "cantidad_g": cantidad}, {food["id"]: food}),
         "macros": macros_reales(food, cantidad),
+        "origen": origen,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     # Upsert del día si no existe, como la casilla por comida: el extra de un día sin
@@ -771,6 +885,79 @@ async def quitar_extra(fecha: str, extra_id: str, user = Depends(get_current_use
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Ese extra ya no está apuntado.")
     return {"fecha": fecha, "id": extra_id}
+
+
+async def extras_del_periodo(user_id: str, desde: str, hasta: str) -> list:
+    """Todos los extras de un cliente entre dos fechas, en una lista corrida.
+
+    ES DONDE SIRVEN (punto 33 del doc del 24-08): sueltos, día a día, no los ve nadie del
+    equipo; juntos en el reporte son lo que explica por qué esa quincena no bajó. Por eso
+    esto devuelve la LISTA de la quincena y no un recuento por día.
+
+    `user_id` es el de `users.id`, que es con el que se guardan las dietas (ojo: el reporte
+    trabaja con `client_profiles.id`, que es otro; el puente lo hace quien llama).
+    Las fechas son YYYY-MM-DD y van incluidas las dos. La consulta es directa porque
+    `extras` es un campo hermano de `comidas` en el documento del día.
+
+    El tope de días es el mismo que valida la puerta HTTP (`_MAX_DIAS_PERIODO_EXTRAS`), y
+    va con uno de más para que un periodo válido no se corte nunca por el borde: una lista
+    recortada en silencio es peor que un error, porque el reporte saldría incompleto sin
+    que nadie se entere.
+    """
+    cursor = db.diets.find(
+        {"user_id": user_id, "fecha": {"$gte": desde, "$lte": hasta},
+         "extras": {"$exists": True, "$ne": []}},
+        {"_id": 0, "fecha": 1, "extras": 1},
+    ).sort("fecha", 1)
+    dias = await cursor.to_list(length=_MAX_DIAS_PERIODO_EXTRAS + 1)
+
+    lista = []
+    for dia in dias:
+        for e in (dia.get("extras") or []):
+            if not isinstance(e, dict):
+                continue
+            lista.append({
+                "fecha": dia.get("fecha"),
+                "id": e.get("id"),
+                # `texto` en los nuevos, `nombre` en los del catálogo: para pintar la lista
+                # vale el mismo campo y quien la lee no tiene que distinguirlos.
+                "texto": e.get("texto") or e.get("nombre") or "",
+                "cantidad_texto": e.get("cantidad_texto"),
+                "macros": e.get("macros"),
+                "origen": e.get("origen"),
+                "created_at": e.get("created_at"),
+            })
+    lista.sort(key=lambda x: (x["fecha"] or "", x["created_at"] or ""))
+    return lista
+
+
+@router.get("/extras/periodo")
+async def get_extras_del_periodo(desde: str, hasta: str, user_id: Optional[str] = None,
+                                 user = Depends(get_current_user)):
+    """Los extras de un periodo, para el reporte y para la ficha del cliente.
+
+    Sin `user_id`, los del que pregunta. Con `user_id`, los de ese cliente y solo para el
+    equipo (la misma regla que la ficha: admin y trainer ven a todos).
+
+    La ruta lleva dos tramos a propósito: `/diets/{fecha}` es de un tramo y no la pisa.
+    """
+    _validar_fecha(desde)
+    _validar_fecha(hasta)
+    if desde > hasta:
+        raise HTTPException(status_code=400, detail="La fecha de inicio va antes que la de fin.")
+    dias = (datetime.strptime(hasta, "%Y-%m-%d") - datetime.strptime(desde, "%Y-%m-%d")).days + 1
+    if dias > _MAX_DIAS_PERIODO_EXTRAS:
+        raise HTTPException(
+            status_code=400,
+            detail="Ese periodo es demasiado largo. Pide como mucho un año de una vez.")
+
+    objetivo = user_id or user["id"]
+    if objetivo != user["id"] and user.get("role") not in ("admin", "trainer"):
+        raise HTTPException(status_code=403, detail="No tienes acceso a este cliente")
+
+    extras = await extras_del_periodo(objetivo, desde, hasta)
+    return {"user_id": objetivo, "desde": desde, "hasta": hasta,
+            "total": len(extras), "extras": extras}
 
 
 @router.post("/copy-day")
@@ -849,27 +1036,37 @@ async def _reparto_del_dia(fecha: str, diet: Optional[dict], user: dict) -> Opti
     """
     from routes.calculator import distribute_macros
 
-    if diet:
-        config = {
-            "tipo_dia": diet.get("tipo_dia") or "entrenamiento",
-            "num_comidas": diet.get("num_comidas") or 4,
-            # `?? 1` y no `or 1`: el 0 es "en ayunas" y es una respuesta, no un vacío.
-            "momento_entreno": diet.get("momento_entreno") if diet.get("momento_entreno") is not None else 1,
-            "opcion_peri": diet.get("opcion_peri") or "intra_post",
-        }
-    else:
-        perfil = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
-        num_comidas = perfil.get("diet_num_comidas")
-        if num_comidas is None:
-            num_comidas = 1 if perfil.get("single_meal_mode") else 4
-        config = {
-            # Sin día guardado, el tipo de día todavía no lo ha dicho nadie: Nutrición abre
-            # en entreno (y marca el selector para que lo diga), y aquí se hace igual.
-            "tipo_dia": "entrenamiento",
-            "num_comidas": num_comidas,
-            "momento_entreno": perfil.get("diet_momento_entreno", 1),
-            "opcion_peri": perfil.get("diet_opcion_peri") or "intra_post",
-        }
+    # CAMPO A CAMPO, NO DOCUMENTO A DOCUMENTO (24-08). Aquí ponía `if diet:` y, en cuanto el
+    # documento del día EXISTÍA, se usaba entero: los campos que no estuviera guardados caían
+    # a los valores de fábrica (4 comidas, `intra_post`) en vez de a los del cliente.
+    #
+    # Y el documento del día puede existir sin que nadie haya configurado nada: apuntar un
+    # extra lo crea con un `upsert` que solo mete la lista `extras` (ver POST /{fecha}/extras).
+    # Medido en dev con una cuenta de `sin_peri` que había apuntado un extra: aquí salía un
+    # objetivo con perientreno y en Inicio otro sin él, 235 contra 290 del mismo día.
+    #
+    # Lo que hace ahora es lo que el párrafo de arriba lleva prometiendo desde el principio:
+    # de cada dato manda el del día SI ESTÁ GUARDADO, y si no el que el cliente tiene puesto.
+    perfil = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    diet = diet or {}
+
+    num_comidas = diet.get("num_comidas") or perfil.get("diet_num_comidas")
+    if num_comidas is None:
+        num_comidas = 1 if perfil.get("single_meal_mode") else 4
+
+    # `is not None` y no `or`: el 0 es «en ayunas», que es una respuesta y no un vacío.
+    momento = diet.get("momento_entreno")
+    if momento is None:
+        momento = perfil.get("diet_momento_entreno", 1)
+
+    config = {
+        # El tipo de día no vive en el perfil: si el día no lo dice, todavía no lo ha dicho
+        # nadie. Nutrición abre en entreno (y marca el selector para que lo diga) y aquí igual.
+        "tipo_dia": diet.get("tipo_dia") or "entrenamiento",
+        "num_comidas": num_comidas,
+        "momento_entreno": momento,
+        "opcion_peri": diet.get("opcion_peri") or perfil.get("diet_opcion_peri") or "intra_post",
+    }
 
     try:
         reparto = await distribute_macros({

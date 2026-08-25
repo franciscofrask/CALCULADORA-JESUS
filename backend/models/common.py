@@ -268,8 +268,30 @@ class CheckInCreate(BaseModel):
     # check-ins ya guardados y las versiones viejas de la app no se tiran.
     descanso: Optional[int] = Field(None, ge=1, le=5)          # "¿Cómo has descansado?" · la noche de ayer
     movimiento: Optional[str] = Field(None, pattern="^(menos|igual|mas)$")
-    # Qué contesta al "Hoy no entrenaste": lo puso pero no lo marcó, o no entrenó.
-    entreno_respuesta: Optional[str] = Field(None, pattern="^(si_no_lo_puse|no_entrene)$")
+    # ── Las once preguntas del doc 24-08 (puntos 01 a 04) ─────────────────────
+    #
+    # «Sensaciones generales del día», con estrellas. CAMPO NUEVO Y NO `mood`, a propósito:
+    # `mood` es la carita del check-in viejo, sigue guardada en filas de mayo y con otra
+    # escala («Mal/Bajo/Neutro/Bien/Genial»). Reaprovecharlo mezclaría dos preguntas
+    # distintas en la misma media sin que nada avisara, que es justo la clase de fallo que
+    # ya nos mordió con las claves de macros en inglés y en castellano.
+    sensaciones: Optional[int] = Field(None, ge=1, le=5)
+    # «¿Entrenaste hoy?», con TRES opciones y para todos, todos los días (punto 02).
+    # Los dos valores viejos (`si_no_lo_puse`, `no_entrene`) siguen admitidos: están
+    # escritos en cierres que ya existen y quitarlos del patrón los dejaría sin leerse.
+    entreno_respuesta: Optional[str] = Field(
+        None, pattern="^(si|no|descanso|si_no_lo_puse|no_entrene)$")
+    # «¿Cómo fue?», colgando del «Sí» (punto 03). Se guarda en el cierre y no en
+    # `workout_logs`: al que entrena por su cuenta no le existe registro de entreno, que
+    # es precisamente el que hoy no deja este dato en ninguna parte.
+    entreno_estrellas: Optional[int] = Field(None, ge=1, le=5)
+    # «¿Hiciste cardio?» (punto 04). «No tocaba» resuelve al que no lleva cardio, así la
+    # pregunta sale a todos y no hay que decidir a quién enseñarla.
+    cardio: Optional[str] = Field(None, pattern="^(si|no|no_tocaba)$")
+    # «¿Se te ha escapado algo más hoy?» (puntos 07 y 32). Aquí se guarda SOLO la
+    # respuesta: lo que escriba se va a la lista de extras del día (POST
+    # /diets/{fecha}/extras), que es la única lista de extras que hay.
+    extras_respuesta: Optional[str] = Field(None, pattern="^(no|si)$")
     entreno_nota: Optional[str] = Field(None, max_length=1000)
     suplementos: Optional[SuplementosDelDia] = None
     # El check de la comida que le quedaba sin registrar. Se guarda AQUÍ y ya: no toca la
@@ -291,7 +313,9 @@ class CheckInCreate(BaseModel):
     # tomar conciencia de lo que se lleva a la boca, y a él le explica por qué alguien coge
     # peso sin saber por qué (el picoteo que nadie apunta en la dieta).
     comido_hoy: Optional[str] = None
-    mood: Optional[int] = None
+    # La carita del check-in viejo. Ya no la pide nadie (las sensaciones van arriba, con
+    # estrellas), pero entraba sin rango ninguno: un 9 se guardaba tan campante.
+    mood: Optional[int] = Field(None, ge=1, le=5)
     trained: Optional[bool] = None
     nutrition_followed: Optional[bool] = None
     # Weekly
@@ -299,6 +323,12 @@ class CheckInCreate(BaseModel):
     # el historico (`anotar_peso`), asi que sin tope aqui se colaban por la otra puerta los
     # 50 y los 94 kg seguidos que salieron en las pruebas del 15-08 (#48).
     weight: Optional[float] = Field(None, ge=25, le=300)
+    # LA FECHA DEL PESAJE, QUE NO SIEMPRE ES LA DE HOY (doc 24-08, la regla del peso
+    # semanal). El peso se archivaba con el día del cierre, así que el que se pesó ayer y
+    # lo apunta hoy metía el dato en el día equivocado, y la pareja de días seguidos desde
+    # el miércoles -- de la que sale la media semanal -- no llegaba a formarse nunca.
+    # Se valida en la ruta (ni futuro, ni más de 14 días atrás); sin ella, el día del cierre.
+    peso_fecha: Optional[str] = None
     training_compliance: Optional[int] = None    # 0-100
     nutrition_compliance: Optional[int] = None   # 0-100
     sleep_quality: Optional[int] = None          # 1-10
@@ -321,7 +351,13 @@ class CheckInResponse(BaseModel):
     # Diario (las notas) y el reporte del mes (descanso y movimiento).
     descanso: Optional[int] = None
     movimiento: Optional[str] = None
+    # Las cuatro preguntas nuevas del doc 24-08. Salen a la respuesta porque de aquí las
+    # lee el historial (la línea del día y su detalle) y el reporte del mes.
+    sensaciones: Optional[int] = None
     entreno_respuesta: Optional[str] = None
+    entreno_estrellas: Optional[int] = None
+    cardio: Optional[str] = None
+    extras_respuesta: Optional[str] = None
     entreno_nota: Optional[str] = None
     suplementos: Optional[SuplementosDelDia] = None
     cena_hecha: Optional[bool] = None
@@ -335,6 +371,9 @@ class CheckInResponse(BaseModel):
     trained: Optional[bool] = None
     nutrition_followed: Optional[bool] = None
     weight: Optional[float] = None
+    # De qué día es ese peso, si no era el de hoy. Vuelve a la pantalla para que al
+    # reabrir el cierre le salga la misma fecha que eligió y no «hoy» otra vez.
+    peso_fecha: Optional[str] = None
     training_compliance: Optional[int] = None
     nutrition_compliance: Optional[int] = None
     sleep_quality: Optional[int] = None

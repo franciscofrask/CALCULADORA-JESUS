@@ -21,7 +21,9 @@ const textoDeLaPeticion = (p) => {
         ? new Date(`${p.fecha}T12:00:00`).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })
         : null;
     return (cuando ? `Nos pediste tu rutina ${cual} el ${cuando}.` : `Nos pediste tu rutina ${cual}.`)
-        + ' El equipo se pone con ella y la tendrás aquí en cuanto esté.'
+        // Si ya se le entregó la del mes, no se le dice que la estamos preparando.
+        + (p.rutina_puesta ? ' Ya la tienes puesta aquí.'
+                           : ' El equipo se pone con ella y la tendrás aquí en cuanto esté.')
         // Del cobro solo se habla cuando el servidor dice que NO entró. Antes esto colgaba
         // de `!cobrado`, y la petición que llega del reporte mensual no trae ese dato: al
         // que ya había pagado se le decía «el cobro se quedó pendiente» sin ser verdad.
@@ -174,17 +176,145 @@ const SemanaDeRutina = ({ semana, abrirPdf, tienePdf, onMarcarHoy, onSiLoHice, o
     );
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// LA RUTINA A LA VISTA, SIN SALIR DE LA PANTALLA (Jesús, 24-08)
+//
+// Hasta hoy el que tiene su rutina en PDF veía una tarjeta con «Abrir mi rutina» que se la
+// abría en otra pestaña. Ahora se ve aquí dentro.
+//
+// TRES DECISIONES, y las tres son por el móvil, que es donde se abre:
+//
+//  1. El PDF se pide con el token (`api`, como todos los ficheros de la casa) y se pinta
+//     desde un blob: poniéndolo en un `src=` a pelo el visor no manda la cabecera y el
+//     servidor contesta 401.
+//  2. En móvil NO se carga sola. Pesan entre 300 KB y 4,6 MB y van dentro del documento de
+//     Mongo; bajarle eso con datos a quien solo entró a marcar el desayuno no está bien.
+//     Ahí se pide con un botón, y en escritorio se carga al abrir la pantalla.
+//  3. «Abrirla a pantalla completa» SE QUEDA SIEMPRE. Un PDF metido en la página se porta
+//     mal fuera del escritorio: Safari de iOS pinta la primera página y no deja pasar de
+//     ahí, y Chrome de Android muchas veces ni la pinta. Si nos quedáramos solo con la
+//     vista previa habría clientes que no podrían leer su rutina, así que la vista previa
+//     es un añadido y el botón de siempre sigue siendo la salida buena.
+//
+// El día que haga falta la rutina página a página dentro de la app, hace falta un visor de
+// PDF de verdad (pdf.js) y eso es una dependencia nueva: hoy no hay ninguna en el proyecto.
+// ─────────────────────────────────────────────────────────────────────────────
+const esPantallaPequena = () =>
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+        ? window.matchMedia('(max-width: 767px)').matches
+        : false;
+
+const VistaPreviaPdf = ({ api, info, abrirPdf }) => {
+    const [enMovil] = useState(esPantallaPequena);
+    const [url, setUrl] = useState(null);
+    // 'espera' (el móvil, hasta que lo pida) · 'cargando' · 'lista' · 'fallo'
+    const [estado, setEstado] = useState(enMovil ? 'espera' : 'cargando');
+
+    const cargar = React.useCallback(async () => {
+        setEstado('cargando');
+        try {
+            const r = await api.get('/routines/pdf', { responseType: 'blob' });
+            setUrl(URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' })));
+            setEstado('lista');
+        } catch (e) {
+            console.error('[vista previa de la rutina]', e?.response?.status || e);
+            setEstado('fallo');
+        }
+    }, [api]);
+
+    useEffect(() => { if (!enMovil) cargar(); }, [cargar, enMovil]);
+    // El blob se suelta al salir: sin esto la pestaña se queda con los megas en memoria.
+    useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
+
+    // Si ya está descargada, se abre esa y no se vuelve a pedir al servidor.
+    const abrirEntera = () => (url ? window.open(url, '_blank', 'noopener') : abrirPdf());
+
+    return (
+        <div className="surface p-4 sm:p-5 space-y-4 max-w-3xl" data-testid="routine-pdf-preview">
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                    <h2 className="font-heading text-xl font-bold uppercase text-foreground leading-tight">Tu rutina, en PDF</h2>
+                    <p className="text-muted-foreground text-sm">
+                        Tu entrenador te la ha preparado el {new Date(info.uploaded_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}.
+                    </p>
+                </div>
+                <button onClick={abrirEntera} data-testid="routine-pdf-btn"
+                    className="btn-brand inline-flex items-center gap-2 shrink-0">
+                    Abrirla entera <ChevronRight className="w-4 h-4" />
+                </button>
+            </div>
+
+            {estado === 'espera' && (
+                <button onClick={cargar} data-testid="routine-pdf-ver-aqui"
+                    className="w-full rounded-2xl border border-dashed border-border py-8 text-center hover:border-brand/50 transition-colors">
+                    <FileText className="w-7 h-7 text-brand/60 mx-auto mb-2" />
+                    <p className="font-semibold text-foreground text-sm">Verla aquí</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Son unos megas: mejor con wifi.</p>
+                </button>
+            )}
+
+            {estado === 'cargando' && <div className="h-64 rounded-2xl bg-muted animate-pulse" />}
+
+            {estado === 'fallo' && (
+                <div className="rounded-2xl border border-border p-6 text-center space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                        No hemos podido enseñártela aquí. Ábrela entera y la verás igual.
+                    </p>
+                    <button onClick={cargar} className="text-sm font-semibold text-brand hover:underline underline-offset-4">
+                        Volver a intentarlo
+                    </button>
+                </div>
+            )}
+
+            {estado === 'lista' && url && (
+                <object data={url} type="application/pdf" aria-label="Tu rutina en PDF"
+                    data-testid="routine-pdf-object"
+                    className="w-full h-[60vh] min-h-[320px] rounded-2xl border border-border bg-card">
+                    {/* Lo que se ve donde el navegador no sabe pintar un PDF dentro de la
+                        página, que en móvil es la mitad de las veces. */}
+                    <div className="p-6 text-center space-y-3">
+                        <p className="text-sm text-muted-foreground">
+                            Tu navegador no la enseña aquí dentro. Ábrela entera y la verás igual.
+                        </p>
+                        <button onClick={abrirEntera} className="btn-brand">Abrirla entera</button>
+                    </div>
+                </object>
+            )}
+        </div>
+    );
+};
+
 const RoutinePage = () => {
-    const { api, myPlan } = useAuth();
+    const { api, myPlan, planCatalog, loading: cargandoSesion } = useAuth();
     const [routine, setRoutine] = useState(null);
-    // «Quiero mi rutina» (P72 del 23-08, DECIDIDO): si su plan NO lleva rutina, aquí no
-    // se le dice que «su entrenador la está preparando» (mentira): se le ofrece comprar
-    // la rutina del mes. La lleva o no lo dice el catálogo del plan.
-    const rutinaIncluida = (() => {
+    // NO SE PINTA LA OFERTA HASTA SABER QUÉ PLAN TIENE (verificación 24-08, fallo 15).
+    //
+    // `myPlan` sale de cruzar el perfil con el CATÁLOGO de planes, y AuthContext pide el
+    // catálogo aparte (context/AuthContext.jsx:288-291): hasta que llega vale null. Con
+    // null, esto daba `false` y en esa ventana un Premium o un Gold -- 116 clientes que la
+    // llevan incluida -- leía un instante «Tu plan no incluye rutina · Quiero mi rutina ·
+    // 57 €». No cobraba de más (el servidor lo rechaza con un 400), pero es el cartel
+    // equivocado en la pantalla donde hay un botón de pagar.
+    //
+    // Por eso ahora son TRES estados y no dos: true (la lleva), false (no la lleva) y null
+    // (todavía no lo sabemos). Con null no se enseña ni la oferta ni el «tu entrenador la
+    // está preparando»: se espera.
+    const planPorSaber = cargandoSesion || !Object.keys(planCatalog || {}).length;
+    const rutinaIncluida = planPorSaber ? null : (() => {
         const r = myPlan?.habilitaciones?.rutina;
         // «opcional» es justo eso: no la lleva de serie, se le ofrece comprarla.
         return !!r && r !== 'ninguna' && r !== 'opcional';
     })();
+    // Y si el catálogo no llega NUNCA (la petición de /plans falló, y AuthContext no la
+    // reintenta), no se puede dejar la pantalla esperando para siempre: a los seis segundos
+    // se enseña el cartel neutro, que es verdad lleve rutina o no. Lo que no se hace nunca a
+    // ciegas es ofrecer los 57 €.
+    const [planTardaDemasiado, setPlanTardaDemasiado] = useState(false);
+    useEffect(() => {
+        if (!planPorSaber) return undefined;
+        const reloj = setTimeout(() => setPlanTardaDemasiado(true), 6000);
+        return () => clearTimeout(reloj);
+    }, [planPorSaber]);
     const [comprando, setComprando] = useState(null);      // null | 'eligiendo' | 'basica' | 'avanzada'
     const [compraHecha, setCompraHecha] = useState(null);  // el mensaje del servidor
     // LA PETICIÓN QUE YA HIZO (24-08). Hasta hoy la compra solo vivía en el estado de
@@ -193,20 +323,46 @@ const RoutinePage = () => {
     // en su ficha y la pantalla la pregunta al abrirse.
     const [peticion, setPeticion] = useState(null);
     const cargarPeticion = React.useCallback(() => {
-        if (rutinaIncluida) return;   // su plan la lleva: aquí no se compra nada
+        // Solo cuando SABEMOS que su plan no la lleva. Con `if (rutinaIncluida) return` y
+        // el tri-estado nuevo, el null de «todavía no lo sé» habría colado la petición.
+        if (rutinaIncluida !== false) return;
         api.get('/routines/quiero-la-rutina')
             .then(r => setPeticion(r.data?.pedida ? r.data : null)).catch(() => {});
     }, [api, rutinaIncluida]);
     useEffect(() => { cargarPeticion(); }, [cargarPeticion]);
 
+    // ¿HAY RUTINA DEL MES QUE ENTREGAR? (verificación 24-08, fallo 14.) El botón cobraba 57 €
+    // aunque no hubiera nada preparado: cero plantillas marcadas y ningún PDF del mes. El
+    // servidor ya no deja pagar en ese caso; aquí se pregunta antes para no enseñar siquiera
+    // un botón que va a rebotar. null mientras no se sabe: la oferta espera.
+    const [rutinaDelMesLista, setRutinaDelMesLista] = useState(null);
+    useEffect(() => {
+        if (rutinaIncluida !== false) return;
+        api.get('/routines/rutina-del-mes/disponible')
+            .then(r => setRutinaDelMesLista(!!r.data?.disponible))
+            // Si la pregunta falla no se le esconde la compra: que lo intente y que sea el
+            // servidor quien diga que no. Esconderla por un corte de red es perder una venta.
+            .catch(() => setRutinaDelMesLista(true));
+    }, [api, rutinaIncluida]);
+
+    // SE COMPRA, NO SE PIDE (Jesús, 24-08). Antes esto apuntaba la petición y cobraba en la
+    // tarjeta guardada: al que no tenía tarjeta -- el que viene de Calma, el de Calculadora --
+    // se le decía «te escribimos para resolverlo» y ahí se quedaba. Ahora va por la pasarela,
+    // como la revisión suelta y el ajuste a medida: paga cualquiera, con factura, y al
+    // volver la tiene puesta.
     const comprarRutina = async (modalidad) => {
         setComprando(modalidad);
         try {
-            const r = await api.post('/routines/quiero-la-rutina', { modalidad });
-            setCompraHecha(r.data?.mensaje || 'Hecho. El equipo se pone con tu rutina.');
+            const r = await api.post('/billing/rutina-del-mes/checkout', { modalidad });
+            if (r.data?.checkout_url) { window.location.href = r.data.checkout_url; return; }
+            // Cuenta de pruebas: no pasa por Stripe y la rutina ya está puesta. Hay que
+            // recargarla toda, no solo la petición: sin esto la pantalla decía «ya la tienes
+            // puesta» encima del «Tu plan no incluye rutina» hasta que recargabas a mano.
+            setCompraHecha(r.data?.mensaje || 'Hecho. Ya tienes tu rutina.');
+            cargarPeticion(); cargarPdf(); cargarSemana(); fetchRoutine();
         } catch (e) {
-            console.error('[quiero-la-rutina]', e?.response?.data || e);
-            toast.error(e?.response?.data?.detail || 'No hemos podido apuntar tu petición. Inténtalo en un momento.');
+            console.error('[rutina-del-mes/checkout]', e?.response?.data || e);
+            toast.error(e?.response?.data?.detail || 'No hemos podido abrir el pago. Inténtalo en un momento.');
             setComprando('eligiendo');
             // Si el servidor la rechaza porque ya estaba pedida, que la pantalla se entere
             // y deje de ofrecerla en vez de dejar el botón puesto.
@@ -224,9 +380,10 @@ const RoutinePage = () => {
     // «Sin rutina asignada» teniendo su rutina subida. Se pide aparte del Promise.all a
     // propósito: si /routines/current falla, el PDF se enseña igual.
     const [pdfInfo, setPdfInfo] = useState(null);
-    useEffect(() => {
+    const cargarPdf = React.useCallback(() => {
         api.get('/routines/pdf/info').then(r => setPdfInfo(r.data?.hay ? r.data : null)).catch(() => {});
     }, [api]);
+    useEffect(() => { cargarPdf(); }, [cargarPdf]);
 
     // La semana de la rutina (7.1 del 21-08): reparto del PDF + días del cliente. Se
     // pide aparte de /routines/current por lo mismo que el PDF: una no tapa a la otra.
@@ -238,6 +395,31 @@ const RoutinePage = () => {
             .then(r => setSemana(r.data?.hay ? r.data : null)).catch(() => {});
     }, [api]);
     useEffect(() => { cargarSemana(); }, [cargarSemana]);
+
+    // LA VUELTA DEL PAGO. Stripe devuelve a /dashboard/routine?rutina=ok&session_id=...
+    // El webhook hace lo mismo por su cuenta, pero puede tardar (o no estar configurado en
+    // local): sin esto el cliente vuelve de pagar y se encuentra otra vez el botón de
+    // comprar, que es justo el sitio donde no se le puede dejar dudar.
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('rutina') !== 'ok') return;
+        const sesion = params.get('session_id');
+        const seguir = () => {
+            // Se quita el ?rutina=ok de la barra: recargar no puede volver a sincronizar.
+            window.history.replaceState({}, '', window.location.pathname);
+            toast.success('Pago hecho. Tu rutina ya es tuya.');
+            cargarPeticion(); cargarPdf(); cargarSemana(); fetchRoutine();
+        };
+        // El `{CHECKOUT_SESSION_ID}` sin sustituir significa que no venimos de Stripe.
+        if (sesion && !sesion.includes('{')) {
+            api.post('/billing/checkout-session/sync', { session_id: sesion })
+                .catch(e => console.error('[rutina: vuelta del pago]', e?.response?.data || e))
+                .finally(seguir);
+        } else {
+            seguir();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // MARCAR el entreno de hoy: el check de T3, por el endpoint de siempre
     // (workout_logs). Marcar aquí y en la pantalla de Entreno escriben la misma fila.
@@ -331,26 +513,21 @@ const RoutinePage = () => {
     if (!routine) {
         return <Wrap>
             <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground mb-6" data-testid="routine-heading">Mi rutina</h1>
-            {pdfInfo && semana?.hay ? (
-                /* Con PDF y con la semana montada (reparto + días del cliente): la
-                   pantalla completa del apartado 12: cabecera, tira, hoy y lo pendiente. */
-                <SemanaDeRutina semana={semana} abrirPdf={abrirPdf} tienePdf
-                    onMarcarHoy={marcarHoy} onSiLoHice={siLoHice} onRecuperar={recuperar}
-                    marcando={marcando} />
-            ) : pdfInfo ? (
-                /* Sin rutina estructurada pero CON PDF: esa ES su rutina, no un «sin
-                   rutina asignada». Se enseña con su botón para abrirla. */
-                <div className="surface p-10 text-center" data-testid="routine-content">
-                    <div className="w-16 h-16 bg-brand/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                        <FileText className="w-8 h-8 text-brand/60" />
-                    </div>
-                    <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">Tu rutina, en PDF</h2>
-                    <p className="text-muted-foreground text-sm mb-6">
-                        Tu entrenador te la ha preparado el {new Date(pdfInfo.uploaded_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}.
-                    </p>
-                    <button onClick={abrirPdf} data-testid="routine-pdf-btn" className="btn-brand inline-flex items-center gap-2">
-                        Abrir mi rutina <ChevronRight className="w-4 h-4" />
-                    </button>
+            {pdfInfo ? (
+                /* Sin rutina estructurada pero CON PDF: esa ES su rutina, no un «sin rutina
+                   asignada». Se enseña ENTERA aquí dentro (Jesús, 24-08), y encima la
+                   semana -- cabecera, tira, hoy y lo pendiente -- cuando hay reparto y sus
+                   días puestos, que es el apartado 12. */
+                <div className="space-y-5" data-testid="routine-content">
+                    {semana?.hay && (
+                        /* Sin el «Abrir el PDF» de la cabecera: la rutina está justo
+                           debajo, y dos botones para lo mismo a dos dedos uno de otro
+                           solo hacen dudar. */
+                        <SemanaDeRutina semana={semana} abrirPdf={abrirPdf}
+                            onMarcarHoy={marcarHoy} onSiLoHice={siLoHice} onRecuperar={recuperar}
+                            marcando={marcando} />
+                    )}
+                    <VistaPreviaPdf api={api} info={pdfInfo} abrirPdf={abrirPdf} />
                 </div>
             ) : (
                 <div className="surface p-10 text-center" data-testid="routine-content">
@@ -368,6 +545,22 @@ const RoutinePage = () => {
                                 Volver a intentarlo
                             </button>
                         </div>
+                    ) : (rutinaIncluida === null && !planTardaDemasiado) ? (
+                        /* Todavía no sabemos qué plan tiene: ni oferta ni «tu entrenador la
+                           está preparando». Un esqueleto dura lo que tarda el catálogo
+                           (milisegundos) y no dice ninguna mentira. */
+                        <div data-testid="rutina-plan-cargando" className="animate-pulse space-y-3 max-w-sm mx-auto">
+                            <div className="h-6 bg-muted rounded w-2/3 mx-auto" />
+                            <div className="h-4 bg-muted rounded w-full" />
+                            <div className="h-4 bg-muted rounded w-4/5 mx-auto" />
+                        </div>
+                    ) : rutinaIncluida === null ? (
+                        /* El catálogo no ha llegado y ya no va a llegar: lo neutro, que es
+                           verdad en los dos casos. Sin botón de pagar. */
+                        <>
+                            <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">Sin rutina asignada</h2>
+                            <p className="text-muted-foreground text-sm">Aquí verás tu rutina en cuanto la tengas. Si crees que ya debería estar, dínoslo por el chat.</p>
+                        </>
                     ) : rutinaIncluida ? (
                         <>
                             <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">Sin rutina asignada</h2>
@@ -381,13 +574,35 @@ const RoutinePage = () => {
                         <p className="text-sm text-foreground max-w-sm mx-auto" data-testid="rutina-compra-hecha">
                             {compraHecha || textoDeLaPeticion(peticion)}
                         </p>
+                    ) : rutinaDelMesLista === false ? (
+                        /* NO SE OFRECE LO QUE NO HAY (verificación 24-08, fallo 14): sin
+                           rutina del mes preparada, ni botón ni precio. El servidor también
+                           lo rechaza, pero un botón de pagar que rebota es peor que no
+                           tenerlo. */
+                        <div data-testid="rutina-del-mes-no-lista">
+                            <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">Tu plan no incluye rutina</h2>
+                            <p className="text-muted-foreground text-sm max-w-sm mx-auto">
+                                La rutina de este mes todavía no está lista. En cuanto la tengamos podrás pedirla desde aquí.
+                            </p>
+                        </div>
+                    ) : rutinaDelMesLista === null ? (
+                        /* Igual que con el plan: la oferta no se pinta hasta saber que hay
+                           algo que vender. */
+                        <div data-testid="rutina-oferta-cargando" className="animate-pulse space-y-3 max-w-sm mx-auto">
+                            <div className="h-6 bg-muted rounded w-2/3 mx-auto" />
+                            <div className="h-4 bg-muted rounded w-full" />
+                        </div>
                     ) : (
                         /* Su plan no lleva rutina: el aviso y el botón de compra del
                            DECIDIDO (P72, doc 23-08), con el precio delante. */
                         <div data-testid="quiero-mi-rutina">
                             <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">Tu plan no incluye rutina</h2>
+                            {/* YA NO SE COBRA EN LA TARJETA GUARDADA (24-08). Esta pantalla
+                                manda al checkout de Stripe, así que decirle «se cobra en la
+                                tarjeta que ya tienes guardada» era mentira justo donde se
+                                paga: el que viene de Calma no tiene ninguna guardada. */}
                             <p className="text-muted-foreground text-sm max-w-sm mx-auto mb-5">
-                                Si quieres, te preparamos la rutina del mes por 57 €. Se cobra en la tarjeta que ya tienes guardada.
+                                Si quieres, te preparamos la rutina del mes por 57 €. Se paga con tarjeta y te mandamos la factura.
                             </p>
                             {comprando === null ? (
                                 <button onClick={() => setComprando('eligiendo')} data-testid="quiero-mi-rutina-btn"
@@ -413,7 +628,7 @@ const RoutinePage = () => {
                                             Ahora no
                                         </button>
                                     </div>
-                                    <p className="text-[11px] text-muted-foreground">Al elegirla autorizas el cargo de 57 € en tu tarjeta.</p>
+                                    <p className="text-[11px] text-muted-foreground">Al elegirla te llevamos a la pantalla de pago de los 57 €. Al volver la tienes aquí.</p>
                                 </div>
                             )}
                         </div>

@@ -8,7 +8,10 @@ dos sitios, y por eso aqui no hay POST ni PUT ninguno:
 
   - `workout_logs` con `nota`: las entradas de entreno, con sus estrellas y su peso
     destacado (T3).
-  - `checkins` con `notas.texto`: las entradas del dia, del cierre del dia (T4).
+  - `checkins` con `notas.texto` o con `entreno_nota`: las entradas del dia, del cierre
+    del dia (T4). Cada una viaja ademas con `dia_resumen`, lo que contesto ese dia, para
+    que el traslado del historial al Diario (punto 23 del doc 24-08) sea pintar y no
+    volver a pedir los check-ins.
 
 Dos reglas que no son de estilo:
 
@@ -82,6 +85,23 @@ def _entrada_de_entreno(log: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+# Las once respuestas de un cierre, tal cual se guardaron. La pantalla las nombra y las
+# pinta; aqui solo se recogen, para que el Diario pueda enseñar el dia entero y no solo lo
+# que se escribio a mano.
+CAMPOS_DEL_DIA = (
+    "sensaciones", "entreno_respuesta", "entreno_estrellas", "cardio", "movimiento",
+    "suplementos", "extras_respuesta", "descanso", "energy", "hunger_anxiety",
+    "nutrition_followed", "weight", "peso_fecha", "cena_hecha", "comida_pendiente",
+    "exceso_nota", "mood", "trained",
+)
+
+
+def _resumen_del_dia(checkin: Dict[str, Any]) -> Dict[str, Any]:
+    """Lo contestado ese dia, sin los campos vacios: la linea del historial y su detalle."""
+    return {campo: checkin[campo] for campo in CAMPOS_DEL_DIA
+            if checkin.get(campo) is not None}
+
+
 def _entrada_del_dia(checkin: Dict[str, Any], solo_compartidas: bool = False) -> Dict[str, Any]:
     notas = checkin.get("notas") or {}
     texto = notas.get("texto")
@@ -107,6 +127,11 @@ def _entrada_del_dia(checkin: Dict[str, Any], solo_compartidas: bool = False) ->
         # su entreno, y "cae todo lo que escribe" incluye eso. No lleva marca de privacidad
         # porque es la respuesta a una pregunta nuestra: el equipo ya la ve en el check-in.
         "entreno_nota": checkin.get("entreno_nota"),
+        # LO QUE CONTESTO ESE DIA, para poder pintar la linea del historial sin volver a
+        # pedir los check-ins (punto 19 del doc 24-08: "Lun 24 · estrellas · Entreno si ·
+        # Dieta si · 96 kg"). Va aparte y no suelto en la entrada para que lo que ya lee
+        # el Diario de hoy siga leyendose igual.
+        "dia_resumen": _resumen_del_dia(checkin),
         "created_at": checkin.get("created_at") or "",
     }
 
@@ -120,21 +145,38 @@ async def _componer(client_id: str, solo_compartidas: bool, skip: int, limit: in
     hasta = skip + limit + 1
 
     filtro_logs: Dict[str, Any] = {"client_id": client_id, "nota": {"$nin": [None, ""]}}
-    # Un cierre entra al Diario por su nota personal O por su nota de entreno (P80): el
-    # que no tiene rutina apunta su entreno ahi y eso tambien es "lo que escribe".
     con_texto = {"$nin": [None, ""]}
-    filtro_checkins: Dict[str, Any] = {
-        "client_id": client_id,
-        "$or": [{"notas.texto": con_texto}, {"entreno_nota": con_texto}],
-    }
     if solo_compartidas:
         filtro_logs["compartida"] = True
-        # Al equipo: las notas personales solo si van compartidas; la nota de entreno
-        # siempre, que es la respuesta a nuestra pregunta y ya la ve en el check-in.
-        filtro_checkins["$or"] = [
-            {"notas.texto": con_texto, "notas.compartida": True},
-            {"entreno_nota": con_texto},
-        ]
+        # AL EQUIPO, SOLO LO ESCRITO Y SOLO LO SUYO. Las notas personales si van
+        # compartidas; la nota de entreno siempre, que es la respuesta a nuestra pregunta y
+        # ya la ve en el check-in. Sus dias enteros el equipo los tiene en la ficha del
+        # cliente: meterlos aqui llenaria el Diario del coach de lineas sin una palabra
+        # escrita, que es justo lo contrario de para lo que lo abre.
+        filtro_checkins: Dict[str, Any] = {
+            "client_id": client_id,
+            "$or": [
+                {"notas.texto": con_texto, "notas.compartida": True},
+                {"entreno_nota": con_texto},
+            ],
+        }
+    else:
+        # AL CLIENTE, DE MOMENTO, SOLO LOS DIAS CON ALGO ESCRITO. Un cierre entra al Diario
+        # por su nota personal O por su nota de entreno (P80): el que no tiene rutina apunta
+        # ahi su entreno y eso tambien es "lo que escribe".
+        #
+        # AQUI SE PROBO A TRAER TODOS LOS DIAS (punto 23, «el Diario y el historial en un
+        # solo sitio») y se deshizo el mismo dia: quien pinta esto es
+        # `components/Diario.jsx`, que de una entrada solo sabe enseñar la fecha, el texto y
+        # la nota de entreno. Con todos los dias dentro, al que cierra a diario le salian
+        # veinte tarjetas con la fecha y NADA debajo. La lista entera es de verdad lo que
+        # pide el punto 23, pero el traslado va junto: la vista de dia (`dia_resumen`, que
+        # ya viaja aqui abajo) tiene que estar pintada ANTES de abrir el filtro. Cuando lo
+        # este, esto es esta linea y nada mas.
+        filtro_checkins = {
+            "client_id": client_id,
+            "$or": [{"notas.texto": con_texto}, {"entreno_nota": con_texto}],
+        }
 
     logs = await db.workout_logs.find(filtro_logs, {"_id": 0}).sort("fecha", -1).to_list(hasta)
     checkins = await db.checkins.find(filtro_checkins, {"_id": 0}).sort("created_at", -1).to_list(hasta)

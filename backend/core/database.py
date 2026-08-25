@@ -114,6 +114,25 @@ async def create_indexes():
     # solo campo, por eso va aparte del compuesto.
     await _ensure("intentos_auth", [("clave", 1), ("cuando", 1)])
     await _ensure("intentos_auth", "cuando", expireAfterSeconds=2 * 3600)
+    # EL PDF DE LA RUTINA (`db.rutina_pdfs`). El índice que `routes/workout_logs.py` y
+    # `routes/routines.py` llevaban dos comentarios prometiendo y que no estaba: medido en
+    # producción el 24-08, `index_information()` solo devolvía `_id_`.
+    #
+    # POR QUÉ IMPORTA MÁS DE LO QUE PARECE PARA 35 FILAS: cada fila lleva el PDF ENTERO
+    # dentro (hasta `MAX_PDF_BYTES`, 15 MB), así que la colección son 15,2 MB en 35
+    # documentos. Sin índice, `tiene_rutina_puesta()` hace un COLLSCAN -- comprobado con
+    # explain contra producción: `totalDocsExamined: 35` para un cliente que no tiene PDF --
+    # y desde el arreglo del 24-08 (punto 51) eso se llama en CADA carga del cierre del día.
+    # Al que NO tiene PDF se le leen todas antes de contestar que no. Con los 165 clientes
+    # a los que hay que subírsela, eso es medio giga recorrido por apertura de pantalla.
+    #
+    # Compuesto y no solo `client_id` a propósito: los `find_one({"client_id": ...},
+    # sort=[("uploaded_at", -1)])` de `routines.py` (la última entrega del cliente) salen
+    # del propio índice y se ahorran también el ordenado en memoria.
+    await _ensure("rutina_pdfs", [("client_id", 1), ("uploaded_at", -1)])
+    # El PDF que se entrega al que COMPRA la rutina del mes (`routes/routines.py`). Una
+    # sola fila vigente; el índice es para que buscarla no dependa de cuántas se archiven.
+    await _ensure("rutina_mes_pdf", [("vigente", 1), ("uploaded_at", -1)])
 
 async def close_connection():
     """Cerrar conexión a MongoDB."""

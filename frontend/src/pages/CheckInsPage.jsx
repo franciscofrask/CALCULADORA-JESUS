@@ -6,14 +6,11 @@ import { revisarPeso, PESO_MIN, PESO_MAX } from '../lib/pesoValido';
 import { useConfirm } from '../components/ui/confirm';
 import { toast } from 'sonner';
 import {
-    Activity, CheckCircle2, Smile, Frown, Meh,
-    Zap, Apple, Dumbbell, Scale, Send,
-    Camera, Trash2, Loader2, ChevronLeft,
+    Activity, CheckCircle2, Scale, Send, Zap,
+    Loader2, ChevronLeft, ChevronDown,
 } from 'lucide-react';
-import { mensajeDeError } from '../lib/mensajeDeError';
-import TresFotos from '../components/reports/TresFotos';
+import { Estrellas } from '../components/reports/piezas';
 
-const ORANGE = '#FF671F';
 const inputCls = "w-full bg-muted border border-input rounded-xl px-3 py-2.5 text-foreground text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F] transition-colors";
 
 // Aquí había una tarjeta con la etiqueta de riesgo del cliente ("Saludable" / "Atención" /
@@ -21,14 +18,10 @@ const inputCls = "w-full bg-muted border border-input rounded-xl px-3 py-2.5 tex
 // etiqueta es una nota de gestión del entrenador, para saber a quién hay que llamar, y sus
 // motivos hablan de cobros y de bajas. El cliente no tiene por qué verse etiquetado en su
 // propio panel. Vive solo en el lado del entrenador, y su ruta también.
-
-const MOOD_FACES = [
-    { value: 1, icon: Frown, color: 'text-red-500', label: 'Mal' },
-    { value: 2, icon: Frown, color: 'text-orange-500', label: 'Bajo' },
-    { value: 3, icon: Meh, color: 'text-amber-500', label: 'Neutro' },
-    { value: 4, icon: Smile, color: 'text-emerald-500', label: 'Bien' },
-    { value: 5, icon: Smile, color: 'text-emerald-400', label: 'Genial' },
-];
+//
+// Y aquí vivían las cinco caritas del ánimo (`MOOD_FACES`). No las pintaba nadie desde el
+// 31-07 y las sensaciones del día se preguntan ahora con estrellas (punto 01 del doc
+// 24-08), así que se van con el resto del check-in viejo.
 
 // El día del RELOJ DEL CLIENTE (bloque F, 23-08). `toISOString()` era el día UTC: desde
 // América por la tarde «hoy» ya era mañana y el cierre de hoy nunca contaba como de hoy.
@@ -61,23 +54,29 @@ const cuando = (iso) => {
     return new Date(`${iso}T12:00:00`).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
 };
 
-// ── El resumen de un cierre en el historial (P76, doc 23-08) ─────────────────
+// ── Cómo se le nombra al cliente cada respuesta ──────────────────────────────
 //
-// El historial decía dos cosas de siete: «Energía 3/5 · Hambre 4/5» y ya, con el descanso,
-// el movimiento, las comidas, los suplementos, las notas y el peso guardados pero mudos.
-// Aquí se saca TODO lo que la entrada traiga: los datos cortos como chips y los textos
-// como renglones.
-// El movimiento del día. UN SOLO VOCABULARIO CON EL FORMULARIO: esto decía «Desgaste:
-// menos de lo habitual» mientras la pregunta de arriba habla de moverse y sus botones
-// dicen «Menos» / «Como siempre» / «Más». Eran dos maneras de nombrar el mismo dato, y el
-// cliente leía en su historial una palabra que nadie le había preguntado. Los valores
-// guardados (menos/igual/mas) no cambian: esto es solo cómo se le enseña.
-const MOVIMIENTO_HIST = {
-    menos: 'Movimiento: menos',
-    igual: 'Movimiento: como siempre',
-    mas: 'Movimiento: más',
+// UN SOLO VOCABULARIO CON EL FORMULARIO: el historial decía «Desgaste: menos de lo
+// habitual» mientras la pregunta habla de moverse y sus botones dicen «Menos» / «Como
+// siempre» / «Más». Eran dos maneras de nombrar el mismo dato, y el cliente leía en su
+// historial una palabra que nadie le había preguntado. Los valores guardados
+// (menos/igual/mas) no cambian: esto es solo cómo se le enseña.
+const MOVIMIENTO_VALOR = { menos: 'Menos', igual: 'Como siempre', mas: 'Más' };
+const SUPLES_VALOR = { si: 'Sí', no_todos: 'No todos', no: 'No' };
+const CARDIO_VALOR = { si: 'Sí', no: 'No', no_tocaba: 'No tocaba' };
+// El entreno, con los tres estados del punto 19. Los dos valores viejos siguen aquí: hay
+// cierres escritos con ellos y sin esto se leerían en blanco.
+//   entrenó -> ✓ · le tocaba y no fue -> ✗ · tocaba descanso -> «Descanso», SIN SÍMBOLO,
+//   «porque no es ni bueno ni malo».
+const ENTRENO_VALOR = {
+    si: 'Sí', no: 'No', descanso: 'No, tocaba descanso',
+    si_no_lo_puse: 'Sí', no_entrene: 'No',
 };
-const SUPLES_HIST = { si: 'Suplementos: sí', no_todos: 'Suplementos: no todos', no: 'Suplementos: no' };
+const ENTRENO_LINEA = {
+    si: 'Entreno ✓', no: 'Entreno ✗', descanso: 'Descanso',
+    si_no_lo_puse: 'Entreno ✓', no_entrene: 'Entreno ✗',
+};
+
 const NOMBRE_COMIDA = (k) => {
     if (!k) return 'Comida';
     if (k === 'Post') return 'Post-entreno';
@@ -85,22 +84,67 @@ const NOMBRE_COMIDA = (k) => {
     return k.startsWith('C') ? `Comida ${k.slice(1)}` : k;
 };
 
-const chipsDelCierre = (c) => {
-    const chips = [];
-    if (c.mood != null) chips.push(`Ánimo ${c.mood}/5`);              // los viejos traían ánimo
-    if (c.energy != null) chips.push(`Energía ${c.energy}/5`);
-    if (c.hunger_anxiety != null) chips.push(`Hambre ${c.hunger_anxiety}/5`);
-    if (c.descanso != null) chips.push(`Descanso ${c.descanso}/5`);
-    if (c.movimiento) chips.push(MOVIMIENTO_HIST[c.movimiento] || c.movimiento);
-    if (c.weight != null) chips.push(kilos(c.weight));
-    if (c.suplementos?.respuesta) chips.push(SUPLES_HIST[c.suplementos.respuesta] || c.suplementos.respuesta);
-    if (c.entreno_respuesta === 'no_entrene') chips.push('No entrenó');
-    if (c.trained != null) chips.push(c.trained ? 'Entrenó' : 'No entrenó');
-    if (c.cena_hecha != null && c.comida_pendiente) {
-        chips.push(`${NOMBRE_COMIDA(c.comida_pendiente)}: ${c.cena_hecha ? 'la hizo' : 'sin registrar'}`);
+// «★★★★☆». Para leer de un vistazo una fila de días, que es para lo que Jesús las pidió.
+const estrellitas = (n) => '★'.repeat(Math.max(0, Math.min(5, n || 0)))
+    + '☆'.repeat(Math.max(0, 5 - Math.max(0, Math.min(5, n || 0))));
+
+// «Lun 24». La cabecera de una línea del historial (punto 19).
+const diaCorto = (iso) => {
+    const d = new Date(`${iso}T12:00:00`);
+    const nombre = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
+    return `${nombre.charAt(0).toUpperCase()}${nombre.slice(1)} ${d.getDate()}`;
+};
+
+// «Lun 24 · ★★★★☆ · Entreno ✓ · Dieta ✓ · 96 kg»: las cuatro cosas del punto 19, en una
+// sola línea y por día. El peso, SOLO el día que lo registró.
+const lineaDelDia = (c) => {
+    const trozos = [];
+    if (c.sensaciones != null) trozos.push(estrellitas(c.sensaciones));
+    if (c.entreno_respuesta) trozos.push(ENTRENO_LINEA[c.entreno_respuesta] || 'Entreno');
+    else if (c.trained != null) trozos.push(c.trained ? 'Entreno ✓' : 'Entreno ✗');
+    if (c.nutrition_followed != null) trozos.push(c.nutrition_followed ? 'Dieta ✓' : 'Dieta ✗');
+    if (c.weight != null) trozos.push(kilos(c.weight));
+    return trozos;
+};
+
+// El detalle de un día (punto 21): las once, «con el nombre entero» y «3 de 5», no «3/5»,
+// que «se lee, no se descifra».
+//
+// LO QUE ESE DÍA NO SE PREGUNTÓ, NO SALE. Los cierres de antes del 24-08 no tienen
+// sensaciones, ni cardio, ni el entreno de tres estados: enseñarlos en blanco o con un
+// guion sería once renglones para decir que no hay nada. Sale lo que contestó y ya.
+const detalleDelDia = (c) => {
+    const filas = [];
+    const pon = (nombre, valor) => { if (valor) filas.push({ nombre, valor }); };
+    pon('Sensaciones', c.sensaciones != null ? estrellitas(c.sensaciones) : null);
+    if (c.entreno_respuesta || c.trained != null) {
+        const respuesta = c.entreno_respuesta
+            ? (ENTRENO_VALOR[c.entreno_respuesta] || c.entreno_respuesta)
+            : (c.trained ? 'Sí' : 'No');
+        pon('Entreno', c.entreno_estrellas != null
+            ? `${respuesta} ${estrellitas(c.entreno_estrellas)}` : respuesta);
     }
-    if (c.nutrition_followed != null) chips.push(c.nutrition_followed ? 'Dieta registrada' : 'Sin dieta registrada');
-    return chips;
+    pon('Cardio', CARDIO_VALOR[c.cardio]);
+    pon('Movimiento', MOVIMIENTO_VALOR[c.movimiento]);
+    pon('Suplementos', SUPLES_VALOR[c.suplementos?.respuesta]);
+    if (c.extras_respuesta) pon('Extras', c.extras_respuesta === 'si' ? 'Sí' : 'No');
+    pon('Descanso', c.descanso != null ? `${c.descanso} de 5` : null);
+    pon('Energía', c.energy != null ? `${c.energy} de 5` : null);
+    pon('Hambre', c.hunger_anxiety != null ? `${c.hunger_anxiety} de 5` : null);
+    pon('Ánimo', c.mood != null ? `${c.mood} de 5` : null);      // los cierres viejos
+    if (c.nutrition_followed != null) pon('Dieta', c.nutrition_followed ? 'Cerrada' : 'Sin cerrar');
+    if (c.cena_hecha != null && c.comida_pendiente) {
+        pon(NOMBRE_COMIDA(c.comida_pendiente), c.cena_hecha ? 'La hizo' : 'Sin registrar');
+    }
+    // El peso ya no es siempre del día del cierre: la casilla pregunta de cuándo es el
+    // pesaje (doc 24-08), así que si lo apuntó de otro día se dice, o el detalle del 24
+    // estaría fechando un peso del 22.
+    if (c.weight != null) {
+        const otroDia = c.peso_fecha && c.peso_fecha !== c.dia ? ` · ${cuando(c.peso_fecha)}` : '';
+        pon('Peso', `${kilos(c.weight)}${otroDia}`);
+    }
+    if (c.notas?.texto) pon('Notas', c.notas.compartida ? 'Compartidas' : 'Solo para ti');
+    return filas;
 };
 
 // Los textos libres del cierre, cada uno con su título delante.
@@ -138,8 +182,10 @@ const Card = ({ className = '', children }) => (
     <div className={`bg-card border border-border rounded-2xl ${className}`}>{children}</div>
 );
 
-// Una entrada del historial. `conTipo` pinta la píldora («Semanal», «Mensual»): dentro de
-// un bloque con título no hace falta, y solo se enciende donde el título no basta.
+// Una entrada de «Reportes anteriores» (semanal o mensual). Los cierres del día YA NO
+// pasan por aquí: tienen su lista propia, una línea por día (puntos 19 a 21 del doc
+// 24-08). `conTipo` pinta la píldora («Semanal», «Mensual»): dentro de un bloque con
+// título no hace falta, y solo se enciende donde el título no basta.
 const EntradaDelHistorial = ({ c, conTipo = false }) => (
     <li className="rounded-xl border border-border bg-muted p-3">
         <div className="flex items-center justify-between mb-2">
@@ -150,37 +196,13 @@ const EntradaDelHistorial = ({ c, conTipo = false }) => (
             ) : <span />}
             <span className="text-[11px] text-foreground/50">{fechaDeEntrada(c)}</span>
         </div>
-        {c.type === 'daily' ? (
-            <>
-                {/* TODO lo que trae la entrada, no dos cosas de siete (P76): los datos
-                    como chips, los textos debajo. */}
-                {chipsDelCierre(c).length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                        {chipsDelCierre(c).map(chip => (
-                            <span key={chip}
-                                className="text-xs text-foreground/70 bg-card border border-border rounded-full px-2 py-0.5">
-                                {chip}
-                            </span>
-                        ))}
-                    </div>
-                )}
-                {renglonesDelCierre(c).map(r => (
-                    <p key={r.titulo}
-                        className="text-sm text-foreground/60 mt-2 whitespace-pre-line border-l-2 border-border pl-3">
-                        <span className="text-[10px] uppercase tracking-wider font-bold text-foreground/40 mr-2">{r.titulo}</span>
-                        {r.texto}
-                    </p>
-                ))}
-            </>
-        ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-foreground/70">
-                {c.weight != null && <span><Scale className="w-3 h-3 inline mr-1" />{c.weight} kg</span>}
-                {c.training_compliance != null && <span>Entreno {c.training_compliance}%</span>}
-                {c.nutrition_compliance != null && <span>Nutri {c.nutrition_compliance}%</span>}
-                {c.sleep_quality != null && <span>Sueño {c.sleep_quality}/10</span>}
-                {c.body_fat_pct != null && <span>Grasa {c.body_fat_pct}%</span>}
-            </div>
-        )}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-foreground/70">
+            {c.weight != null && <span><Scale className="w-3 h-3 inline mr-1" />{c.weight} kg</span>}
+            {c.training_compliance != null && <span>Entreno {c.training_compliance}%</span>}
+            {c.nutrition_compliance != null && <span>Nutri {c.nutrition_compliance}%</span>}
+            {c.sleep_quality != null && <span>Sueño {c.sleep_quality}/10</span>}
+            {c.body_fat_pct != null && <span>Grasa {c.body_fat_pct}%</span>}
+        </div>
         {c.trainer_feedback && (
             <div className="mt-2 p-2 bg-brand/10 border border-brand/20 rounded-lg text-sm text-foreground/80">
                 <span className="text-[10px] uppercase tracking-wider text-brand font-bold mr-2">Entrenador:</span>{c.trainer_feedback}
@@ -189,48 +211,181 @@ const EntradaDelHistorial = ({ c, conTipo = false }) => (
     </li>
 );
 
-const BoolPicker = ({ icon: Icon, label, value, onChange }) => (
-    <div>
-        <span className="text-sm text-foreground/70 mb-2 flex items-center gap-2">
-            <Icon className="w-4 h-4" /> {label}
+// Aquí vivían `BoolPicker` (los dos botones de sí/no del check-in viejo) y `Collapsible`,
+// la caja plegable del semanal y del mensual. Los dos formularios se cayeron con T11 del
+// doc 16-08 y desde el 24-08 no queda nada que los pinte.
+
+// ── EL HISTORIAL: UNA LÍNEA POR DÍA (puntos 19 a 21 del doc 24-08) ───────────
+//
+// «Lun 24 · ★★★★☆ · Entreno ✓ · Dieta ✓ · 96 kg». Se toca y se abre con las once.
+//
+// DESDE QUÉ DÍA SE CUENTAN LOS HUECOS (punto 20, decidido aquí porque hacía falta un
+// criterio y no lo había): desde el PRIMER cierre que tiene escrito, y como mucho 30 días
+// atrás. Contar desde el alta no vale -- hay clientes de 2023 y saldrían dos años de
+// «Sin rellenar» --, y contar desde una fecha fija tampoco: la pantalla no lleva la misma
+// vida para todos. Su primer cierre es el día en que esta pantalla empezó a existir para
+// él, que es lo único que sabemos de verdad. Quien no ha cerrado ninguno no tiene huecos:
+// no tiene lista todavía.
+const DIAS_DE_HUECO_COMO_MUCHO = 30;
+
+const _sumaDias = (iso, n) => {
+    const d = new Date(`${iso}T12:00:00`);
+    d.setDate(d.getDate() + n);
+    return d.toLocaleDateString('en-CA');
+};
+
+/**
+ * Los días del historial, de hoy hacia atrás: los que cerró y los huecos AGRUPADOS.
+ *
+ * «Los días seguidos sin rellenar se agrupan en una sola línea, no una por día. Tres
+ * huecos seguidos son tres líneas que dicen lo mismo que una.»
+ */
+export const diasDelHistorial = (cierres, hoyIso) => {
+    const porDia = new Map();
+    for (const c of cierres) {
+        // Los cierres de antes del bloque F no traen `dia`: su día sale del created_at,
+        // que el navegador ya pasa a la hora del cliente.
+        const dia = c.dia || (c.created_at ? new Date(c.created_at).toLocaleDateString('en-CA') : null);
+        if (dia && !porDia.has(dia)) porDia.set(dia, c);
+    }
+    if (porDia.size === 0) return [];
+
+    const primero = [...porDia.keys()].sort()[0];
+    const tope = _sumaDias(hoyIso, -(DIAS_DE_HUECO_COMO_MUCHO - 1));
+    const desde = primero > tope ? primero : tope;
+
+    const filas = [];
+    for (let dia = hoyIso; dia >= desde; dia = _sumaDias(dia, -1)) {
+        const cierre = porDia.get(dia);
+        if (cierre) { filas.push({ tipo: 'dia', dia, cierre }); continue; }
+        const ultima = filas[filas.length - 1];
+        if (ultima && ultima.tipo === 'hueco') ultima.dias.push(dia);
+        else filas.push({ tipo: 'hueco', dias: [dia] });
+    }
+
+    // Y LOS DÍAS CERRADOS QUE QUEDAN POR DETRÁS DEL TOPE, DETRÁS. El tope son los huecos,
+    // no la lista: recorriendo solo esos 30 días, al que cerró un día hace dos meses y
+    // ninguno desde entonces le desaparecía su único día del historial y se quedaba con un
+    // mes de «Sin rellenar» y nada más. Estos van sueltos y sin rellenarles los huecos: de
+    // ahí para atrás la fila de días vacíos no cuenta nada que se pueda leer.
+    for (const dia of [...porDia.keys()].filter(d => d < desde).sort().reverse()) {
+        filas.push({ tipo: 'dia', dia, cierre: porDia.get(dia) });
+    }
+    return filas;
+};
+
+// «Mar 18 · Mié 19 · Jue 20 · Sin rellenar», o «Mié 19 · Sin rellenar» si es uno solo.
+//
+// UN TRAMO LARGO SE DICE POR SUS EXTREMOS. El doc enseña tres días y tres caben; el que
+// lleva un mes sin cerrar tiene 30, y 30 «Lun 3 · Mar 4 · Mié 5...» son cuatro renglones
+// de nombres de día que no dicen nada que no diga «del 26 de julio al 23 de agosto».
+const TRAMO_QUE_TODAVIA_SE_LEE = 5;
+const _delDiaAlDia = (dias) => {
+    const orden = [...dias].sort();
+    const dm = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
+    return `Del ${dm(orden[0])} al ${dm(orden[orden.length - 1])}`;
+};
+
+const HuecoDelHistorial = ({ dias }) => (
+    <li className="rounded-xl border border-dashed border-border px-3 py-2.5 flex items-center justify-between gap-3"
+        data-testid="historial-hueco">
+        <span className="text-sm text-foreground/40">
+            {/* De más antiguo a más nuevo dentro del tramo: se lee como pasó. */}
+            {dias.length > TRAMO_QUE_TODAVIA_SE_LEE
+                ? _delDiaAlDia(dias)
+                : [...dias].reverse().map(diaCorto).join(' · ')}
         </span>
-        <div className="grid grid-cols-2 gap-2">
-            {[{ v: true, l: 'Sí' }, { v: false, l: 'No' }].map(({ v, l }) => {
-                const active = value === v;
-                const tone = active
-                    ? (v ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400' : 'border-red-500 bg-red-500/10 text-red-400')
-                    : 'border-border bg-muted text-foreground/50 hover:border-white/30';
-                return (
-                    <button key={String(v)} type="button" onClick={() => onChange(v)}
-                        className={`py-3 rounded-xl border font-bold text-sm transition-all ${tone}`}>
-                        {l}
-                    </button>
-                );
-            })}
-        </div>
-    </div>
+        <span className="text-xs text-foreground/30 flex-shrink-0">Sin rellenar</span>
+    </li>
 );
 
-// Aquí vivía `Collapsible`, la caja plegable del check-in semanal y del mensual. Los dos
-// formularios se caen con T11 del doc 16-08, así que la caja se va con ellos.
+const DiaDelHistorial = ({ dia, cierre, abierto, onAbrir }) => {
+    const filas = detalleDelDia(cierre);
+    const renglones = renglonesDelCierre(cierre);
+    return (
+        <li className="rounded-xl border border-border bg-muted" data-testid="historial-dia">
+            <button type="button" onClick={onAbrir} data-testid={`historial-dia-${dia}`}
+                className="w-full flex items-start gap-2 px-3 py-2.5 text-left">
+                <span className="text-sm font-semibold text-foreground flex-shrink-0">{diaCorto(dia)}</span>
+                {/* QUE ENVUELVA, NO QUE SE CORTE: en el móvil las cuatro cosas de la línea
+                    no caben de una tirada, y cortando por el final se perdían justo el
+                    peso y la dieta, que es lo que se viene a mirar bajando el dedo. */}
+                <span className="text-sm text-foreground/60 min-w-0">
+                    {lineaDelDia(cierre).map(t => ` · ${t}`).join('')}
+                </span>
+                <ChevronDown className={`w-4 h-4 text-foreground/40 ml-auto flex-shrink-0 transition-transform ${abierto ? 'rotate-180' : ''}`} />
+            </button>
+            {/* El detalle se abre DEBAJO, no encima: en el móvil, abriéndose encima se
+                pierde el sitio en el que estaba. */}
+            {abierto && (
+                <div className="px-3 pb-3 pt-1 border-t border-border" data-testid="historial-detalle">
+                    <dl className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-1">
+                        {filas.map(f => (
+                            <React.Fragment key={f.nombre}>
+                                <dt className="text-xs text-foreground/40">{f.nombre}</dt>
+                                <dd className="text-xs text-foreground/80">{f.valor}</dd>
+                            </React.Fragment>
+                        ))}
+                    </dl>
+                    {renglones.map(r => (
+                        <p key={r.titulo}
+                            className="text-sm text-foreground/60 mt-2 whitespace-pre-line border-l-2 border-border pl-3">
+                            <span className="text-[10px] uppercase tracking-wider font-bold text-foreground/40 mr-2">{r.titulo}</span>
+                            {r.texto}
+                        </p>
+                    ))}
+                    {cierre.trainer_feedback && (
+                        <div className="mt-2 p-2 bg-brand/10 border border-brand/20 rounded-lg text-sm text-foreground/80">
+                            <span className="text-[10px] uppercase tracking-wider text-brand font-bold mr-2">Entrenador:</span>
+                            {cierre.trainer_feedback}
+                        </div>
+                    )}
+                </div>
+            )}
+        </li>
+    );
+};
 
-// ── El cierre del día (T4 del doc 16-08) ─────────────────────────────────────
-//
-// «Al final del día. Lo primero que sale es lo que no ha marcado». Ese orden -- entreno,
-// suplementos, comida sin registrar, macros -- no es decorativo: es lo que hace que el
-// cierre valga para algo, porque son las cuatro cosas que la app no puede saber sola.
-// Debajo va lo de siempre, que se pregunta todos los días le falte o no le falte nada.
-//
-// Todo lo condicional lo decide el servidor (`GET /checkins/hoy`): la pantalla pinta lo
-// que le digan y no vuelve a calcular por su cuenta si le toca entreno o si se ha pasado
-// de hidratos.
+/**
+ * «Tus días»: la lista de días del punto 19, con sus huecos y su detalle.
+ *
+ * Se exporta a propósito. El punto 23 pide que el historial viva en UN SOLO SITIO,
+ * Seguimiento -> Diario, y ese traslado toca `components/Diario.jsx` y `ReportsPage.jsx`,
+ * que no son de este trabajo. Cuando se haga, se importa esto y no se vuelve a escribir.
+ */
+export const HistorialDeDias = ({ cierres, hoyIso }) => {
+    const [abierto, setAbierto] = useState(null);
+    const filas = useMemo(() => diasDelHistorial(cierres, hoyIso), [cierres, hoyIso]);
+    if (filas.length === 0) return null;
+    return (
+        <ul className="space-y-2">
+            {filas.map(f => (f.tipo === 'hueco'
+                ? <HuecoDelHistorial key={`hueco-${f.dias[0]}`} dias={f.dias} />
+                : <DiaDelHistorial key={f.dia} dia={f.dia} cierre={f.cierre}
+                    abierto={abierto === f.dia}
+                    onAbrir={() => setAbierto(a => (a === f.dia ? null : f.dia))} />
+            ))}
+        </ul>
+    );
+};
 
-// Las tres escalas del doc, cada una con sus extremos escritos.
+// ── El cierre del día (T4 del doc 16-08, rehecho con el doc 24-08) ───────────
+//
+// ONCE PREGUNTAS, una por tarjeta, y una sola encendida cada vez. El orden lo manda el
+// doc del 24: sensaciones, entreno (y cómo fue), cardio, movimiento, suplementos, extras,
+// descanso, energía, hambre, notas y peso.
+//
+// Lo condicional lo sigue decidiendo el servidor (`GET /checkins/hoy`): la pantalla pinta
+// lo que le digan y no vuelve a calcular por su cuenta si le tocan suplementos o qué
+// comidas se dejó sin registrar.
+
+// Las escalas de 1 a 5, cada una con sus extremos escritos. El título va en la tarjeta,
+// así que aquí es opcional: dentro de una tarjeta escribirlo dos veces sobra.
 const Escala = ({ titulo, subtitulo, minLabel, maxLabel, value, onChange, testId }) => (
     <div>
-        <span className="text-sm text-foreground/70 block">{titulo}</span>
+        {titulo && <span className="text-sm text-foreground/70 block">{titulo}</span>}
         {subtitulo && <p className="text-[11px] text-foreground/40 mt-0.5">{subtitulo}</p>}
-        <div className="flex gap-2 mt-2">
+        <div className="flex gap-2">
             {[1, 2, 3, 4, 5].map(v => (
                 <button key={v} type="button" onClick={() => onChange(v)} data-testid={`${testId}-${v}`}
                     className={`flex-1 py-3 rounded-xl border font-bold text-sm transition-all ${value === v
@@ -262,113 +417,405 @@ const Opciones = ({ opciones, value, onChange, testId, columnas = 3 }) => (
     </div>
 );
 
-// ── Corta o larga (apartado 9 del doc del lunes) ─────────────────────────────
+// ── LA REGLA DEL COLOR (puntos 13, 14 y 18 del doc 24-08) ────────────────────
 //
-// Si el cliente YA FUE MARCANDO sus comidas durante el día -- la casilla del Inicio
-// nuevo, que vive en el día (`comidas.{k}.marcada`) --, el cierre no le vuelve a
-// preguntar si cumplió: le quedan solo las cinco cosas que la app no puede saber sola.
-// La versión larga es para el que no marca sobre la marcha. El peri no cuenta: no se
-// marca. Sin día guardado, o sin nada montado, la larga de siempre.
+// «La tarjeta naranja significa "esto es lo que toca ahora". Sólo una encendida a la vez;
+// en cuanto se contesta, se apaga y se enciende la siguiente.» Y al contestar, DOS
+// señales y no una: «el tono dice por dónde vas; el tick dice lo que ya está hecho».
+//
+// Con eso no hace falta ni barra de progreso ni contador: el color dice por dónde va.
+// Y al reabrir el cierre para corregirlo, todo sale contestado y en oscuro; tocando una
+// respuesta se vuelve a encender esa tarjeta (`onAbrir`).
+//
+// `cola` es lo que cuelga de una respuesta y sigue haciendo falta con la tarjeta ya
+// apagada: el «¿cuál y por qué?» de los suplementos y el campo de los extras. Se pinta
+// abajo, encendida o no; si se escondiera al apagarse, contestar «No todos» haría
+// desaparecer la caja donde tenía que escribir cuál.
+const Tarjeta = ({ titulo, ayuda, ayudaCursiva = false, encendida, contestada,
+                  resumen, onAbrir, cola, testId, children }) => (
+    <div data-testid={testId} data-encendida={encendida ? '1' : '0'}
+        className={`rounded-2xl border p-4 transition-colors ${encendida
+            ? 'border-brand bg-brand/5'
+            : 'border-border bg-card'}`}>
+        {encendida ? (
+            <div className="flex items-start gap-2">
+                {contestada && (
+                    <CheckCircle2 className="w-4 h-4 text-brand flex-shrink-0 mt-0.5"
+                        data-testid={`${testId}-tick`} />
+                )}
+                <div className="min-w-0 flex-1">
+                    <span className="text-sm block text-foreground font-semibold">{titulo}</span>
+                    {ayuda && (
+                        <p className={`text-[11px] text-foreground/40 mt-0.5 ${ayudaCursiva ? 'italic' : ''}`}>
+                            {ayuda}
+                        </p>
+                    )}
+                    <div className="mt-2">{children}</div>
+                </div>
+            </div>
+        ) : (
+            // Apagada, y entera pulsable: «al tocar una respuesta, vuelve a encenderse esa
+            // tarjeta» (punto 18). Con la que aún no ha contestado vale igual, para poder
+            // adelantarse sin tener que contestar por orden.
+            <button type="button" onClick={onAbrir} data-testid={`${testId}-abrir`}
+                className="w-full flex items-start gap-2 text-left">
+                {contestada && (
+                    <CheckCircle2 className="w-4 h-4 text-brand flex-shrink-0 mt-0.5"
+                        data-testid={`${testId}-tick`} />
+                )}
+                <div className="min-w-0 flex-1">
+                    <span className="text-sm block text-foreground/50">{titulo}</span>
+                    {/* «Con su respuesta marcada debajo.» */}
+                    {contestada && (
+                        <span className="text-sm text-foreground/80 block mt-0.5"
+                            data-testid={`${testId}-resumen`}>{resumen}</span>
+                    )}
+                </div>
+            </button>
+        )}
+        {cola && <div className="mt-2">{cola}</div>}
+    </div>
+);
 
-const NUMERAL = { 1: 'una', 2: 'dos', 3: 'tres', 4: 'cuatro' };
-// Las cosas que quedan por contestar en el cierre corto, escritas. Van de cuatro (las
-// escalas y el movimiento, que salen siempre) a ocho.
-const CUANTAS = { 4: 'cuatro', 5: 'cinco', 6: 'seis', 7: 'siete', 8: 'ocho' };
+// Los días entre los que puede elegir al fechar un pesaje: hoy y los `diasAtras` de antes.
+//
+// EL NÚMERO LO DICE EL SERVIDOR (fallo 7 del repaso del 24-08). Aquí había un 8 escrito a
+// mano mientras el servidor aceptaba 14 días y `core/series_cliente.py` declaraba 30 en una
+// función que no llamaba nadie: tres sitios y tres números para la misma regla, y el
+// cliente sólo podía elegir entre los 8 que le dejaba el desplegable. Ahora la regla vive
+// en la serie y viaja en `GET /checkins/hoy` (`peso_dias_atras`), así que lo que se ofrece
+// es exactamente lo que se acepta.
+const diasParaPesarse = (hoyIso, diasAtras) => {
+    const dias = [];
+    for (let i = 0; i <= diasAtras; i++) {
+        const d = new Date(`${hoyIso}T12:00:00`);
+        d.setDate(d.getDate() - i);
+        const iso = d.toLocaleDateString('en-CA');
+        const etiqueta = i === 0 ? 'Hoy' : i === 1 ? 'Ayer'
+            : d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+        dias.push({ iso, etiqueta: etiqueta.charAt(0).toUpperCase() + etiqueta.slice(1) });
+    }
+    return dias;
+};
 
-// Suma de `macros_efectivos` de una comida guardada, como la lista del Inicio: cuando el
-// campo falta en filas antiguas esa comida suma 0, y aquí el número es informativo.
-// Las comidas PRINCIPALES del día (C1..Cn): las que se marcan. Intra y Post, fuera.
-const comidasPrincipales = (dia) => (dia?.exists
-    ? ['C1', 'C2', 'C3', 'C4'].slice(0, Math.max(1, Math.min(4, dia.num_comidas || 4)))
-    : []);
+// Los valores viejos de `entreno_respuesta` se leen con la pregunta nueva: el que
+// contestó «Sí, pero no lo puse» dijo que sí entrenó, y el que contestó «No entrené»
+// dijo que no. Sin esto, al reabrir un cierre de ayer la pregunta salía en blanco.
+const ENTRENO_DE_VUELTA = { si_no_lo_puse: 'si', no_entrene: 'no' };
 
 // `inicial` es el cierre ya guardado hoy cuando se entra a EDITARLO (P75, doc 23-08): el
 // formulario arranca con lo que puso, lo toca y al guardar SUSTITUYE al de antes. Sin
 // `inicial` es el cierre en blanco de siempre.
+//
+// AQUÍ VIVÍA EL «CIERRE CORTO», el que al que ya había marcado todas sus comidas le
+// escondía las preguntas condicionales, las notas y el peso. Se va con el doc 24-08: las
+// once preguntas salen a todos, todos los días, y lo de las comidas no es una pregunta
+// sino el aviso de arriba («la app ya sabe la respuesta»). Con eso se caen también las
+// dos reglas que lo parcheaban, `verNotas` y `verPeso`: si nada se esconde, nada se
+// puede perder al reeditar.
 const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado, inicial = null }) => {
     const navigate = useNavigate();
     const [enviando, setEnviando] = useState(false);
+    // La tarjeta que el cliente ha vuelto a abrir a mano. Sin ella manda el orden: la
+    // primera sin contestar.
+    const [abierta, setAbierta] = useState(null);
     const [f, setF] = useState(() => ({
-        entreno_respuesta: inicial?.entreno_respuesta ?? null,
-        entreno_nota: inicial?.entreno_nota || '',
+        sensaciones: inicial?.sensaciones ?? null,
+        entreno_respuesta: inicial?.entreno_respuesta
+            ? (ENTRENO_DE_VUELTA[inicial.entreno_respuesta] || inicial.entreno_respuesta)
+            : null,
+        entreno_estrellas: inicial?.entreno_estrellas ?? null,
+        cardio: inicial?.cardio ?? null,
+        movimiento: inicial?.movimiento ?? null,
         suplementos: inicial?.suplementos?.respuesta ?? null,
         suplementos_detalle: inicial?.suplementos?.detalle || '',
-        cena_hecha: inicial?.cena_hecha ?? false,
-        exceso_nota: inicial?.exceso_nota || '',
+        extras_respuesta: inicial?.extras_respuesta ?? null,
         descanso: inicial?.descanso ?? null,
         energy: inicial?.energy ?? null,
         hunger_anxiety: inicial?.hunger_anxiety ?? null,
-        movimiento: inicial?.movimiento ?? null,
         notas: inicial?.notas?.texto || '',
         compartida: inicial?.notas?.compartida ?? false,
         weight: inicial?.weight != null ? String(inicial.weight) : '',
     }));
     const set = (campo, valor) => setF(prev => ({ ...prev, [campo]: valor }));
+    // Contestar apaga la tarjeta y enciende la siguiente: se suelta la que se abrió a
+    // mano y vuelve a mandar el orden.
+    const responder = (campo, valor) => { set(campo, valor); setAbierta(null); };
 
-    // La decisión corta/larga, con lo que dice el servidor del día de hoy. `marcada` solo
-    // vale si lo dice el día guardado: si la marca no llegó a la base, larga, que nunca
-    // pregunta de menos.
-    const comidas = (dia?.exists && dia.comidas) || {};
-    const claves = comidasPrincipales(dia);
-    const algoMontado = claves.some(k => (comidas[k]?.alimentos || []).length > 0);
-    const corta = claves.length > 0 && algoMontado && claves.every(k => comidas[k]?.marcada === true);
+    // EL DÍA DE LA DIETA QUE SE ESTABA COMIENDO (punto 32). El cierre de las 23:50 tiene
+    // que caer en el día de hoy y no en el de mañana, y el extra que se apunte desde aquí
+    // tiene que ir a la lista de ESE día: los dos usan la misma fecha, la que dice el
+    // servidor, y si no llegó, la del reloj del cliente.
+    const fechaDelDia = hoy?.fecha || todayKey();
 
-    // ── REEDITAR NO PUEDE ESCONDER LO QUE YA CONTESTÓ (24-08) ────────────────
+    // El peso puede ser de otro día (la regla del peso semanal, doc 24-08): se pregunta
+    // de cuándo es y se manda con el peso.
+    const [pesoFecha, setPesoFecha] = useState(inicial?.peso_fecha || fechaDelDia);
+    // Los días que se le ofrecen para fecharlo, los que diga el servidor. Si no lo dice
+    // -- una respuesta de antes de este cambio -- no se pregunta la fecha y el peso va con
+    // el día del cierre, que es lo que hacía la app antes de que la casilla llevara fecha:
+    // mejor no preguntar que ofrecer un día que el servidor va a rechazar en silencio.
+    const diasDePesaje = diasParaPesarse(fechaDelDia, hoy?.peso_dias_atras);
+
+    // ── Los extras del día (puntos 07 y 32) ──────────────────────────────────
+    // Una sola lista: la del día. Lo que escriba aquí es un `POST /diets/{fecha}/extras`,
+    // el mismo que usa el campo del Inicio, para que no haya que ir a buscar los extras a
+    // dos sitios.
+    const [extras, setExtras] = useState(() => dia?.extras || []);
+    const [textoExtra, setTextoExtra] = useState('');
+    const [apuntando, setApuntando] = useState(false);
+
+    const apuntarExtra = async () => {
+        const texto = textoExtra.trim();
+        if (!texto) return;
+        setApuntando(true);
+        try {
+            const { data } = await api.post(`/diets/${fechaDelDia}/extras`,
+                { texto, origen: 'checkin' });
+            setExtras(prev => [...prev, data?.extra || { id: `${Date.now()}`, texto }]);
+            setTextoExtra('');
+        } catch (err) {
+            console.error('No se pudo apuntar el extra desde el cierre del día:', err?.response?.data || err);
+            toast.error('No hemos podido apuntarlo. Inténtalo en un momento.');
+        } finally {
+            setApuntando(false);
+        }
+    };
+
+    // ── Las nueve preguntas de la cadena ─────────────────────────────────────
     //
-    // El cierre corto esconde las notas y el peso a quien ya marcó todas sus comidas, y
-    // eso está bien la PRIMERA vez del día. Pero el cierre se puede reabrir para
-    // corregirlo (P75), y quien anotó sus notas y su peso por la mañana -- cuando aún era
-    // largo -- por la noche reabría y no los veía: no podía corregirlos, no podía
-    // borrarlos, y le quedaba la sensación de que se habían perdido. Y encima el peso
-    // seguía viajando escondido, así que «Confírmame el peso» le podía saltar por un
-    // número que la pantalla no le estaba enseñando.
-    //
-    // La regla es por campo y no en bloque: EDITANDO, lo que trae respuesta se enseña
-    // siempre; lo que viene vacío se sigue escondiendo, que para eso existe el corto.
-    const editando = inicial != null;
-    const verNotas = !corta || (editando && !!inicial?.notas?.texto);
-    const verPeso = !corta || (editando && inicial?.weight != null);
+    // Las notas y el peso NO entran aquí a propósito: son opcionales por diseño, así que
+    // nunca se pueden dar por contestadas, y una tarjeta que no se puede contestar dejaría
+    // el naranja clavado en ella para siempre. Van abiertas al final, como en el
+    // maquetado.
+    const preguntas = [
+        {
+            id: 'sensaciones', testId: 'cierre-sensaciones', visible: true,
+            titulo: 'Sensaciones generales del día',
+            hecha: f.sensaciones != null,
+            resumen: estrellitas(f.sensaciones),
+            campo: <Estrellas testid="cierre-sensaciones-estrellas" valor={f.sensaciones}
+                onChange={v => responder('sensaciones', v)} />,
+        },
+        {
+            id: 'entreno', testId: 'cierre-entreno', visible: true,
+            titulo: '¿Entrenaste hoy?',
+            // No se da por contestada con el «Sí» a secas: «¿Cómo fue?» cuelga de él y es
+            // una pregunta más de las once.
+            hecha: f.entreno_respuesta != null
+                && (f.entreno_respuesta !== 'si' || f.entreno_estrellas != null),
+            resumen: [ENTRENO_VALOR[f.entreno_respuesta],
+                      f.entreno_estrellas != null ? estrellitas(f.entreno_estrellas) : null]
+                .filter(Boolean).join(' · '),
+            campo: (
+                <>
+                    <Opciones testId="cierre-entreno-op" value={f.entreno_respuesta}
+                        onChange={v => {
+                            set('entreno_respuesta', v);
+                            // Cambiar de idea limpia lo que colgaba del «Sí».
+                            if (v !== 'si') { set('entreno_estrellas', null); setAbierta(null); }
+                        }}
+                        opciones={[{ v: 'si', l: 'Sí' }, { v: 'no', l: 'No' },
+                                   { v: 'descanso', l: 'Descanso' }]} />
+                    {/* SANGRADA Y COLGANDO DEL «SÍ», como lo pide el doc (punto 03). */}
+                    {f.entreno_respuesta === 'si' && (
+                        <div className="mt-3 pl-3 border-l-2 border-brand/40" data-testid="cierre-entreno-como-fue">
+                            <span className="text-sm text-foreground/70 block">¿Cómo fue?</span>
+                            <div className="mt-1">
+                                <Estrellas testid="cierre-entreno-estrellas" valor={f.entreno_estrellas}
+                                    onChange={v => responder('entreno_estrellas', v)} />
+                            </div>
+                            {/* AQUÍ NO VA UNA SEGUNDA CAJA DE NOTAS. Se probó a colgar del
+                                «Sí» un «Qué entrenaste hoy» y se quitó: el punto 11 dice
+                                «UNA SOLA CAJA, con la pista de qué poner», y la pista que
+                                da es justamente «Cosas que quieras acordarte del entreno y
+                                de la dieta». Con las dos, el que lleva rutina acababa
+                                apuntando lo mismo en dos sitios, y el rótulo de la de
+                                arriba no era de Jesús: era inventado. Lo que ya haya
+                                escrito en `entreno_nota` no se toca, viaja tal cual. */}
+                        </div>
+                    )}
+                </>
+            ),
+        },
+        {
+            id: 'cardio', testId: 'cierre-cardio', visible: true,
+            titulo: '¿Hiciste cardio?',
+            hecha: f.cardio != null,
+            resumen: CARDIO_VALOR[f.cardio],
+            campo: <Opciones testId="cierre-cardio-op" value={f.cardio}
+                onChange={v => responder('cardio', v)}
+                opciones={[{ v: 'si', l: 'Sí' }, { v: 'no', l: 'No' },
+                           { v: 'no_tocaba', l: 'No tocaba' }]} />,
+        },
+        {
+            id: 'movimiento', testId: 'cierre-movimiento-card', visible: true,
+            titulo: '¿Te moviste lo suficiente?',
+            // En cursiva y sin punto final, tal cual lo pide el doc.
+            ayuda: 'Moverte es salud y menos grasa: a más te muevas, más gastas',
+            ayudaCursiva: true,
+            hecha: f.movimiento != null,
+            resumen: MOVIMIENTO_VALOR[f.movimiento],
+            // Etiquetas cortas: los tres botones van en fila y en el móvil tres frases no
+            // caben -- se partían en tres renglones dentro del botón. Los valores
+            // guardados (menos/igual/mas) son los de siempre.
+            campo: <Opciones testId="cierre-movimiento" value={f.movimiento}
+                onChange={v => responder('movimiento', v)}
+                opciones={[{ v: 'menos', l: 'Menos' }, { v: 'igual', l: 'Como siempre' },
+                           { v: 'mas', l: 'Más' }]} />,
+        },
+        {
+            id: 'suplementos', testId: 'cierre-suplementos',
+            // Solo a quien su PLAN le da suplementación y además tiene protocolo puesto.
+            // Lo decide el servidor, con el mismo candado que su pantalla (punto 06).
+            visible: !!hoy?.suplementos,
+            titulo: '¿Tomaste tus suplementos?',
+            hecha: f.suplementos != null,
+            resumen: SUPLES_VALOR[f.suplementos],
+            campo: <Opciones testId="cierre-suplementos-op" value={f.suplementos}
+                onChange={v => responder('suplementos', v)}
+                opciones={[{ v: 'si', l: 'Sí' }, { v: 'no_todos', l: 'No todos' },
+                           { v: 'no', l: 'No' }]} />,
+            cola: f.suplementos === 'no_todos' ? (
+                <input value={f.suplementos_detalle} onChange={e => set('suplementos_detalle', e.target.value)}
+                    data-testid="cierre-suplementos-detalle"
+                    placeholder="¿Cuál y por qué?" className={inputCls} />
+            ) : null,
+        },
+        {
+            id: 'extras', testId: 'cierre-extras', visible: true,
+            titulo: '¿Se te ha escapado algo más hoy?',
+            ayuda: 'Algo que comieras de más y no pusieras en el apartado «extras»',
+            hecha: f.extras_respuesta != null,
+            resumen: f.extras_respuesta === 'si' ? 'Sí' : 'No',
+            campo: <Opciones columnas={2} testId="cierre-extras-op" value={f.extras_respuesta}
+                onChange={v => responder('extras_respuesta', v)}
+                opciones={[{ v: 'no', l: 'No' }, { v: 'si', l: 'Sí → apúntalo' }]} />,
+            cola: f.extras_respuesta === 'si' ? (
+                <div data-testid="cierre-extras-campo">
+                    {/* Lo apuntado se queda listado encima del campo, como en el Inicio. */}
+                    {extras.length > 0 && (
+                        <ul className="mb-2 space-y-1">
+                            {extras.map(e => (
+                                <li key={e.id} className="text-sm text-foreground/70">
+                                    · {e.texto || e.nombre}{e.cantidad_texto ? ` · ${e.cantidad_texto}` : ''}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                    <textarea rows={2} value={textoExtra} onChange={e => setTextoExtra(e.target.value)}
+                        data-testid="cierre-extras-texto"
+                        placeholder="Con la cantidad aproximada a ojo si no lo pesas, pero ponlo todo."
+                        className={inputCls + ' resize-none'} />
+                    <button type="button" onClick={apuntarExtra} disabled={apuntando || !textoExtra.trim()}
+                        data-testid="cierre-extras-apuntar"
+                        className="mt-2 px-3 py-2 rounded-xl border border-border text-sm font-semibold text-foreground/70 hover:text-foreground hover:bg-muted disabled:opacity-50">
+                        {apuntando ? 'Apuntando...' : 'Apuntarlo'}
+                    </button>
+                </div>
+            ) : null,
+        },
+        {
+            id: 'descanso', testId: 'cierre-descanso-card', visible: true,
+            // El descanso se pregunta aquí, referido a la noche de ayer, y sale del
+            // reporte del mes: así son 28 datos al mes en vez de uno.
+            titulo: '¿Cómo descansaste la noche de ayer?',
+            ayuda: 'Fundamental tener una buena rutina de sueño si no la tienes ya',
+            hecha: f.descanso != null,
+            resumen: f.descanso != null ? `${f.descanso} de 5` : '',
+            campo: <Escala minLabel="fatal" maxLabel="genial" testId="cierre-descanso"
+                value={f.descanso} onChange={v => responder('descanso', v)} />,
+        },
+        {
+            id: 'energia', testId: 'cierre-energia-card', visible: true,
+            titulo: 'Niveles de energía durante el día',
+            // «Fuera de tu entrenamiento»: sin eso el que acaba de entrenar contesta por
+            // cómo se encontró en el gimnasio, que no es lo que se le pregunta.
+            ayuda: 'Fuera de tu entrenamiento, en tu día normal',
+            hecha: f.energy != null,
+            resumen: f.energy != null ? `${f.energy} de 5` : '',
+            campo: <Escala minLabel="bajita" maxLabel="pletórico" testId="cierre-energia"
+                value={f.energy} onChange={v => responder('energy', v)} />,
+        },
+        {
+            id: 'hambre', testId: 'cierre-hambre-card', visible: true,
+            // Hambre y ansiedad, juntas: es como lo dice él y es una sola escala. Y «con
+            // la dieta», que es de lo que se pregunta y no de la ansiedad de la vida.
+            titulo: 'Hambre / ansiedad con la dieta',
+            hecha: f.hunger_anxiety != null,
+            resumen: f.hunger_anxiety != null ? `${f.hunger_anxiety} de 5` : '',
+            campo: <Escala minLabel="nada" maxLabel="mucha" testId="cierre-hambre"
+                value={f.hunger_anxiety} onChange={v => responder('hunger_anxiety', v)} />,
+        },
+    ].filter(p => p.visible);
 
-    // LA CUENTA DE LA CABECERA CUENTA LO QUE VA A SALIR, ni una más. Era fija («cinco», o
-    // «cuatro» sin protocolo de suplementos) y ya mentía antes de esto: al que no tiene
-    // rutina con nosotros le sale además la nota de entreno libre, que tampoco se calla en
-    // el corto. Y desde hoy, al que reabre su cierre le vuelven las notas y el peso.
-    // Prometerle cinco y enseñarle siete es de las cosas por las que se deja de leer lo
-    // que pone la pantalla. Las cuatro fijas son descanso, energía, hambre y movimiento.
-    const cosas = CUANTAS[4 + [hoy?.suplementos, hoy?.tiene_rutina === false, verNotas, verPeso]
-        .filter(Boolean).length];
+    // La primera sin contestar es la que toca; la que se haya abierto a mano manda sobre
+    // ella. Nunca hay más de una encendida.
+    const pendientes = preguntas.filter(p => !p.hecha);
+    const encendida = preguntas.some(p => p.id === abierta) ? abierta : (pendientes[0]?.id ?? null);
+
+    // ── El Guardar, apagado hasta el final (punto 15) ────────────────────────
+    //
+    // Cuenta lo que se le PREGUNTA a este cliente hoy, ni una cosa más: las notas y el
+    // peso son opcionales por diseño, y la de los suplementos no le sale a todo el mundo.
+    // Y se dice qué falta: un Guardar apagado sin decir por qué es peor que uno encendido.
+    const faltan = pendientes.map(p => p.titulo);
+
+    // Las comidas que no registró, ARRIBA DEL TODO y antes de la primera pregunta (punto
+    // 16). No es una pregunta, es un aviso: la app ya sabe la respuesta y se le enseña
+    // antes de empezar por si aún está a tiempo de corregirlo. Con esto se va la casilla
+    // «La hice» de abajo, que preguntaba lo mismo de una sola comida.
+    const sinRegistrar = hoy?.comidas_pendientes || [];
+    // «Dieta registrada» solo si de verdad tiene algo puesto. `dia.exists` no vale: desde
+    // que los extras hacen `upsert`, un día al que solo le apuntaron «dos cañas» tiene
+    // documento y ninguna comida, y le diríamos que su dieta está registrada.
+    const hayDietaMontada = Object.values(dia?.comidas || {})
+        .some(c => ((c || {}).alimentos || []).length > 0);
 
     const guardar = async () => {
-        const algo = ['entreno_respuesta', 'suplementos', 'descanso', 'energy', 'hunger_anxiety', 'movimiento']
-            .some(k => f[k] != null) || f.cena_hecha || f.notas.trim() || f.entreno_nota.trim() || f.weight;
-        if (!algo) return toast.error('Cuéntame algo antes de guardar.');
+        if (faltan.length > 0) return;
         if (f.weight && !await pesoAceptado(f.weight)) return;
 
         setEnviando(true);
         try {
             await api.post('/checkins', {
                 type: 'daily',
-                // El día del RELOJ DEL CLIENTE (bloque F): su cierre se archiva en SU día.
-                fecha: todayKey(),
-                descanso: f.descanso, energy: f.energy, hunger_anxiety: f.hunger_anxiety,
-                movimiento: f.movimiento,
+                fecha: fechaDelDia,
+                sensaciones: f.sensaciones,
                 entreno_respuesta: f.entreno_respuesta,
-                entreno_nota: f.entreno_nota.trim() || null,
+                entreno_estrellas: f.entreno_respuesta === 'si' ? f.entreno_estrellas : null,
+                cardio: f.cardio,
+                movimiento: f.movimiento,
+                descanso: f.descanso, energy: f.energy, hunger_anxiety: f.hunger_anxiety,
                 suplementos: f.suplementos
                     ? { respuesta: f.suplementos, detalle: f.suplementos_detalle.trim() || null }
                     : null,
-                // El check de la comida se guarda AQUÍ y ya: no toca la dieta ni le manda
-                // a Nutrición. Se anota de cuál hablaba, o el sí/no no se puede leer luego.
-                // LO QUE NO SE VUELVE A PREGUNTAR, NO SE BORRA: el guardado sustituye la
-                // fila entera, y mandar null aquí tiraba el «La hice» de esta mañana en
-                // cuanto la comida dejaba de estar pendiente (porque la registró después,
-                // o porque el cierre pasó a corto). Si la pregunta no sale, viaja lo que
-                // ya había contestado.
-                cena_hecha: !corta && hoy?.comida_pendiente ? f.cena_hecha : (inicial?.cena_hecha ?? null),
-                comida_pendiente: (!corta && hoy?.comida_pendiente?.key) || inicial?.comida_pendiente || null,
-                exceso_nota: f.exceso_nota.trim() || null,
+                // La respuesta se guarda aquí; lo que escribió ya está en la lista de
+                // extras del día, que es la única que hay.
+                extras_respuesta: f.extras_respuesta,
+                // LO QUE YA NO SE PREGUNTA, NO SE BORRA. El guardado sustituye la fila
+                // entera, así que un null a pelo se llevaría por delante lo que contestó
+                // antes de este rediseño (el «La hice» de la comida pendiente y la nota
+                // del exceso de macros). Viaja tal cual estaba.
+                //
+                // ESTA LISTA YA NO ES LA QUE SOSTIENE EL ARREGLO (fallo 9 del 24-08). Ir
+                // campo a campo obligaba a acordarse, y se olvidaron dos: `comido_hoy` y
+                // `mood` desaparecían al reeditar. Desde el 24-08 el servidor conserva
+                // TODO lo que esta pantalla no manda (routes/checkins.py, el bucle de
+                // `_LO_QUE_PONE_EL_SERVIDOR`), así que un campo nuevo ya no hay que
+                // añadirlo aquí. Estas cuatro líneas se quedan porque no estorban y dejan
+                // a la vista lo que el formulario sabe que existe y no pregunta.
+                cena_hecha: inicial?.cena_hecha ?? null,
+                comida_pendiente: inicial?.comida_pendiente ?? null,
+                exceso_nota: inicial?.exceso_nota || null,
+                // Y la nota de entreno de los cierres de antes: la caja ya no está, pero
+                // borrarla al reeditar sería tirar lo que escribió.
+                entreno_nota: inicial?.entreno_nota || null,
                 notas: f.notas.trim() ? { texto: f.notas.trim(), compartida: f.compartida } : null,
                 weight: f.weight ? parseFloat(String(f.weight).replace(',', '.')) : null,
+                // De qué día es ese peso: sin esto la pareja de días seguidos de la que
+                // sale la media semanal no se forma nunca.
+                peso_fecha: f.weight ? pesoFecha : null,
             });
             toast.success('Anotado. Mañana seguimos.');
             onGuardado();
@@ -381,155 +828,51 @@ const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado, inicial = null 
     };
 
     return (
-        <Card className="p-5 space-y-6" data-testid="cierre-del-dia">
-            {/* La cabecera de la versión CORTA: marcó todas sus comidas durante el día,
-                así que aquí no se le vuelve a preguntar por ellas. */}
-            {corta && (
-                <div className="flex items-start gap-3" data-testid="cierre-corto">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
+        <div className="space-y-3" data-testid="cierre-del-dia">
+            {/* SU DIETA DE HOY, ANTES DE LA PRIMERA PREGUNTA (punto 16). */}
+            {sinRegistrar.length > 0 ? (
+                <div className="rounded-2xl border border-border bg-muted p-4" data-testid="cierre-dieta-aviso">
                     <p className="text-sm font-bold text-foreground">
-                        Ya marcaste {claves.length === 1 ? 'tu comida' : `las ${NUMERAL[claves.length]} comidas`}.
-                        {' '}Solo quedan {cosas} cosas.
+                        {sinRegistrar.length === 1
+                            ? 'Te queda 1 comida sin registrar'
+                            : `Te quedan ${sinRegistrar.length} comidas sin registrar`}
                     </p>
-                </div>
-            )}
-
-            {/* Aquí vivía la lista informativa de comidas sin registrar («Te quedan
-                cuatro comidas...»). FUERA (P77 del doc 23-08, decidido por Francisco el
-                23-08): preguntaba dos veces lo mismo que el bloque de la comida pendiente
-                de abajo, que es el del doc original (T4 del 16-08) y el único que guarda
-                algo (el «La hice» viaja al cierre y al coach). */}
-
-            {/* 1 · El entreno que no marcó. «Sí, pero no lo puse» le lleva a registrarlo,
-                que es donde de verdad se arregla; no se apaña con un sí a secas aquí.
-                En la versión corta no sale: solo quedan las cinco de siempre. */}
-            {!corta && hoy?.entreno && (
-                <div data-testid="cierre-entreno">
-                    <span className="text-sm text-foreground/70 mb-2 block">Hoy no entrenaste.</span>
-                    <Opciones columnas={2} testId="cierre-entreno-op" value={f.entreno_respuesta}
-                        onChange={(v) => {
-                            if (v === 'si_no_lo_puse') return navigate('/dashboard/entreno');
-                            set('entreno_respuesta', v);
-                        }}
-                        opciones={[
-                            { v: 'si_no_lo_puse', l: 'Sí, pero no lo puse' },
-                            { v: 'no_entrene', l: 'No entrené' },
-                        ]} />
-                    <textarea rows={2} value={f.entreno_nota} onChange={e => set('entreno_nota', e.target.value)}
-                        data-testid="cierre-entreno-nota"
-                        placeholder="Cuéntame si quieres qué pasó. Opcional."
-                        className={inputCls + ' resize-none mt-2'} />
-                </div>
-            )}
-
-            {/* 1b · Sin rutina con nosotros no había dónde apuntar el entreno (P80, doc
-                23-08): una nota corta y opcional. Quien tiene rutina apunta lo suyo en su
-                registro de entreno, así que a él esta caja no le sale y nada se duplica. */}
-            {hoy?.tiene_rutina === false && (
-                <div data-testid="cierre-entreno-libre">
-                    <span className="text-sm text-foreground/70 block">Tu entreno de hoy</span>
-                    <p className="text-[11px] text-foreground/40 mt-0.5 mb-2">
-                        Si entrenaste por tu cuenta, apúntalo aquí (opcional).
+                    <p className="text-sm text-foreground/60 mt-0.5">
+                        {sinRegistrar.map(c => c.etiqueta).join(' · ')}
                     </p>
-                    <input value={f.entreno_nota} onChange={e => set('entreno_nota', e.target.value)}
-                        data-testid="cierre-entreno-libre-nota"
-                        placeholder="Qué entrenaste hoy" className={inputCls} />
+                    <button type="button" onClick={() => navigate('/dashboard/nutrition')}
+                        data-testid="cierre-dieta-ir"
+                        className="text-[11px] text-brand hover:underline underline-offset-4 mt-0.5">
+                        Puedes cerrarlas antes de seguir
+                    </button>
                 </div>
-            )}
-
-            {/* 2 · Los suplementos, solo a quien tenga protocolo. */}
-            {hoy?.suplementos && (
-                <div data-testid="cierre-suplementos">
-                    <span className="text-sm text-foreground/70 mb-2 block">¿Tomaste tus suplementos?</span>
-                    <Opciones testId="cierre-suplementos-op" value={f.suplementos}
-                        onChange={(v) => set('suplementos', v)}
-                        opciones={[{ v: 'si', l: 'Sí' }, { v: 'no_todos', l: 'No todos' }, { v: 'no', l: 'No' }]} />
-                    {f.suplementos === 'no_todos' && (
-                        <input value={f.suplementos_detalle} onChange={e => set('suplementos_detalle', e.target.value)}
-                            data-testid="cierre-suplementos-detalle"
-                            placeholder="¿Cuál y por qué?" className={inputCls + ' mt-2'} />
-                    )}
+            ) : hayDietaMontada ? (
+                <div className="rounded-2xl border border-border bg-muted p-4 flex items-center gap-2"
+                    data-testid="cierre-dieta-aviso">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                    <p className="text-sm text-foreground">Dieta registrada</p>
                 </div>
-            )}
+            ) : null}
 
-            {/* 3 · La comida que le quedó sin registrar: un check y ya. Con todas
-                marcadas no hay nada que preguntar. */}
-            {!corta && hoy?.comida_pendiente && (
-                <div data-testid="cierre-comida">
-                    <span className="text-sm text-foreground/70 mb-2 block">
-                        Te queda la {hoy.comida_pendiente.etiqueta} sin registrar.
-                    </span>
-                    <label className="flex items-center gap-3 cursor-pointer">
-                        <input type="checkbox" checked={f.cena_hecha} data-testid="cierre-comida-hecha"
-                            onChange={e => set('cena_hecha', e.target.checked)}
-                            className="w-4 h-4 accent-[#FF671F]" />
-                        <span className="text-sm text-foreground/80">La hice</span>
-                    </label>
-                </div>
-            )}
+            {preguntas.map(p => (
+                <Tarjeta key={p.id} testId={p.testId} titulo={p.titulo} ayuda={p.ayuda}
+                    ayudaCursiva={p.ayudaCursiva} encendida={encendida === p.id}
+                    contestada={p.hecha} resumen={p.resumen} cola={p.cola}
+                    onAbrir={() => setAbierta(p.id)}>
+                    {p.campo}
+                </Tarjeta>
+            ))}
 
-            {/* 4 · Si se ha pasado de macros. En la corta tampoco sale. */}
-            {!corta && hoy?.exceso && (
-                <div data-testid="cierre-exceso">
-                    <span className="text-sm text-foreground/70 mb-2 block">
-                        Hoy te has pasado {hoy.exceso.gramos} g de {hoy.exceso.macro}.
-                    </span>
-                    <textarea rows={2} value={f.exceso_nota} onChange={e => set('exceso_nota', e.target.value)}
-                        data-testid="cierre-exceso-nota"
-                        placeholder="Cuéntame si quieres qué pasó. Opcional."
-                        className={inputCls + ' resize-none'} />
-                </div>
-            )}
-
-            {/* Y luego lo de siempre, con los literales del doc 23-08 (P81). El descanso
-                se pregunta aquí, referido a la noche de ayer, y sale del reporte del mes:
-                así son 28 datos al mes en vez de uno. */}
-            <Escala titulo="¿Cómo descansaste la noche de ayer?"
-                subtitulo="Fundamental tener una buena rutina de sueño si no la tienes ya"
-                minLabel="fatal" maxLabel="genial" testId="cierre-descanso"
-                value={f.descanso} onChange={v => set('descanso', v)} />
-            {/* «Fuera de tu entrenamiento»: sin eso el que acaba de entrenar contesta por
-                cómo se encontró en el gimnasio, que no es lo que se le pregunta. */}
-            <Escala titulo="Niveles de energía durante el día"
-                subtitulo="Fuera de tu entrenamiento, en tu día normal"
-                minLabel="bajita" maxLabel="pletórico" testId="cierre-energia"
-                value={f.energy} onChange={v => set('energy', v)} />
-            {/* Hambre y ansiedad, juntas: es como lo dice él y es una sola escala. Y «con
-                la dieta», que es de lo que se pregunta y no de la ansiedad de la vida. */}
-            <Escala titulo="Hambre / ansiedad con la dieta" minLabel="nada" maxLabel="mucha" testId="cierre-hambre"
-                value={f.hunger_anxiety} onChange={v => set('hunger_anxiety', v)} />
-
-            <div>
-                {/* LA PREGUNTA ES LA SUYA. El 23-08 la cambiamos por «¿Tuviste más
-                    desgaste de lo normal?» y no es lo que él pide: «desgaste» es palabra
-                    de entrenador, y además la respuesta se guarda en `movimiento`. */}
-                <span className="text-sm text-foreground/70 block">¿Te moviste lo suficiente?</span>
-                {/* En cursiva y sin punto final, tal cual lo pide el doc. */}
-                <p className="text-[11px] text-foreground/40 mt-0.5 mb-2 italic">
-                    Moverte es salud y menos grasa: a más te muevas, más gastas
-                </p>
-                {/* Etiquetas cortas: los tres botones van en fila y en el móvil tres
-                    frases no caben -- se partían en tres renglones dentro del botón. Los
-                    valores guardados (menos/igual/mas) son los de siempre. */}
-                <Opciones testId="cierre-movimiento" value={f.movimiento} onChange={v => set('movimiento', v)}
-                    opciones={[
-                        { v: 'menos', l: 'Menos' },
-                        { v: 'igual', l: 'Como siempre' },
-                        { v: 'mas', l: 'Más' },
-                    ]} />
-            </div>
-
-            {/* Las notas y el peso son de la versión larga: el mockup corto no los lleva.
-                Quien quiera pesarse ese día lo hace desde Evolución. Al REEDITAR salen
-                igualmente si ya traen respuesta (ver `verNotas` / `verPeso` arriba). */}
-            {verNotas && (
-            <div>
-                <span className="text-sm text-foreground/70 block">Notas personales</span>
+            {/* Las notas y el peso, abiertos y al final: son opcionales y no entran en la
+                cadena del naranja. */}
+            <div className="rounded-2xl border border-border bg-card p-4">
+                <span className="text-sm text-foreground block">Notas personales</span>
                 <p className="text-[11px] text-foreground/40 mt-0.5 mb-2">
-                    Compártelo si quieres que lo veamos, o déjalo para ti (opcional).
+                    Esto es para tu diario. Lo puedes compartir con nosotros o quedártelo para ti
                 </p>
                 <textarea rows={3} value={f.notas} onChange={e => set('notas', e.target.value)}
-                    data-testid="cierre-notas" placeholder="De lo que quieras acordarte"
+                    data-testid="cierre-notas"
+                    placeholder="Cosas que quieras acordarte del entreno y de la dieta"
                     className={inputCls + ' resize-none'} />
                 <label className="flex items-center gap-3 cursor-pointer mt-2">
                     <input type="checkbox" checked={f.compartida} data-testid="cierre-compartir"
@@ -538,15 +881,11 @@ const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado, inicial = null 
                     <span className="text-sm text-foreground/80">Compartir con nosotros</span>
                 </label>
             </div>
-            )}
 
-            {verPeso && (
-            <div>
-                <span className="text-sm text-foreground/70 block">Peso</span>
+            <div className="rounded-2xl border border-border bg-card p-4">
+                <span className="text-sm text-foreground block">Peso</span>
                 {/* DOS RENGLONES, como los pide él: arriba para qué sirve pesarse aquí y
-                    debajo el último que tenemos. Iba todo en una línea que empezaba por
-                    «Opcional ·» y el «sólo para ti» -- que es lo que quita el reparo de
-                    apuntarlo -- no se decía en ninguna parte. */}
+                    debajo el último que tenemos. */}
                 <div className="mt-0.5 mb-2">
                     <p className="text-[11px] text-foreground/40">
                         Registrarlo es opcional, sólo para ti. Te lo pediremos sólo para los reportes
@@ -560,187 +899,61 @@ const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado, inicial = null 
                 <input type="number" step="0.1" min={PESO_MIN} max={PESO_MAX} value={f.weight}
                     onChange={e => set('weight', e.target.value)} data-testid="cierre-peso"
                     placeholder="kg" className={inputCls} />
+                {/* DE QUÉ DÍA ES ESE PESO. El peso se archivaba con la fecha del cierre, y
+                    el que se pesa por la mañana y lo apunta de noche -- o se pesó ayer --
+                    metía el dato en el día que no era. La media semanal sale de la pareja
+                    de días SEGUIDOS desde el miércoles, así que un pesaje corrido de día
+                    rompe la pareja y la semana se queda sin peso sin que nada avise. */}
+                {f.weight && diasDePesaje.length > 1 && (
+                    <div className="mt-2">
+                        <label className="text-[11px] text-foreground/40 block mb-1" htmlFor="cierre-peso-fecha">
+                            ¿De qué día es este peso?
+                        </label>
+                        <select id="cierre-peso-fecha" value={pesoFecha}
+                            onChange={e => setPesoFecha(e.target.value)} data-testid="cierre-peso-fecha"
+                            className={inputCls}>
+                            {diasDePesaje.map(d => (
+                                <option key={d.iso} value={d.iso}>{d.etiqueta}</option>
+                            ))}
+                        </select>
+                    </div>
+                )}
             </div>
-            )}
 
-            <button onClick={guardar} disabled={enviando} data-testid="cierre-guardar"
-                className="w-full bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-60">
+            {faltan.length > 0 && (
+                // Las tres primeras y cuántas más: la lista entera son ocho renglones al
+                // empezar, y al final -- que es cuando el cliente mira el botón -- quedan
+                // una o dos. Lo que hace falta es que sepa qué le falta, no leerse la
+                // pantalla otra vez.
+                <p className="text-[11px] text-foreground/40" data-testid="cierre-que-falta">
+                    Te queda por contestar: {faltan.slice(0, 3).join(' · ')}
+                    {faltan.length > 3 && ` y ${faltan.length - 3} más`}
+                </p>
+            )}
+            <button onClick={guardar} disabled={enviando || faltan.length > 0} data-testid="cierre-guardar"
+                className="w-full bg-[#FF671F] hover:bg-[#FF671F]/90 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
                 {enviando && <Loader2 className="w-4 h-4 animate-spin" />} Guardar
             </button>
-        </Card>
-    );
-};
-
-// ── Fotos de progreso ────────────────────────────────────────────────────────
-const PhotoThumb = ({ photo, api, onDeleted }) => {
-    const [url, setUrl] = useState(null);
-    useEffect(() => {
-        let alive = true; let objUrl = null;
-        api.get(`/reports/photos/${photo.id}`, { responseType: 'blob' })
-            .then(res => { if (!alive) return; objUrl = URL.createObjectURL(res.data); setUrl(objUrl); })
-            .catch(() => {});
-        return () => { alive = false; if (objUrl) URL.revokeObjectURL(objUrl); };
-    }, [api, photo.id]);
-
-    return (
-        <div className="relative group rounded-xl overflow-hidden border border-border bg-muted aspect-[3/4]">
-            {url
-                ? <img src={url} alt="" className="w-full h-full object-cover" />
-                : <div className="w-full h-full flex items-center justify-center"><Loader2 className="w-4 h-4 animate-spin text-foreground/40" /></div>}
-            {/* La inicial no lleva papelera. El backend también la protege, pero enseñar
-                un botón que va a fallar es peor que no enseñarlo: la app le dice que esa
-                foto no se puede recuperar y a la vez le ofrece borrarla. */}
-            {photo.inicial ? (
-                <span title="Tu foto inicial: no se puede borrar"
-                    className="absolute top-1.5 right-1.5 text-[9px] font-bold uppercase tracking-wide bg-black/60 text-white/90 px-1.5 py-1 rounded">
-                    inicial
-                </span>
-            ) : (
-                <button onClick={() => onDeleted(photo.id)}
-                    className="absolute top-1.5 right-1.5 w-7 h-7 rounded-lg bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Trash2 className="w-3.5 h-3.5" />
-                </button>
-            )}
-            {/* La pose, arriba a la izquierda. Sin ella tres fotos de un mes son tres
-                fotos sueltas; con ella son la misma foto desde tres sitios, que es lo
-                único que se puede comparar de un mes a otro. Las subidas antes del 06-08
-                no la tienen y ahí no se pinta nada, en vez de inventarse una. */}
-            {photo.pose && (
-                <span className="absolute top-1.5 left-1.5 text-[9px] font-bold uppercase tracking-wide bg-black/60 text-white/90 px-1.5 py-1 rounded">
-                    {POSE_LABEL[photo.pose] || photo.pose}
-                </span>
-            )}
-            <span className="absolute bottom-1 left-1.5 text-[10px] text-white/90 bg-black/50 px-1.5 py-0.5 rounded">
-                {new Date(photo.taken_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
-            </span>
         </div>
     );
 };
 
-// Las tres poses, con el nombre que ve el cliente y el orden en que se miran.
-const POSE_LABEL = { frente: 'Frente', espalda: 'Espalda', perfil: 'Perfil' };
-const POSE_ORDEN = ['frente', 'perfil', 'espalda'];
-
-const _mesDe = (iso) => String(iso || '').slice(0, 7);
-const _mesTitulo = (key) => {
-    const [y, m] = key.split('-');
-    const d = new Date(+y, +m - 1, 1);
-    return isNaN(d) ? key : d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-};
-
-/**
- * La rejilla de fotos: solo para VERLAS.
- *
- * Se subían aquí y también se borraban aquí. Desde el 06-08-2026 hay un solo sitio para
- * subirlas -- el reporte, con sus tres poses y la del mes pasado al lado para colocarse
- * igual -- y esta pantalla se queda para mirarlas, que es lo que se viene a hacer aquí.
- */
-const PhotosSection = ({ api, token }) => {
-    const [photos, setPhotos] = useState([]);
-    // Si acaba de subir su primera foto en esta visita, la subida se queda a la vista:
-    // cambiarla por la rejilla a mitad le quitaría el hueco de las otras dos poses.
-    const [subiendoAhora, setSubiendoAhora] = useState(false);
-    const navigate = useNavigate();
-
-    const load = useCallback(() => {
-        api.get('/reports/photos').then(r => setPhotos(r.data?.photos || [])).catch(() => {});
-    }, [api]);
-    useEffect(() => { load(); }, [load]);
-
-    const remove = async (id) => {
-        try { await api.delete(`/reports/photos/${id}`); setPhotos(p => p.filter(x => x.id !== id)); }
-        catch (err) { toast.error(mensajeDeError(err, 'Error borrando la foto')); }
-    };
-
-    // POR MESES, Y DENTRO DEL MES POR POSE. Era una parrilla plana de todas las fotos de
-    // todos los meses mezcladas -- frente, espalda y perfil seguidas, con la fecha diminuta
-    // en una esquina -- y por eso Jesús la llamó «un álbum»: para ver si alguien ha
-    // cambiado hay que poder poner el mes de al lado debajo, y así no se podía.
-    const meses = useMemo(() => {
-        const mapa = new Map();
-        for (const p of photos) {
-            const k = _mesDe(p.taken_at);
-            if (!mapa.has(k)) mapa.set(k, []);
-            mapa.get(k).push(p);
-        }
-        return [...mapa.entries()]
-            .sort((a, b) => b[0].localeCompare(a[0]))            // el mes más reciente arriba
-            .map(([key, fotos]) => ({
-                key,
-                fotos: fotos.sort((a, b) => {
-                    const d = POSE_ORDEN.indexOf(a.pose) - POSE_ORDEN.indexOf(b.pose);
-                    // Las que no tienen pose (las de antes del 06-08) al final, por fecha.
-                    return d !== 0 ? d : String(a.taken_at).localeCompare(String(b.taken_at));
-                }),
-            }));
-    }, [photos]);
-
-    return (
-        <Card className="p-5">
-            <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-                <div className="flex items-center gap-2">
-                    <Camera className="w-4 h-4 text-brand" />
-                    <p className="text-xs font-bold text-foreground/40 uppercase tracking-wider">Fotos de progreso</p>
-                </div>
-                {/* Con fotos ya subidas, la puerta para añadir más sigue en Seguimiento;
-                    sin ninguna, la subida está aquí mismo y este enlace sobra. */}
-                {photos.length > 0 && (
-                    <button onClick={() => navigate('/dashboard/reports')}
-                        className="text-xs text-brand hover:underline underline-offset-4 font-semibold">
-                        Sube más en Seguimiento
-                    </button>
-                )}
-            </div>
-            {/* Vuelve a decir «tu reporte» a secas, y ahora es verdad. El 09-08 esto decía
-                «mensual» como parche: las fotos solo se pedían en el reporte mensual y en una
-                semana normal el cliente venía aquí, iba a Reportes y no encontraba dónde
-                subirlas. El parche avisaba de la contradicción pero no la quitaba -- seguía
-                sin haber sitio 3 de cada 4 semanas. Ahora el bloque de fotos está siempre en
-                Reportes (punto 21), así que el enlace lleva a algo. */}
-            {photos.length === 0 || subiendoAhora ? (
-                // SIN FOTOS, LA PUERTA VA AQUÍ (doc 23-08, bloque 10, y lo decidido el
-                // 19-08): en autogestión las fotos no se piden, se recomiendan, y esto
-                // decía «se piden en el reporte mensual» sin dejar hacer nada. Ahora se
-                // recomienda y debajo va la subida de siempre, la misma de los reportes
-                // (POST /reports/photos), que no distingue de planes.
-                <div>
-                    {photos.length === 0 && (
-                        <p className="text-foreground/50 text-sm mb-4">
-                            Todavía no has subido fotos. Te recomendamos hacértelas cada cuatro
-                            semanas: son la forma más honesta de ver tu cambio. Puedes subirlas
-                            aquí cuando quieras.
-                        </p>
-                    )}
-                    <TresFotos api={api} token={token}
-                        onSubida={() => { setSubiendoAhora(true); load(); }} />
-                </div>
-            ) : (
-                <div className="space-y-5">
-                    {meses.map(m => (
-                        <div key={m.key}>
-                            <p className="text-[11px] font-bold uppercase tracking-wider text-foreground/40 mb-2 capitalize">
-                                {_mesTitulo(m.key)}
-                            </p>
-                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
-                                {m.fotos.map(p => <PhotoThumb key={p.id} photo={p} api={api} onDeleted={remove} />)}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-        </Card>
-    );
-};
+// AQUI VIVIAN LAS FOTOS DE PROGRESO (`PhotoThumb` y `PhotosSection`), la rejilla por
+// meses y la subida de la primera foto. FUERA del cierre del dia (punto 17 del doc
+// 24-08): «Debajo del Guardar: Anotado. Manana seguimos, Editar lo de hoy, Ver mi
+// diario. Y nada mas». Jesus lo senala ademas en el punto 53: «el check-in se ha
+// llenado de cosas que no pedi: una galeria entera de fotos de progreso, con la cara».
+// Las fotos se ven en Seguimiento -> Evolucion, y se suben con TresFotos, que vive en
+// ReportsPage.
 
 const CheckInsPage = () => {
-    const { api, token, pantalla } = useAuth();
+    const { api, pantalla } = useAuth();
     // El cierre del día nuevo, detrás de su interruptor del panel (T4). Con él apagado se
     // queda el check-in diario de siempre, que es lo que hay hoy en producción.
     const cierreNuevo = pantalla('t4_cierre_nuevo');
     const [hoy, setHoy] = useState(null);
-    // El día de la dieta de hoy, para decidir cierre corto o largo. `listo` evita el
-    // parpadeo: sin él la larga saldría un instante y se encogería a corta delante
-    // del cliente.
+    // El día de la dieta de hoy: de él salen el aviso de arriba («Dieta registrada») y la
+    // lista de extras ya apuntados. `listo` evita el parpadeo del formulario.
     const [diaHoy, setDiaHoy] = useState({ dia: null, listo: false });
     const { confirm } = useConfirm();
     const navigate = useNavigate();
@@ -935,17 +1148,24 @@ const CheckInsPage = () => {
                         <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
                         <div>
                             <p className="font-bold text-foreground">Anotado. Mañana seguimos.</p>
-                            {/* Guardado no es sellado (P75, doc 23-08): el mismo día se puede
-                                reabrir, corregir y volver a guardar; lo nuevo sustituye. */}
+                            {/* Debajo del Guardar, estas dos y nada más (punto 17 del doc
+                                24-08). Guardado no es sellado (P75, doc 23-08): el mismo
+                                día se puede reabrir, corregir y volver a guardar. */}
                             <button type="button" onClick={() => setEditando(true)} data-testid="cierre-editar"
-                                className="mt-1.5 text-sm text-brand font-semibold hover:underline underline-offset-4">
+                                className="mt-1.5 block text-sm text-brand font-semibold hover:underline underline-offset-4">
                                 Editar lo de hoy
+                            </button>
+                            <button type="button" onClick={() => navigate('/dashboard/reports?abrir=diario')}
+                                data-testid="cierre-ver-diario"
+                                className="mt-1 block text-sm text-brand font-semibold hover:underline underline-offset-4">
+                                Ver mi diario →
                             </button>
                         </div>
                     </Card>
                 ) : hoy?.fecha && !diaHoy.listo ? (
-                    // Sin la dieta de hoy aún no se sabe si el cierre es corto o largo:
-                    // mejor un latido que un formulario que cambia de tamaño al llegar.
+                    // Sin la dieta de hoy todavía no se sabe qué avisar arriba ni qué
+                    // extras tiene apuntados: mejor un latido que un formulario que cambia
+                    // de tamaño delante del cliente.
                     <div className="h-64 bg-muted rounded-2xl animate-pulse" data-testid="checkins-content" />
                 ) : (
                     <div data-testid="checkins-content">
@@ -1034,24 +1254,22 @@ const CheckInsPage = () => {
                 weekly o monthly): los que ya están guardados se siguen leyendo, y salen aquí
                 abajo en el historial. Lo que desaparece son los formularios. */}
 
-            {/* LAS FOTOS NO PINTAN NADA AQUÍ.
-                Este bloque decía «se suben en tu reporte» y justo debajo «aún no has subido
-                fotos»: un cajón entero para mandarte a otro sitio. Esta es la pantalla de los
-                diez segundos -- energía, hambre y qué has comido --, y todo lo que no sean esos
-                dos campos le quita el sentido (Jesús, 11-08).
-                Las fotos siguen donde se suben, en el reporte, y se ven en Mi evolución; aquí
-                no se pierde ninguna forma de llegar a ellas. En escritorio se queda, que ahí
-                sobra sitio y el bloque no estorba a nadie. */}
-            <div className="hidden lg:block">
-                <PhotosSection api={api} token={token} />
-            </div>
+            {/* LAS FOTOS SE FUERON DE AQUÍ (punto 17). Estaban en un `hidden lg:block`, o
+                sea solo en escritorio, y es justo donde Jesús las vio: «debajo del
+                "Anotado" hay ahora una galería entera de fotos de progreso, con la cara»
+                (punto 53). Se ven en Seguimiento -> Evolución. */}
 
             {/* EL HISTORIAL, EN DOS BLOQUES (24-08).
-                Caían mezclados los cierres del día y los reportes mensuales importados de
-                Calma, cada uno con su píldora de tipo y su hora. Filtrar a los cierres a
-                secas NO vale: en producción hay 1.593 entradas mensuales y 5 cierres, y 98
-                de los 103 clientes con historial solo tienen mensuales, así que se
-                quedarían con la pantalla vacía. Su etapa anterior también es suya. */}
+                «Tus días» es una línea por día con sus huecos (puntos 19 a 21). Los
+                reportes NO se filtran: en producción hay 1.593 entradas mensuales y 5
+                cierres, y 98 de los 103 clientes con historial solo tienen mensuales, así
+                que quitarlos les deja la pantalla vacía. Su etapa anterior también es suya.
+
+                ESTA LISTA TIENE QUE ACABAR EN UN SOLO SITIO, Seguimiento -> Diario (punto
+                23), y de momento no puede: el traslado toca `components/Diario.jsx` y
+                `ReportsPage.jsx`. `HistorialDeDias` se exporta ya montada para que ese
+                traslado sea una importación y no volver a escribirla. Quitarla de aquí
+                antes de tiempo dejaría al cliente sin ver ni uno solo de sus días. */}
             <Card className="p-5">
                 <p className="text-xs font-bold text-foreground/40 uppercase tracking-wider mb-3">Historial</p>
                 {checkins.length === 0 ? (
@@ -1063,9 +1281,7 @@ const CheckInsPage = () => {
                                 <p className="text-[11px] font-bold uppercase tracking-wider text-foreground/40 mb-2">
                                     Tus días
                                 </p>
-                                <ul className="space-y-3">
-                                    {cierres.map(c => <EntradaDelHistorial key={c.id} c={c} />)}
-                                </ul>
+                                <HistorialDeDias cierres={cierres} hoyIso={hoy?.fecha || todayKey()} />
                             </div>
                         )}
                         {reportes.length > 0 && (

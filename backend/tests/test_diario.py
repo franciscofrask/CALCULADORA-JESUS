@@ -89,9 +89,15 @@ def test_el_cliente_ve_su_diario(cabeceras_cliente):
     assert fechas == sorted(fechas, reverse=True), "el diario va de lo más nuevo a lo más viejo"
     for e in datos["entradas"]:
         assert e["tipo"] in ("entreno", "dia")
-        # Desde el P80 (doc 23-08) una entrada puede venir solo con la nota de entreno
-        # del cierre (quien no tiene rutina la apunta ahi): texto o nota, pero algo trae.
-        assert e["texto"] or e.get("entreno_nota")
+        # LAS ENTRADAS DE ENTRENO SIGUEN PIDIENDO TEXTO; LAS DEL DÍA, YA NO (punto 23 del
+        # doc 24-08). El Diario y el historial del cierre son la misma lista, así que un
+        # día con estrellas, entreno y peso pero sin una palabra escrita también sale: si
+        # no, el Diario de la plataforma entera se queda en una entrada, que es lo que
+        # había. Lo que sí trae siempre un día es lo que contestó.
+        if e["tipo"] == "entreno":
+            assert e["texto"], "una entrada de entreno entra al Diario por su nota"
+        else:
+            assert "dia_resumen" in e
 
 
 def test_el_equipo_solo_ve_las_compartidas(cabeceras_admin, cabeceras_cliente):

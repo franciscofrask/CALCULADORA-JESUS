@@ -5,7 +5,7 @@ import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
-import { Search, Dumbbell, ChevronRight, Users } from 'lucide-react';
+import { Search, Dumbbell, ChevronRight, Users, Upload, Star } from 'lucide-react';
 import { PlanBadge } from './ClientDashboard';
 import EditorDeRutina from '../components/EditorDeRutina';
 
@@ -38,6 +38,20 @@ const BibliotecaDeRutinas = ({ api }) => {
             .catch(() => toast.error('No hemos podido borrarla. Inténtalo de nuevo.'));
     };
 
+    // CUÁL ES LA RUTINA DEL MES (24-08). Faltaba el concepto: la app la vende por 57 € en
+    // tres sitios y en la base no había forma de saber cuál es la de este mes, así que el
+    // que la compraba solo generaba un aviso para que alguien se la mandara a mano. La que
+    // se marque aquí es la que se le pone sola a quien la pague.
+    const marcarDelMes = (r) => {
+        api.post(`/admin/routines/biblioteca/${r.id}/del-mes`, { del_mes: !r.del_mes })
+            .then(() => {
+                toast.success(r.del_mes ? `«${r.nombre}» ya no es la del mes`
+                                        : `«${r.nombre}» es la rutina del mes`);
+                cargar();
+            })
+            .catch(() => toast.error('No hemos podido marcarla. Inténtalo de nuevo.'));
+    };
+
     return (
         <>
             <Card className="bg-[#111] border-[#222]">
@@ -65,9 +79,16 @@ const BibliotecaDeRutinas = ({ api }) => {
                     ) : (
                         <div className="space-y-2">
                             {rutinas.map(r => (
-                                <div key={r.id} className="flex items-center justify-between gap-3 p-3 bg-[#0A0A0A] rounded-lg border border-[#222]">
+                                <div key={r.id} className={`flex items-center justify-between gap-3 p-3 bg-[#0A0A0A] rounded-lg border ${r.del_mes ? 'border-[#FF671F]/50' : 'border-[#222]'}`}>
                                     <div className="min-w-0">
-                                        <p className="text-white text-sm">{r.nombre}</p>
+                                        <p className="text-white text-sm">
+                                            {r.nombre}
+                                            {r.del_mes && (
+                                                <span className="ml-2 text-[9px] uppercase font-bold tracking-wide text-[#FF671F] bg-[#FF671F]/15 px-1.5 py-0.5 rounded">
+                                                    la del mes
+                                                </span>
+                                            )}
+                                        </p>
                                         <p className="text-white/40 text-xs">
                                             {r.dias_de_entreno} {r.dias_de_entreno === 1 ? 'día' : 'días'} · {r.ejercicios} ejercicios
                                             {r.objetivo ? ` · ${r.objetivo}` : ''}{r.nivel ? ` · ${r.nivel}` : ''}
@@ -75,6 +96,12 @@ const BibliotecaDeRutinas = ({ api }) => {
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-3 shrink-0">
+                                        <button onClick={() => marcarDelMes(r)} data-testid={`del-mes-${r.id}`}
+                                            title="La que se le entrega sola a quien compre la rutina del mes"
+                                            className={`inline-flex items-center gap-1 text-xs font-semibold ${r.del_mes ? 'text-[#FF671F]' : 'text-white/40 hover:text-white'}`}>
+                                            <Star className={`w-3.5 h-3.5 ${r.del_mes ? 'fill-[#FF671F]' : ''}`} />
+                                            {r.del_mes ? 'Es la del mes' : 'La del mes'}
+                                        </button>
                                         <button onClick={() => setEditando(r)}
                                             className="text-white/50 hover:text-white text-xs font-semibold">Editar</button>
                                         <button onClick={() => borrar(r)}
@@ -233,6 +260,80 @@ const PonerlesRutinaAVarios = ({ api, onHecho }) => {
     );
 };
 
+/**
+ * LA MISMA RUTINA A VARIOS DE GOLPE (Jesús, 24-08).
+ *
+ * «La del mes solo a los que se le incluyen, la personalizada se le da una personalizada,
+ * debemos agregar eso.» En producción hay 59 clientes con plan de rutina PERSONALIZADA y 58
+ * sin ninguna rutina puesta. Subir el PDF de uno en uno desde su ficha son 58 vueltas de
+ * ficha, subir, volver; la entrega mensual de agosto hubo que hacerla por un script suelto
+ * porque esto no existía.
+ *
+ * Se marcan los clientes en la tabla de abajo y se sube UN archivo para todos. No pisa nada:
+ * como la subida de la ficha, guarda una entrega más y el cliente ve la última.
+ */
+const SubirPdfAVarios = ({ api, ids, onHecho, onLimpiar }) => {
+    const [reparto, setReparto] = useState('');
+    const [semanas, setSemanas] = useState('');
+    const [subiendo, setSubiendo] = useState(false);
+
+    const subir = async (e) => {
+        const archivo = e.target.files?.[0];
+        e.target.value = '';               // para poder subir el mismo archivo dos veces
+        if (!archivo) return;
+        setSubiendo(true);
+        try {
+            const fd = new FormData();
+            fd.append('file', archivo);
+            fd.append('clientes', ids.join(','));
+            if (reparto.trim()) fd.append('reparto', reparto.trim());
+            if (semanas.trim()) fd.append('semanas', semanas.trim());
+            const r = await api.post('/admin/routines/pdf-en-bloque', fd);
+            const n = r.data?.subidas || 0;
+            toast.success(n === 1 ? 'Rutina subida a 1 cliente' : `Rutina subida a ${n} clientes`);
+            onHecho?.();
+        } catch (err) {
+            toast.error(err?.response?.data?.detail || 'No hemos podido subir la rutina. Inténtalo de nuevo.');
+        } finally {
+            setSubiendo(false);
+        }
+    };
+
+    return (
+        <Card className="bg-[#111] border-[#FF671F]/40" data-testid="subir-pdf-en-bloque">
+            <CardContent className="p-4 space-y-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                    <Upload className="w-5 h-5 text-[#FF671F] shrink-0" />
+                    <p className="text-white text-sm font-semibold flex-1 min-w-0">
+                        {ids.length} {ids.length === 1 ? 'cliente elegido' : 'clientes elegidos'}
+                    </p>
+                    <button onClick={onLimpiar} className="text-white/40 hover:text-white text-xs">quitar la selección</button>
+                </div>
+                {/* 130px y no 92: con la caja estrecha el «Semanas» sale cortado. */}
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_130px] gap-2">
+                    <Input value={reparto} onChange={e => setReparto(e.target.value)}
+                        placeholder="Reparto: Empuje, Tirón, Pierna, Empuje"
+                        className="bg-[#0A0A0A] border-[#333] text-white text-xs" data-testid="bloque-reparto" />
+                    <Input type="number" min="1" max="52" value={semanas} onChange={e => setSemanas(e.target.value)}
+                        placeholder="Semanas" className="bg-[#0A0A0A] border-[#333] text-white text-xs"
+                        data-testid="bloque-semanas" />
+                </div>
+                <p className="text-[10px] text-white/30">
+                    El reparto y las semanas se le ponen a todos: es la misma rutina. Los días de la
+                    semana los eligió cada cliente en su alta.
+                </p>
+                <label className={`inline-flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-lg cursor-pointer
+                    ${subiendo ? 'bg-[#FF671F]/40 text-white/70' : 'bg-[#FF671F] hover:bg-[#FF671F]/90 text-white'}`}>
+                    <Upload className="w-4 h-4" />
+                    {subiendo ? 'Subiendo…' : `Subirles el PDF a los ${ids.length}`}
+                    <input type="file" accept="application/pdf" className="hidden" disabled={subiendo}
+                        onChange={subir} data-testid="input-pdf-en-bloque" />
+                </label>
+            </CardContent>
+        </Card>
+    );
+};
+
 // Vista general de rutinas: quien tiene su rutina puesta (estructurada o en PDF) y quien no.
 // La rutina se genera y se asigna dentro de la ficha del cliente (pestaña Entreno); editarle
 // un ejercicio a un cliente concreto todavía no se puede desde ninguna pantalla.
@@ -243,6 +344,14 @@ const AdminRoutinesPage = () => {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [onlyMissing, setOnlyMissing] = useState(false);
+    // «La del mes solo a los que se le incluyen, la personalizada se le da una
+    // personalizada» (Jesús, 24-08). Son DOS entregas distintas y dos listas distintas: a
+    // los de «del mes» se les sube el MISMO PDF de este mes de golpe, y a los de
+    // personalizada, el suyo. Por eso hay un filtro para cada una y no uno solo: sin el de
+    // «del mes» había que fiarse del ojo para no colarle a un personalizado la del montón.
+    const [soloPersonalizadas, setSoloPersonalizadas] = useState(false);
+    const [soloDelMes, setSoloDelMes] = useState(false);
+    const [elegidos, setElegidos] = useState(() => new Set());
 
     const recargar = React.useCallback(() => {
         setLoading(true);
@@ -262,24 +371,45 @@ const AdminRoutinesPage = () => {
     // 11-08). El catálogo ya lo sabe: `habilitaciones.rutina` vale "ninguna" en los planes
     // que no la incluyen. Con 240 filas iguales, esto es la diferencia entre una lista y
     // una tarea.
-    const pagaRutina = (plan) => {
-        const r = planCatalog?.[plan]?.habilitaciones?.rutina;
-        return Boolean(r) && r !== 'ninguna';
+    // «OPCIONAL» NO ES «INCLUIDA» (24-08). Esto contaba como prometida la rutina de
+    // cualquier plan cuyo modo no fuera «ninguna», y «opcional» quiere decir justo lo
+    // contrario: no se la lleva, se la puede comprar. Con los datos de hoy eran 43
+    // personas de más -- Bronze y Reto 12en12 -- metidas en «la tienen incluida en su plan
+    // y todavía no la tienen puesta», o sea 43 tareas que no existen. El doc de Jesús trae
+    // ese número inflado (165) porque lo copió de esta pantalla.
+    const modoRutina = (plan) => planCatalog?.[plan]?.habilitaciones?.rutina || 'ninguna';
+    const laLlevaEnSuPlan = (plan) => {
+        const r = modoRutina(plan);
+        return Boolean(r) && r !== 'ninguna' && r !== 'opcional';
     };
+    const esPersonalizada = (plan) => modoRutina(plan) === 'personalizada';
+    const esDelMes = (plan) => modoRutina(plan) === 'del_mes';
 
     const filtered = rows.filter(r =>
         (!onlyMissing || !r.has_routine) &&
+        (!soloPersonalizadas || esPersonalizada(r.plan)) &&
+        (!soloDelMes || esDelMes(r.plan)) &&
         (!search || r.name?.toLowerCase().includes(search.toLowerCase()) || r.email?.toLowerCase().includes(search.toLowerCase()))
     ).sort((a, b) => {
-        const pa = pagaRutina(a.plan), pb = pagaRutina(b.plan);
+        const pa = laLlevaEnSuPlan(a.plan), pb = laLlevaEnSuPlan(b.plan);
         if (pa !== pb) return pa ? -1 : 1;
         // Dentro de cada grupo, el que aún no la tiene primero: es el que hay que atender.
         if (a.has_routine !== b.has_routine) return a.has_routine ? 1 : -1;
         return (a.name || '').localeCompare(b.name || '', 'es');
     });
     const withRoutine = rows.filter(r => r.has_routine).length;
-    const laPagan = rows.filter(r => pagaRutina(r.plan));
-    const laPaganSinRutina = laPagan.filter(r => !r.has_routine).length;
+    const laLlevanSinRutina = rows.filter(r => laLlevaEnSuPlan(r.plan) && !r.has_routine).length;
+    const personalizadasPendientes = rows.filter(r => esPersonalizada(r.plan) && !r.has_routine);
+    const delMesPendientes = rows.filter(r => esDelMes(r.plan) && !r.has_routine);
+
+    // La selección se guarda por id y no por fila: al recargar la tabla las filas son otras.
+    const alternar = (id) => setElegidos(previos => {
+        const s = new Set(previos);
+        if (s.has(id)) s.delete(id); else s.add(id);
+        return s;
+    });
+    const elegirLosDeLaLista = () => setElegidos(new Set(filtered.map(r => r.client_id)));
+    const todosElegidos = filtered.length > 0 && filtered.every(r => elegidos.has(r.client_id));
 
     // Cada columna se enseña solo si tiene algo que decir: «o se rellenan o se quitan».
     // Los DÍAS solo los tiene la rutina estructurada (un PDF no se puede abrir por dentro),
@@ -288,7 +418,7 @@ const AdminRoutinesPage = () => {
     // tienen las dos, y la del PDF es la que dice si esa rutina es de este mes o de marzo.
     const hayDias = rows.some(r => r.routine_created_at);
     const hayFechas = hayDias || rows.some(r => r.pdf_uploaded_at);
-    const columnas = 4 + (hayDias ? 1 : 0) + (hayFechas ? 1 : 0);
+    const columnas = 5 + (hayDias ? 1 : 0) + (hayFechas ? 1 : 0);
 
     if (loading) return <div className="p-6 bg-[#0A0A0A] min-h-screen"><div className="animate-pulse space-y-4"><div className="h-8 bg-[#222] rounded w-1/4" /><div className="h-96 bg-[#111] rounded-xl" /></div></div>;
 
@@ -303,10 +433,28 @@ const AdminRoutinesPage = () => {
                     {rows.length - withRoutine > 0 && <span className="text-yellow-400"> · {rows.length - withRoutine} sin rutina</span>}
                 </p>
                 {/* El número que de verdad es una tarea: a los demás no se les prometió. */}
-                {laPaganSinRutina > 0 && (
+                {laLlevanSinRutina > 0 && (
                     <p className="text-white/60 text-sm mt-1" data-testid="rutinas-prometidas">
-                        <span className="text-[#FF671F] font-semibold">{laPaganSinRutina}</span>
+                        <span className="text-[#FF671F] font-semibold">{laLlevanSinRutina}</span>
                         {' '}de ellos la tienen incluida en su plan y todavía no la tienen puesta. Van primero en la lista.
+                    </p>
+                )}
+                {personalizadasPendientes.length > 0 && (
+                    <p className="text-white/60 text-sm mt-1" data-testid="rutinas-personalizadas-pendientes">
+                        <span className="text-[#FF671F] font-semibold">{personalizadasPendientes.length}</span>
+                        {' '}esperan una rutina PERSONALIZADA: la suya, no la del mes.
+                        <button onClick={() => { setSoloPersonalizadas(true); setSoloDelMes(false); setOnlyMissing(true); }}
+                            data-testid="ver-personalizadas-pendientes"
+                            className="ml-2 text-[#FF671F] hover:underline">verlos</button>
+                    </p>
+                )}
+                {delMesPendientes.length > 0 && (
+                    <p className="text-white/60 text-sm mt-1" data-testid="rutinas-del-mes-pendientes">
+                        <span className="text-[#FF671F] font-semibold">{delMesPendientes.length}</span>
+                        {' '}esperan LA DEL MES: a estos se les sube el mismo PDF a todos.
+                        <button onClick={() => { setSoloDelMes(true); setSoloPersonalizadas(false); setOnlyMissing(true); }}
+                            data-testid="ver-del-mes-pendientes"
+                            className="ml-2 text-[#FF671F] hover:underline">verlos</button>
                     </p>
                 )}
             </div>
@@ -314,6 +462,12 @@ const AdminRoutinesPage = () => {
             <BibliotecaDeRutinas api={api} />
 
             <PonerlesRutinaAVarios api={api} onHecho={recargar} />
+
+            {elegidos.size > 0 && (
+                <SubirPdfAVarios api={api} ids={[...elegidos]}
+                    onLimpiar={() => setElegidos(new Set())}
+                    onHecho={() => { setElegidos(new Set()); recargar(); }} />
+            )}
 
             <div className="flex flex-col md:flex-row gap-3">
                 <div className="relative flex-1 max-w-sm">
@@ -325,6 +479,25 @@ const AdminRoutinesPage = () => {
                     data-testid="only-missing-toggle">
                     Solo sin rutina
                 </button>
+                {/* Excluyentes: un plan no puede ser «del mes» y «personalizada» a la vez, y
+                    con los dos puestos la tabla se quedaba vacía sin explicar por qué. */}
+                <button onClick={() => { setSoloPersonalizadas(v => !v); setSoloDelMes(false); }}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors ${soloPersonalizadas ? 'bg-[#FF671F] text-white border-[#FF671F]' : 'bg-[#111] text-white/60 border-[#222] hover:text-white'}`}
+                    data-testid="only-personalizada-toggle">
+                    Solo personalizada
+                </button>
+                <button onClick={() => { setSoloDelMes(v => !v); setSoloPersonalizadas(false); }}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors ${soloDelMes ? 'bg-[#FF671F] text-white border-[#FF671F]' : 'bg-[#111] text-white/60 border-[#222] hover:text-white'}`}
+                    data-testid="only-del-mes-toggle">
+                    Solo la del mes
+                </button>
+                {filtered.length > 0 && (
+                    <button onClick={() => (todosElegidos ? setElegidos(new Set()) : elegirLosDeLaLista())}
+                        className="px-4 py-2 rounded-lg text-sm font-semibold border bg-[#111] text-white/60 border-[#222] hover:text-white transition-colors"
+                        data-testid="elegir-los-de-la-lista">
+                        {todosElegidos ? 'Quitar la selección' : `Elegir los ${filtered.length} de la lista`}
+                    </button>
+                )}
             </div>
 
             <Card className="bg-[#111] border-[#222]">
@@ -333,6 +506,11 @@ const AdminRoutinesPage = () => {
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="text-left text-white/40 text-xs uppercase border-b border-[#222]">
+                                    <th className="pl-4 pr-1 py-3 w-8">
+                                        <input type="checkbox" checked={todosElegidos} data-testid="elegir-todos"
+                                            onChange={() => (todosElegidos ? setElegidos(new Set()) : elegirLosDeLaLista())}
+                                            className="accent-[#FF671F] w-4 h-4 align-middle" />
+                                    </th>
                                     <th className="px-4 py-3">Cliente</th>
                                     <th className="px-4 py-3 hidden sm:table-cell">Plan</th>
                                     <th className="px-4 py-3">Rutina</th>
@@ -345,15 +523,23 @@ const AdminRoutinesPage = () => {
                                 {filtered.map(r => (
                                     <tr key={r.client_id} className="border-b border-[#1a1a1a] cursor-pointer hover:bg-white/5"
                                         onClick={() => navigate(`/admin/clients/${r.client_id}`)} data-testid={`routine-row-${r.client_id}`}>
+                                        {/* La casilla no abre la ficha: sin el stopPropagation, marcar
+                                            a alguien te saca de la pantalla y pierdes la selección. */}
+                                        <td className="pl-4 pr-1 py-3" onClick={e => e.stopPropagation()}>
+                                            <input type="checkbox" checked={elegidos.has(r.client_id)}
+                                                onChange={() => alternar(r.client_id)}
+                                                data-testid={`elegir-${r.client_id}`}
+                                                className="accent-[#FF671F] w-4 h-4 align-middle" />
+                                        </td>
                                         <td className="px-4 py-3">
                                             <p className="text-white font-medium">{r.name || '-'}</p>
                                             <p className="text-white/40 text-xs">{r.email}</p>
                                         </td>
                                         <td className="px-4 py-3 hidden sm:table-cell">
                                             <PlanBadge plan={r.plan} />
-                                            {pagaRutina(r.plan) && (
+                                            {laLlevaEnSuPlan(r.plan) && (
                                                 <span className="ml-2 text-[9px] uppercase font-bold tracking-wide text-[#FF671F] bg-[#FF671F]/15 px-1.5 py-0.5 rounded">
-                                                    la paga
+                                                    {esPersonalizada(r.plan) ? 'personalizada' : esDelMes(r.plan) ? 'la del mes' : 'la lleva'}
                                                 </span>
                                             )}
                                         </td>
@@ -365,7 +551,7 @@ const AdminRoutinesPage = () => {
                                                 ? <Badge className="bg-green-500/15 text-green-500 border-0">Activa</Badge>
                                                 : r.tiene_pdf
                                                     ? <Badge className="bg-green-500/15 text-green-500 border-0">En PDF</Badge>
-                                                    : <Badge className={`border-0 ${pagaRutina(r.plan) ? 'bg-red-500/15 text-red-400' : 'bg-white/5 text-white/40'}`}>
+                                                    : <Badge className={`border-0 ${laLlevaEnSuPlan(r.plan) ? 'bg-red-500/15 text-red-400' : 'bg-white/5 text-white/40'}`}>
                                                         Sin rutina
                                                     </Badge>}
                                         </td>
@@ -383,7 +569,14 @@ const AdminRoutinesPage = () => {
                                 {filtered.length === 0 && (
                                     <tr><td colSpan={columnas} className="px-4 py-10 text-center text-white/30">
                                         <Dumbbell className="w-8 h-8 mx-auto mb-2 text-white/15" />
-                                        {onlyMissing ? 'Todos los clientes tienen rutina' : 'Sin clientes'}
+                                        {/* Con el filtro de personalizada puesto, «todos los
+                                            clientes tienen rutina» es falso: son los de ese
+                                            filtro, y decirlo mal deja pensando que no queda
+                                            trabajo cuando sí queda. */}
+                                        {!onlyMissing ? 'Sin clientes'
+                                            : soloPersonalizadas ? 'Todos los de rutina personalizada tienen la suya'
+                                                : soloDelMes ? 'Todos los de la rutina del mes ya la tienen'
+                                                    : 'Todos los clientes tienen rutina'}
                                     </td></tr>
                                 )}
                             </tbody>

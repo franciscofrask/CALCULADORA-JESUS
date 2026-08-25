@@ -16,6 +16,38 @@ URL_WEBHOOK_SUFIJO = f"?secret={SECRETO_GHL}"
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'http://localhost:8000').rstrip('/')
 
+from conftest import corre  # noqa: E402
+
+
+def _recoger_la_mesa(email=None, lead_id=None):
+    """Borra el cliente y el lead que ha inventado una prueba de conversion.
+
+    ESTAS PRUEBAS DEJABAN CLIENTES DE VERDAD EN LA BASE. `POST /leads/{id}/convert` crea un
+    usuario y una ficha, y aqui no se borraba ninguno de los dos: cada pasada de la bateria
+    dejaba dos «TEST_Convert_...» / «TEST_DoubleConvert_...» metidos entre los clientes
+    reales, contando en los totales, en el MRR y en el semaforo del panel. No es teoria: es
+    lo que puso en rojo a
+    `test_casos_L_panel::test_en_la_lista_de_clientes_no_hay_clientes_de_prueba` en la
+    bateria del 24-08, y ese test tiene toda la razon.
+
+    Va por Mongo y no por la API porque no hay endpoint que borre un cliente, y por el
+    correo, que estas pruebas lo generan con un uuid: no puede coincidir con nadie de fuera.
+    """
+    async def _limpia():
+        from core.database import db
+        if email:
+            u = await db.users.find_one({"email": email}, {"_id": 0, "id": 1})
+            if u:
+                await db.client_profiles.delete_many({"user_id": u["id"]})
+                await db.users.delete_one({"id": u["id"]})
+        if lead_id:
+            await db.leads.delete_one({"id": lead_id})
+    try:
+        corre(_limpia())
+    except Exception as e:                       # noqa: BLE001
+        # Recoger la mesa no puede tumbar la prueba: si falla, se dice y se sigue.
+        print(f"[limpieza] no se pudo borrar {email or lead_id}: {e}")
+
 # Test credentials
 ADMIN_EMAIL = "francisco@test.com"
 ADMIN_PASSWORD = "demo123"
@@ -248,26 +280,28 @@ class TestLeadsConvert:
             "phone": "+34600000000"
         }, headers=admin_headers)
         lead_id = create_resp.json()["id"]
-        
-        # Convert to client
-        # "gold" es legacy: desde el punto 40 del 07-08 un alta nueva solo puede entrar
-        # con un plan que se venda hoy.
-        response = requests.post(f"{BASE_URL}/api/leads/{lead_id}/convert", json={
-            "plan": "nivel1"
-        }, headers=admin_headers)
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
-        
-        data = response.json()
-        assert "user_id" in data
-        assert "profile_id" in data
-        assert data["email"] == email
-        assert data["plan"] == "nivel1"
-        print(f"✅ POST /api/leads/{lead_id}/convert creates user ({data['user_id']}) and profile ({data['profile_id']})")
-        
-        # Verify lead status changed to convertido
-        lead_resp = requests.get(f"{BASE_URL}/api/leads/{lead_id}", headers=admin_headers)
-        assert lead_resp.json()["status"] == "convertido"
-        print("✅ Lead status changed to 'convertido'")
+        try:
+            # Convert to client
+            # "gold" es legacy: desde el punto 40 del 07-08 un alta nueva solo puede entrar
+            # con un plan que se venda hoy.
+            response = requests.post(f"{BASE_URL}/api/leads/{lead_id}/convert", json={
+                "plan": "nivel1"
+            }, headers=admin_headers)
+            assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+
+            data = response.json()
+            assert "user_id" in data
+            assert "profile_id" in data
+            assert data["email"] == email
+            assert data["plan"] == "nivel1"
+            print(f"✅ POST /api/leads/{lead_id}/convert creates user ({data['user_id']}) and profile ({data['profile_id']})")
+
+            # Verify lead status changed to convertido
+            lead_resp = requests.get(f"{BASE_URL}/api/leads/{lead_id}", headers=admin_headers)
+            assert lead_resp.json()["status"] == "convertido"
+            print("✅ Lead status changed to 'convertido'")
+        finally:
+            _recoger_la_mesa(email=email, lead_id=lead_id)
     
     def test_convert_lead_without_email_fails(self, admin_headers):
         """POST /api/leads/{id}/convert rejects if email missing"""
@@ -296,15 +330,18 @@ class TestLeadsConvert:
             "email": email
         }, headers=admin_headers)
         lead_id = create_resp.json()["id"]
-        
-        # First conversion
-        requests.post(f"{BASE_URL}/api/leads/{lead_id}/convert", json={"plan": "nivel1"}, headers=admin_headers)
-        
-        # Try second conversion
-        response = requests.post(f"{BASE_URL}/api/leads/{lead_id}/convert", json={"plan": "nivel2"}, headers=admin_headers)
-        assert response.status_code == 400, f"Expected 400, got {response.status_code}"
-        assert "convertido" in response.json().get("detail", "").lower()
-        print("✅ Convert rejects already converted lead")
+        try:
+            # First conversion
+            requests.post(f"{BASE_URL}/api/leads/{lead_id}/convert", json={"plan": "nivel1"}, headers=admin_headers)
+
+            # Try second conversion
+            response = requests.post(f"{BASE_URL}/api/leads/{lead_id}/convert", json={"plan": "nivel2"}, headers=admin_headers)
+            assert response.status_code == 400, f"Expected 400, got {response.status_code}"
+            assert "convertido" in response.json().get("detail", "").lower()
+            print("✅ Convert rejects already converted lead")
+        finally:
+            # La primera conversion SI creo cliente: hay que recogerlo igual.
+            _recoger_la_mesa(email=email, lead_id=lead_id)
 
 # ==================== WEBHOOK TESTS ====================
 

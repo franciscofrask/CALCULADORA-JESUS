@@ -28,8 +28,10 @@ from core.security import get_admin_only_user, get_admin_user
 from core.sin_futuro import hasta_hoy
 from core.tiempo import a_madrid, hoy_madrid
 from models.user import codigo_de_plan, merged_catalog
-from routes.admin import _fuera_el_equipo
-from routes.pagos_historicos import SIN_COPIAS, SOLO_DINERO
+from routes.admin import (
+    _fuera_el_equipo, _plan_con_entrenador, cobro_de, euros_al_mes, importe_de_ciclo,
+    ultimos_cobros_por_email,
+)
 from routes.plans import _overrides_by_code
 from routes.report_cadence import compute_client_report_state
 
@@ -37,10 +39,6 @@ router = APIRouter(prefix="/admin/paneles", tags=["paneles"])
 
 _DIAS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
 _MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
-
-# Semanas que tiene un mes de media (365.25 / 12 / 7). Es lo que convierte un precio
-# por ciclo de N semanas en un "al mes" comparable entre planes.
-SEMANAS_POR_MES = 4.345
 
 
 # ==================== La semana de negocio y las fechas en cristiano ====================
@@ -93,7 +91,20 @@ def _dias_desde(iso: Any, now: datetime) -> Optional[int]:
 _PROY_PERFIL = {
     "_id": 0, "id": 1, "user_id": 1, "plan": 1, "status": 1, "trainer_id": 1,
     "cycle_start": 1, "created_at": 1, "current_period_end": 1,
+    # El PRINCIPIO del periodo, no solo el final: es lo que dice cada cuánto le cobra
+    # Stripe de verdad, y de ahí sale el «al mes» (`euros_al_mes`). Sin él, el Premium al
+    # que Stripe le cobra 250 EUR cada mes se contaba repartido entre las 12 semanas de su
+    # plan, o sea a 90,52 EUR (puntos 44 y 46 del 24-08, el caso Montalvo).
+    "current_period_start": 1,
     "stripe_subscription_id": 1, "subscription_status": 1,
+    # Los dos que mira la puerta de la app además del ciclo (`core/plan_access`): sin
+    # ellos, «solo los que pueden entrar» dejaría fuera al que pagó un pago único y
+    # dentro al que empezó un checkout y no lo terminó.
+    "access_until": 1, "checkout_status": 1,
+    # El precio de su ficha y la cortesía: son los dos últimos peldaños de la cascada
+    # del dinero (`importe_de_ciclo`), y sin ellos el legacy con precio congelado
+    # saldría con la tarifa nueva del catálogo.
+    "price": 1, "comp_plan": 1,
     "renovacion_importe_prevision": 1, "reporte_aplazado_hasta": 1,
     "reporte_aplazado_nota": 1, "reporte_aplazado_tipo": 1, "aplazamientos_seguidos": 1,
     "ultimo_ajuste": 1, "ultimo_reporte": 1, "height": 1, "goal": 1,
@@ -108,14 +119,23 @@ _PROY_PERFIL = {
 }
 
 
-async def _activos_con_usuarios() -> (List[Dict[str, Any]], Dict[str, Dict[str, Any]]):
+async def _activos_con_usuarios(solo_con_acceso: bool = False
+                                ) -> (List[Dict[str, Any]], Dict[str, Dict[str, Any]]):
     """Los clientes activos (fuera del equipo) y sus usuarios, en dos consultas.
 
     El filtro del equipo es el mismo de /admin/stats: si aquí se contara distinto, el
     panel enseñaría dos totales que no cuadran en la misma pantalla.
+
+    `solo_con_acceso` deja fuera a los que llevan la etiqueta «activo» y ya no pueden
+    entrar (punto 46 del 24-08): son 38 caducados que hinchaban la cartera y la factura de
+    Dirección con gente que ni entra ni paga. Lo usa Dirección, que habla de dinero; los
+    paneles de trabajo (Entrenador, Operaciones, Soporte) siguen viendo al caducado, que
+    para ellos sigue siendo alguien a quien perseguir.
     """
     profiles = await db.client_profiles.find(
         {**await _fuera_el_equipo(), "status": "activo"}, _PROY_PERFIL).to_list(3000)
+    if solo_con_acceso:
+        profiles = [p for p in profiles if estado_de_acceso(p)["activo"]]
     uids = [p["user_id"] for p in profiles if p.get("user_id")]
     users = await db.users.find(
         {"id": {"$in": uids}},
@@ -129,18 +149,10 @@ def _plan_de(catalogo: Dict[str, Any], p: Dict[str, Any]) -> Dict[str, Any]:
     return catalogo.get(codigo_de_plan(p.get("plan"))) or {}
 
 
-def _plan_lleva_entrenador(plan: Dict[str, Any]) -> bool:
-    """True si el plan incluye entrenador detrás (habilitaciones.acompanamiento).
-
-    Es el criterio de la casa para saber si un plan lleva acompañamiento: `merged_catalog`
-    completa `acompanamiento` en todas las entradas (solo_app | con_entrenador |
-    con_entrenador_y_llamadas). ELM y Mantenimiento son solo_app: sus clientes no tienen
-    entrenador QUE ASIGNAR, así que contarlos como «sin entrenador» era inflar la lista
-    con gente que está exactamente como su plan manda (P64, doc 23-08: 82 donde había ~5).
-    Un plan que no está en el catálogo sale como solo_app y no cuenta: si no se sabe qué
-    incluye, no se le apunta trabajo a nadie."""
-    hab = plan.get("habilitaciones") or {}
-    return (hab.get("acompanamiento") or "solo_app") != "solo_app"
+# `_plan_con_entrenador` (routes/admin.py) es el criterio de «a este le falta entrenador»,
+# y desde el punto 61 del 24-08 lo comparten este panel y la lista de Clientes: estaba
+# escrito dos veces, una aquí y otra en el navegador, y solo esta miraba el plan. Resultado:
+# 10 en Operaciones y 83 en Clientes el mismo día.
 
 
 def _fila(p: Dict[str, Any], u: Optional[Dict[str, Any]], plan: Dict[str, Any]) -> Dict[str, Any]:
@@ -153,55 +165,21 @@ def _fila(p: Dict[str, Any], u: Optional[Dict[str, Any]], plan: Dict[str, Any]) 
     }
 
 
-async def _ultimo_pago_por_email(emails: List[str]) -> Dict[str, Dict[str, Any]]:
-    """El último cobro REAL de cada email, en una sola agregación.
-
-    Mismos filtros obligatorios que routes/pagos_historicos.py: sin las copias
-    (duplicado_de) y solo lo que fue dinero (es_dinero != false). Sin ellos, un evento
-    de "intento de cobro" o una factura duplicada inflaría la previsión.
-    """
-    if not emails:
-        return {}
-    out: Dict[str, Dict[str, Any]] = {}
-    cursor = db.pagos_historicos.aggregate([
-        {"$match": {**SIN_COPIAS, **SOLO_DINERO,
-                    "email": {"$in": emails}, "importe": {"$gt": 0}}},
-        {"$sort": {"fecha": 1}},
-        {"$group": {"_id": "$email",
-                    "importe": {"$last": "$importe"}, "fecha": {"$last": "$fecha"}}},
-    ])
-    async for doc in cursor:
-        out[doc["_id"]] = doc
-    return out
+# EL DINERO SE CUENTA EN UN SOLO SITIO (punto 46 del 24-08). Aquí vivían una cascada de
+# importes y una normalización a mes propias, distintas de las del Inicio del panel: dos
+# pantallas del mismo panel decían 31.945 € y 20.062 € de los mismos clientes. Ahora las dos
+# llaman a `importe_de_ciclo` / `euros_al_mes` de routes/admin.py.
+_ultimo_pago_por_email = ultimos_cobros_por_email
 
 
-def _importe_renovacion(p: Dict[str, Any], plan: Dict[str, Any],
-                        pago: Optional[Dict[str, Any]]) -> (float, bool):
-    """Cuánto se espera que pague este cliente al renovar. Devuelve (importe, es_a_mano).
-
-    La cascada, en orden de confianza:
-      (a) `renovacion_importe_prevision` en el perfil: lo puso una persona a mano, y ahí
-          van también los que pagan por transferencia. Manda sobre todo lo demás.
-      (b) Su último cobro real (> 0) en pagos_historicos: lo que pagó la última vez es la
-          mejor pista de lo que va a pagar, sobre todo en los legacy con precio por
-          antigüedad (un gold puede pagar 450 o 847). Se usa tal cual, sin adivinar si
-          era "razonable": si no lo es, para eso está el ajuste a mano de (a).
-      (c) El `precio` del catálogo de su plan: el que nunca ha pagado por la app (alta
-          manual, importado) al menos sale con el precio de tarifa, no con un 0.
-    """
-    a_mano = p.get("renovacion_importe_prevision")
-    if isinstance(a_mano, (int, float)) and not isinstance(a_mano, bool):
-        return round(float(a_mano), 2), True
-    if pago and float(pago.get("importe") or 0) > 0:
-        return round(float(pago["importe"]), 2), False
-    return round(float(plan.get("precio") or 0), 2), False
-
-
-def _estado_renovacion(p: Dict[str, Any], plan: Dict[str, Any], es_a_mano: bool) -> str:
+def _estado_renovacion(p: Dict[str, Any], plan: Dict[str, Any], fuente: str) -> str:
     """"confirmado" si renueva solo (Stripe activo o el plan renueva automático),
-    "a_mano" si el importe lo fijó una persona, "por_confirmar" el resto."""
-    if es_a_mano:
+    "a_mano" si el importe lo fijó una persona, "cortesia" si no paga, "por_confirmar" el
+    resto."""
+    if fuente == "a_mano":
         return "a_mano"
+    if fuente == "cortesia":
+        return "cortesia"
     stripe_activo = bool(p.get("stripe_subscription_id")) and \
         (p.get("subscription_status") or "").lower() == "active"
     if stripe_activo or (plan.get("renovacion") or {}).get("automatica"):
@@ -210,38 +188,18 @@ def _estado_renovacion(p: Dict[str, Any], plan: Dict[str, Any], es_a_mano: bool)
 
 
 def _fila_renovacion(p: Dict[str, Any], u: Optional[Dict[str, Any]], plan: Dict[str, Any],
-                     pago: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+                     catalogo: Dict[str, Any], pago: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """Fila básica + lo que hace falta para hablar de su renovación: importe, estado
     y la fecha en la que se le acaba lo pagado."""
-    importe, es_a_mano = _importe_renovacion(p, plan, pago)
+    importe, fuente = importe_de_ciclo(p, catalogo, pago)
     fecha = _fecha_de(p.get("current_period_end"))
     return {
         **_fila(p, u, plan),
         "importe": importe,
-        "estado": _estado_renovacion(p, plan, es_a_mano),
+        "estado": _estado_renovacion(p, plan, fuente),
         "fecha": fecha.isoformat() if fecha else None,
         "fecha_label": _label_dia(fecha),
     }
-
-
-def _eur_mes(importe: float, plan: Dict[str, Any]) -> float:
-    """El importe de ciclo de este cliente, normalizado a euros AL MES.
-
-    Sumar importes de ciclo tal cual mezcla trimestres con meses y la cifra no
-    significa nada (ya pasó con el MRR del panel viejo). La normalización:
-    importe * (4.345 / semanas del ciclo de cobro). Si el plan no declara
-    billing_cycle_weeks, se mira el periodo del primer precio del catálogo; y si
-    tampoco, se trata como mensual, que es el caso por defecto de la casa.
-    """
-    semanas = plan.get("billing_cycle_weeks")
-    if semanas:
-        return importe * SEMANAS_POR_MES / float(semanas)
-    periodo = str(((plan.get("precios") or [{}])[0] or {}).get("periodo") or "").lower()
-    if "trimestre" in periodo or "12 semanas" in periodo:
-        return importe / 3.0
-    if "año" in periodo or "ano" in periodo or "anual" in periodo:
-        return importe / 12.0
-    return importe
 
 
 async def _origenes_de_leads(now: datetime) -> Dict[str, Any]:
@@ -280,15 +238,26 @@ async def panel_direccion(user=Depends(get_admin_only_user)):
     now = datetime.now(timezone.utc)
     catalogo = merged_catalog(await _overrides_by_code())
     lunes, domingo = _semana_es()
-    profiles, umap = await _activos_con_usuarios()
+    # SOLO LOS QUE PUEDEN ENTRAR (punto 46 del 24-08). Este panel contaba a todo el que
+    # llevara la etiqueta «activo», y ahí dentro van 38 caducados: gente que ni entra ni
+    # paga y que engordaba la cartera y la factura del mes. Ahora cuenta como el Inicio del
+    # panel, y `caducados_fuera` viaja para poder decirlo en pantalla: la cifra baja porque
+    # se dejan de contar los caducados, no porque haya caído el negocio.
+    profiles, umap = await _activos_con_usuarios(solo_con_acceso=True)
+    con_etiqueta_activo = await db.client_profiles.count_documents(
+        {**await _fuera_el_equipo(), "status": "activo"})
+    caducados_fuera = max(0, con_etiqueta_activo - len(profiles))
 
     emails = [umap[p["user_id"]]["email"] for p in profiles
               if p.get("user_id") in umap and umap[p["user_id"]].get("email")]
     pagos = await _ultimo_pago_por_email(emails)
 
     def pago_de(p):
+        # Por `cobro_de` y no por `pagos.get(email)`: el mapa viene con las claves
+        # normalizadas y buscar con el correo tal cual dejaría sin cobro al que lo tenga
+        # con una mayúscula, mientras la ficha -- que sí lo normaliza -- se lo enseña.
         u = umap.get(p.get("user_id")) or {}
-        return pagos.get(u.get("email"))
+        return cobro_de(pagos, u.get("email"))
 
     # Renovaciones de las próximas 4 semanas, repartidas por semana natural (la 0 es la
     # actual). Renovar = se le acaba lo pagado (current_period_end) ese día.
@@ -300,7 +269,8 @@ async def panel_direccion(user=Depends(get_admin_only_user)):
         indice = (fecha - lunes).days // 7
         if indice < 4:
             semanas[indice].append(
-                _fila_renovacion(p, umap.get(p.get("user_id")), _plan_de(catalogo, p), pago_de(p)))
+                _fila_renovacion(p, umap.get(p.get("user_id")), _plan_de(catalogo, p),
+                                 catalogo, pago_de(p)))
     for lista in semanas:
         lista.sort(key=lambda f: (f["fecha"] or "9999", f["name"]))
 
@@ -350,8 +320,7 @@ async def panel_direccion(user=Depends(get_admin_only_user)):
     por_plan: Dict[str, Dict[str, Any]] = {}
     for p in profiles:
         plan = _plan_de(catalogo, p)
-        importe, _ = _importe_renovacion(p, plan, pago_de(p))
-        eur = _eur_mes(importe, plan)
+        eur = euros_al_mes(p, catalogo, pago_de(p))
         factura_mes += eur
         if eur <= 0:
             a_cero += 1
@@ -368,15 +337,23 @@ async def panel_direccion(user=Depends(get_admin_only_user)):
     # `a_cero`, a la vista. El delta compara contra la foto de la semana pasada, que se
     # guarda al servir: una por semana ISO, la primera visita de la semana fija el número
     # (machacarla en cada carga haría el delta comparar la foto de hace 5 minutos).
+    #
+    # EL DELTA SOLO COMPARA FOTOS DEL MISMO CRITERIO (punto 46). Las fotos guardadas hasta
+    # el 24-08 contaban también a los caducados: restarles el número nuevo daría un -37 de
+    # golpe que no es una baja, es el cambio de criterio. Se marcan con criterio propio y la
+    # semana que no tenga foto comparable sale sin delta, que es la verdad.
+    CRITERIO = "pagando_con_acceso"
     iso_year, iso_week, _ = lunes.isocalendar()
     semana_iso = f"{iso_year}-W{iso_week:02d}"
-    if not await db.panel_snapshots.find_one({"semana": semana_iso}, {"_id": 1}):
+    if not await db.panel_snapshots.find_one(
+            {"semana": semana_iso, "criterio": CRITERIO}, {"_id": 1}):
         await db.panel_snapshots.insert_one(
             {"semana": semana_iso, "activos": pagando, "fecha": now.isoformat(),
-             "criterio": "pagando"})
+             "criterio": CRITERIO})
     prev_year, prev_week, _ = (lunes - timedelta(days=7)).isocalendar()
     anterior = await db.panel_snapshots.find_one(
-        {"semana": f"{prev_year}-W{prev_week:02d}"}, {"_id": 0, "activos": 1})
+        {"semana": f"{prev_year}-W{prev_week:02d}", "criterio": CRITERIO},
+        {"_id": 0, "activos": 1})
     delta = (pagando - anterior["activos"]) if anterior else None
 
     prevision = []
@@ -393,8 +370,12 @@ async def panel_direccion(user=Depends(get_admin_only_user)):
         "entra_esta_semana": {"confirmado": confirmado, "por_confirmar": por_confirmar,
                               "clientes": semanas[0]},
         # `activos` son los que pagan; `con_acceso` es el total con acceso vigente, para
-        # que la diferencia (los a cero) no desaparezca de la vista.
-        "cartera": {"activos": pagando, "con_acceso": len(profiles), "delta_semana": delta},
+        # que la diferencia (los a cero) no desaparezca de la vista. Y `caducados_fuera`
+        # son los que ANTES contaban aquí y ya no (punto 46): sin ese número, la cartera y
+        # la factura bajan de golpe y parece una caída del negocio.
+        "cartera": {"activos": pagando, "con_acceso": len(profiles), "delta_semana": delta,
+                    "caducados_fuera": caducados_fuera,
+                    "con_etiqueta_activo": con_etiqueta_activo},
         "altas_bajas": {"altas": len(altas), "bajas": len(bajas),
                         "altas_clientes": altas, "bajas_clientes": bajas},
         "factura_mes": round(factura_mes, 2),
@@ -468,7 +449,7 @@ async def panel_entrenador(trainer_id: Optional[str] = None, user=Depends(get_ad
     # Sin asignar = su plan lleva entrenador y no tiene a nadie (P64): los solo_app
     # (ELM, Mantenimiento) no cuentan, no hay nada que asignarles.
     sin_asignar = sum(1 for p in profiles
-                      if not p.get("trainer_id") and _plan_lleva_entrenador(_plan_de(catalogo, p)))
+                      if not p.get("trainer_id") and _plan_con_entrenador(_plan_de(catalogo, p)))
     mios = [p for p in profiles if p.get("trainer_id") == tid]
     ids = [p["id"] for p in mios]
 
@@ -616,7 +597,7 @@ async def panel_operaciones(user=Depends(get_admin_user)):
 
         # Solo si su plan LLEVA entrenador (P64): al de ELM o Mantenimiento no le falta
         # nadie, su plan es sin acompañamiento.
-        if not p.get("trainer_id") and _plan_lleva_entrenador(plan):
+        if not p.get("trainer_id") and _plan_con_entrenador(plan):
             sin_entrenador.append(fila)
 
         faltas = [nombre for campo, nombre in (("height", "altura"), ("goal", "objetivo"))
@@ -726,12 +707,12 @@ async def panel_soporte(user=Depends(get_admin_user)):
         u = umap.get(p.get("user_id"))
         plan = _plan_de(catalogo, p)
         fecha = _fecha_de(p.get("current_period_end"))
-        pago = pagos.get((u or {}).get("email"))
+        pago = cobro_de(pagos, (u or {}).get("email"))
 
         if fecha and hoy <= fecha <= hoy + timedelta(days=14):
             ciclo = compute_cycle(p, now)
             renovacion.append({
-                **_fila_renovacion(p, u, plan, pago),
+                **_fila_renovacion(p, u, plan, catalogo, pago),
                 "telefono": (u or {}).get("phone") or None,
                 "semana": ciclo["week"],
                 # Cuántas semanas tiene su ciclo, para leer "semana 11 de 12" de un

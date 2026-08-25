@@ -250,6 +250,12 @@ const LlamadasPendientes = ({ llamadas, onAtendida, onCobrar, generandoEnlace })
     );
 };
 
+// El dinero se escribe como en Paneles > Dirección: miles con punto, sin decimales y el
+// euro detrás. Es la misma receta que el `eur()` de AdminPanelesPage.jsx, a propósito.
+const eurosRedondos = (n) => (n === null || n === undefined || isNaN(Number(n)))
+    ? '0 €'
+    : `${new Intl.NumberFormat('es-ES', { maximumFractionDigits: 0 }).format(Number(n))} €`;
+
 // Admin Dashboard Home
 const AdminDashboard = () => {
     const { api, planCatalog, user } = useAuth();
@@ -647,9 +653,23 @@ const AdminDashboard = () => {
                                 : 'ni activos ni de baja'}
                         </span>
                     ) : null} />
-                {/* El MRR es dinero: solo admin (P62). Al entrenador el backend ni se lo manda. */}
+                {/* El MRR es dinero: solo admin (P62). Al entrenador el backend ni se lo manda.
+                    Y ES EL MISMO NÚMERO QUE «FACTURA AL MES» DE PANELES > DIRECCIÓN (punto 46
+                    del 24-08): eran dos cuentas distintas y daban 20.062 € y 31.945 € de los
+                    mismos clientes el mismo día. Ahora las dos salen de la misma función y del
+                    mismo cobro real, así que si vuelven a discrepar es que algo se ha roto. */}
+                {/* Y ESCRITO IGUAL QUE ALLÍ, que si no la comprobación no se puede hacer de
+                    un vistazo: aquí ponía «22485.53€» y Dirección «22.486 €». Es el mismo
+                    dinero, pero con el punto de los decimales a la inglesa y sin miles no lo
+                    parece, y el punto 46 va justo de leer dos pantallas y creerlas. */}
                 {esAdmin && (
-                    <KpiCard value={`${stats?.mrr || 0}€`} label="MRR" icon={DollarSign} color="#8B5CF6" testId="kpi-mrr" />
+                    <KpiCard value={eurosRedondos(stats?.mrr)} label="MRR" icon={DollarSign} color="#8B5CF6" testId="kpi-mrr"
+                        pie={stats?.mrr_criterio && (
+                            <span className="text-[10px] text-white/50 mt-0.5" data-testid="kpi-mrr-criterio">
+                                {stats.mrr_criterio.clientes} con acceso · {stats.mrr_criterio.cobro_real} con cobro real
+                                <span className="block text-white/30">Igual que «Factura al mes» de Dirección</span>
+                            </span>
+                        )} />
                 )}
             </div>
 
@@ -1020,6 +1040,20 @@ const KpiCard = ({ value, label, icon: Icon, color, testId, pie = null }) => (
     </Card>
 );
 
+// LOS QUE DE VERDAD NO LLEVA NADIE (punto 61 del doc del 24-08).
+//
+// Lo decide el SERVIDOR (`sin_entrenador` de /admin/clients), con el mismo criterio que
+// Paneles > Operaciones: sin entrenador asignado Y con un plan que lleve entrenador detrás.
+// Aquí se miraba solo `trainer_id`, así que la pestaña decía 83 donde Operaciones decía 10:
+// los 73 de diferencia son ELM, Mantenimiento y Calculadora JP, planes de autogestión que no
+// tienen entrenador QUE ASIGNAR. Dos consultas para la misma pregunta, una en el servidor y
+// otra en el navegador, y solo una miraba el plan.
+//
+// Si la fila viene sin el campo (un backend viejo detrás), se cae al criterio de antes: es
+// preferible una pestaña de más que una pestaña vacía sin explicación.
+const leFaltaEntrenador = (c) => (
+    c?.sin_entrenador !== undefined ? !!c.sin_entrenador : !c?.trainer_id);
+
 // Admin Clients List
 const AdminClientsList = () => {
     // `planCatalog` lo usa el filtro de planes de más abajo. Faltaba aquí -- lo sacaba solo
@@ -1075,7 +1109,7 @@ const AdminClientsList = () => {
     useEffect(() => {
         if (carteraElegida.current || loading || !clients.length) return;
         carteraElegida.current = true;
-        if (!clients.some(c => !c.trainer_id)) setCartera(general);
+        if (!clients.some(leFaltaEntrenador)) setCartera(general);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [loading, clients]);
 
@@ -1107,7 +1141,7 @@ const AdminClientsList = () => {
     };
 
     const deLaCartera = (c) => {
-        if (cartera === 'sin_coach') return !c.trainer_id;
+        if (cartera === 'sin_coach') return leFaltaEntrenador(c);
         if (cartera === 'mios') return c.trainer_id === user?.id;
         return true;
     };
@@ -1116,12 +1150,28 @@ const AdminClientsList = () => {
     // usuarios activos de los inactivos»). Se mira `acceso`, que lo calcula el servidor con
     // la misma regla que la puerta de la app, no el `status` del perfil: en producción hay
     // 57 marcados «activo» a los que la app ya no deja entrar, y mezclados en la misma
-    // lista no hay forma de saber a quién estás mirando. Los registros a medias no son ni
-    // una cosa ni la otra y salen solo en «Todos».
+    // lista no hay forma de saber a quién estás mirando.
+    //
+    // OJO AL LEER ESTE COMENTARIO: hasta el 24-08 acababa diciendo que los registros a
+    // medias «salen solo en Todos», y ya no es verdad -- desde el cambio de abajo van a
+    // «Fuera» con los caducados. Se corrige aquí porque la nota vieja fue justo la que
+    // hizo creer que «Todos» y las pestañas contaban lo mismo.
     const tieneAcceso = (c) => (c.acceso ? c.acceso.activo : c.status === 'activo');
-    const delAcceso = (c) => (acceso === 'todos' ? true
-        : c.status === 'registro_incompleto' ? false
-        : acceso === 'activos' ? tieneAcceso(c) : !tieneAcceso(c));
+    // LOS QUE NO TRABAJAN VAN JUNTOS Y FUERA (Jesús, 24-08: «a los que no tienen plan sácalos
+    // de la lista, ponlos en otro lado; a los caducados también, ambos en la misma lista»).
+    //
+    // Son dos cosas distintas y antes estaban en dos sitios distintos: el caducado tenía su
+    // pestaña y el que se registró sin elegir plan salía EN GRIS dentro de «Todos», mezclado
+    // con la gente a la que sí hay que atender. Para el trabajo del día da igual por qué no
+    // está dentro: lo que importa es que no está. Una sola lista, «Fuera».
+    const estaFuera = (c) => c.status === 'registro_incompleto' || !c.plan || !tieneAcceso(c);
+    // UN SOLO CRITERIO PARA LA PESTAÑA Y PARA SU NÚMERO (la regla de lib/cuentaClientes.js).
+    // Antes esto estaba escrito dos veces -- aquí para filtrar la tabla y más abajo, con otras
+    // condiciones, para contar la pestaña -- y por eso los números dejaron de sumar. Ahora la
+    // pregunta «¿esta fila sale en la pestaña X?» se responde en un sitio y las dos la usan.
+    const esDelAcceso = (c, cual) => (cual === 'todos' ? true
+        : cual === 'activos' ? !estaFuera(c) : estaFuera(c));
+    const delAcceso = (c) => esDelAcceso(c, acceso);
 
     const filteredClients = clients.filter(c => deLaCartera(c) && delAcceso(c) && (
         c.user?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -1142,25 +1192,51 @@ const AdminClientsList = () => {
     // registros a medias y sin la ficha propia. Antes contaban filas a secas y por eso
     // «Todos» decía 182 donde el panel decía 178.
     const cuantos = (cual) => clients.filter(c => cuentaComoCliente(c) && (
-        cual === 'sin_coach' ? !c.trainer_id : cual === 'mios' ? c.trainer_id === user?.id : true)).length;
+        cual === 'sin_coach' ? leFaltaEntrenador(c) : cual === 'mios' ? c.trainer_id === user?.id : true)).length;
+    // Los que no tienen entrenador porque su plan no lo lleva. No son un problema, pero
+    // sin decirlo la pestaña pasa de 83 a 10 y parece que se han perdido 73 clientes.
+    const sinCoachPorPlan = clients.filter(
+        c => cuentaComoCliente(c) && !c.trainer_id && !leFaltaEntrenador(c)).length;
     const sinTerminar = contarRegistrosSinTerminar(clients);
 
     // LOS QUE NO LLEVA NADIE, PRIMERO.
     // «Sin entrenador: 233 de 247. Esa pestaña debería ser lo primero que se abre, no la
     // segunda» (Jesús, 11-08). Es la única de las dos que es trabajo: un cliente sin
     // entrenador no lo mira nadie. Va delante y es la que se abre; el resto está a un clic.
+    // «Todos los clientes» y no «Todos» a secas: al lado hay otra pestaña que también se
+    // llama «Todos» (la de acceso) y desde el arreglo del fallo 12 las dos enseñan números
+    // muy distintos -- 200 contra 317 -- porque contestan a preguntas distintas: esta
+    // cuenta CLIENTES y aquella cuenta FILAS, con los registros sin terminar dentro. Dos
+    // botones pegados con la misma palabra y cifras que no se parecen es exactamente la
+    // lectura que provocó el fallo 12; con la palabra «clientes» delante ya no hay duda.
     const CARTERAS = esAdmin
-        ? [['sin_coach', 'Sin entrenador'], ['todos', 'Todos']]
+        ? [['sin_coach', 'Sin entrenador'], ['todos', 'Todos los clientes']]
         : [['sin_coach', 'Sin entrenador'], ['mios', 'Mis clientes']];
 
     // Cuenta con el filtro de cartera puesto: si estás mirando «Sin entrenador», los
-    // números de activos y caducados tienen que ser los de esa cartera, no los del total.
+    // números de «Activos» y «Fuera» tienen que ser los de esa cartera, no los del total.
+    //
+    // ESTAS TRES CUENTAS TIENEN QUE SUMAR (fallo 12 de la verificación del 24-08). Al llevar
+    // los registros sin terminar a «Fuera» -- que es lo que pidió Jesús: «a los que no tienen
+    // plan sácalos de la lista... a los caducados también, ambos en la misma lista» -- «Fuera»
+    // empezó a contarlos y «Todos» no, porque «Todos» seguía filtrando por
+    // `cuentaComoCliente`. En la app viva se leía «Activos (92) · Fuera (71) · Todos (105)», y
+    // 92 + 71 no son 105: sobraban los 58 registros a medias. Peor todavía, «Todos» decía 105
+    // y su propia tabla enseñaba 163 filas.
+    //
+    // La regla, y no se vuelve a romper: CADA NÚMERO CUENTA LAS FILAS QUE VA A ENSEÑAR SU
+    // PESTAÑA -- menos la ficha del propio miembro del equipo, que se ve pero no cuenta desde
+    // el #56 --, con el mismo `esDelAcceso` que filtra la tabla. Activos y Fuera son las dos
+    // mitades disjuntas de Todos, así que suman por construcción. Quién es CLIENTE del negocio
+    // es otra pregunta distinta -- esa la contesta `cuentaComoCliente` en el total de arriba --
+    // y se dice con palabras en la nota de debajo de las pestañas.
     const cuantosAcceso = (cual) => clients.filter(
-        c => cuentaComoCliente(c) && deLaCartera(c)
-             && (cual === 'todos' ? true
-                 : c.status === 'registro_incompleto' ? false
-                 : cual === 'activos' ? tieneAcceso(c) : !tieneAcceso(c))).length;
-    const ACCESOS = [['activos', 'Activos'], ['caducados', 'Caducados'], ['todos', 'Todos']];
+        c => !c.es_tu_ficha && deLaCartera(c) && esDelAcceso(c, cual)).length;
+    const ACCESOS = [['activos', 'Activos'], ['fuera', 'Fuera'], ['todos', 'Todos']];
+    // Los registros a medias de la cartera que se está mirando: son los que hacen que el
+    // número de las pestañas y el total de clientes de la cabecera no puedan coincidir.
+    const sinTerminarEnVista = clients.filter(
+        c => !c.es_tu_ficha && deLaCartera(c) && c.status === 'registro_incompleto').length;
 
     return (
         <div className="p-6 space-y-6 animate-fade-in bg-[#0A0A0A] min-h-screen">
@@ -1177,17 +1253,31 @@ const AdminClientsList = () => {
                             <span className="text-white/30"> · viendo {filteredClients.length}</span>
                         )}
                     </p>
+                    {/* YA NO SALEN EN GRIS EN MEDIO DE LA TABLA: están en «Fuera», con los
+                        caducados. La línea se queda para que el total siga cuadrando a la
+                        vista, pero ahora dice dónde encontrarlos en vez de dónde estorban. */}
                     {sinTerminar > 0 && (
                         <p className="text-white/30 text-xs mt-0.5">
                             Y {sinTerminar} {sinTerminar === 1 ? 'registro' : 'registros'} sin
                             terminar: entraron y no eligieron plan, así que no cuentan como clientes.
-                            Salen en la tabla en gris.
+                            Están en «Fuera».
+                        </p>
+                    )}
+                    {/* EL SALTO DE 83 A 10 SE EXPLICA (punto 61). La pestaña «Sin entrenador»
+                        es la que se abre por defecto: sin esta línea, quien entre mañana verá
+                        diez filas donde ayer había ochenta y tres y pensará lo peor. */}
+                    {cartera === 'sin_coach' && sinCoachPorPlan > 0 && (
+                        <p className="text-white/30 text-xs mt-0.5" data-testid="sin-coach-por-plan">
+                            Aquí solo salen los que su plan lleva entrenador. Otros {sinCoachPorPlan} no
+                            tienen entrenador porque su plan es de autogestión (ELM, Mantenimiento,
+                            Calculadora JP): están como su plan manda y no le faltan a nadie. Es el
+                            mismo criterio que Paneles &gt; Operaciones.
                         </p>
                     )}
                 </div>
             </div>
 
-            {/* Mi cartera / los que no lleva nadie, y al lado activos o caducados */}
+            {/* Mi cartera / los que no lleva nadie, y al lado «Activos» o «Fuera» */}
             <div className="flex flex-wrap items-center gap-3">
                 <div className="inline-flex rounded-lg bg-[#111111] p-0.5 border border-[#333]">
                     {CARTERAS.map(([valor, etiqueta]) => (
@@ -1207,6 +1297,20 @@ const AdminClientsList = () => {
                         </button>
                     ))}
                 </div>
+                {/* POR QUÉ LAS PESTAÑAS SUMAN MÁS QUE EL TOTAL DE CLIENTES (fallo 12). Ya suman
+                    entre ellas, pero «Todos» enseña también los registros a medias y el contador
+                    de clientes de la cabecera no los cuenta: son dos preguntas distintas. Los
+                    números de las pestañas se leen antes que ninguna frase, así que la diferencia
+                    se explica aquí al lado, con los números delante, y no en una nota suelta
+                    arriba del todo. */}
+                {sinTerminarEnVista > 0 && (
+                    <p className="basis-full text-white/30 text-xs" data-testid="cuadre-pestanas">
+                        «Todos» ({cuantosAcceso('todos')}) son Activos ({cuantosAcceso('activos')})
+                        más Fuera ({cuantosAcceso('fuera')}), y ahí
+                        van {sinTerminarEnVista} {sinTerminarEnVista === 1 ? 'registro' : 'registros'} sin
+                        terminar que no suman al total de clientes.
+                    </p>
+                )}
             </div>
 
             {/* Filters */}
@@ -1280,6 +1384,10 @@ const AdminClientsList = () => {
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs">Cliente</TableHead>
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs">Plan</TableHead>
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden md:table-cell">Precio</TableHead>
+                                    {/* QUIÉN RENUEVA SOLO (punto 45 del 24-08). No había ni una
+                                        pantalla que lo dijera: el único sitio de todo el panel
+                                        era un punto de color de seis píxeles en Dirección. */}
+                                    <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden lg:table-cell">Renueva</TableHead>
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden md:table-cell">Semana</TableHead>
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden sm:table-cell">Entrenador</TableHead>
                                     {/* Punto 29: la columna que contesta "¿quién me toca esta
@@ -1352,8 +1460,41 @@ const AdminClientsList = () => {
                                             </p>
                                             {client.id && client.precio_mensual != null
                                                 && client.precio_mensual !== client.price && (
-                                                <p className="text-[11px] text-white/40">{client.precio_mensual}€/mes</p>
+                                                // Y DE DÓNDE SALE (punto 43): el «al mes» se
+                                                // calcula con el último cobro real, que puede
+                                                // no ser el precio de la ficha. Sin decirlo,
+                                                // «450 € · 306,68 €/mes» parece una división
+                                                // mal hecha.
+                                                <p className="text-[11px] text-white/40"
+                                                    title={client.precio_fuente === 'cobro_real'
+                                                        ? 'Calculado con lo último que se le cobró de verdad, no con el precio de la ficha'
+                                                        : undefined}>
+                                                    {/* Con la coma de los decimales: la fila
+                                                        ponía «306.68€/mes», que en castellano
+                                                        son trescientos seis euros escritos a
+                                                        la inglesa. */}
+                                                    {Number(client.precio_mensual).toLocaleString('es-ES', { maximumFractionDigits: 2 })}€/mes
+                                                    {client.precio_fuente === 'cobro_real' && (
+                                                        <span className="text-white/30"> · por su último cobro</span>
+                                                    )}
+                                                </p>
                                             )}
+                                        </TableCell>
+                                        {/* Sola con Stripe detrás, «según el plan» cuando lo
+                                            dice el catálogo pero no hay suscripción viva, y a
+                                            mano el resto: son tres cosas distintas y hasta hoy
+                                            se pintaban del mismo color (punto 45). */}
+                                        <TableCell className="hidden lg:table-cell">
+                                            {!client.id ? <span className="text-white/30 text-sm">-</span> : (() => {
+                                                const r = client.renueva_solo || {};
+                                                const [texto, clase, ayuda] = r.automatica && r.via === 'stripe'
+                                                    ? ['Sola', 'text-emerald-400', 'Stripe le cobra solo']
+                                                    : r.automatica
+                                                        ? ['Según el plan', 'text-amber-400', 'Su plan renueva automático, pero no hay suscripción viva en Stripe']
+                                                        : ['A mano', 'text-white/40', 'No se le cobra solo: hay que pedirle la renovación'];
+                                                return <span className={`text-xs ${clase}`} title={ayuda}
+                                                    data-testid={`renueva-${client.id}`}>{texto}</span>;
+                                            })()}
                                         </TableCell>
                                         {/* Las DOS semanas (doc 19-08): la de plan y la de rutina,
                                             que es la que decide cuándo le llega el reporte. Sin

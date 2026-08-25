@@ -35,9 +35,46 @@ import requests
 BUCLE = asyncio.new_event_loop()
 
 
+def _bucle_de_motor():
+    """El bucle al que se ato el cliente de Motor, o None si todavia no se ha atado.
+
+    Motor 3.3 guarda el bucle de la PRIMERA operacion en `client._io_loop` y lo reutiliza
+    para siempre (`AgnosticClient.io_loop`), asi que es un dato privado suyo y aqui se lee
+    con cuidado: si un dia cambia de nombre, esto devuelve None y todo sigue como estaba.
+    """
+    try:
+        from core.database import client
+        return client, getattr(client, "_io_loop", None)
+    except Exception:                                    # noqa: BLE001
+        return None, None
+
+
 def corre(corutina):
-    """Ejecuta una corutina en el bucle comun de la bateria."""
-    return BUCLE.run_until_complete(corutina)
+    """Ejecuta una corutina en el bucle comun de la bateria.
+
+    Y CURA EL BUCLE MUERTO, que es lo que hacia fallar estos tests SOLO en tanda. El
+    cliente de Motor se queda con el bucle de su primera operacion; si esa primera vez cayo
+    dentro de un `asyncio.run(...)` de otro fichero -- quedan 51 asi --, ese bucle se cierra
+    al acabar y a partir de ahi cualquier consulta por `corre()` muere con «Event loop is
+    closed» aunque BUCLE siga abierto. Paso en la bateria del 24-08 con los dos de
+    test_circuitos_2408 y los tres de test_correos_avisos_2308: verdes en solitario, rojos
+    en tanda, y ni el codigo ni el test tenian nada que ver.
+
+    Se le presta BUCLE solo mientras dura esta corutina y se le devuelve lo que tenia. Y
+    solo cuando su bucle esta CERRADO, es decir cuando la llamada iba a reventar de todas
+    formas: si el atado es bueno, aqui no pasa nada de nada y esto es la linea de siempre.
+    """
+    client, atado = _bucle_de_motor()
+    if client is None or atado is None or not atado.is_closed():
+        return BUCLE.run_until_complete(corutina)
+    client._io_loop = BUCLE
+    try:
+        return BUCLE.run_until_complete(corutina)
+    finally:
+        # Se le devuelve el suyo aunque este muerto: los ficheros que van por `asyncio.run`
+        # no pasan por aqui, y dejarles BUCLE (abierto pero sin correr) les colgaria la
+        # consulta para siempre en vez de darles un error.
+        client._io_loop = atado
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "http://localhost:8000").rstrip("/")
 API = f"{BASE_URL}/api"

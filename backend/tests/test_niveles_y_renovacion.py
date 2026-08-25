@@ -204,9 +204,13 @@ class TestLosComplementos:
         comp = [c for c, p in PLAN_CATALOG.items() if p.get("estado") == "complemento"]
         assert set(comp) == {"rutina_mes", "rutina_personalizada", "revision_macros", "formaciones"}
 
-    def test_la_rutina_del_mes_tiene_los_dos_precios(self):
+    def test_la_rutina_del_mes_cuesta_57_en_todas_partes(self):
+        """UN SOLO PRECIO desde el 24-08 (decisión de Jesús). Eran dos -- 57 dentro de un
+        plan y 67 suelta -- y por eso Inicio le decía 67 al de Mantenimiento mientras la
+        pantalla de Rutina y el cobro del reporte decían 57."""
         precios = {p["importe"] for p in PLAN_CATALOG["rutina_mes"]["precios"]}
-        assert precios == {57.0, 67.0}
+        assert precios == {57.0}
+        assert PLAN_CATALOG["rutina_mes"]["precio"] == 57.0
 
     def test_la_rutina_personalizada_a_97(self):
         assert PLAN_CATALOG["rutina_personalizada"]["precio"] == 97.0

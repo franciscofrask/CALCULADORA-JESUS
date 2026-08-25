@@ -27,6 +27,7 @@ import { verComo } from '../lib/modoRevision';
 import { seLeOfreceLaRevision } from '../lib/revision';
 import LimiteDeError from '../components/LimiteDeError';
 import TuDietaHoy from '../components/inicio/TuDietaHoy';
+import ExtrasDelDia from '../components/nutrition/ExtrasDelDia';
 import HeroInicio from '../components/inicio/BannerInicio';
 import BottomNav from '../components/BottomNav';
 
@@ -158,7 +159,7 @@ const OnboardingChecklist = ({ steps, onDismiss, navigate, onResume, showResume 
 // alguien lo va a ver: «que deje su mail y queda como lead».
 // LA VENTANA DE LAS 12 SEMANAS (doc 19-08, «Fotos, medidas y % de grasa: la regla»).
 //
-//     «Llevas 12 semanas sin actualizar tu porcentaje de grasa — Te recomiendo medirlo
+//     «Llevas 12 semanas sin actualizar tu porcentaje de grasa · Te recomiendo medirlo
 //      cada 12 semanas.» Tres salidas, y una vez al día como mucho aunque abra la app
 //      varias veces.
 //
@@ -405,6 +406,16 @@ const InicioNuevo = () => {
     // una a una para la lista de «Marca lo que ya te has comido».
     const [dieta, setDieta] = useState(null);
     const [diaCargado, setDiaCargado] = useState(false);
+    // LOS EXTRAS DEL DÍA DE QUIEN NO TIENE MACROS. Con macros, el bloque lo pinta TuDietaHoy
+    // y lleva su propia lista; sin macros, ese componente no se monta y el cliente se
+    // quedaba sin campo de extras en Inicio (los puntos 26 y 29 de Jesús dicen que el campo
+    // está en Inicio, sin condiciones: apuntar lo que se ha comido no depende de tener los
+    // macros puestos). Esta lista solo se usa en esa rama, así que nunca hay dos a la vez.
+    const [extrasSinMacros, setExtrasSinMacros] = useState([]);
+    // La configuración de dieta QUE TIENE PUESTA el cliente (`GET /user/diet-config`), que es
+    // la que manda los días que todavía no ha montado. Aquí solo se usa el `opcion_peri`,
+    // para el rótulo del perientreno: ver `conPerientreno`.
+    const [configDieta, setConfigDieta] = useState(null);
     const [suplementos, setSuplementos] = useState([]);
     const [rutina, setRutina] = useState(null);
     const [entrenoDeHoy, setEntrenoDeHoy] = useState(null);
@@ -413,6 +424,9 @@ const InicioNuevo = () => {
     // La rutina en PDF que sube el entrenador: para quien la tiene, ESA es su rutina
     // (mismo patrón que RoutinePage tras el arreglo del 21-08).
     const [pdfRutina, setPdfRutina] = useState(null);
+    // La semana de su rutina (`GET /routines/semana`): de ahí sale el nombre de lo que
+    // entrena hoy («Pectoral - Tríceps»), que es lo que pide el punto 24 del 24-08.
+    const [semanaRutina, setSemanaRutina] = useState(null);
     // El día de mañana, para la línea «Mañana · aún sin dieta · Repetir la de hoy».
     const [dietaManana, setDietaManana] = useState(null);
     const [ultimoCierre, setUltimoCierre] = useState(null);
@@ -429,7 +443,8 @@ const InicioNuevo = () => {
             // fuentes -- ese fue el fallo: según cuál llegara antes, Inicio enseñaba 190, 235
             // o 225 del mismo día mientras el cliente miraba. Viene resuelto con la dieta o
             // no viene.
-            const [dietaRes, suplRes, rutinaRes, logRes, cierreRes, dueRes, prefsRes, pdfRes, mananaRes] = await Promise.all([
+            const [dietaRes, suplRes, rutinaRes, logRes, cierreRes, dueRes, prefsRes, pdfRes, mananaRes,
+                   semanaRes, cfgRes] = await Promise.all([
                 api.get(`/diets/${hoyDeLaDieta()}`).catch(() => ({ data: { exists: false } })),
                 api.get('/supplements/current').catch(() => ({ data: null })),
                 api.get('/routines/current').catch(() => ({ data: null })),
@@ -439,6 +454,17 @@ const InicioNuevo = () => {
                 api.get('/user/preferences').catch(() => ({ data: { has_preferences: true } })),
                 api.get('/routines/pdf/info').catch(() => ({ data: { hay: false } })),
                 api.get(`/diets/${mananaDeLaDieta()}`).catch(() => ({ data: { exists: false } })),
+                // QUÉ LE TOCA HOY, POR SU NOMBRE (punto 24 del doc del 24-08: «TU ENTRENO
+                // PREVISTO · Pectoral - Tríceps · VER»). El servidor ya lo sabía -- el
+                // reparto del PDF cruzado con los días que entrena -- y esta pantalla no lo
+                // preguntaba: para el que tiene la rutina en PDF la línea decía «Tu rutina,
+                // en PDF» y había que abrir el PDF para saber qué tocaba.
+                api.get(`/routines/semana?hoy_cliente=${hoyLocal()}`).catch(() => ({ data: { hay: false } })),
+                // LA CONFIGURACIÓN QUE TIENE PUESTA, para los días que aún no ha montado.
+                // Es la MISMA petición que hace TuDietaHoy en ese caso para pedir el reparto,
+                // y aquí hace falta por lo mismo: sin ella esta pantalla no sabe si el
+                // cliente lleva perientreno y el rótulo del punto 49 se lo inventaba.
+                api.get('/user/diet-config').catch(() => ({ data: null })),
             ]);
             // EN INICIO, SOLO LA SUYA. Desde el 18-08 el servidor manda la suplementación
             // general a quien no tiene la suya escrita, y ahí está bien: la pestaña tiene
@@ -451,6 +477,8 @@ const InicioNuevo = () => {
             // Qué le toca hoy lo dice el SERVIDOR, que cuenta los días en hora de España.
             setEntrenoDelDia(logRes.data?.tiene_rutina ? logRes.data : null);
             setPdfRutina(pdfRes.data?.hay ? pdfRes.data : null);
+            setSemanaRutina(semanaRes.data?.hay ? semanaRes.data : null);
+            setConfigDieta(cfgRes.data || null);
             setDietaManana(mananaRes.data || null);
             setUltimoCierre(Array.isArray(cierreRes.data) ? cierreRes.data[0] || null : null);
             setReportes(dueRes.data?.items || []);
@@ -461,6 +489,8 @@ const InicioNuevo = () => {
             // Viene aunque el día no exista todavía: el objetivo es del día, no de lo que
             // haya puesto.
             setObjetivoComidas(dieta?.objetivo_comidas || null);
+            // Los extras ya apuntados hoy, para la rama sin macros (ver `extrasSinMacros`).
+            setExtrasSinMacros((dieta?.exists && dieta.extras) || []);
             // LO SERVIDO TAMBIÉN LO CUENTA EL SERVIDOR (punto 3 del 17-08).
             //
             // Aquí se sumaba `macros_efectivos` de cada alimento tal y como estuviera
@@ -511,6 +541,17 @@ const InicioNuevo = () => {
     // resuelve en `GET /workout-logs/hoy`, que desde el bloque F recibe el día del cliente.
     const grupoMuscular = entrenoDelDia?.dia_rutina || '';
     const esDiaDeEntreno = !!entrenoDelDia && !entrenoDelDia.descanso;
+    // Lo previsto para hoy en la semana de su rutina: el que tiene la rutina en PDF no
+    // tiene «rutina estructurada», pero su reparto sí dice qué grupo le toca hoy.
+    //
+    // SOLO SI PUEDE ABRIR LA RUTINA. `GET /routines/semana` contesta sin mirar el plan («si
+    // su entrenador le subió la rutina, es suya»), pero /dashboard/routine va detrás de
+    // CAP.RUTINA -- el plan más el interruptor t3_entreno -- y CapabilityRoute devuelve a
+    // Inicio sin decir nada. Sin esa llave, la línea del PDF se queda como estaba y abre el
+    // PDF, que es lo único que sí funciona para él: mejor un enlace pobre que uno muerto.
+    const hoyDeLaSemana = (semanaRutina && can('rutina')) ? (semanaRutina.hoy || null) : null;
+    const grupoPrevisto = hoyDeLaSemana?.entrena ? (hoyDeLaSemana.grupo || '') : '';
+    const descansoPrevisto = !!hoyDeLaSemana && !hoyDeLaSemana.entrena;
     const soloCardio = esDiaDeEntreno && entrenoDelDia.tipo === 'cardio';
     const duracionCardio = (() => {
         const d = entrenoDelDia?.cardio_minutos;
@@ -527,6 +568,52 @@ const InicioNuevo = () => {
     const tipoDeDia = dieta?.exists && dieta.tipo_dia
         ? (dieta.tipo_dia === 'descanso' ? 'descanso' : 'entreno')
         : entrenoDelDia ? (entrenoDelDia.descanso ? 'descanso' : 'entreno') : null;
+
+    // EL DÍA PUEDE EXISTIR SIN DIETA MONTADA: desde el 24-08 apuntar un extra hace upsert
+    // del documento del día, así que `exists` ya no significa «configurado». El marcador
+    // bueno es `num_comidas`, que solo lo escribe un guardado de dieta de verdad (la misma
+    // regla y por la misma razón que `diaConfigurado` en components/inicio/TuDietaHoy.jsx).
+    const diaConfigurado = Boolean(dieta?.exists && dieta.num_comidas);
+
+    // La configuración con la que sale el número de arriba. LA PRECEDENCIA ES LA DE
+    // `TuDietaHoy` al pedir el reparto, y tiene que ser la misma o el rótulo describe otra
+    // cosa: con el día montado, la del día; sin montar, día de ENTRENAMIENTO y lo que el
+    // cliente tenga puesto (`GET /user/diet-config`). Por eso no se mira `tipoDeDia`: el
+    // rótulo describe el número que se enseña, no el día que debería ser.
+    //
+    // ESA CONFIGURACIÓN HAY QUE IR A BUSCARLA (`configDieta`): cuando el día no existe,
+    // `GET /diets/{fecha}` no manda ninguna, y aquí se daba por hecho lo más común.
+    const opcionPeriDelNumero = diaConfigurado
+        ? (dieta.opcion_peri || 'intra_post')
+        : (configDieta?.opcion_peri || 'intra_post');
+    const tipoDiaDelNumero = diaConfigurado ? (dieta.tipo_dia || 'entrenamiento') : 'entrenamiento';
+
+    // SI EL NÚMERO DE ARRIBA LLEVA EL PERIENTRENO DENTRO, que es lo que decide si se rotula
+    // (punto 49 del 24-08). Y la respuesta es exactamente: si el día tiene BLOQUE de peri.
+    //
+    // El de arriba es el total del reparto y el de Mis macros es `objetivo_de_las_comidas`
+    // (backend/macro_distribution.py), que es ese mismo total MENOS el bloque Intra/Post.
+    // O sea que los dos números se separan justo cuando hay bloque, y no antes. De ahí las
+    // tres condiciones, todas comprobadas contra /calculator/distribute el 24-08:
+    //   · DESCANSO: no hay peri en el día (235 con peri frente a 225 pelados en descanso).
+    //   · `sin_peri` CON peri asignado: no hay bloque, pero el presupuesto se reparte entre
+    //     las comidas y el total lo lleva igual -- y como no hay bloque que restar, Mis
+    //     macros enseña ESE MISMO total (medido: los dos a 235,1/290). No hay nada que
+    //     aclarar, así que no se rotula.
+    //   · PERI A 0 con bloque: `periworkout` sale a 0 y los dos números vuelven a coincidir
+    //     (190/240 los dos). Un peri a 0 es decisión del coach y se respeta, no se rellena
+    //     con el 35/15 de arranque (misma regla que `leer_peri` en el servidor).
+    const macroDelPeri = (claves) => {
+        for (const c of claves) {
+            const v = profile?.macros_periworkout?.[c];
+            if (v !== undefined && v !== null && v !== '') return Number(v) || 0;
+        }
+        return null;   // sin asignar: manda el valor de arranque del servidor
+    };
+    const hayBloqueDePeri = tipoDiaDelNumero !== 'descanso' && opcionPeriDelNumero !== 'sin_peri';
+    const periP = macroDelPeri(['protein', 'proteinas']) ?? 35;
+    const periH = macroDelPeri(['carbs', 'hidratos']) ?? 15;
+    const conPerientreno = hayBloqueDePeri && (periP > 0 || periH > 0);
 
     // El PDF se abre vía blob porque el visor del navegador no manda el token (mismo
     // camino que RoutinePage y EntrenoPage).
@@ -552,8 +639,9 @@ const InicioNuevo = () => {
         && !/^ninguno$/i.test(canalContacto) && !/incidencias/i.test(canalContacto);
     const contestaElViernes = /viernes/i.test(canalContacto);
     // La tarjeta de venta del que no lleva rutina pero puede comprarla (`rutina: opcional`,
-    // hoy Mantenimiento). El precio es el del complemento del catálogo («Suelta», 67 €):
-    // si el catálogo no lo dice, no hay tarjeta.
+    // hoy Mantenimiento). El precio es el del complemento del catálogo («Suelta»), que
+    // desde el 24-08 son 57 € como en todas partes: si el catálogo no lo dice, no hay
+    // tarjeta. El número NO se escribe aquí, para que no vuelva a haber dos.
     const precioRutinaSuelta = (planCatalog?.rutina_mes?.precios || [])
         .find((p) => /suelta/i.test(p.label || ''))?.importe;
     const ventaRutina = h.rutina === 'opcional' && !entrenoDelDia && !rutina && !pdfRutina
@@ -583,7 +671,11 @@ const InicioNuevo = () => {
             path: '/planes',
         });
     }
-    if (can('reportes') && !cierreDeHoy) {
+    // EL CIERRE DEL DÍA, CON SU LLAVE PROPIA (decisión de Jesús del 24-08). Aquí se pedía
+    // `reportes` y por eso la línea no le salía a los 81 clientes cuyo plan no vende
+    // ningún reporte -- ELM, Mantenimiento, Calculadora JP, Básica --, que son justo los
+    // que solo tienen esto para contar su día. Ver CAP.CIERRE_DIA en lib/planAccess.js.
+    if (can('cierre_dia') && !cierreDeHoy) {
         pendientes.push({
             id: 'cierre', icono: ClipboardCheck, titulo: '¿Cómo fuiste hoy?',
             // En cursiva, como lo pide el doc 19-08: es una aclaración, no una orden.
@@ -714,12 +806,56 @@ const InicioNuevo = () => {
                     </div>
                 </div>
             ) : objetivo ? (
-                <TuDietaHoy api={api} userId={user?.id} fecha={hoyDeLaDieta()} dieta={dieta}
-                    objetivo={objetivo} servido={comido} navigate={navigate} />
+                /* LA NOTA DEL PERIENTRENO VA PEGADA A LOS NÚMEROS, Y ESO CUESTA UN TRUCO.
+                   TuDietaHoy no devuelve una tarjeta: devuelve TRES secciones sueltas (los
+                   números, «Marca lo que ya te has comido» y «Extras del día»). Escrita
+                   detrás del componente con un `-mt-3`, la frase no caía bajo los números:
+                   caía debajo del campo de texto de los extras (medido el 24-08: los
+                   números en y=430 y la nota en y=1345), y «EXTRAS DEL DÍA», que son dos
+                   líneas de Jesús, acababa con una frase de macros que no es suya.
+                   Como el bloque de extras vive DENTRO de ese componente y ese fichero no
+                   se toca desde aquí, se ordena con flex: la nota va primero en el HTML y
+                   la tarjeta de los números se sube por encima con `order`. Si algún día
+                   TuDietaHoy cambia el `data-testid` de esa sección, el selector deja de
+                   casar y la nota se queda ARRIBA del todo, pegada a lo que explica: la
+                   caída es fea pero no vuelve a meterse en los extras. */
+                <div className="flex flex-col gap-6 [&>[data-testid=tu-dieta-hoy]]:order-[-1]">
+                    {/* EL NÚMERO LLEVA EL PERIENTRENO DENTRO, Y HAY QUE DECIRLO (punto 49
+                        del doc del 24-08: «unas suman el perientreno y otras no, y ninguna
+                        lo dice»). Inicio enseña el total CON el peri -- `conPeri`, el
+                        resumen del reparto, en components/inicio/TuDietaHoy.jsx -- y Mis
+                        macros enseña el mismo día SIN él: los dos números son buenos y
+                        parecían un error. Aquí solo se rotula el de esta pantalla; el
+                        criterio único y los rótulos de Mis macros, Mi semana y Nutrición
+                        son de otros ficheros.
+                        Con el día guardado en descanso, o con el perientreno apagado, no se
+                        pinta: no hay nada que aclarar (ver `conPerientreno`).
+                        El margen negativo la deja a un dedo de la tarjeta de números (el
+                        `gap-6` del contenedor son 24 px) y no del bloque de abajo. */}
+                    {conPerientreno && (
+                        <p className="text-xs text-muted-foreground px-1 -mt-[1.125rem]" data-testid="nota-perientreno">
+                            Tus macros de hoy llevan el perientreno dentro.
+                        </p>
+                    )}
+                    <TuDietaHoy api={api} userId={user?.id} fecha={hoyDeLaDieta()} dieta={dieta}
+                        objetivo={objetivo} servido={comido} navigate={navigate} />
+                </div>
             ) : (
-                <LineaDeHoy icono={Scale} titulo="Configura tus macros"
-                    detalle="Introduce tu peso, % graso y objetivo" testId="inicio-sin-macros"
-                    onClick={() => navigate('/dashboard/macro-calculator')} />
+                <>
+                    <LineaDeHoy icono={Scale} titulo="Configura tus macros"
+                        detalle="Introduce tu peso, % graso y objetivo" testId="inicio-sin-macros"
+                        onClick={() => navigate('/dashboard/macro-calculator')} />
+                    {/* «EL CAMPO ESTÁ EN INICIO» (puntos 26 y 29), TAMBIÉN SIN MACROS. El
+                        bloque de extras vive dentro de TuDietaHoy, que solo se monta cuando
+                        hay objetivo; el que todavía no tiene los macros puestos se quedaba
+                        sin dónde apuntar lo que se comió y solo le quedaban Nutrición y la
+                        pregunta de la noche. Apuntar un extra no necesita macros: no cuenta
+                        contra nada (punto 28), solo se guarda. */}
+                    <ExtrasDelDia api={api} fecha={hoyDeLaDieta()} extras={extrasSinMacros}
+                        origen="inicio"
+                        onAnadido={(e) => setExtrasSinMacros((prev) => [...prev, e])}
+                        onQuitado={(id) => setExtrasSinMacros((prev) => prev.filter((x) => x.id !== id))} />
+                </>
             )}
 
             {/* «Tus macros los pones tú · Cambiarlos»: solo si el catálogo dice que este
@@ -730,16 +866,21 @@ const InicioNuevo = () => {
                     onClick={() => navigate('/dashboard/macro-calculator')} />
             )}
 
-            {/* «TU ENTRENO HOY», en una línea: el entreno con su grupo si se conoce, el PDF
-                de rutina si es lo que hay (patrón de RoutinePage tras el arreglo de hoy),
-                la rutina del mes si el plan la trae por catálogo, o Descanso. */}
+            {/* «TU ENTRENO PREVISTO», en una línea: el entreno con su grupo si se conoce, el
+                PDF de rutina si es lo que hay (patrón de RoutinePage tras el arreglo de
+                hoy), la rutina del mes si el plan la trae por catálogo, o Descanso.
+
+                «PREVISTO», NO «HOY» (punto 24 del doc del 24-08): «es el plan, no un hecho.
+                El hecho lo cuenta él por la noche en el check-in». */}
             {diaCargado && (esDiaDeEntreno || entrenoDelDia?.descanso || pdfRutina || rutinaDelMes || ventaRutina) && (
                 <section className="space-y-3" data-testid="tu-entreno-hoy">
-                    <p className="caption">Tu entreno hoy</p>
+                    <p className="caption">Tu entreno previsto</p>
                     {esDiaDeEntreno ? (
                         entrenoDeHoy?.hecho ? (
+                            /* El grupo por su nombre y sin «Entreno ·» delante: el titulillo
+                               de arriba ya dice que esto es el entreno (punto 24, 24-08). */
                             <LineaDeHoy icono={Dumbbell}
-                                titulo={`Entreno${grupoMuscular ? ` · ${grupoMuscular}` : ''}`}
+                                titulo={grupoMuscular || grupoPrevisto || 'Entreno'}
                                 detalle={resumenEntreno || null} hecho testId="linea-entreno"
                                 onClick={() => navigate('/dashboard/entreno')} />
                         ) : soloCardio ? (
@@ -748,7 +889,7 @@ const InicioNuevo = () => {
                                 testId="linea-entreno" onClick={() => navigate('/dashboard/entreno')} />
                         ) : (
                             <LineaDeHoy icono={Dumbbell}
-                                titulo={`Entreno${grupoMuscular ? ` · ${grupoMuscular}` : ''}`}
+                                titulo={grupoMuscular || grupoPrevisto || 'Entreno'}
                                 detalle="Ver la rutina" testId="linea-entreno"
                                 onClick={() => navigate('/dashboard/entreno')} />
                         )
@@ -757,9 +898,27 @@ const InicioNuevo = () => {
                             detalle="Hoy no te toca entrenar" testId="linea-entreno"
                             onClick={() => navigate('/dashboard/entreno')} />
                     ) : pdfRutina ? (
-                        /* Sin rutina estructurada pero CON PDF: esa ES su rutina. */
-                        <LineaDeHoy icono={FileText} titulo="Tu rutina, en PDF"
-                            detalle="Abrirla" testId="linea-entreno-pdf" onClick={abrirPdfRutina} />
+                        /* Sin rutina estructurada pero CON PDF: esa ES su rutina. Y si su
+                           reparto dice qué le toca hoy, se dice por su nombre y «Ver la
+                           rutina» la carga, en vez de mandarle a abrir el PDF a buscarlo
+                           (punto 24 del 24-08).
+
+                           LA CAÍDA IMPORTA: sin reparto guardado -- hoy en producción son
+                           los DOS PDFs que hay -- la línea se queda como estaba, «Tu
+                           rutina, en PDF · Abrirla», que dice menos que el grupo pero más
+                           que un «Entreno» a secas. */
+                        grupoPrevisto ? (
+                            <LineaDeHoy icono={Dumbbell} titulo={grupoPrevisto}
+                                detalle="Ver la rutina" testId="linea-entreno-previsto"
+                                onClick={() => navigate('/dashboard/routine')} />
+                        ) : descansoPrevisto ? (
+                            <LineaDeHoy icono={Moon} titulo="Descanso"
+                                detalle="Hoy no te toca entrenar" testId="linea-entreno-descanso"
+                                onClick={() => navigate('/dashboard/routine')} />
+                        ) : (
+                            <LineaDeHoy icono={FileText} titulo="Tu rutina, en PDF"
+                                detalle="Abrirla" testId="linea-entreno-pdf" onClick={abrirPdfRutina} />
+                        )
                     ) : rutinaDelMes ? (
                         <LineaDeHoy icono={Dumbbell} titulo="La rutina del mes"
                             detalle="Ver la de este mes" testId="linea-rutina-del-mes"
@@ -1499,8 +1658,11 @@ const NAV_ITEMS = [
     { path: '/dashboard/macro-calculator', icon: SlidersHorizontal, label: 'Mis macros' },
     { path: '/dashboard/supplements', icon: Pill, label: 'Suplementos', cap: 'suplementacion' },
     { path: '/dashboard/chatbot', icon: Bot, label: 'Asistente IA' },
-    { path: '/dashboard/reports', icon: FileText, label: 'Reportes', cap: 'reportes' },
-    { path: '/dashboard/checkins', icon: ClipboardCheck, label: 'Check-ins', cap: 'reportes' },
+    // Seguimiento y el cierre del día van con la llave del cierre (24-08), no con la de
+    // reportes: dentro de Seguimiento el que no vende reportes ve su historial, su
+    // Evolución y su Diario, y no ve el formulario. Ver CAP.CIERRE_DIA en lib/planAccess.js.
+    { path: '/dashboard/reports', icon: FileText, label: 'Reportes', cap: 'cierre_dia' },
+    { path: '/dashboard/checkins', icon: ClipboardCheck, label: 'Check-ins', cap: 'cierre_dia' },
     // El plan «solo app» no lleva entrenador: enseñarle el Chat es prometerle una persona
     // que no tiene (TABLA 20 del documento del 09-08).
     { path: '/dashboard/messages', icon: MessageCircle, label: 'Chat', cap: 'chat' },
@@ -1522,7 +1684,7 @@ const NAV_ITEMS = [
 const BOTTOM_ITEMS = [
     { path: '/dashboard', icon: Home, label: 'Inicio', end: true },
     { path: '/dashboard/nutrition', icon: Apple, label: 'Nutrición' },
-    { path: '/dashboard/reports', icon: TrendingUp, label: 'Seguimiento', cap: 'reportes' },
+    { path: '/dashboard/reports', icon: TrendingUp, label: 'Seguimiento', cap: 'cierre_dia' },
     { path: '/dashboard/profile', icon: User, label: 'Perfil' },
 ];
 

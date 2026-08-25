@@ -461,7 +461,25 @@ async def sync_profile_from_subscription(subscription, *, profile_id=None, user_
     if plan_code:
         plan_info = get_plan_info(plan_code)
         update["plan"] = plan_info["code"]
-        update["price"] = plan_info["price"]
+        # EL PRECIO DEL CLIENTE NO SE PISA CON LA TARIFA DEL CATALOGO (24-08).
+        #
+        # Aqui ponia `update["price"] = plan_info["price"]` a secas, y esto lo llaman los
+        # webhooks de Stripe: o sea que CADA VEZ que a alguien se le renovaba la suscripcion,
+        # su precio pasaba a ser el de tarifa. Ese es el origen del caso que trajo Jesus en su
+        # documento: Montalvo con 1.500 € en la ficha mientras Stripe le cobra 250 al mes. No
+        # se lo escribio nadie a mano; se lo escribio esta linea.
+        #
+        # La regla es la suya: el que viene del sistema anterior CONSERVA su plan y su precio,
+        # y las tarifas nuevas solo aplican a clientes nuevos. Asi que el precio que ya tiene
+        # el perfil manda, y el del catalogo solo entra cuando no hay ninguno. Cuando compra o
+        # cambia de plan a proposito, el precio ya se lo escribe el checkout
+        # (`ensure_checkout_profile`, con `price_override` si es un precio congelado), asi que
+        # para entonces el perfil ya trae el bueno y no hay nada que rellenar.
+        if profile.get("price") is None:
+            update["price"] = plan_info["price"]
+        elif float(profile.get("price") or 0) != float(plan_info["price"] or 0):
+            logger.info("Precio propio de %s: %s (la tarifa de %s es %s). Se respeta el suyo.",
+                        profile.get("id"), profile.get("price"), plan_info["code"], plan_info["price"])
         # users.plan (capacidades en la UI) solo se refleja con la suscripción activa;
         # con incomplete/past_due/canceled el usuario no debe "tener" el plan.
         if status in {"active", "trialing"}:

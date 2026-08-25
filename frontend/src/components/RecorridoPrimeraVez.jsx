@@ -6,7 +6,7 @@ import { Check, Plus } from 'lucide-react';
 //
 // Cinco tarjetas que no explican pantallas: explican las TRES REGLAS del método
 // que, si no se entienden, hacen que la app parezca rara (el día es lo que
-// cuadra, el perientreno va aparte, los extras cuentan igual).
+// cuadra, el perientreno tiene su bloque, los extras se apuntan y no cuentan).
 //
 // A PROPÓSITO SIN ANCLAR AL DOM: el tour anterior (driver.js) señalaba elementos
 // concretos y se rompía según qué interruptor estuviera encendido (el paso 2
@@ -105,13 +105,19 @@ const EsquemaPerientreno = () => (
     </div>
 );
 
-// Paso 5: los extras cuentan igual.
+// Paso 5: los extras se apuntan y no tocan los macros.
+//
+// AQUÍ DECÍA «Cuenta igual que lo demás», Y ERA MENTIRA DESDE EL 24-08. Este dibujo y su
+// texto se escribieron el 21-08, cuando los extras SÍ sumaban en «Llevas». El punto 28 del
+// doc del 24-08 lo cambió -- van en su lista, aparte, y los macros de la dieta no se mueven
+// -- y esta tarjeta se quedó atrás. Es lo PRIMERO que lee del método quien entra por
+// primera vez, así que si vuelve a cambiar la regla de los extras, se cambia también aquí.
 const EsquemaExtras = () => (
     <div className="w-full flex flex-col items-center gap-3 py-2">
         <span className="inline-flex items-center gap-2 rounded-xl border border-dashed border-brand/60 px-4 py-3 text-brand text-sm font-bold uppercase tracking-wide">
             <Plus className="w-4 h-4" /> Extras del día
         </span>
-        <span className="text-[11px] text-muted-foreground">Cuenta igual que lo demás</span>
+        <span className="text-[11px] text-muted-foreground">No toca tus macros</span>
     </div>
 );
 
@@ -146,8 +152,12 @@ export const PASOS_RECORRIDO = [
     },
     {
         id: 'extras',
+        // «Cuenta igual» era la regla del 21-08 y dejó de serlo el 24-08 (punto 28: los
+        // extras no tocan ni «Llevas» ni «Falta»). Prometer aquí que suman era enseñarle a
+        // compensar antes de que hubiera empezado: si se comió una tarta, la app no le va
+        // a decir que se salte la comida 4. La última frase es de Jesús, literal.
         titulo: '¿Te has comido algo que no estaba?',
-        texto: 'Añádelo en Extras del día y cuenta igual. La app no te riñe: solo necesita saber lo que has comido de verdad.',
+        texto: 'Apúntalo en Extras del día. No cuenta contra tus macros ni te cambia la dieta: se te fue algo, lo apuntas, y te sigues comiendo tus comidas.',
         Esquema: EsquemaExtras,
     },
 ];
