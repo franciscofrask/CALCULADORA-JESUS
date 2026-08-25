@@ -509,6 +509,14 @@ PLAN_CATALOG = {
         # Se le deja su nombre en vez de meterlos en "Reto 12en12 - Gold" porque lo que
         # compraron se llama asi.
         "name": "Reto 12en12", "estado": "legacy", "renovable_por_los_suyos": True, "asignable": True,
+        # SON 12 SEMANAS, NO 13. El catalogo de Jesus dice las dos cosas: la vista rapida de
+        # «PLANES ACTIVOS» pone «13 semanas» y el bloque de detalle de esa misma hoja pone
+        # «programa especifico de 12 semanas». Cotejado el 25-08 y se queda en 12, porque:
+        # los periodos reales de los 22 clientes en produccion se agrupan en 83-86 dias y
+        # ninguno llega a los 91 que serian 13 semanas; sus hermanos Gold y Silver son de 12;
+        # y el nombre del plan es 12en12. La celda del «13» es la errata.
+        # NO CAMBIAR a 13 sin preguntar: de esta cifra cuelgan el reporte que toca cada
+        # semana, la ventana de envio y los avisos de 21 clientes activos.
         "ciclo": {"tipo": "trimestral", "semanas": 12},
         # El doc del 19-08 los destapa: no es un plan, son los clientes Premium de José
         # Luis y de Montse, cada uno con su precio en la hoja de control de pagos. «A
