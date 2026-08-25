@@ -21,6 +21,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 
 from core.calendario_reportes import (
     calendario_del_cliente, dia_de_envio, reporte_de_la_semana, toca_en_la_semana)
+from core.config import VENTANAS_SIEMPRE_ABIERTAS
 from core.cycle import compute_cycle, _parse_dt
 from core.tiempo import MADRID, a_madrid
 from core.database import db
@@ -431,7 +432,13 @@ def compute_client_report_state(profile: Dict[str, Any], catalog: Dict[str, Any]
         "due": bool(tipos),
         "window_open": win_open,
         "window_close": win_close,
-        "is_open": bool(tipos) and win_open <= now <= win_close,
+        # En el clon de pruebas la ventana se da por abierta siempre que esta semana toque
+        # reporte (core/config.VENTANAS_SIEMPRE_ABIERTAS). Las fechas de verdad se
+        # devuelven igual, y `abierta_por_pruebas` avisa de que esta abierta a la fuerza
+        # para que la pantalla pueda decirlo. En produccion la variable no existe.
+        "is_open": bool(tipos) and (VENTANAS_SIEMPRE_ABIERTAS or win_open <= now <= win_close),
+        "abierta_por_pruebas": bool(
+            tipos and VENTANAS_SIEMPRE_ABIERTAS and not (win_open <= now <= win_close)),
     }
 
 
@@ -475,6 +482,9 @@ async def get_my_due_report(user=Depends(get_current_user)):
     window = {
         "due": True,
         "is_open": state["is_open"],
+        # Solo viene a True en el clon de pruebas, y solo cuando la ventana de verdad NO
+        # esta abierta: la pantalla lo usa para decirlo con las fechas reales al lado.
+        "abierta_por_pruebas": state.get("abierta_por_pruebas", False),
         "submitted": bool(submitted),
         "opens_at": win_open.isoformat(),
         "closes_at": win_close.isoformat(),

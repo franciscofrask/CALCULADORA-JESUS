@@ -248,6 +248,25 @@ const PortadaSeguimiento = ({ windowState, vencido, conDiario, puedeMandarReport
                     onClick={onRevision} />
             )}
 
+            {/* SOLO EN EL CLON DE PRUEBAS. Allí la ventana se abre a la fuerza para poder
+                probar el reporte cualquier día, y sin decirlo se presta a confusión: uno
+                pensaría que un cliente puede rellenarlo hoy. Así que se dice, y con las
+                fechas de verdad al lado. En producción este aviso no existe, porque el
+                servidor solo manda `abierta_por_pruebas` si la variable está encendida. */}
+            {windowState?.abierta_por_pruebas && (
+                <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2"
+                    data-testid="ventana-abierta-por-pruebas">
+                    <p className="text-[13px] font-semibold text-amber-500">
+                        Abierta solo para pruebas
+                    </p>
+                    <p className="text-[13px] text-muted-foreground">
+                        De verdad {apertura ? `se abre el ${apertura}` : 'abre otro día'}
+                        {plazo ? ` y se cierra el ${plazo}` : ''}. Hoy la puedes rellenar
+                        igualmente porque estás en el clon de pruebas.
+                    </p>
+                </div>
+            )}
+
             {/* Y detrás del que toca, el siguiente. Va pegada a su tarjeta porque habla de
                 ella. Con esto el cliente ve su calendario y no solo el día de hoy: el del
                 Nivel 2 sabe que después de este quincenal le llega el mensual, que es el que

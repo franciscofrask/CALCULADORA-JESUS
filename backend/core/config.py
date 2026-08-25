@@ -46,6 +46,21 @@ STRIPE_ALLOW_LIVE_MODE = os.environ.get('STRIPE_ALLOW_LIVE_MODE', 'false').strip
 # Frontend base URL for Stripe success/cancel redirects. Falls back to first CORS origin, else localhost:3000.
 FRONTEND_URL = (os.environ.get('FRONTEND_URL') or os.environ.get('APP_BASE_URL') or '').strip()
 
+# LAS VENTANAS DE REPORTE, ABIERTAS SIEMPRE (SOLO EN EL CLON DE PRUEBAS).
+#
+# El quincenal se rellena el miercoles y el jueves, el mensual de viernes a lunes y el
+# semanal de viernes a sabado. Para probarlos hay que esperar a que caiga el dia, y en el
+# clon de dev eso no tiene sentido: se prueba cuando se prueba.
+#
+# Con esto encendido la ventana se da por abierta siempre que ESA SEMANA le toque un
+# reporte -- no se inventa uno donde no lo hay --, y la respuesta dice `abierta_por_pruebas`
+# con las fechas de verdad al lado, para que en pantalla se lea cuando abre y cierra de
+# verdad y nadie confunda el clon con lo que hara un cliente.
+#
+# Apagado de fabrica: en produccion la variable no existe y todo sigue igual.
+VENTANAS_SIEMPRE_ABIERTAS = os.environ.get(
+    'VENTANAS_SIEMPRE_ABIERTAS', '').strip().lower() in ('1', 'true', 'si', 'sí')
+
 # Billing cycle (matches calmajp: 12 weeks = 84 days). Change here if cobro mensual.
 DEFAULT_BILLING_CYCLE_WEEKS = 12
 DEFAULT_BILLING_CYCLE_DAYS = DEFAULT_BILLING_CYCLE_WEEKS * 7

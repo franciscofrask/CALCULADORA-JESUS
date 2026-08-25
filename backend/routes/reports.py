@@ -52,15 +52,19 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
                                         rutina=await rutina_activa_de(profile.get("id")))
     if not state["due"]:
         raise HTTPException(status_code=403, detail="Esta semana no toca reporte. Te avisaremos cuando abra la ventana.")
-    if now < state["window_open"]:
-        # Decía «se rellena el fin de semana», que es verdad para el mensual y mentira para
-        # el quincenal: ese se rellena el miércoles y el jueves.
-        raise HTTPException(
-            status_code=403,
-            detail=f"Todavía no toca: se abre el {_fecha_es(state['window_open'])} "
-                   f"a las {_hora_es(state['window_open'])} y lo tienes hasta el "
-                   f"{_fecha_es(state['window_close'])} a las {_hora_es(state['window_close'])}.")
-    if now > state["window_close"]:
+    # Los dos cerrojos miran `is_open`, que es quien sabe de verdad si la ventana está
+    # abierta. Antes comparaban las fechas por su cuenta, y en el clon de pruebas -- donde
+    # la ventana se abre a la fuerza (VENTANAS_SIEMPRE_ABIERTAS) -- eso dejaba al cliente
+    # viendo el formulario y sin poder mandarlo: peor que no enseñárselo.
+    if not state["is_open"]:
+        if now < state["window_open"]:
+            # Decía «se rellena el fin de semana», que es verdad para el mensual y mentira
+            # para el quincenal: ese se rellena el miércoles y el jueves.
+            raise HTTPException(
+                status_code=403,
+                detail=f"Todavía no toca: se abre el {_fecha_es(state['window_open'])} "
+                       f"a las {_hora_es(state['window_open'])} y lo tienes hasta el "
+                       f"{_fecha_es(state['window_close'])} a las {_hora_es(state['window_close'])}.")
         raise HTTPException(status_code=403, detail="La ventana de esta semana ya se cerró. Espera a la semana que viene.")
 
     # Confirmación de huecos: el cumplimiento sale del registro, no de que se puntúe
