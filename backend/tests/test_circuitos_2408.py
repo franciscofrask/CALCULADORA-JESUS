@@ -237,9 +237,11 @@ def test_preparar_el_checkout_no_revienta_sin_precio_de_stripe():
         await db.client_profiles.update_one({"id": original["id"]}, {"$set": {
             "status": "pendiente_pago", "access_until": None, "current_period_end": None,
             "subscription_status": None}})
+        suyo = original.get("plan")
         try:
             p = await ensure_checkout_profile(u, "reto12en12")   # legacy, sin Price
-            return {"plan": p.get("plan"), "price_id": p.get("stripe_price_id")}
+            return {"plan": p.get("plan"), "suyo": suyo,
+                    "checkout_plan": p.get("checkout_plan")}
         finally:
             await db.client_profiles.replace_one({"id": original["id"]}, original)
 
@@ -247,8 +249,15 @@ def test_preparar_el_checkout_no_revienta_sin_precio_de_stripe():
     if isinstance(r, str):
         import pytest
         pytest.skip(r)
-    assert r["plan"] == "reto12en12", "no ha preparado el checkout del plan antiguo"
-    assert r["price_id"] is None, "sin Price en Stripe, el campo se queda a nulo y ya"
+    # Lo que este test vigila es que NO REVIENTE: si hubiera vuelto el 503 de antes,
+    # `corre` habria propagado la excepcion y no habriamos llegado hasta aqui.
+    #
+    # Y de paso, el contrato nuevo del 25-08: al que YA tiene plan no se le escribe el
+    # que va a comprar hasta que pague. Antes esto afirmaba lo contrario -- que la ficha
+    # se quedaba con «reto12en12» -- y ese era justamente el fallo: mirar un plan y
+    # cerrar la ventana dejaba al cliente sin el suyo.
+    assert r["plan"] == r["suyo"], "abrir un pago le ha cambiado el plan sin haber pagado"
+    assert r["checkout_plan"] == "reto12en12", "no ha quedado apuntado que iba a por ese"
 
 
 def test_sin_precio_congelado_no_se_adivina_cobrando_el_ultimo_recibo():

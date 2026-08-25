@@ -20,7 +20,7 @@ import { euros } from '../lib/precios';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
-import { Loader2, TrendingDown, TrendingUp, Check, ArrowRight, Info, Phone } from 'lucide-react';
+import { Loader2, TrendingDown, TrendingUp, Check, ArrowRight, ArrowLeft, Info, Phone } from 'lucide-react';
 import { mensajeDeError } from '../lib/mensajeDeError';
 
 const fmtPct = (x) => (x == null ? '—' : `${x > 0 ? '+' : ''}${x}%`);
@@ -137,6 +137,16 @@ const RenovacionPage = () => {
 
     return (
         <div className="px-4 sm:px-6 lg:px-8 py-8 max-w-4xl mx-auto pb-24" data-testid="renovacion-page">
+            {/* UNA PUERTA PARA SALIR (Francisco, 25-08). Esta pantalla no tenía ninguna:
+                se entra desde «Ver mis opciones» del caducado y desde el aviso de fin de
+                ciclo, y una vez dentro la única forma de volver era el botón del navegador.
+                Al cliente que solo venía a mirar sus opciones se le dejaba encerrado entre
+                botones de pagar, que es el peor sitio para no tener salida. */}
+            <button onClick={() => navigate('/dashboard')}
+                className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4 -ml-1 transition-colors"
+                data-testid="renovacion-volver">
+                <ArrowLeft className="w-4 h-4" /> Volver al inicio
+            </button>
             <header className="mb-8">
                 {/* SIN FECHA DE FIN NO SE INVENTAN DÍAS.
                     A los clientes anteriores al calendario de arranque no se les guardó el fin

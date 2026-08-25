@@ -236,6 +236,14 @@ PLAN_CATALOG = {
         # A los 55 no se les toca el precio: hay quien paga 67 y quien paga 87 (el precio
         # de cada cliente vive en su perfil; este es el de catálogo para el que entre).
         "name": "El Lunes Empiezo", "estado": "activo", "asignable": True,
+        # FUERA DE LA PANTALLA DE RENOVACION (Francisco, 25-08). Se sigue vendiendo por su
+        # embudo y sigue estando en /planes: lo que no tiene sentido es ofrecerselo al que
+        # acaba un ciclo. Al cliente de Silver que termina se le pintaba «Cambiar a El Lunes
+        # Empiezo · 97 €/mes» entre Gold y Calculadora, como si fuera un escalon mas de la
+        # misma escalera, y no lo es: es otro producto, con otra puerta de entrada. Al
+        # renovar se elige entre el plan propio (si es renovable), los tres niveles y la
+        # salida a Mantenimiento.
+        "fuera_de_renovacion": True,
         # Sin esta frase, la pantalla de renovación le colgaba el «más gente encima de tus
         # números» de la escalera de precios, y ELM es autogestión: no hay nadie encima
         # (P53 del doc 23-08). Lo que dice es su ficha: solo app y catálogo de recursos.

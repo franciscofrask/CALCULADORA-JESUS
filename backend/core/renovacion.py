@@ -359,7 +359,10 @@ def salidas(*, plan_actual: Optional[str], opciones_catalogo: Dict[str, Any],
 
     # 2) Cambiar de nivel. Los que no tiene, mas caros primero: subir es lo que se quiere
     #    empujar, pero sin esconder que tambien puede bajar.
-    otros = sorted((c for c in contratables if c != actual),
+    # Fuera los que tienen su propio embudo: se venden, pero no como escalon de una
+    # renovacion (`fuera_de_renovacion` en el catalogo; hoy solo El Lunes Empiezo).
+    otros = sorted((c for c in contratables
+                    if c != actual and not catalogo.get(c, {}).get("fuera_de_renovacion")),
                    key=lambda c: catalogo.get(c, {}).get("precio") or 0, reverse=True)
     for code in otros:
         info = catalogo.get(code) or {}

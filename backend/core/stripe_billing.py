@@ -302,20 +302,50 @@ async def ensure_checkout_profile(user: Dict[str, Any], plan: str, *, price_over
         # sabe la fecha buena (`sync_profile_from_one_time_session`, o el webhook de la
         # suscripcion), y mientras tanto no dan acceso a nadie: `has_active_access` corta
         # antes por `status` y, si no, por la propia fecha ya pasada.
-        update_data = {
-            "plan": plan_info["code"],
-            "price": profile_price,
-            "status": "pendiente_pago",
-            "subscription_status": "incomplete",
-            "checkout_status": "draft",
-            "stripe_price_id": stripe_price_id,
-            "next_payment": None,
-            "cancel_at_period_end": False,
-            "billing_cycle_days": plan_info["billing_cycle_weeks"] * 7,
-            "last_payment_error": None,
-            # Limpia la caducidad de una compra única anterior (p.ej. reto60 → ELM).
-            "access_until": None,
-        }
+        # AL QUE YA TIENE UN PLAN NO SE LE TOCA NADA SUYO HASTA QUE VUELVA EL PAGO
+        # (Francisco, 25-08). Esta es la otra mitad del candado de arriba.
+        #
+        # Arriba se protegió al que tiene ACCESO VIVO. Al caducado -- que es justamente a
+        # quien se le enseña la pantalla de renovación -- se le seguía escribiendo encima
+        # el plan pulsado, su precio de tarifa y `pendiente_pago`. Con eso, mirar un plan y
+        # cerrar la ventana le dejaba «Sin plan · el pago no llegó a completarse»: había
+        # perdido CUÁL era su plan y su precio congelado, así que ya no podía ni renovar el
+        # suyo, porque «Seguir igual» sale de ese campo. Reproducido el 25-08 con un
+        # cliente de ELM: pulsó Gold, no pagó, y volvió sin plan.
+        #
+        # No hace falta escribirlo para cobrar: la sesión de Stripe lleva el plan en su
+        # metadata y al volver el pago manda esa (`sync_profile_from_one_time_session`:
+        # `metadata.get("plan") or profile.get("plan")`). Así que aquí solo se apunta la
+        # INTENCIÓN, en campos propios que no pisan nada, y lo suyo se queda como estaba.
+        #
+        # Al que no tiene plan todavía (se registró y nunca compró) se le sigue escribiendo
+        # como siempre: ahí no hay nada que perder y el estado `pendiente_pago` es el que
+        # le enseña «termina tu compra».
+        ya_tenia_plan = bool((profile.get("plan") or "").strip())
+        if ya_tenia_plan:
+            update_data = {
+                "checkout_status": "draft",
+                # Qué fue a comprar, sin tocar lo que tiene. Si paga, el sync escribe el
+                # plan de verdad; si no vuelve, esto es solo una nota.
+                "checkout_plan": plan_info["code"],
+                "checkout_price": profile_price,
+                "checkout_iniciado_at": now_iso,
+            }
+        else:
+            update_data = {
+                "plan": plan_info["code"],
+                "price": profile_price,
+                "status": "pendiente_pago",
+                "subscription_status": "incomplete",
+                "checkout_status": "draft",
+                "stripe_price_id": stripe_price_id,
+                "next_payment": None,
+                "cancel_at_period_end": False,
+                "billing_cycle_days": plan_info["billing_cycle_weeks"] * 7,
+                "last_payment_error": None,
+                # Limpia la caducidad de una compra única anterior (p.ej. reto60 → ELM).
+                "access_until": None,
+            }
         if trainer_id is not None:
             update_data["trainer_id"] = trainer_id
         # Perfiles nacidos de un upsert (preferencias, webhook de leads) pueden no tener

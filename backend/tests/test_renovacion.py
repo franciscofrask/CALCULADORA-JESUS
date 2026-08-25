@@ -132,7 +132,12 @@ class TestLasTresSalidas:
         s = self._salidas(plan="reto12en12_gold", precio_alta=1500.0)
         renovar = [x for x in s if x["tipo"] == "renovar"]
         assert len(renovar) == 1 and renovar[0]["por_checkout"] is True
-        assert {x["plan"] for x in s if x["tipo"] == "cambiar"} == {"nivel1", "nivel2", "nivel3", "elm"}
+        # EL LUNES EMPIEZO SALIO DE AQUI (Francisco, 25-08). Se sigue vendiendo por su
+        # embudo y sigue en /planes, pero no se ofrece como escalon de una renovacion: al
+        # que acababa un ciclo se le pintaba «Cambiar a El Lunes Empiezo · 97 €/mes» entre
+        # Gold y Calculadora, como si fuera otro peldaño de la misma escalera, y no lo es.
+        # Lo marca el catalogo con `fuera_de_renovacion`, no el codigo del plan.
+        assert {x["plan"] for x in s if x["tipo"] == "cambiar"} == {"nivel1", "nivel2", "nivel3"}
 
     def test_subir_se_ofrece_antes_que_bajar(self):
         cambios = [s for s in self._salidas(plan="nivel1") if s["tipo"] == "cambiar"]
