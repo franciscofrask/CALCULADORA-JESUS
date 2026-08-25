@@ -87,3 +87,34 @@ class TestArranqueEnLunes:
         sesion["payment_status"] = "unpaid"
         asyncio.run(sb.sync_profile_from_one_time_session(sesion))
         assert entorno == {}
+
+
+class TestFinDeCicloSinHora:
+    """Renovar el mismo plan teniendo el fin de ciclo guardado como un dia pelado.
+
+    Son 95 fichas de produccion, 94 de clientes activos, casi todas de las que vinieron
+    de Calma: `current_period_end` es «2026-07-12», sin hora y sin zona. Compararlo con
+    el instante del pago reventaba con «can't compare offset-naive and offset-aware
+    datetimes», y reventaba DESPUES de cobrar: Stripe cobraba, y tanto la vuelta a la app
+    como el webhook se caian con un 500, asi que el plan no se activaba nunca. El cliente
+    solo veia «No hemos podido confirmar el pago». Solo pasaba al renovar SU MISMO plan.
+    """
+
+    @pytest.fixture
+    def migrado(self, monkeypatch, entorno):
+        async def _find(**kwargs):
+            return dict(PERFIL, current_period_end="2026-12-31")
+
+        monkeypatch.setattr(sb, "find_client_profile", _find)
+        return entorno
+
+    def test_el_pago_se_confirma_y_el_plan_queda_activo(self, migrado):
+        asyncio.run(sb.sync_profile_from_one_time_session(_pagar(utc(2026, 7, 29, 15))))
+        assert migrado["status"] == "activo", \
+            "se le ha cobrado y su plan no se ha activado"
+
+    def test_el_ciclo_nuevo_se_encadena_donde_acaba_el_viejo(self, migrado):
+        asyncio.run(sb.sync_profile_from_one_time_session(_pagar(utc(2026, 7, 29, 15))))
+        inicio = datetime.fromisoformat(migrado["current_period_start"])
+        assert (inicio.year, inicio.month, inicio.day) == (2026, 12, 31), \
+            "renovar antes de vencer encadena, no arranca hoy comiendose lo pagado"

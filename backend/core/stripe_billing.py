@@ -554,10 +554,24 @@ async def sync_profile_from_one_time_session(session, *, user_id=None):
     # MISMO plan y su ciclo aun no ha vencido, el nuevo se ENCADENA: arranca donde acaba
     # el viejo, no hoy. Sin esto, pagar 7 dias antes recalculaba el fin desde hoy y le
     # comia los dias que ya tenia pagados.
+    #
+    # LA FECHA SIN ZONA HORARIA TAMBIEN ES UNA FECHA (25-08). `current_period_end` no
+    # siempre es un instante completo: en 95 fichas de produccion -- 94 de clientes
+    # activos, casi todas de las que vinieron de Calma -- es un dia pelado, «2026-07-12».
+    # `fromisoformat` lo devuelve SIN zona, y compararlo con `pago`, que si la lleva,
+    # reventaba con «can't compare offset-naive and offset-aware datetimes». Reventaba
+    # justo aqui, DESPUES de cobrar: el cliente metia la tarjeta, Stripe le cobraba, y
+    # tanto la vuelta a la app como el webhook se caian con un 500, asi que su plan no
+    # se activaba nunca y solo veia «No hemos podido confirmar el pago». Solo le pasaba
+    # al que renovaba SU MISMO plan, porque el `and` de abajo corta antes en los demas.
+    # El resto del backend ya asume UTC cuando no hay zona (core/tiempo.a_madrid,
+    # core/cycle._parse_dt, core/renovacion._fecha); aqui faltaba.
     fin_actual = None
     try:
         fin_actual = datetime.fromisoformat(
             str(profile.get("current_period_end") or "").replace("Z", "+00:00"))
+        if fin_actual.tzinfo is None:
+            fin_actual = fin_actual.replace(tzinfo=timezone.utc)
     except (ValueError, TypeError):
         pass
     # EL PRECIO QUE SE GUARDA ES EL DE SU RENOVACION, NO EL DE TARIFA (24-08). Ojo con
