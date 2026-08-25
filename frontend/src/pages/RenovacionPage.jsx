@@ -132,6 +132,22 @@ const RenovacionPage = () => {
     }
 
     const { ciclo, resumen, salidas, renueva_solo, motivo_cambio } = datos;
+
+    // «RENOVAR MI PLAN» ENSEÑA SU PLAN, NO EL CATALOGO (Francisco, 25-08).
+    //
+    // Desde el caducado salen dos botones y los dos traian aqui, a la lista entera. Al que
+    // pulsa «Renovar mi plan» no hay que ponerle delante Premium, Gold y Calculadora: ya ha
+    // dicho lo que quiere. Con `?solo=mio` se le enseña solo el suyo, y debajo la puerta
+    // para ver el resto por si cambia de idea. «Ver mis opciones» sigue trayendo a todo.
+    //
+    // Si su plan NO se puede renovar -- retirado y sin reabrir -- no hay «Seguir igual» que
+    // enseñar, asi que se le enseña todo igualmente: mas vale la lista que una pantalla
+    // vacia con un titulo que promete.
+    const soloElSuyo = new URLSearchParams(window.location.search).get('solo') === 'mio';
+    const tieneElSuyo = salidas.some(s => s.tipo === 'renovar');
+    const aEnseñar = (soloElSuyo && tieneElSuyo)
+        ? salidas.filter(s => s.tipo === 'renovar')
+        : salidas;
     const { peso, grasa, fotos, constancia, ajustes_de_macros } = resumen;
     const bajado = (peso.cambio_pct ?? 0) < 0;
 
@@ -296,7 +312,7 @@ const RenovacionPage = () => {
             )}
 
             <div className="space-y-3">
-                {salidas.map(s => (
+                {aEnseñar.map(s => (
                     <button key={s.plan + s.tipo} onClick={() => elegir(s)} disabled={!!yendo}
                         data-testid={`salida-${s.tipo}-${s.plan}`}
                         className={`w-full surface surface-hover p-4 flex items-center justify-between gap-4 text-left disabled:opacity-60 ${
@@ -340,6 +356,16 @@ const RenovacionPage = () => {
                     </button>
                 ))}
             </div>
+
+            {/* Enseñándole solo el suyo, la puerta al resto tiene que estar: el que llega
+                aquí decidido puede cambiar de idea al ver el precio. */}
+            {soloElSuyo && tieneElSuyo && salidas.length > 1 && (
+                <button onClick={() => navigate('/renovacion')}
+                    className="mt-4 text-sm text-brand hover:underline"
+                    data-testid="renovacion-ver-todas">
+                    Ver todas mis opciones
+                </button>
+            )}
         </div>
     );
 };

@@ -27,7 +27,22 @@ def compute_cycle(profile: Dict[str, Any], now: Optional[datetime] = None) -> Di
     """Devuelve {week, cycle_number, cycle_total_weeks, cycle_start} para un perfil."""
     now = now or datetime.now(timezone.utc)
     plan = PLAN_CATALOG.get((profile.get("plan") or "").lower().strip()) or {}
-    total = (plan.get("ciclo") or {}).get("semanas")
+    ciclo = plan.get("ciclo") or {}
+    total = ciclo.get("semanas")
+    # LOS PLANES MENSUALES TAMBIEN TIENEN CICLO, Y ES DE CUATRO SEMANAS (Francisco, 25-08).
+    #
+    # Solo se miraba `ciclo.semanas`, que en los mensuales es None, asi que no habia modulo
+    # y la semana SUBIA SIN PARAR: a un cliente de El Lunes Empiezo -- que se cobra cada 28
+    # dias -- la app le decia «Estas en la semana 8», un numero que no significaba nada y
+    # que iba a seguir creciendo para siempre.
+    #
+    # Se coge de `billing_cycle_weeks`, que es lo que de verdad se le cobra, y SOLO en los
+    # mensuales: los cinco complementos de pago unico (rutina del mes, revision...) no son
+    # un ciclo, y los «variable» -- Premium y entrenamiento personal -- llevan 4 en ese
+    # campo por defecto pero en la practica van a 84 dias, asi que decirles «semana 3 de 4»
+    # seria cambiar un numero sin sentido por otro.
+    if not total and ciclo.get("tipo") == "mensual":
+        total = plan.get("billing_cycle_weeks")
 
     anchor = _parse_dt(profile.get("cycle_start")) or _parse_dt(profile.get("created_at")) or now
     # UN CICLO PAGADO POR ADELANTADO NO EMPIEZA HASTA QUE EMPIEZA (25-08).

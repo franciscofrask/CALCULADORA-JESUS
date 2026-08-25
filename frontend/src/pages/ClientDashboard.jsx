@@ -274,7 +274,13 @@ const PlanCaducado = ({ navigate, nombre, api, email }) => {
                     <p className="text-brand font-medium text-sm" data-testid="caducado-hecho">{hecho}</p>
                 ) : (
                     <div className="flex flex-col sm:flex-row gap-2 justify-center">
-                        <button onClick={() => navigate('/renovacion')} className="btn-brand whitespace-nowrap"
+                        {/* SU PLAN, NO EL CATÁLOGO (Francisco, 25-08). Los dos botones de
+                            esta pantalla traían a la misma lista entera, y al que pulsa
+                            «Renovar mi plan» no hay que ponerle delante Premium, Gold y
+                            Calculadora: ya ha dicho lo que quiere. Con `solo=mio` se le
+                            enseña el suyo y, debajo, la puerta a los demás. «Ver mis
+                            opciones», más abajo, sigue trayendo la lista completa. */}
+                        <button onClick={() => navigate('/renovacion?solo=mio')} className="btn-brand whitespace-nowrap"
                             data-testid="caducado-renovar">
                             Renovar mi plan
                         </button>
