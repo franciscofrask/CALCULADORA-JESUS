@@ -76,19 +76,35 @@ const SemanaDeRutina = ({ semana, abrirPdf, tienePdf, onMarcarHoy, onSiLoHice, o
                 )}
             </div>
 
-            {/* La tira de la semana: L a D con el grupo o la luna del descanso. */}
-            <div className="grid grid-cols-7 gap-1.5" data-testid="semana-rutina-tira">
+            {/* La tira de la semana: L a D con el grupo o la luna del descanso.
+                EN EL MÓVIL, DOS FILAS DE CUATRO (Francisco, 25-08). Con siete columnas en
+                390 px cada casilla mide 44 px, y ahí no cabe ningún grupo de verdad: los
+                del catálogo de Jesús son «Dorsal Gemelo Abdomen» o «Cuádriceps Gemelo», y
+                salían cortados a media palabra («Cuadric…»), que se lee como una errata.
+                Con cuatro columnas la casilla pasa a 84 px y entran enteros. En cuanto hay
+                sitio (sm) vuelve a la fila de siete de siempre. */}
+            <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5" data-testid="semana-rutina-tira">
                 {dias.map(d => (
                     <div key={d.fecha} data-testid={`semana-dia-${d.fecha}`}
-                        className={`rounded-xl border px-1 py-2 text-center min-w-0
+                        className={`rounded-xl border px-0.5 py-2 text-center min-w-0
                             ${d.hoy ? 'border-brand bg-brand/10' : 'border-border bg-card'}`}>
                         <p className={`text-[10px] font-bold uppercase ${d.hoy ? 'text-brand' : 'text-muted-foreground'}`}>
                             {DAY_LABELS[d.dia]}
                         </p>
-                        <div className="mt-1 h-8 flex flex-col items-center justify-center">
+                        {/* EL GRUPO, ENTERO (Francisco, 25-08). Con `truncate` en siete
+                            columnas de 390 px, «Empuje» salía «Emp…» y «Dorsal Gemelo
+                            Abdomen» no se leía en absoluto: el cliente no sabe qué le toca
+                            el jueves, que es para lo que existe esta tira. Ahora parte en
+                            dos líneas y la caja crece con ellas. */}
+                        <div className="mt-1 min-h-8 flex flex-col items-center justify-center">
                             {d.entrena ? (
                                 <>
-                                    <p className="text-[9px] font-semibold text-foreground leading-tight truncate w-full px-0.5"
+                                    {/* Se parte SOLO entre palabras: «Cuádriceps Gemelo» baja
+                                        a dos líneas, pero «Cuádriceps» no se corta por la
+                                        mitad («Cuadric/eps»), que es lo que hacía y no se
+                                        entendía. Lo que aun así no quepa se recorta, y el
+                                        nombre entero sigue estando en la tarjeta de HOY. */}
+                                    <p className="text-[9px] font-semibold text-foreground leading-tight w-full break-normal line-clamp-2 overflow-hidden"
                                         title={d.grupo}>{d.grupo}</p>
                                     {d.hecho ? <Check className="w-3 h-3 text-emerald-500 mt-0.5" />
                                         : d.recuperado_en ? <span className="text-[8px] text-muted-foreground">→ otro día</span>
@@ -229,36 +245,39 @@ const VistaPreviaPdf = ({ api, info, abrirPdf }) => {
     // Si ya está descargada, se abre esa y no se vuelve a pedir al servidor.
     const abrirEntera = () => (url ? window.open(url, '_blank', 'noopener') : abrirPdf());
 
+    // EN EL MÓVIL, EL BOTÓN Y YA (Francisco, 25-08: «tiene que verse bien en celulares»).
+    //
+    // Aquí había una caja de puntos que ocupaba un tercio de la pantalla para decir «Verla
+    // aquí · son unos megas», y al pulsarla el navegador del móvil casi nunca sabe pintar
+    // un PDF dentro de la página: lo que salía era otra caja disculpándose CON UN SEGUNDO
+    // botón «Abrirla entera», el mismo que ya estaba arriba. Dos botones iguales y media
+    // pantalla gastada para no enseñar nada.
+    //
+    // El visor de dentro se queda SOLO en escritorio, donde hay sitio y donde el navegador
+    // sí lo pinta. Para verlo de verdad en el móvil haría falta pdf.js, que no está en el
+    // proyecto, y no se va a meter una dependencia para esto.
     return (
         <div className="surface p-4 sm:p-5 space-y-4 max-w-3xl" data-testid="routine-pdf-preview">
-            <div className="flex items-start justify-between gap-3 flex-wrap">
-                <div>
-                    <h2 className="font-heading text-xl font-bold uppercase text-foreground leading-tight">Tu rutina, en PDF</h2>
-                    <p className="text-muted-foreground text-sm">
-                        Tu entrenador te la ha preparado el {new Date(info.uploaded_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}.
-                    </p>
-                </div>
-                <button onClick={abrirEntera} data-testid="routine-pdf-btn"
-                    className="btn-brand inline-flex items-center gap-2 shrink-0">
-                    Abrirla entera <ChevronRight className="w-4 h-4" />
-                </button>
+            <div>
+                <h2 className="font-heading text-xl font-bold uppercase text-foreground leading-tight">Tu rutina, en PDF</h2>
+                <p className="text-muted-foreground text-sm">
+                    Tu entrenador te la ha preparado el {new Date(info.uploaded_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}.
+                </p>
             </div>
 
-            {estado === 'espera' && (
-                <button onClick={cargar} data-testid="routine-pdf-ver-aqui"
-                    className="w-full rounded-2xl border border-dashed border-border py-8 text-center hover:border-brand/50 transition-colors">
-                    <FileText className="w-7 h-7 text-brand/60 mx-auto mb-2" />
-                    <p className="font-semibold text-foreground text-sm">Verla aquí</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">Son unos megas: mejor con wifi.</p>
-                </button>
-            )}
+            {/* Ancho entero en el móvil, que es donde se pulsa con el pulgar. */}
+            <button onClick={abrirEntera} data-testid="routine-pdf-btn"
+                className="btn-brand w-full sm:w-auto inline-flex items-center justify-center gap-2">
+                <FileText className="w-4 h-4" />
+                Abrir mi rutina <ChevronRight className="w-4 h-4" />
+            </button>
 
-            {estado === 'cargando' && <div className="h-64 rounded-2xl bg-muted animate-pulse" />}
+            {estado === 'cargando' && !enMovil && <div className="h-64 rounded-2xl bg-muted animate-pulse" />}
 
-            {estado === 'fallo' && (
-                <div className="rounded-2xl border border-border p-6 text-center space-y-3">
+            {estado === 'fallo' && !enMovil && (
+                <div className="rounded-2xl border border-border p-4 text-center space-y-2">
                     <p className="text-sm text-muted-foreground">
-                        No hemos podido enseñártela aquí. Ábrela entera y la verás igual.
+                        No hemos podido enseñártela aquí dentro. Con el botón se abre igual.
                     </p>
                     <button onClick={cargar} className="text-sm font-semibold text-brand hover:underline underline-offset-4">
                         Volver a intentarlo
@@ -266,17 +285,18 @@ const VistaPreviaPdf = ({ api, info, abrirPdf }) => {
                 </div>
             )}
 
-            {estado === 'lista' && url && (
+            {estado === 'lista' && url && !enMovil && (
                 <object data={url} type="application/pdf" aria-label="Tu rutina en PDF"
                     data-testid="routine-pdf-object"
                     className="w-full h-[60vh] min-h-[320px] rounded-2xl border border-border bg-card">
-                    {/* Lo que se ve donde el navegador no sabe pintar un PDF dentro de la
-                        página, que en móvil es la mitad de las veces. */}
-                    <div className="p-6 text-center space-y-3">
+                    {/* Donde el navegador no sabe pintar un PDF dentro de la página. Sin
+                        repetir el botón, que está justo encima, y centrado: si no, queda
+                        una caja enorme con una frase arriba del todo y parece que se ha
+                        roto algo. */}
+                    <div className="h-full flex items-center justify-center p-6 text-center">
                         <p className="text-sm text-muted-foreground">
-                            Tu navegador no la enseña aquí dentro. Ábrela entera y la verás igual.
+                            Tu navegador no la enseña aquí dentro. Ábrela con el botón de arriba.
                         </p>
-                        <button onClick={abrirEntera} className="btn-brand">Abrirla entera</button>
                     </div>
                 </object>
             )}
