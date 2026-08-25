@@ -290,6 +290,17 @@ const HuecoDelMes = ({ api, sexo, hueco, onHecho }) => {
     const pdf = hueco?.pdf;
     const etiqueta = sexo === 'hombre' ? 'Hombre' : 'Mujer';
 
+    // EL PDF ESTA DETRAS DE LA SESION, asi que un `window.open` a la URL devuelve
+    // «Not authenticated»: el navegador pide esa direccion sin la cabecera. Se baja con el
+    // cliente de la app y se abre desde un object URL, igual que la ficha del cliente.
+    const ver = async () => {
+        try {
+            const r = await api.get(`/admin/routines/pdf-del-mes?sexo=${sexo}`,
+                { responseType: 'blob' });
+            window.open(URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' })), '_blank');
+        } catch { toast.error('No se pudo abrir el PDF.'); }
+    };
+
     const subir = async (e) => {
         const archivo = e.target.files?.[0];
         e.target.value = '';
@@ -340,7 +351,7 @@ const HuecoDelMes = ({ api, sexo, hueco, onHecho }) => {
                         onChange={subir} data-testid={`input-del-mes-${sexo}`} />
                 </label>
                 {pdf && (
-                    <button onClick={() => window.open(`${api.defaults.baseURL}/admin/routines/pdf-del-mes?sexo=${sexo}`, '_blank')}
+                    <button onClick={ver} data-testid={`ver-del-mes-${sexo}`}
                         className="text-xs text-white/40 hover:text-white">verla</button>
                 )}
             </div>
