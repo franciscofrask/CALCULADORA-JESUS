@@ -581,45 +581,12 @@ const InicioNuevo = () => {
     // regla y por la misma razón que `diaConfigurado` en components/inicio/TuDietaHoy.jsx).
     const diaConfigurado = Boolean(dieta?.exists && dieta.num_comidas);
 
-    // La configuración con la que sale el número de arriba. LA PRECEDENCIA ES LA DE
-    // `TuDietaHoy` al pedir el reparto, y tiene que ser la misma o el rótulo describe otra
-    // cosa: con el día montado, la del día; sin montar, día de ENTRENAMIENTO y lo que el
-    // cliente tenga puesto (`GET /user/diet-config`). Por eso no se mira `tipoDeDia`: el
-    // rótulo describe el número que se enseña, no el día que debería ser.
-    //
-    // ESA CONFIGURACIÓN HAY QUE IR A BUSCARLA (`configDieta`): cuando el día no existe,
-    // `GET /diets/{fecha}` no manda ninguna, y aquí se daba por hecho lo más común.
-    const opcionPeriDelNumero = diaConfigurado
-        ? (dieta.opcion_peri || 'intra_post')
-        : (configDieta?.opcion_peri || 'intra_post');
-    const tipoDiaDelNumero = diaConfigurado ? (dieta.tipo_dia || 'entrenamiento') : 'entrenamiento';
-
-    // SI EL NÚMERO DE ARRIBA LLEVA EL PERIENTRENO DENTRO, que es lo que decide si se rotula
-    // (punto 49 del 24-08). Y la respuesta es exactamente: si el día tiene BLOQUE de peri.
-    //
-    // El de arriba es el total del reparto y el de Mis macros es `objetivo_de_las_comidas`
-    // (backend/macro_distribution.py), que es ese mismo total MENOS el bloque Intra/Post.
-    // O sea que los dos números se separan justo cuando hay bloque, y no antes. De ahí las
-    // tres condiciones, todas comprobadas contra /calculator/distribute el 24-08:
-    //   · DESCANSO: no hay peri en el día (235 con peri frente a 225 pelados en descanso).
-    //   · `sin_peri` CON peri asignado: no hay bloque, pero el presupuesto se reparte entre
-    //     las comidas y el total lo lleva igual -- y como no hay bloque que restar, Mis
-    //     macros enseña ESE MISMO total (medido: los dos a 235,1/290). No hay nada que
-    //     aclarar, así que no se rotula.
-    //   · PERI A 0 con bloque: `periworkout` sale a 0 y los dos números vuelven a coincidir
-    //     (190/240 los dos). Un peri a 0 es decisión del coach y se respeta, no se rellena
-    //     con el 35/15 de arranque (misma regla que `leer_peri` en el servidor).
-    const macroDelPeri = (claves) => {
-        for (const c of claves) {
-            const v = profile?.macros_periworkout?.[c];
-            if (v !== undefined && v !== null && v !== '') return Number(v) || 0;
-        }
-        return null;   // sin asignar: manda el valor de arranque del servidor
-    };
-    const hayBloqueDePeri = tipoDiaDelNumero !== 'descanso' && opcionPeriDelNumero !== 'sin_peri';
-    const periP = macroDelPeri(['protein', 'proteinas']) ?? 35;
-    const periH = macroDelPeri(['carbs', 'hidratos']) ?? 15;
-    const conPerientreno = hayBloqueDePeri && (periP > 0 || periH > 0);
+    // EL PERIENTRENO YA NO SE ROTULA DESDE AQUÍ (puntos 86 a 88 del artifact del 25-08).
+    // Desde el 24-08 había una frase, «Tus macros de hoy llevan el perientreno dentro», y
+    // para decidir si salía se recalculaba aquí la configuración del día -- con su propia
+    // precedencia, que tenía que coincidir con la de `TuDietaHoy` o el rótulo describía otro
+    // número. Ahora en su sitio hay un INTERRUPTOR, y vive donde viven los números, así que
+    // lee el mismo reparto que ellos y no puede desmentirlos: components/inicio/TuDietaHoy.
 
     // El PDF se abre vía blob porque el visor del navegador no manda el token (mismo
     // camino que RoutinePage y EntrenoPage).
@@ -815,40 +782,12 @@ const InicioNuevo = () => {
                     </div>
                 </div>
             ) : objetivo ? (
-                /* LA NOTA DEL PERIENTRENO VA PEGADA A LOS NÚMEROS, Y ESO CUESTA UN TRUCO.
-                   TuDietaHoy no devuelve una tarjeta: devuelve TRES secciones sueltas (los
-                   números, «Marca lo que ya te has comido» y «Extras del día»). Escrita
-                   detrás del componente con un `-mt-3`, la frase no caía bajo los números:
-                   caía debajo del campo de texto de los extras (medido el 24-08: los
-                   números en y=430 y la nota en y=1345), y «EXTRAS DEL DÍA», que son dos
-                   líneas de Jesús, acababa con una frase de macros que no es suya.
-                   Como el bloque de extras vive DENTRO de ese componente y ese fichero no
-                   se toca desde aquí, se ordena con flex: la nota va primero en el HTML y
-                   la tarjeta de los números se sube por encima con `order`. Si algún día
-                   TuDietaHoy cambia el `data-testid` de esa sección, el selector deja de
-                   casar y la nota se queda ARRIBA del todo, pegada a lo que explica: la
-                   caída es fea pero no vuelve a meterse en los extras. */
-                <div className="flex flex-col gap-6 [&>[data-testid=tu-dieta-hoy]]:order-[-1]">
-                    {/* EL NÚMERO LLEVA EL PERIENTRENO DENTRO, Y HAY QUE DECIRLO (punto 49
-                        del doc del 24-08: «unas suman el perientreno y otras no, y ninguna
-                        lo dice»). Inicio enseña el total CON el peri -- `conPeri`, el
-                        resumen del reparto, en components/inicio/TuDietaHoy.jsx -- y Mis
-                        macros enseña el mismo día SIN él: los dos números son buenos y
-                        parecían un error. Aquí solo se rotula el de esta pantalla; el
-                        criterio único y los rótulos de Mis macros, Mi semana y Nutrición
-                        son de otros ficheros.
-                        Con el día guardado en descanso, o con el perientreno apagado, no se
-                        pinta: no hay nada que aclarar (ver `conPerientreno`).
-                        El margen negativo la deja a un dedo de la tarjeta de números (el
-                        `gap-6` del contenedor son 24 px) y no del bloque de abajo. */}
-                    {conPerientreno && (
-                        <p className="text-xs text-muted-foreground px-1 -mt-[1.125rem]" data-testid="nota-perientreno">
-                            Tus macros de hoy llevan el perientreno dentro.
-                        </p>
-                    )}
-                    <TuDietaHoy api={api} userId={user?.id} fecha={hoyDeLaDieta()} dieta={dieta}
-                        objetivo={objetivo} servido={comido} navigate={navigate} />
-                </div>
+                /* Los números, la lista de comidas y los extras. El interruptor del
+                   perientreno va dentro, en el pie de «Macros»: hasta el 25-08 aquí había
+                   una frase suelta explicándolo, y hacía falta un truco de `order` para que
+                   cayera pegada a los números en vez de dentro de los extras. */
+                <TuDietaHoy api={api} userId={user?.id} fecha={hoyDeLaDieta()} dieta={dieta}
+                    objetivo={objetivo} servido={comido} navigate={navigate} />
             ) : (
                 <>
                     <LineaDeHoy icono={Scale} titulo="Configura tus macros"

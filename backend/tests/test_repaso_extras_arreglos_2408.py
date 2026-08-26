@@ -56,49 +56,65 @@ def _fuente(ruta: str) -> str:
     return (RAIZ / ruta).read_text(encoding="utf-8")
 
 
+TU_DIETA_HOY = "frontend/src/components/inicio/TuDietaHoy.jsx"
+
+
 def _bloque_del_rotulo() -> str:
-    """El trozo de Inicio donde se decide si sale la nota del perientreno."""
+    """El trozo de Inicio donde se decide que dia se esta enseñando."""
     src = _fuente(INICIO)
-    fin = src.index("const conPerientreno")
-    return src[src.index("const diaConfigurado"):src.index("\n", fin)]
+    fin = src.index("const diaConfigurado")
+    return src[src.index("const dieta") if "const dieta" in src else 0:src.index("\n", fin)]
 
 
-# ── A · el rotulo del perientreno describe el numero que se enseña ──────────────────────
+# ── A · el perientreno del numero: desde el 26-08 es un INTERRUPTOR ─────────────────────
+#
+# Hasta el 25-08 aqui habia una frase, «Tus macros de hoy llevan el perientreno dentro», y
+# para decidir si salia se recalculaba la configuracion del dia EN INICIO, con su propia
+# precedencia; si esa precedencia se separaba de la de TuDietaHoy, el rotulo describia otro
+# numero. Los puntos 86 a 88 del artifact del 25-08 lo cambian por un interruptor que vive
+# donde viven los numeros y lee el mismo reparto, asi que no puede desmentirlos. Lo que se
+# comprueba ahora es justo eso.
 
-def test_el_rotulo_del_peri_mira_la_configuracion_del_cliente():
-    """Sin `/user/diet-config` la pantalla no sabe si el cliente lleva peri, y al que lo
-    tiene apagado se le dice que sus macros lo llevan dentro."""
+def test_el_interruptor_del_peri_sale_del_mismo_reparto_que_el_numero():
+    """Si el interruptor sacara los gramos del peri de otro sitio (del perfil, por
+    ejemplo), volveria a poder decir «40 P» debajo de un total que lleva otros 35."""
+    src = _fuente(TU_DIETA_HOY)
+    bloque = src[src.index("const periTotal"):src.index("const valoresDeVista")]
+    assert "reparto?.periworkout" in bloque, \
+        "el interruptor vuelve a sacar el peri de un sitio distinto del total"
+    assert "conPeri.P - periTotal.P" in bloque, \
+        "el numero sin peri ya no se calcula restando: puede dejar de cuadrar con el total"
+
+
+def test_la_grasa_no_entra_en_la_cuenta_del_peri():
+    """En el metodo la grasa del peri no cuenta, y por eso `G_total` nunca la llevo.
+    Restarla dejaria la grasa mas baja al desmarcar, y eso seria un numero inventado."""
+    src = _fuente(TU_DIETA_HOY)
+    bloque = src[src.index("const sinPeri"):src.index("const valoresDeVista")]
+    assert "G: conPeri.G" in bloque, "la grasa vuelve a moverse al sacar el peri"
+
+
+def test_el_interruptor_solo_vive_en_macros():
+    """Punto 88: en Dieta, Llevas y Falta el peri ya va contado como una comida mas, con su
+    fila y su casilla, asi que ahi el interruptor mentiria."""
+    src = _fuente(TU_DIETA_HOY)
+    assert "vista === 'macros' && hayPeriEnElDia" in src, \
+        "el interruptor del peri se ha soltado de la pestaña Macros"
+
+
+def test_sin_peri_en_el_dia_no_hay_interruptor():
+    """Descanso, `sin_peri` o un peri a 0 puesto por el coach: no hay nada que separar."""
+    src = _fuente(TU_DIETA_HOY)
+    assert re.search(r"hayPeriEnElDia = periTotal\.P > 0 \|\| periTotal\.H > 0", src), \
+        "el interruptor vuelve a salir con el dia sin perientreno"
+
+
+def test_la_nota_vieja_del_peri_ya_no_esta_en_inicio():
+    """La frase suelta necesitaba un truco de `order` para no caer dentro de los extras.
+    Al quitarla se fue el truco: que no vuelva ninguna de las dos."""
     src = _fuente(INICIO)
-    assert "/user/diet-config" in src, \
-        "Inicio ha dejado de preguntar la configuracion del cliente: el rotulo del peri vuelve a inventarsela"
-    bloque = _bloque_del_rotulo()
-    assert "configDieta?.opcion_peri" in bloque, \
-        "el dia sin montar vuelve a dar por hecho que todo el mundo lleva perientreno"
-
-
-def test_el_rotulo_del_peri_se_calla_en_los_tres_casos_sin_bloque_de_peri():
-    """Descanso, `sin_peri` y peri a 0: en los tres el numero de Inicio y el de Mis macros
-    son el mismo, asi que no hay nada que aclarar."""
-    bloque = _bloque_del_rotulo()
-    assert "!== 'descanso'" in bloque and "!== 'sin_peri'" in bloque, \
-        "el rotulo vuelve a salir en descanso o en sin_peri"
-    assert re.search(r"periP > 0 \|\| periH > 0", bloque), \
-        "un perientreno a 0 es decision del coach: con el a 0 los dos numeros coinciden"
-
-
-def test_un_peri_a_cero_no_se_rellena_con_el_arranque_del_servidor():
-    """Misma regla que `leer_peri` en backend/macro_distribution.py: el 35/15 es solo para
-    el peri SIN ASIGNAR. Rellenar un 0 puesto a proposito ya mordio una vez en el servidor."""
-    bloque = _bloque_del_rotulo()
-    assert "v !== undefined && v !== null && v !== ''" in bloque, \
-        "el 0 vuelve a contar como vacio y se rellena con el 35/15"
-
-
-def test_la_nota_solo_se_pinta_con_conperientreno():
-    """La nota no puede volver a pintarse siempre: cuelga de la condicion."""
-    src = _fuente(INICIO)
-    trozo = src[src.index("{conPerientreno && ("):]
-    assert 'data-testid="nota-perientreno"' in trozo[:600]
+    assert "nota-perientreno" not in src, \
+        "vuelve la frase suelta del peri: o se pega a los numeros con un truco, o cae en los extras"
 
 
 # ── B · el dia que existe solo por un extra no es un dia montado ────────────────────────
@@ -168,5 +184,8 @@ def test_inicio_monta_los_extras_en_una_sola_rama():
     src = _fuente(INICIO)
     assert src.count("<ExtrasDelDia") == 1, "Inicio monta el bloque de extras mas de una vez"
     # Y va en la rama SIN objetivo, la de «Configura tus macros», no al lado de TuDietaHoy.
-    rama_con_macros = src.split("<TuDietaHoy", 1)[1].split("</div>", 1)[0]
+    # Se corta por el `) : (` del ternario, que es donde acaba la rama CON macros: cortar
+    # por el primer `</div>` daba por hecho que TuDietaHoy iba envuelto en uno, y desde el
+    # 26-08 va suelto (se quito el envoltorio que sostenia la nota del peri).
+    rama_con_macros = src.split("<TuDietaHoy", 1)[1].split(") : (", 1)[0]
     assert "<ExtrasDelDia" not in rama_con_macros

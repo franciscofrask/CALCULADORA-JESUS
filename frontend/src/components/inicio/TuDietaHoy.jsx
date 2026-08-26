@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Circle, ChevronRight, Zap } from 'lucide-react';
+import { CheckCircle2, CheckSquare, ChevronRight, Circle, Square, Zap } from 'lucide-react';
 import { leer as leerLocal, escribir as escribirLocal } from '../../lib/almacenLocal';
 import { num0, num1 } from '../../lib/numeros';
 import { leerMacro } from '../../lib/estadoDelMacro';
@@ -79,7 +79,11 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
     // Las comidas ya marcadas se CONTRAEN («2 hechas · ocultas — Ver», punto 1 del doc
     // del 23-08): la lista enseña solo lo que queda por comer, y el «Ver» las despliega.
     const [verHechas, setVerHechas] = useState(false);
-    useEffect(() => { setVerHechas(false); }, [fecha]);
+    // El peri va DENTRO del total por defecto (punto 87): el 250 ya lleva los 40 del peri.
+    // Desmarcarlo es una forma de mirar la cuenta, no un ajuste que se guarde, así que
+    // vuelve a su sitio al cambiar de día.
+    const [periDentro, setPeriDentro] = useState(true);
+    useEffect(() => { setVerHechas(false); setPeriDentro(true); }, [fecha]);
     // El reparto vivo del día: los totales con el peri y el objetivo de cada comida.
     const [reparto, setReparto] = useState(null);
     const [marcadas, setMarcadas] = useState({});
@@ -270,7 +274,24 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
     } : null;
     const pasadas = falta ? ['P', 'H', 'G'].filter((k) => falta[k] < 0) : [];
 
-    const valoresDeVista = { macros: conPeri, dieta: totalDieta, llevas, falta };
+    // EL PERIENTRENO, DENTRO O APARTE (puntos 86 a 88). Los dos números salen del MISMO
+    // reparto, así que la resta cuadra siempre: el total lleva el peri sumado
+    // (`resumen.P_total`) y quitárselo da exactamente el objetivo de las comidas, que es el
+    // número que enseña Mis macros. La grasa no se toca: en el método la del peri no cuenta,
+    // y por eso `G_total` nunca la llevó.
+    const periTotal = useMemo(() => ORDEN_PERI.reduce((acc, k) => {
+        const o = (reparto?.periworkout || {})[k];
+        return o ? { P: acc.P + (o.P || 0), H: acc.H + (o.H || 0) } : acc;
+    }, { P: 0, H: 0 }), [reparto]);
+    const hayPeriEnElDia = periTotal.P > 0 || periTotal.H > 0;
+    const sinPeri = conPeri
+        ? { P: conPeri.P - periTotal.P, H: conPeri.H - periTotal.H, G: conPeri.G }
+        : conPeri;
+
+    const valoresDeVista = {
+        macros: periDentro ? conPeri : sinPeri,
+        dieta: totalDieta, llevas, falta,
+    };
     const valores = valoresDeVista[vista];
     // Con un extra apuntado y ninguna comida marcada, Llevas vuelve a decir «Todavía no
     // has marcado nada»: desde que los extras no suman, el número sería un 0 pelado.
@@ -394,6 +415,34 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
                             ) : PIE_DE_VISTA[vista] ? (
                                 <p className="text-xs text-muted-foreground text-center mt-3">{PIE_DE_VISTA[vista]}</p>
                             ) : null}
+
+                            {/* EL INTERRUPTOR DEL PERIENTRENO, Y SOLO EN MACROS (puntos 86 a
+                                88). En Dieta, Llevas y Falta no aparece: ahí el peri ya va
+                                contado como una comida más, con su fila y su casilla.
+
+                                LA CASILLA VA DELANTE DEL TEXTO. Puesta ahí se lee como lo que
+                                es -- algo que se puede desmarcar -- y no hace falta explicarlo;
+                                detrás habría que contarlo, y en el móvil competiría por el
+                                ancho con la frase.
+
+                                Y al desmarcarlo se ve la cuenta: 210 + 40 = 250 de proteína.
+                                Con eso se acaba el lío entre este número y el de Mis macros,
+                                que enseña el mismo día sin el peri y parecía un error. */}
+                            {vista === 'macros' && hayPeriEnElDia && (
+                                <button type="button" role="checkbox" aria-checked={periDentro}
+                                    onClick={() => setPeriDentro((v) => !v)}
+                                    data-testid="interruptor-peri"
+                                    className="mt-2 mx-auto flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                                    {periDentro
+                                        ? <CheckSquare className="w-4 h-4 text-ok flex-shrink-0" />
+                                        : <Square className="w-4 h-4 flex-shrink-0" />}
+                                    <span>
+                                        {periDentro
+                                            ? 'Perientreno incluido'
+                                            : `Perientreno aparte · ${num0(periTotal.P)} P · ${num0(periTotal.H)} H`}
+                                    </span>
+                                </button>
+                            )}
                         </>
                     )}
                 </div>

@@ -109,16 +109,17 @@ def test_el_origen_llega_hasta_el_dato_guardado(cabeceras_cliente, origen):
 
 # ── FALLO 16 · donde se pinta la nota del perientreno ───────────────────────────────────
 
-def test_la_nota_del_perientreno_no_cae_dentro_de_los_extras():
+def test_no_hay_frases_sueltas_de_macros_alrededor_de_los_extras():
     """TuDietaHoy devuelve TRES secciones (numeros, marcar comidas y extras), asi que una
-    frase escrita detras del componente aterriza debajo del campo de texto de los extras.
-    Va delante en el HTML y la tarjeta de numeros se sube con `order`."""
+    frase escrita detras del componente aterriza debajo del campo de texto de los extras:
+    «EXTRAS DEL DIA», que son dos lineas de Jesus, acababa con una frase de macros que no es
+    suya. Se sostenia con un truco de `order`.
+
+    Desde el 26-08 (puntos 86 a 88) esa frase es un interruptor y vive DENTRO de la tarjeta
+    de Macros, asi que ni hace falta el truco ni se puede caer. Lo que se comprueba es que
+    no vuelva ninguna de las dos cosas."""
     src = _fuente(INICIO)
-    nota = src.index('data-testid="nota-perientreno"')
-    componente = src.index("<TuDietaHoy")
-    assert nota < componente, "la nota vuelve a ir detras de TuDietaHoy: acaba en los extras"
-    # El truco que la sube: sin el `order` la nota se queda arriba del todo (caida fea,
-    # pero nunca dentro de los extras).
-    assert re.search(r"\[&>\[data-testid=tu-dieta-hoy\]\]:order-\[-1\]", src)
-    assert "-mt-3" not in src.split("nota-perientreno", 1)[0][-400:], \
-        "el -mt-3 daba por hecho que la nota iba pegada a la tarjeta de macros"
+    assert "nota-perientreno" not in src, \
+        "vuelve la frase suelta del peri en Inicio: acaba dentro de los extras"
+    assert not re.search(r"\[&>\[data-testid=tu-dieta-hoy\]\]:order-\[-1\]", src), \
+        "vuelve el truco de `order`: solo hacia falta para sostener la frase suelta"
