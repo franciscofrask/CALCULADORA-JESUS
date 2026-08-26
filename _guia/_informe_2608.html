@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>12EN12 · Lo trabajado el 26 de agosto</title>
+<style>
+  @page { size: A4; margin: 17mm 15mm 15mm 15mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 10.4pt; line-height: 1.5; color: #1a1a1a; margin: 0;
+  }
+  h1 { font-size: 21pt; margin: 0 0 2mm; letter-spacing: -.4px; }
+  .sub { color: #666; font-size: 10pt; margin: 0 0 8mm; }
+  h2 {
+    font-size: 13pt; margin: 9mm 0 3mm; padding-bottom: 1.5mm;
+    border-bottom: 2px solid #FF671F; page-break-after: avoid;
+  }
+  h3 { font-size: 11pt; margin: 5mm 0 1.5mm; page-break-after: avoid; }
+  p { margin: 0 0 2.5mm; }
+  ul { margin: 0 0 3mm; padding-left: 5mm; }
+  li { margin-bottom: 1.2mm; }
+  .fase {
+    border-left: 3px solid #ddd; padding: 0 0 0 4mm; margin: 0 0 4mm;
+    page-break-inside: avoid;
+  }
+  .fase h3 { margin-top: 0; }
+  .cita {
+    color: #555; font-style: italic; border-left: 2px solid #FF671F;
+    padding-left: 3mm; margin: 2mm 0;
+  }
+  .caja {
+    background: #fdf5f0; border: 1px solid #f3d9c8; border-radius: 3px;
+    padding: 3mm 4mm; margin: 3mm 0; page-break-inside: avoid;
+  }
+  .caja.gris { background: #f6f6f6; border-color: #e0e0e0; }
+  .caja h3 { margin-top: 0; }
+  code { font-family: Consolas, monospace; font-size: 9.2pt; background: #f0f0f0;
+         padding: 0 1mm; border-radius: 2px; }
+  table { width: 100%; border-collapse: collapse; margin: 2mm 0 4mm; font-size: 9.4pt; }
+  th, td { text-align: left; padding: 1.6mm 2mm; border-bottom: 1px solid #e4e4e4;
+           vertical-align: top; }
+  th { background: #f6f6f6; font-weight: 600; }
+  .n { color: #FF671F; font-weight: 700; }
+  .cifra { font-weight: 700; }
+  .pie { margin-top: 8mm; padding-top: 3mm; border-top: 1px solid #ddd;
+         color: #777; font-size: 8.8pt; }
+  .salto { page-break-before: always; }
+</style>
+</head>
+<body>
+
+<h1>Lo trabajado el 26 de agosto</h1>
+<p class="sub">
+  Los tres artifacts de Jesús (partes 2, 3 y 4 de «Para el equipo»), puntos 75 al 143.
+  Diecisiete fases, veintiún commits. Todo en producción desde hoy.
+</p>
+
+<div class="caja">
+  <h3>El resumen en cuatro líneas</h3>
+  <ul>
+    <li>Los <span class="cifra">69 puntos</span> de los tres documentos, ejecutados y comprobados en el navegador a 390 px y a 1280 px.</li>
+    <li>Al cotejar contra el catálogo real salieron <span class="cifra">seis fallos de fondo</span> que no estaban en ningún punto: la app decía una cosa y contaba otra.</li>
+    <li>Quedan <span class="cifra">dos preguntas</span> para Jesús, y las dos bloquean una fase entera.</li>
+    <li>Y <span class="cifra">seis tests rojos</span> anteriores a este trabajo que conviene mirar.</li>
+  </ul>
+</div>
+
+<h2>Parte 2 · El Inicio del cliente (puntos 75 a 104)</h2>
+
+<div class="fase">
+  <h3>La frase del día desaparecía</h3>
+  <p>
+    La pantalla exigía que la frase tuviera la fecha de hoy, así que en cuanto se acababan
+    las escritas, el hueco se quedaba vacío. Ahora rotan: la frase sale de la fecha, así que
+    nunca se agotan y no hace falta que nadie las cargue cada mañana.
+  </p>
+</div>
+
+<div class="fase">
+  <h3>«Lo que llevas» no podía llegar nunca al total</h3>
+  <p>
+    El intra y el post no se dejaban marcar por una regla escrita a propósito, de modo que el
+    contador se quedaba corto por diseño. Eran <span class="cifra">tres candados distintos</span>
+    y había que quitar los tres. El punto 96 cambia ese criterio, así que se levantaron.
+  </p>
+</div>
+
+<div class="fase">
+  <h3>Los números del Inicio, y una sola regla de color</h3>
+  <p>
+    Los números pasan a blanco y menos gruesos, y todos los decimales se van salvo el de la
+    línea de aviso, que es donde hace falta la cifra exacta.
+  </p>
+  <p>
+    El cambio de fondo es otro: <strong>había cuatro criterios de color distintos</strong> en
+    las cuatro pestañas del Inicio, cada uno inventado en su sitio. Ahora hay uno solo
+    (<code>lib/estadoDelMacro</code>) y las cuatro preguntan al mismo.
+  </p>
+</div>
+
+<h2>Parte 3 · La pantalla de Nutrición (puntos 105 a 119)</h2>
+
+<div class="fase">
+  <h3>El número de arriba se contaba de tres maneras</h3>
+  <p>
+    La cabecera enseñaba un número que, según dónde mirases, salía de un criterio o de otro:
+    <strong>el mismo dato con tres cuentas distintas</strong>. Ahora hay un solo número y
+    dice lo que es: lo que llevas creado.
+  </p>
+</div>
+
+<div class="fase">
+  <h3>La cabecera tenía cinco botones en el ordenador y tres en el móvil</h3>
+  <p>
+    Y desaparecían justo PDF y Copiar, que son los que se usan. Peor: en el móvil
+    reaparecían abajo del todo, después de las comidas, donde nadie baja a buscarlos. Tres
+    sitios para cinco botones. Ahora queda PDF fuera y el resto dentro del «···», igual en
+    los dos tamaños.
+  </p>
+</div>
+
+<div class="fase">
+  <h3>El nombre de la comida desaparecía en el móvil</h3>
+  <p>
+    No es que se cortara: había una regla que lo quitaba entero cuando la comida se pasaba de
+    macros. Justo cuando más falta hace saber de qué comida hablamos.
+  </p>
+</div>
+
+<h2>Parte 4 · La comida por dentro, la calibración y el buscador (puntos 120 a 143)</h2>
+
+<div class="fase">
+  <h3>Los números de la comida, siempre y con decimales</h3>
+  <p>
+    Las barras de macros de cada comida sólo aparecían a veces. Ahora están siempre, con su
+    número, su palabra y su color, y con el margen proporcional que protege al intra: cuatro
+    gramos sobre los nueve de proteína que pide un intra son casi la mitad.
+  </p>
+</div>
+
+<div class="fase">
+  <h3>Vaciar, la papelera y el tercer camino</h3>
+  <p>
+    Jesús pidió que Vaciar y la papelera preguntaran. Al mirarlo apareció un tercero, y era
+    el peor de los tres: <strong>bajar la cantidad por debajo del mínimo saca el alimento de
+    la comida</strong>, y por el botón «−» lo hacía sin preguntar, sin aviso y sin deshacer.
+    Era la única de las cuatro formas de borrar sin ninguna red, y la más fácil de disparar
+    sin querer: se pulsa repetido, sin mirar, y está a un dedo de la papelera.
+  </p>
+  <p>Los cuatro caminos preguntan ahora, con el mismo diálogo.</p>
+</div>
+
+<div class="fase">
+  <h3>El cartel de la calibración prometía lo que no iba a pasar</h3>
+  <p>
+    El aviso de «frutos secos hoy: 25 de 40 g, su proteína te cuenta a la mitad» le salía a
+    todos los frutos secos por igual. Pero antes del tramo hay una puerta: la proteína tiene
+    que llegar a un tercio del macro dominante o no cuenta nunca, comas lo que comas. A las
+    nueces (23 %) y al cóctel (30,5 %) les prometía una proteína que aporta cero.
+  </p>
+  <p>
+    Comprobado contra el catálogo entero, y coincide con los cinco casos que él nombró:
+    almendras y crema de cacahuete sí cuentan; cóctel, avellana y nueces no.
+  </p>
+</div>
+
+<div class="fase">
+  <h3>El buscador de alimentos dice cuál es cuál</h3>
+  <p>
+    Cada alimento enseñaba dos números sin decir cuál era cuál, y a uno lo llamaba «lo que
+    pone la etiqueta» aunque fuera un genérico sin bote. Ahora son <strong>«Macros del
+    método»</strong> (lo que te cuenta) y <strong>«Macros reales»</strong> (lo que contiene).
+  </p>
+  <p>
+    Arriba se explica qué es un genérico, que no se decía en ningún sitio, y los alimentos a
+    los que la proteína les crece con la cantidad llevan un punto delante; al abrirlos
+    enseñan sus tres tramos. Hasta hoy un alimento de la lista no se podía abrir.
+  </p>
+</div>
+
+<h2>Los seis fallos de fondo que aparecieron al comprobarlo</h2>
+
+<p>
+  Ninguno estaba en un punto numerado. Salieron todos de la misma raíz: <strong>hay dos
+  motores contando lo mismo</strong>, la regla de categoría heredada de Calma y la
+  calibración progresiva del método, y no siempre decían lo mismo.
+</p>
+
+<table>
+  <tr><th style="width:26%">Qué pasaba</th><th style="width:16%">A cuántos</th><th>Por qué</th></tr>
+  <tr>
+    <td>El buscador prometía proteína que el día no da</td>
+    <td class="n">39 panes y cereales</td>
+    <td>La regla de categoría los dejaba pasar y la puerta del tercio los paraba después. Salían con la proteína en verde y en una comida aportaban cero.</td>
+  </tr>
+  <tr>
+    <td>Contador de tramo a quien no le toca</td>
+    <td class="n">44 cereales proteicos</td>
+    <td>Su proteína cuenta entera desde el primer gramo. El contador les decía «todavía no te cuenta» mientras ya se la estaba contando toda.</td>
+  </tr>
+  <tr>
+    <td>Dos alimentos iguales decían lo contrario</td>
+    <td class="n">39 alimentos</td>
+    <td>Es el hallazgo de los dos cacahuetes. No eran datos mal puestos: una regla zera la proteína con P·2&nbsp;≤&nbsp;G (la mitad) y la otra la deja con P&nbsp;&gt;&nbsp;G/3 (el tercio). Los tres cacahuetes del catálogo caen justo entre las dos.</td>
+  </tr>
+  <tr>
+    <td>Los números cambiaban al guardar</td>
+    <td class="n">toda la ventana</td>
+    <td>Añadías 25 g de almendras, la ventana decía «P 0» y al guardar aparecían 2,9. Eran cuatro motores para el mismo número, y ninguno era el del día.</td>
+  </tr>
+  <tr>
+    <td>Cambiar la cantidad perdía la proteína</td>
+    <td class="n">frutos secos y panes</td>
+    <td>Pulsar «+» rehacía la cuenta desde los macros de la etiqueta, que llegan a cero, y mandaba la proteína calibrada a cero.</td>
+  </tr>
+  <tr>
+    <td>La pantalla de Alimentos se ralentizó</td>
+    <td class="n">de 1,4 s a 2,0 s</td>
+    <td>Deuda propia: preguntaba la calibración cuatro veces por alimento, y son 3.200 fichas. Con una sola clasificación por ficha vuelve a 1,6 s.</td>
+  </tr>
+</table>
+
+<div class="caja">
+  <h3>Lo importante del tercero: no había que tocar el catálogo</h3>
+  <p>
+    El punto 136 pedía buscar todos los casos y arreglarlos en la base de datos de
+    producción. Al medirlo salió que los datos estaban bien: lo que había eran <strong>dos
+    varas de medir la misma proteína</strong>. Se arregló cuadrando las reglas, sin tocar un
+    solo dato. Ahora los 62 alimentos afectados dicen todos lo mismo.
+  </p>
+</div>
+
+<h2>Cómo se comprobó</h2>
+
+<ul>
+  <li><strong>En el navegador de verdad</strong>, a 390 px y a 1280 px, pantalla por pantalla. No con capturas de un test.</li>
+  <li>
+    <strong>Contra el catálogo entero</strong> (3.219 alimentos), no contra los ejemplos del
+    documento. De ahí salieron los seis fallos de fondo y las cifras exactas de cada uno.
+  </li>
+  <li>
+    <strong>Comprobando que no se movía nada más</strong>: 5.514 comprobaciones de alimentos
+    fuera de las familias calibradas, cero diferencias.
+  </li>
+  <li>
+    <strong>El caso que sólo el motor del día puede resolver</strong>: al subir los anacardos
+    de 15 a 16 g el día cruza los 40 g, y la proteína salta de 4,5 a 9,3 con las almendras
+    subiendo solas sin tocarlas.
+  </li>
+</ul>
+
+<h2>Lo que queda</h2>
+
+<h3>Dos preguntas para Jesús, y las dos bloquean una fase entera</h3>
+<ol>
+  <li>
+    <strong>Los suplementos por comida</strong> (puntos 99 y 118). Hoy la app no sabe qué
+    suplemento va en qué comida: esa relación no existe en ningún sitio. ¿La decide el
+    entrenador cliente a cliente, o vale una tabla fija por suplemento (creatina en la comida
+    3, omega 3 y NAC en la 4)?
+  </li>
+  <li>
+    <strong>El saludo por hora</strong> (punto 104). ¿Lo quiere, y con qué franjas?
+  </li>
+</ol>
+
+<h3>Seis tests rojos anteriores a este trabajo</h3>
+<p>
+  Comprobados uno a uno revirtiendo los cambios: fallan igual sin ellos. No son ruido, son
+  cosas que conviene mirar.
+</p>
+<ul>
+  <li>Las categorías 7, 8 y 22 se abren <strong>vacías</strong> en el constructor de comidas.</li>
+  <li>La ventana de menús ya no abre en el Recetario.</li>
+  <li>Sin protocolo propio, la pantalla de Suplementos llega vacía.</li>
+  <li>La pantalla de Alimentos tarda más de 3 segundos (4,06 s ya antes de esta tanda).</li>
+  <li>El buscador da 8 alimentos cuando le piden 10.</li>
+  <li>Cinco casos del motor de macros, uno de ellos marcado como que falla a propósito.</li>
+</ul>
+
+<div class="pie">
+  Informe generado el 26 de agosto de 2026 · 12EN12 · commits <code>42deb8a</code> a
+  <code>a3b7395</code>, desplegados en 12en12app.jesusgallegopt.com
+</div>
+
+</body>
+</html>
