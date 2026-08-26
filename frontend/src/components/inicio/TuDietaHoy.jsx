@@ -307,9 +307,14 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
                         </p>
                     ) : (
                         <>
-                            {/* Se pintan POR MACRO, como la captura del doc del 23-08 (punto 1):
-                                el nombre encima, el número grande en naranja, y en Falta el
-                                «para llegar» debajo con su barra de progreso. */}
+                            {/* Se pintan POR MACRO: el nombre encima, el número grande y, en
+                                Falta, «para llegar» debajo con su barra.
+
+                                EL NÚMERO VA EN BLANCO (punto 75 del 25-08). Iba en el naranja
+                                de la marca, el mismo del botón de Guardar y de la pestaña
+                                activa: cinco cosas distintas pintadas del mismo color, así que
+                                el color no decía nada. El estado lo dirán la palabra, el punto
+                                y la barra (puntos 82 y 83); el número solo dice cuánto. */}
                             <div className="grid grid-cols-3 gap-3 mt-4">
                                 {['P', 'H', 'G'].map((k) => {
                                     /* En Falta, el negativo NO se deja en cero (doc 21-08,
@@ -326,16 +331,16 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
                                             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                                                 {NOMBRE[k]}
                                             </p>
-                                            <p className={`font-data font-bold leading-none text-[34px] sm:text-[40px] mt-1 ${pasado ? 'text-amber-600' : 'text-brand'}`}>
+                                            <p className="numero-grande font-data leading-none text-[34px] sm:text-[40px] mt-1.5 text-foreground">
                                                 {crudo == null ? '·' : (pasado ? Math.abs(crudo) : Math.max(0, crudo))}
                                             </p>
                                             {vista === 'falta' && (
                                                 <>
-                                                    <p className={`text-xs mt-1 ${pasado ? 'text-amber-600 font-medium' : 'text-muted-foreground'}`}>
+                                                    <p className={`text-xs mt-1 ${pasado ? 'text-pasado font-medium' : 'text-muted-foreground'}`}>
                                                         {pasado ? 'de más' : 'para llegar'}
                                                     </p>
                                                     <div className="h-1 rounded-full bg-muted mt-1.5 overflow-hidden">
-                                                        <div className={`h-full rounded-full ${pasado ? 'bg-amber-500' : 'bg-brand'}`}
+                                                        <div className={`h-full rounded-full ${pasado ? 'bg-pasado' : 'bg-brand'}`}
                                                             style={{ width: `${pasado ? 100 : progreso}%` }} />
                                                     </div>
                                                 </>
@@ -347,11 +352,13 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
                                     );
                                 })}
                             </div>
-                            {/* Lo pasado se dice tal cual, en tono tostado y sin bronca. */}
+                            {/* Lo pasado se dice tal cual, en el naranja de «te has pasado»
+                                (#FF5A2E, punto 76) y sin bronca. Es el ÚNICO sitio del Inicio
+                                donde el número puede llevar decimal (punto 80). */}
                             {vista === 'falta' && pasadas.length > 0 && (
                                 <div className="mt-3 space-y-0.5" data-testid="falta-pasado">
                                     {pasadas.map((k) => (
-                                        <p key={k} className="text-sm text-center font-medium text-amber-600 dark:text-amber-400">
+                                        <p key={k} className="text-sm text-center font-medium text-pasado">
                                             Te has pasado de {Math.abs(falta[k])} g de {NOMBRE_LLANO[k]}
                                         </p>
                                     ))}

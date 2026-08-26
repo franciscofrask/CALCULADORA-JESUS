@@ -140,6 +140,19 @@
        resetea el 'ss01'/'cv11' heredado del body para que los dígitos salgan limpios. */
     .font-data { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; }
 
+    /* LOS TRES NÚMEROS DEL INICIO (punto 81 del 25-08): «más altos y menos gordos».
+       Mismo tipo y peso 700 -- que es el que ya tenían, aunque el documento diga 850 --;
+       lo que cambia es la caja: se estiran a lo alto y se estrechan. Con tres cifras en
+       una pantalla de 390 px eso es lo que decide si respiran o se tocan.
+       El `transform` no toca el hueco que ocupan, así que la rejilla de tres columnas se
+       queda donde está y ninguna otra pantalla se entera. */
+    .numero-grande {
+        display: inline-block;
+        font-weight: 700;
+        letter-spacing: -0.015em;
+        transform: scaleY(1.12) scaleX(0.9);
+    }
+
     .heading-1 { @apply font-heading text-4xl md:text-5xl font-bold tracking-tight uppercase; }
     .heading-2 { @apply font-heading text-3xl md:text-4xl font-bold tracking-tight uppercase; }
     .heading-3 { @apply font-heading text-xl md:text-2xl font-semibold tracking-tight uppercase; }
