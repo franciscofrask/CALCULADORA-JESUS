@@ -529,8 +529,13 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
                     const objetivoFila = esPeri ? peri.objetivo : reparto?.comidas?.[k];
                     const nombre = esPeri ? k : nombreComida(k, esUnica);
                     return (
+                        // EL BORDE NARANJA DEL PERI SE QUEDA EN EL CONTENEDOR. Esta fila era
+                        // un solo botón y llevaba el `border-l-4` puesto en él; al partirla
+                        // en dos para meter la casilla de marcar (punto 96), el borde se
+                        // quedó dentro del trozo que se pulsa y dejó de verse. Es lo único
+                        // que distingue de un vistazo el intra y el post de las comidas.
                         <div key={k} data-testid={`comida-hoy-${k}`}
-                            className={`surface p-3.5 sm:p-4 flex items-center gap-3 transition-opacity ${marcada ? 'opacity-55' : ''}`}>
+                            className={`surface p-3.5 sm:p-4 flex items-center gap-3 transition-opacity ${esPeri ? 'border-l-4 border-l-brand' : ''} ${marcada ? 'opacity-55' : ''}`}>
                             {/* La casilla. Persistencia: ver el comentario de cabecera. */}
                             <button onClick={() => marcar(k)} role="checkbox" aria-checked={marcada}
                                 aria-label={`${nombre}: ${marcada ? 'ya marcado' : 'marcar como tomado'}`}
