@@ -48,6 +48,6 @@ const CUENTAS = {
         };
     });
     console.log(JSON.stringify(datos, null, 1));
-    await page.screenshot({ path: path.join(SALIDA, `${quien}-${ancho}.jpg`), type: 'jpeg', quality: 70 });
+    await page.screenshot({ path: path.join(SALIDA, `${quien}-${ancho}.jpg`), type: 'jpeg', quality: 70, fullPage: true });
     await nav.close();
 })();

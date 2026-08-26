@@ -2649,7 +2649,6 @@ const NutritionPage = () => {
                     mealInfo={mealInfo}
                     calculateMealMacros={calculateMealMacros}
                     getMealStatus={getMealStatus}
-                    getDayStatus={getDayStatus}
                 />
 
                 {/* EL DÍA VACÍO EN LUGAR DE LA PARRILLA (doc 21-08, tarea 6.1): una

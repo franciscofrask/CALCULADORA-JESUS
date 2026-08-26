@@ -34,6 +34,14 @@ module.exports = {
           carbs: '#2196F3',
           fat: '#FFA500',
         },
+        // LOS DOS COLORES DE ESTADO (artifact del 25-08, puntos 76 y 77; y la parte 3 los
+        // trae a Nutrición). Verde «esto ya está resuelto» y naranja «te has pasado», y ese
+        // naranja es UN TONO PROPIO, distinto del de la marca: mientras el número y el botón
+        // de Guardar compartían color, el naranja significaba cinco cosas y no significaba
+        // ninguna. Van con `<alpha-value>` para que sirvan también con opacidad
+        // (`bg-pasado/5`, `ring-pasado/40`), que es como se pinta la comida sin crear.
+        ok: 'rgb(34 197 94 / <alpha-value>)',
+        pasado: 'rgb(255 90 46 / <alpha-value>)',
         // Legacy (compatibilidad con páginas aún no rediseñadas)
         'brand-orange': '#FFA500',
         'brand-orange-dark': '#FF8C00',

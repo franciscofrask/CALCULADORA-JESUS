@@ -1,8 +1,8 @@
 import React from 'react';
 import { StatusDot } from './DaySummary';
 import { macrosDeVista } from './ModoMacros';
-import { margenDe, seExcede, textoExceso } from '../../lib/exceso';
-import { num1, numMedio, alMedio, alDecima } from '../../lib/numeros';
+import { margenDe, seExcede } from '../../lib/exceso';
+import { num0, num1, numMedio, alMedio, alDecima } from '../../lib/numeros';
 import { TOPE_GRAMOS } from '../../lib/cantidades';
 import ContadorFamilia from './ContadorFamilia';
 import {
@@ -29,23 +29,63 @@ const MACRO = { P: '#FF671F', H: '#2196F3', G: '#FFA500' };
  *
  * En el perientreno la grasa no cuenta, igual que en el resto del cálculo.
  */
+const NOMBRE_MACRO = { P: 'proteína', H: 'hidratos', G: 'grasa' };
+const enumerar = (p) => (p.length <= 1 ? p.join('') : `${p.slice(0, -1).join(', ')} y ${p[p.length - 1]}`);
+
 const estadoDeLaComida = (status, target, served, cuantosAlimentos, esPeri = false, bloqueada = false) => {
     // Con el volcado puesto, las demás comidas quedan con objetivo = servido y salían
     // como «Cuadrada» en verde mientras el día decía «te falta» (punto 11 del 23-08:
     // «una de las dos cosas está mal»). La que mentía era el verde: bloqueada no es
     // cuadrada, es que ya no juega.
-    if (bloqueada) return { texto: 'Bloqueada', cls: 'text-muted-foreground' };
-    if (!cuantosAlimentos) return { texto: 'Sin hacer', cls: 'text-muted-foreground' };
-    // POR CUÁNTO TE PASAS, no solo que te pasas (Jesús, 13-08): «la app enseña los dos
-    // números pero no la diferencia; el cliente tiene que restar». El texto sale de
-    // `lib/exceso`, el mismo que usa el chat, para que la app no hable de dos maneras.
+    if (bloqueada) return { texto: 'bloqueada', color: null };
+    // SIN CREAR, EN NARANJA (punto 117). Le falta todo, así que cae del mismo lado que
+    // cualquier macro fuera de margen: «lo que te pide algo se ve, lo que ya está se apaga».
+    if (!cuantosAlimentos) return { texto: 'sin crear', color: 'pasado' };
+
+    const claves = esPeri ? ['P', 'H'] : ['P', 'H', 'G'];
+    // EL MARGEN DE CADA MACRO ES EL DE LA COMIDA (`margenDe`), no los 4 g planos del día.
+    // El artifact dice que el margen es «el mismo de la parte 2», pero aquí eso mordería:
+    // 4 g sobre los 9 de proteína que pide un intra son casi la mitad, y ya pasó una vez
+    // que la pantalla decía «Comida cuadrada. Pulsa Guardar» sobre un «5 / 9». El margen
+    // proporcional es el mismo criterio con el que `getMealStatus` decide el estado, así
+    // que la palabra y el color no pueden contradecirlo. Ver lib/exceso.
+    const desvios = claves.map((k) => ({ k, d: (served[k] || 0) - (target[k] || 0) }));
+    const fuera = desvios.filter((x) => Math.abs(x.d) >= margenDe(target[x.k]));
+
+    // POR CUÁNTO Y DE QUÉ, no solo que te pasas (Jesús, 13-08): «la app enseña los dos
+    // números pero no la diferencia; el cliente tiene que restar».
     if (status === 'sobra') {
-        const cuanto = textoExceso(served, target, { esPeri });
-        return { texto: cuanto ? `Te pasas ${cuanto}` : 'Te pasas', cls: 'text-red-500' };
+        const sobran = fuera.filter((x) => x.d > 0 && seExcede(x.k, served[x.k], target[x.k]));
+        return {
+            texto: sobran.length
+                ? `sobran ${enumerar(sobran.map((x) => `${num0(x.d)} de ${NOMBRE_MACRO[x.k]}`))}`
+                : 'sobran',
+            color: 'pasado',
+        };
     }
-    if (status === 'falta') return { texto: 'Te falta', cls: 'text-amber-600 dark:text-amber-400' };
-    return { texto: 'Cuadrada', cls: 'text-emerald-600 dark:text-emerald-400' };
+    if (status === 'falta') {
+        const faltan = fuera.filter((x) => x.d < 0);
+        return {
+            texto: faltan.length
+                ? `faltan ${enumerar(faltan.map((x) => `${num0(-x.d)} de ${NOMBRE_MACRO[x.k]}`))}`
+                : 'faltan',
+            color: 'pasado',
+        };
+    }
+    // Cuadrada. Si clava, se dice y ya; si baila dentro del margen, se dice cuánto, con las
+    // palabras de la parte 2: «válido +2».
+    const mayor = desvios.map((x) => ({ ...x, d: Math.round(x.d) }))
+        .sort((a, b) => Math.abs(b.d) - Math.abs(a.d))[0];
+    if (!mayor || mayor.d === 0) return { texto: 'cuadrada', color: 'ok' };
+    return { texto: `válido ${mayor.d > 0 ? '+' : '−'}${Math.abs(mayor.d)}`, color: 'ok' };
 };
+
+// El punto de color que va delante de la palabra del estado (punto 116).
+const PuntoDeEstado = ({ color }) => (color ? (
+    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${color === 'ok' ? 'bg-ok' : 'bg-pasado'}`} />
+) : null);
+
+const claseDelEstado = (color) => (color === 'ok' ? 'text-ok' : color === 'pasado' ? 'text-pasado' : 'text-muted-foreground');
 
 // Los números con coma decimal y sin decimales cuando son cero, en un solo sitio para toda
 // la pantalla (Jesús, 15-08, fallo 43: «34.2/37.5g»).
@@ -360,7 +400,18 @@ const MealCard = ({
     // reemplace si se pasa». Los otros estados son cortos («Cuadrada», «Te falta») y caben al
     // lado, así que esos no se tocan.
     const estado = estadoDeLaComida(status, target, calculateMealMacros(mealKey), foods.length, isPeri, isLocked);
-    const excesoTapaElNombre = status === 'sobra' && foods.length > 0;
+
+    // SIN LETRAS Y SIN DECIMALES (punto 115): «52,5P · 10H · 15G» pasa a «53 · 10 · 15».
+    // La grasa del peri no cuenta en el método, así que ahí son dos números.
+    const lineaObjetivo = isPeri
+        ? `${num0(target.P)} · ${num0(target.H)}`
+        : `${num0(target.P)} · ${num0(target.H)} · ${num0(target.G)}`;
+
+    // LO QUE TE PIDE ALGO SE VE, LO QUE YA ESTÁ SE APAGA (punto 117, «como en Inicio»).
+    // La comida sin crear va en naranja entera -- borde y fondo --, y la que ya está
+    // cuadrada baja de intensidad: la lista se recorre buscando lo que falta por hacer.
+    const sinCrear = !isLocked && !isPeri && foods.length === 0;
+    const yaEsta = !isLocked && estado.color === 'ok';
 
     // ── LA PUERTA DEL AUTOAJUSTE (Jesús, doc 21-08, apartado 14) ─────────────────────
     //
@@ -464,39 +515,49 @@ const MealCard = ({
                     números que decide todo lo demás -- iba en 12 px, más pequeño que
                     cualquier otra cosa de la pantalla. El nombre sube a 20 px y el objetivo
                     a 15, que es el tamaño del texto normal. */}
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                        <h3 className={`font-heading font-bold uppercase tracking-wide text-foreground truncate ${denso ? 'text-xl lg:text-base' : 'text-2xl lg:text-lg'} ${excesoTapaElNombre ? 'hidden lg:block' : ''}`}>{info.name}</h3>
-                        {/* El punto de color, solo en escritorio: en el teléfono el estado se
-                            pide con «ver detalles», dentro de la comida. */}
-                        {/* Bloqueada por el volcado: el candado sustituye al punto verde,
-                            que aquí contaba una mentira (ver estadoDeLaComida). */}
-                        {!isLocked && <StatusDot status={status} className="hidden lg:inline-block flex-shrink-0" />}
+                        {/* TODAS CON SU NOMBRE, SIEMPRE (punto 114). Pasaban dos cosas y las
+                            dos las contaba él: el nombre se cortaba en el móvil («COMID…»)
+                            porque iba a 24 px en mayúsculas compitiendo en la misma línea con
+                            el estado y con Automático/Manual; y cuando la comida se pasaba
+                            DESAPARECÍA del móvil, porque el texto largo del exceso le quitaba
+                            el sitio a propósito, y quedaba solo el cuadrito «C1». Ahora el
+                            nombre tiene su línea entera y el estado se ha bajado a la de los
+                            números, así que ya no compiten. */}
+                        <h3 className={`font-heading font-bold uppercase tracking-wide text-foreground truncate ${denso ? 'text-base' : 'text-[17px] lg:text-lg'}`}>{info.name}</h3>
+                        {/* Bloqueada por el volcado: el candado, que no es un estado sino que
+                            esa comida ya no juega (ver estadoDeLaComida). */}
                         {isLocked && <Lock className="w-4 h-4 text-amber-500 flex-shrink-0" />}
                     </div>
-                    {/* En el teléfono los números bajan al pie de la tarjeta, no van pegados
-                        al nombre: así la fila de arriba queda con lo que se recorre de un
-                        vistazo -- la comida y en qué punto está -- y el objetivo, que es lo
-                        que se lee cuando ya te has parado en esa comida, queda debajo. */}
-                    <p className="hidden lg:block text-xs text-muted-foreground font-data mt-0.5">
-                        Objetivo: {isPeri ? `${fmtHalf(target.P)}P · ${fmtHalf(target.H)}H` : `${fmtHalf(target.P)}P · ${fmtHalf(target.H)}H · ${fmtHalf(target.G)}G`}
-                    </p>
+                    {/* EL OBJETIVO Y EL ESTADO, EN LA MISMA LÍNEA (puntos 115 y 116). Los
+                        números, sin letras y sin decimales: «53 · 10 · 15», que el orden ya
+                        está escrito arriba. Y el estado con su punto y su palabra, en el
+                        vocabulario de la parte 2. */}
+                    {/* APILADOS EN EL MÓVIL, en la misma línea a partir de `sm`. Un exceso de
+                        dos macros («sobran 264 de hidratos y 40 de grasa») no cabe al lado de
+                        nada en 390 px: compartiendo línea aplastaba el objetivo hasta dejarlo
+                        en «Objetivo…», que es el mismo problema del nombre una fila más
+                        arriba. Cada uno en su línea cabe entero y no se corta ninguno. */}
+                    <div className="flex flex-col items-start gap-0.5 mt-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
+                        <p className="text-xs text-muted-foreground font-data" data-testid={`objetivo-${mealKey}`}>
+                            <span className="mr-1.5">Objetivo</span>
+                            {lineaObjetivo}
+                        </p>
+                        {!isPeri && (
+                            <span className={`text-xs font-bold flex items-start gap-1.5 sm:text-right ${claseDelEstado(estado.color)}`}
+                                data-testid={`estado-comida-${mealKey}`}>
+                                <span className="mt-1"><PuntoDeEstado color={estado.color} /></span>
+                                {estado.texto}
+                            </span>
+                        )}
+                    </div>
                 </div>
             </div>
 
-            {/* CÓMO VA ESTA COMIDA, CON SU PALABRA (documento del 10-08, pantalla 9): la
-                lista se lee de arriba abajo como algo que se va tachando, y para eso cada
-                fila tiene que decir en qué punto está. Solo en el teléfono: en escritorio
-                está el punto de color de siempre. */}
-            {/* Cuando se pasa, este texto ES el titular de la fila: se le deja encoger
-                (`min-w-0` y sin `flex-shrink-0`) y alinearse a la izquierda, en el hueco
-                que deja el nombre escondido. En los demás estados se queda como estaba,
-                a la derecha y sin encoger. */}
-            <span className={`lg:hidden text-[15px] font-bold text-right ${estado.cls} ${
-                excesoTapaElNombre ? 'min-w-0 flex-1 text-left' : 'flex-shrink-0 ml-auto'}`}
-                data-testid={`estado-comida-${mealKey}`}>
-                {estado.texto}
-            </span>
+            {/* El estado ya no vive aquí: se ha bajado a la línea del objetivo, junto al
+                nombre, y es el mismo en móvil y en escritorio (punto 116). Estaba suelto en
+                esta fila y por eso el nombre se quedaba sin sitio. */}
             {/* Con el día entero desplegado el modo va aquí, en pequeño: la banda de
                 "Modo de cálculo" repetida seis veces no cabía, pero esconderla dejaba
                 sin Automático/Manual a las comidas que aún no tienen alimentos. */}
@@ -513,7 +574,7 @@ const MealCard = ({
     );
 
     return (
-        <div className={`surface overflow-hidden ${isPeri ? 'border-l-4 border-l-brand' : ''} ${isLocked ? 'opacity-70' : ''} ${!forceExpanded && !isExpanded ? 'surface-hover' : ''}`} data-testid={`meal-card-${mealKey}`}>
+        <div className={`surface overflow-hidden ${isPeri ? 'border-l-4 border-l-brand' : ''} ${isLocked ? 'opacity-70' : ''} ${!forceExpanded && !isExpanded ? 'surface-hover' : ''} ${sinCrear ? 'ring-1 ring-pasado/40 bg-pasado/5' : ''} ${yaEsta && !isExpanded ? 'opacity-70' : ''}`} data-testid={`meal-card-${mealKey}`}>
             {/* Header */}
             {forceExpanded ? (
                 <div className={`${denso ? 'p-3 sm:p-3.5' : 'p-4 sm:p-5'} flex items-center justify-between gap-3 border-b border-border`}>{HeaderInner}</div>
@@ -523,25 +584,12 @@ const MealCard = ({
                     {HeaderInner}
                 </button>
             )}
-            {/* EL OBJETIVO, AL PIE DE LA TARJETA (teléfono). Arriba queda la comida y su
-                estado, que es lo que se recorre de un vistazo; los números, que son lo que
-                se lee cuando ya te has parado en esa comida, van debajo y a todo el ancho.
-
-                Y CON SU NOMBRE DELANTE (Francisco, 17-08). Estos números son el OBJETIVO, no
-                lo que lleva puesto, y en el teléfono no lo decía en ninguna parte -- en el
-                ordenador sí pone «Objetivo:». Resultado: dos comidas con el mismo objetivo
-                (30P · 15H · 10G) se veían idénticas y una decía «te pasas 5 g de grasa» y la
-                otra «Válida». Las dos eran ciertas -- una llevaba 15 g de grasa y la otra
-                10,5 -- pero desde fuera parecía que el aviso mentía. */}
-            {!forceExpanded && (
-                <p className="lg:hidden px-3.5 sm:px-4 pb-3 text-[17px] font-data text-foreground/70"
-                    data-testid={`objetivo-${mealKey}`}>
-                    <span className="font-sans text-[11px] font-bold uppercase tracking-wider text-muted-foreground mr-2">
-                        Objetivo
-                    </span>
-                    {isPeri ? `${fmtHalf(target.P)}P · ${fmtHalf(target.H)}H` : `${fmtHalf(target.P)}P · ${fmtHalf(target.H)}H · ${fmtHalf(target.G)}G`}
-                </p>
-            )}
+            {/* Aquí iba OTRA VEZ el objetivo, solo para el teléfono y a 17 px. Ahora está en
+                la línea de debajo del nombre, con el estado al lado y en los dos tamaños, así
+                que esto era el mismo dato dos veces en la misma tarjeta.
+                La palabra «Objetivo» delante se queda (Francisco, 17-08): son el objetivo y
+                no lo que lleva puesto, y sin decirlo dos comidas con los mismos números se
+                veían idénticas y una decía «te pasas» y la otra «cuadrada». */}
 
             {isExpanded && (
                 <div className={forceExpanded ? (denso ? 'p-3 sm:p-3.5 space-y-3' : 'p-4 sm:p-5 space-y-4') : 'px-3.5 sm:px-4 pb-4 pt-1 space-y-3'}>

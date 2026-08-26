@@ -45,7 +45,6 @@ const DayHeader = ({
     configExpanded, setConfigExpanded,
     // macros
     dayMacros, dayTarget, servedPeriP, servedPeriH, servedPeriG = 0, totalPeriP, totalPeriH,
-    getDayStatus,
     // Datos del perfil faltantes o imposibles (tarea 1.4): viene con la respuesta de
     // /distribute, que viaja con las cabeceras de «actuar como» -- el perfil evaluado es
     // el del cliente sobre el que se trabaja, no el del que ha iniciado sesión.
@@ -68,7 +67,6 @@ const DayHeader = ({
     const tgtP = (dayTarget.P_total ?? 0) - (totalPeriP || 0);
     const tgtH = (dayTarget.H_total ?? 0) - (totalPeriH || 0);
     const tgtG = dayTarget.G_total ?? 0;   // el objetivo del peri no lleva grasa
-    const dayStatus = getDayStatus();
     const hayPeri = tipoDia === 'entrenamiento' && opcionPeri !== 'sin_peri';
 
     // LOS NÚMEROS GRANDES ENSEÑAN EL DÍA ENTERO, PERI INCLUIDO (doc 21-08, apartado 11):
@@ -126,11 +124,11 @@ const DayHeader = ({
                         sigue siendo el aro naranja del conmutador, en el sitio donde se
                         actúa (punto 4.17). */}
 
-                    {/* Los distintivos de «Cuadrado» y «Te pasas», solo en escritorio: en el
-                        teléfono lo dice ya el titular de debajo -- «Día cuadrado», «Te has
-                        pasado» -- con los números al lado, que es donde se mira. */}
-                    {dayStatus === 'cuadrado' && <span className="hidden lg:inline px-2 py-0.5 bg-emerald-500 text-white text-[10px] font-bold rounded-full uppercase tracking-wide">Cuadrado</span>}
-                    {dayStatus === 'sobra' && <span className="hidden lg:inline px-2 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full uppercase tracking-wide">Te pasas</span>}
+                    {/* AQUÍ IBAN LOS DISTINTIVOS «CUADRADO» Y «TE PASAS», y se han ido con
+                        el titular (Francisco, 26-08). Existían porque el titular era solo de
+                        móvil y en escritorio había que decir el estado del día de alguna
+                        manera. Ahora lo dicen los tres puntos y las tres palabras, en los dos
+                        tamaños, así que esto era el mismo dato otra vez y con otro rojo. */}
                 </div>
 
                 {/* En escritorio, el resumen de la configuración va aquí arriba, como estaba.
