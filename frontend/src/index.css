@@ -209,9 +209,6 @@
     .bg-ok { background-color: var(--ok); }
     .text-pasado { color: var(--pasado); }
     .bg-pasado { background-color: var(--pasado); }
-    /* La barra del que va por debajo: sin color, solo longitud. Que se vea sobre la pista
-       pero que no compita con el verde y el naranja, que son los que dicen algo. */
-    .bg-neutro { background-color: hsl(var(--muted-foreground) / 0.45); }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     .track-stroke { stroke: hsl(var(--track)); }

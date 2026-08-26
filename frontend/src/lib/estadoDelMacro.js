@@ -15,9 +15,10 @@
  * día, que son cientos de gramos. «De 1 a 4, falte o sobre, es válido y sale en verde. A
  * partir de 5, naranja. No hace falta cuadrar al gramo.»
  *
- * POR DEBAJO NUNCA PINTA. Ni corto de 5 ni corto de 200: mientras vas por debajo no hay
- * nada que corregir, solo día por delante. El naranja es solo para lo que se ha pasado, y
- * por eso no hace falta leyenda: sin punto significa que no hay nada que mirar.
+ * A PARTIR DE 5 PINTA NARANJA, FALTE O SOBRE. Es la frase de arriba al pie de la letra, y
+ * es decisión de Francisco del 26-08. Lo que distingue faltar de sobrar no es el color, es
+ * la LONGITUD de la barra: la del que falta está corta y la del que sobra está llena a
+ * tope (punto 83).
  */
 import { MARGEN } from './exceso';
 
@@ -82,21 +83,22 @@ export function leerMacro({ vista, hay, objetivo }) {
     else estado = CORTO;
 
     const resuelto = estado === CLAVADO || estado === VALIDO;
+    // Verde dentro del margen y naranja a partir de 5, falte o sobre: no hay tercer color.
+    const color = resuelto ? 'ok' : 'pasado';
     return {
         estado,
         desvio,
         palabra: (PALABRA[vista] || PALABRA.dieta)(estado, desvio, meta),
-        // El punto y la palabra: verde si está resuelto, naranja si se ha pasado, y nada
-        // mientras va por debajo.
-        color: resuelto ? 'ok' : (estado === PASADO ? 'pasado' : null),
+        color,
         barra: {
             // La barra hace algo que el punto no hace: en un día cuadrado se llenan las
-            // tres de verde de lado a lado. Y su LONGITUD distingue faltar de sobrar sin
-            // gastar color: la del que falta está corta, la del que sobra está llena.
+            // tres de verde de lado a lado. Y su LONGITUD es lo que distingue faltar de
+            // sobrar, ahora que el color no lo hace: la del que falta está corta, la del
+            // que sobra está llena a tope.
             largo: resuelto || estado === PASADO
                 ? 100
                 : (meta > 0 ? Math.max(0, Math.min(100, (tiene / meta) * 100)) : 0),
-            color: resuelto ? 'ok' : (estado === PASADO ? 'pasado' : null),
+            color,
         },
     };
 }

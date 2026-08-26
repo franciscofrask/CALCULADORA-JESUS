@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, CheckSquare, ChevronRight, Circle, Square, Zap } from 'lucide-react';
 import { leer as leerLocal, escribir as escribirLocal } from '../../lib/almacenLocal';
-import { num0 } from '../../lib/numeros';
+import { num0, num1 } from '../../lib/numeros';
 import { leerMacro } from '../../lib/estadoDelMacro';
 import ExtrasDelDia from '../nutrition/ExtrasDelDia';
 
@@ -41,6 +41,7 @@ import ExtrasDelDia from '../nutrition/ExtrasDelDia';
  */
 
 const NOMBRE = { P: 'Proteína', H: 'Hidratos', G: 'Grasa' };
+const NOMBRE_LLANO = { P: 'proteína', H: 'hidratos', G: 'grasa' };
 
 const VISTAS = [
     { id: 'macros', label: 'Macros' },
@@ -282,12 +283,16 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
         return { P: acc.P + m.P, H: acc.H + m.H, G: acc.G + (m.G || 0) };
     }, { P: 0, H: 0, G: 0 });
 
-    // Lo que falta, redondeado: NI UN DECIMAL en todo el Inicio (punto 80).
-    const falta = conPeri ? {
-        P: Math.round(conPeri.P - llevas.P),
-        H: Math.round(conPeri.H - llevas.H),
-        G: Math.round(conPeri.G - llevas.G),
+    // Lo que falta, redondeado, que es lo que se pinta. El desvío EXACTO se guarda aparte:
+    // es el único decimal que sobrevive en todo el Inicio (punto 80), y solo para la línea
+    // de aviso, que es donde el gramo de verdad sirve para algo.
+    const faltaExacto = conPeri ? {
+        P: conPeri.P - llevas.P, H: conPeri.H - llevas.H, G: conPeri.G - llevas.G,
     } : null;
+    const falta = faltaExacto ? {
+        P: Math.round(faltaExacto.P), H: Math.round(faltaExacto.H), G: Math.round(faltaExacto.G),
+    } : null;
+    const pasadas = falta ? ['P', 'H', 'G'].filter((k) => falta[k] < 0) : [];
 
     // EL PERIENTRENO, DENTRO O APARTE (puntos 86 a 88). Los dos números salen del MISMO
     // reparto, así que la resta cuadra siempre: el total lleva el peri sumado
@@ -414,8 +419,7 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
                                             {lectura.barra && (
                                                 <div className="h-1 rounded-full bg-muted mt-1.5 overflow-hidden">
                                                     <div data-testid={`barra-${vista}-${k}`}
-                                                        className={`h-full rounded-full ${lectura.barra.color === 'ok' ? 'bg-ok'
-                                                            : lectura.barra.color === 'pasado' ? 'bg-pasado' : 'bg-neutro'}`}
+                                                        className={`h-full rounded-full ${lectura.barra.color === 'ok' ? 'bg-ok' : 'bg-pasado'}`}
                                                         style={{ width: `${lectura.barra.largo}%` }} />
                                                 </div>
                                             )}
@@ -423,12 +427,23 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
                                     );
                                 })}
                             </div>
-                            {/* AQUÍ IBA LA LÍNEA DE AVISO, y se ha ido (punto 90): «si cada
-                                macro lo dice debajo de su número, la frase de arriba lo
-                                repite. Una línea menos». Decía «Te has pasado de 13 g de
-                                hidratos» debajo de un «te pasas 14» que ya lo contaba. En
-                                ninguna de las veinte pantallas de escenarios del 25-08
-                                aparece esa frase, ni con un macro pasado ni con dos. */}
+                            {/* LA LÍNEA DE AVISO, que es donde vive el ÚNICO decimal de todo
+                                el Inicio (punto 80): «el decimal exacto sólo aparece en la
+                                línea de aviso: Te has pasado 13,7 g de hidratos».
+
+                                Ojo con confundirla con la del punto 90, que es otra: aquella
+                                era la línea de ARRIBA, la que iba encima de los números, y
+                                esa sí se fue -- era el rótulo del perientreno, y lo sustituyó
+                                el interruptor. Ésta va debajo y se queda. */}
+                            {vista === 'falta' && pasadas.length > 0 && (
+                                <div className="mt-3 space-y-0.5" data-testid="falta-pasado">
+                                    {pasadas.map((k) => (
+                                        <p key={k} className="text-sm text-center font-medium text-pasado">
+                                            Te has pasado {num1(Math.abs(faltaExacto[k]))} g de {NOMBRE_LLANO[k]}
+                                        </p>
+                                    ))}
+                                </div>
+                            )}
                             {vista === 'llevas' ? (
                                 /* Solo las comidas y el peri: los extras no se nombran aquí
                                    porque no entran en la cuenta, y verlos al lado del número
