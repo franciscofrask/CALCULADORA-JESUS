@@ -1,6 +1,7 @@
 import React from 'react';
 import { StatusDot } from './DaySummary';
 import { margenDe, seExcede } from '../../lib/exceso';
+import { leerMacro } from '../../lib/estadoDelMacro';
 import { num0, num1, numMedio, alMedio, alDecima } from '../../lib/numeros';
 import { TOPE_GRAMOS } from '../../lib/cantidades';
 import ContadorFamilia from './ContadorFamilia';
@@ -176,77 +177,68 @@ export const MealTab = ({ mealKey, mealInfo, getMealStatus, isLocked, selected, 
 };
 
 // ===== Macro progress block =====
+/**
+ * LOS NÚMEROS DE LA COMIDA, SIEMPRE Y CON EL FORMATO DE LA CASA (puntos 120 a 122 del
+ * artifact del 26-08).
+ *
+ * «Esto ya lo calcula la app. Está escondido detrás de un "ver detalles" en gris.»
+ *
+ * Y lo estaba de verdad: en el teléfono el bloque nacía cerrado, así que para saber qué le
+ * faltaba a la comida había que pedirlo. Lo que enseñaba era además otro formato -- «54/63,5
+ * g» con un chip al lado --, distinto del de Inicio y del de la cabecera de esta pantalla.
+ * Ahora es el mismo de siempre: número, punto, palabra y barra.
+ *
+ * AQUÍ SÍ VAN DECIMALES (punto 121). Es la pantalla donde se afina, y el gramo importa: se
+ * pide `vista: 'comida'` a lib/estadoDelMacro, que no redondea y que por debajo de 1 g dice
+ * «cuadrado» (punto 122). El margen sigue siendo el proporcional de `lib/exceso`, el mismo
+ * con el que la comida decide su estado, para no tener dos varas en la misma tarjeta.
+ */
 const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFoods }) => {
-    // EN EL TELÉFONO, EL ESTADO VA DETRÁS DE «VER DETALLES». Los «Cuadrado» y los
-    // «faltan 12g» de cada macro son tres avisos por comida y cinco comidas por pantalla:
-    // en 390 px eso es media pantalla diciendo en palabras lo que la resta de al lado ya
-    // dice. No se quitan -- cuando hace falta, hacen falta --, se piden.
-    //
-    // En escritorio salen siempre, como hasta ahora: esa vista no se ha rediseñado todavía.
-    const [verDetalles, setVerDetalles] = React.useState(false);
     const target = getMealTarget(mealKey);
     const served = calculateMealMacros(mealKey);
     const isPeri = mealKey === 'Intra' || mealKey === 'Post';
 
-    // `key` para saber DE QUÉ macro se habla: pasarse de proteína no se pinta en rojo
-    // (Jesús, 13-08). El «sobran X g» se sigue diciendo -- el dato no se esconde --, pero
-    // en el color de siempre, porque no es un fallo que haya que corregir.
-    const macroState = (servedVal, tgtVal, key) => {
-        if (!(servedVal > 0)) return { label: null, cls: '', over: false };
-        // LO QUE FALTA SE CUENTA CONTRA EL OBJETIVO QUE SE ESTÁ VIENDO (17-08-2026).
-        //
-        // La línea decía «54/63,5 g · faltan 9,3 g», y 54 + 9,3 son 63,3, no 63,5. El
-        // objetivo se enseña redondeado al medio gramo (como en Calma) y el restante salía
-        // del valor exacto: dos criterios en el mismo renglón, y el cliente haciendo una
-        // resta que no le da. Se cuenta contra lo que lee; el motor sigue con el exacto.
-        const r = alMedio(tgtVal) - alDecima(servedVal);
-        // DENTRO DEL MARGEN, CUADRADO (Francisco, 17-08). Habia un escalon intermedio,
-        // «Válido» en ambar, para lo que caia dentro de los ±4 sin estar clavado. Dos
-        // palabras y dos colores para lo que el metodo da por bueno igual: si esta dentro,
-        // cuadra. Y con el mismo margen que usa `getMealStatus` para decidir el veredicto
-        // de la comida (`margenDe`, proporcional en el perientreno): si el chip y el titulo
-        // usaran varas distintas volveriamos a tener dos criterios para lo mismo.
-        if (Math.abs(r) <= margenDe(tgtVal)) {
-            return { label: 'Cuadrado', cls: 'text-emerald-600 dark:text-emerald-400', over: false };
-        }
-        if (r > 0) return { label: `faltan ${fmt1(r)} g`, cls: 'text-red-500', over: false };
-        const enRojo = seExcede(key, servedVal, tgtVal, { esPeri: isPeri });
-        return { label: `sobran ${fmt1(-r)} g`,
-                 cls: enRojo ? 'text-red-500' : 'text-muted-foreground', over: enRojo };
-    };
+    const claves = isPeri ? ['P', 'H'] : ['P', 'H', 'G'];
+    const NOMBRE = { P: 'Proteína', H: 'Hidratos', G: 'Grasa' };
 
-    const bars = [
-        { label: 'P', name: 'Proteína', val: served.P, tgt: target.P, color: MACRO.P, st: macroState(served.P, target.P, 'P') },
-        { label: 'H', name: 'Hidratos', val: served.H, tgt: target.H, color: MACRO.H, st: macroState(served.H, target.H, 'H') },
-    ];
-    if (!isPeri) bars.push({ label: 'G', name: 'Grasas', val: served.G, tgt: target.G, color: MACRO.G, st: macroState(served.G, target.G, 'G') });
-
-    // Sin barras: los tres macros en una sola linea (servido/objetivo + cuanto falta
-    // o sobra). El color del texto ya dice como va cada uno.
     return (
-        <>
-            {/* EL BLOQUE ENTERO DE P/H/G VA DETRÁS DE «VER DETALLES» EN EL TELÉFONO, tal cual
-                estaba, sin quitarle nada: los tres macros con lo servido, lo objetivo y el
-                «Cuadrado» o «faltan 12g» de cada uno. Ocupaba una franja permanente en cada
-                una de las cinco comidas, y arriba del todo ya está lo que le queda del día.
-                Cuando lo necesita -- mientras monta esa comida -- lo pide. */}
-            <div className={`bg-muted/50 rounded-xl px-3 py-2.5 flex-wrap items-center gap-x-5 gap-y-1.5 ${verDetalles ? 'flex' : 'hidden lg:flex'}`}
-                data-testid={`meal-progress-${mealKey}`}>
-                {bars.map(({ label, name, val, tgt, color, st }) => (
-                    <div key={label} className="flex items-center gap-1.5 whitespace-nowrap">
-                        <span className="w-2.5 h-2.5 lg:w-2 lg:h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                        <span className="text-[15px] lg:text-[11px] font-bold hidden sm:inline" style={{ color }}>{name}</span>
-                        <span className="text-[15px] lg:text-[11px] font-bold sm:hidden" style={{ color }}>{label}</span>
-                        <span className={`font-data text-[15px] lg:text-[11px] ${hasFoods && st.over ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>{fmt1(val)}/{fmtHalf(tgt)} g</span>
-                        {hasFoods && st.label && <span className={`font-data text-[15px] lg:text-[11px] font-semibold ${st.cls}`}>{st.label}</span>}
+        <div className="grid grid-cols-3 gap-3" data-testid={`meal-progress-${mealKey}`}>
+            {claves.map((k) => {
+                // LO QUE FALTA SE CUENTA CONTRA EL OBJETIVO QUE SE ESTÁ VIENDO (17-08-2026).
+                // La línea decía «54/63,5 g · faltan 9,3 g», y 54 + 9,3 son 63,3, no 63,5:
+                // el objetivo se enseña redondeado al medio gramo (como en Calma) y el
+                // restante salía del valor exacto. Se cuenta contra lo que lee.
+                const meta = alMedio(target[k] || 0);
+                const tiene = alDecima(served[k] || 0);
+                const lectura = leerMacro({ vista: 'comida', hay: tiene, objetivo: meta, margen: margenDe(meta) });
+                return (
+                    <div key={k} className="text-center" data-testid={`comida-macro-${mealKey}-${k}`}>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-center gap-1">
+                            {NOMBRE[k]}
+                            {hasFoods && lectura.color && (
+                                <span className={`w-1.5 h-1.5 rounded-full ${lectura.color === 'ok' ? 'bg-ok' : 'bg-pasado'}`} />
+                            )}
+                        </p>
+                        <p className="numero-grande font-data leading-none text-[26px] sm:text-[30px] mt-1.5 text-foreground">
+                            {fmt1(tiene)}
+                        </p>
+                        {hasFoods && (
+                            <p data-testid={`comida-palabra-${mealKey}-${k}`}
+                                className={`text-xs mt-1 ${lectura.color === 'ok' ? 'text-ok font-medium'
+                                    : lectura.color === 'pasado' ? 'text-pasado font-medium' : 'text-muted-foreground'}`}>
+                                {lectura.palabra}
+                            </p>
+                        )}
+                        {hasFoods && lectura.barra && (
+                            <div className="h-1 rounded-full bg-muted mt-1.5 overflow-hidden">
+                                <div className={`h-full rounded-full ${lectura.barra.color === 'ok' ? 'bg-ok' : 'bg-pasado'}`}
+                                    style={{ width: `${lectura.barra.largo}%` }} />
+                            </div>
+                        )}
                     </div>
-                ))}
-            </div>
-            <button onClick={() => setVerDetalles(v => !v)} data-testid={`ver-detalles-${mealKey}`}
-                className="lg:hidden text-[14px] text-muted-foreground hover:text-foreground underline underline-offset-2 self-start">
-                {verDetalles ? 'ocultar detalles' : 'ver detalles'}
-            </button>
-        </>
+                );
+            })}
+        </div>
     );
 };
 
@@ -546,7 +538,12 @@ const MealCard = ({
                             <span className="mr-1.5">Objetivo</span>
                             {lineaObjetivo}
                         </p>
-                        {!isPeri && (
+                        {/* CON LA COMIDA ABIERTA, EL ESTADO NO SE REPITE (punto 120). Dentro
+                            están los tres macros uno a uno, con su palabra y su barra: decir
+                            además «faltan 20 de proteína» aquí arriba es contar lo mismo dos
+                            veces, y peor, porque lo resume. Cerrada sí: ahí es lo único que
+                            dice en qué punto está esa comida. */}
+                        {!isPeri && !isExpanded && (
                             <span className={`text-xs font-bold flex items-start gap-1.5 sm:text-right ${claseDelEstado(estado.color)}`}
                                 data-testid={`estado-comida-${mealKey}`}>
                                 <span className="mt-1"><PuntoDeEstado color={estado.color} /></span>

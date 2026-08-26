@@ -21,6 +21,13 @@
  * tope (punto 83).
  */
 import { MARGEN } from './exceso';
+import { num0, num1 } from './numeros';
+
+// DENTRO DE UNA COMIDA SÍ VAN DECIMALES (puntos 121 y 122 del artifact del 26-08): «es la
+// pantalla donde se afina. En el resto de la app, redondos». Y con el decimal hace falta un
+// suelo, porque si no la palabra se pone a cantar medios gramos: «medio gramo de grasa no lo
+// pesa nadie, y no se pueden cortar 0,2 g de una nuez». Por debajo de 1 g, cuadrado.
+export const SUELO_DE_LA_COMIDA = 1;
 
 export const SIN_ESTADO = 'sin_estado';
 export const CORTO = 'corto';
@@ -35,26 +42,29 @@ const MENOS = '−';
 const PALABRA = {
     // Macros no lleva estado NUNCA: ahí el número es el objetivo, no hay bueno ni malo.
     macros: () => 'tu objetivo',
-    dieta: (estado, desvio) => {
+    dieta: (estado, desvio, objetivo, n) => {
         if (estado === CLAVADO) return 'cuadrado';
-        if (estado === VALIDO) return `válido ${desvio > 0 ? '+' : MENOS}${Math.abs(desvio)}`;
-        if (estado === PASADO) return `sobran ${Math.abs(desvio)}`;
-        return `faltan ${Math.abs(desvio)}`;
+        if (estado === VALIDO) return `válido ${desvio > 0 ? '+' : MENOS}${n(Math.abs(desvio))}`;
+        if (estado === PASADO) return `sobran ${n(Math.abs(desvio))}`;
+        return `faltan ${n(Math.abs(desvio))}`;
     },
-    llevas: (estado, desvio, objetivo) => {
-        if (estado === PASADO) return `te pasas ${Math.abs(desvio)}`;
+    llevas: (estado, desvio, objetivo, n) => {
+        if (estado === PASADO) return `te pasas ${n(Math.abs(desvio))}`;
         // «Ya lo tienes» le dice que puede olvidarse de ése el resto del día, que es lo
         // único que necesita saber en esta pestaña.
         if (estado === CLAVADO || estado === VALIDO) return 'ya lo tienes';
-        return `de ${objetivo}`;
+        return `de ${n(objetivo)}`;
     },
-    falta: (estado, desvio) => {
-        if (estado === PASADO) return `te pasas ${Math.abs(desvio)}`;
+    falta: (estado, desvio, objetivo, n) => {
+        if (estado === PASADO) return `te pasas ${n(Math.abs(desvio))}`;
         if (estado === CLAVADO || estado === VALIDO) return 'cuadrado';
         // El número YA es lo que falta, así que no se pone «faltan»: sería decirlo dos veces.
         return 'para llegar';
     },
 };
+// Dentro de una comida las palabras son las de Dieta -- «cuadrado», «válido +2,3»,
+// «faltan 4,5» --, lo que cambia es que llevan decimal.
+PALABRA.comida = PALABRA.dieta;
 
 /**
  * Lee un macro y devuelve todo lo que hay que pintar de él.
@@ -67,18 +77,27 @@ const PALABRA = {
  * «válido −4» debajo de un número que ya se ve clavado, y el cliente creería que la app
  * miente. La palabra tiene que salir de lo mismo que él está leyendo.
  */
-export function leerMacro({ vista, hay, objetivo }) {
+export function leerMacro({ vista, hay, objetivo, margen }) {
     if (vista === 'macros') {
         return { estado: SIN_ESTADO, palabra: PALABRA.macros(), color: null, barra: null };
     }
-    const meta = Math.round(objetivo || 0);
-    const tiene = Math.round(hay || 0);
+    // DENTRO DE UNA COMIDA NO SE REDONDEA, ni el número ni la palabra (punto 121). En el
+    // resto de la app sí: un decimal en un total del día no decide nada y ensucia.
+    const conDecimales = vista === 'comida';
+    const n = conDecimales ? num1 : num0;
+    const meta = conDecimales ? (objetivo || 0) : Math.round(objetivo || 0);
+    const tiene = conDecimales ? (hay || 0) : Math.round(hay || 0);
     // Lo que hay MENOS lo que debería haber: negativo es que falta, positivo es que sobra.
     const desvio = tiene - meta;
+    const fuera = Math.abs(desvio);
+    // El margen puede venir dado: dentro de una comida es el proporcional de `lib/exceso`
+    // (`margenDe`), porque 4 g sobre los 9 de proteína de un intra son casi la mitad.
+    const tope = margen != null ? margen : MARGEN;
 
     let estado;
-    if (desvio === 0) estado = CLAVADO;
-    else if (Math.abs(desvio) <= MARGEN) estado = VALIDO;
+    // Clavado: exacto en el resto de la app; por debajo de 1 g dentro de una comida.
+    if (conDecimales ? fuera < SUELO_DE_LA_COMIDA : desvio === 0) estado = CLAVADO;
+    else if (fuera <= tope) estado = VALIDO;
     else if (desvio > 0) estado = PASADO;
     else estado = CORTO;
 
@@ -88,7 +107,7 @@ export function leerMacro({ vista, hay, objetivo }) {
     return {
         estado,
         desvio,
-        palabra: (PALABRA[vista] || PALABRA.dieta)(estado, desvio, meta),
+        palabra: (PALABRA[vista] || PALABRA.dieta)(estado, desvio, meta, n),
         color,
         barra: {
             // La barra hace algo que el punto no hace: en un día cuadrado se llenan las
