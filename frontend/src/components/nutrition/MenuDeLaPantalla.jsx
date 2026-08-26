@@ -53,8 +53,12 @@ const MenuDeLaPantalla = ({ opciones = [], etiqueta = 'Más opciones' }) => {
                             data-testid={`menu-pantalla-${o.id}`}
                             disabled={o.deshabilitada}
                             onClick={() => { setAbierto(false); o.al(); }}
-                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-sm text-foreground hover:bg-muted transition-colors disabled:opacity-50">
-                            {o.icono && <o.icono className="w-4 h-4 flex-shrink-0 text-muted-foreground" />}
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-sm transition-colors disabled:opacity-50 ${
+                                o.peligro ? 'text-pasado hover:bg-pasado/10' : 'text-foreground hover:bg-muted'}`}>
+                            {/* Lo que se lleva algo por delante va en rojo (punto 126: «Vaciar
+                                la comida, esta en rojo»). Es la unica marca que distingue una
+                                opcion destructiva de las demas dentro de un menu. */}
+                            {o.icono && <o.icono className={`w-4 h-4 flex-shrink-0 ${o.peligro ? '' : 'text-muted-foreground'}`} />}
                             <span className="min-w-0">
                                 <span className="block font-semibold">{o.texto}</span>
                                 {/* El detalle es para el resumen de la configuración del día

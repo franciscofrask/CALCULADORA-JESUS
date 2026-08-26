@@ -43,5 +43,27 @@ const SALIDA = path.join(__dirname, '_nutricion_2608');
         };
     }, comida), null, 1));
     await page.screenshot({ path: path.join(SALIDA, `comida-${ancho}.jpg`), type: 'jpeg', quality: 70, fullPage: true });
+
+    // Los controles (puntos 124 a 128).
+    console.log('controles:', JSON.stringify(await page.evaluate((c) => {
+        const t = (s) => (document.querySelector(s)?.textContent || '').trim();
+        const card = document.querySelector(`[data-testid="meal-card-${c}"]`);
+        return {
+            ajuste: (card?.innerText || '').includes('AJUSTE DE CANTIDADES'),
+            modoViejo: (card?.innerText || '').includes('MODO DE CÁLCULO'),
+            explicacion: t(`[data-testid="ajuste-explicacion-${c}"]`),
+            cuadrarAncho: !!document.querySelector(`[data-testid="cuadrar-${c}"]`),
+            fraseCuadrar: (card?.innerText || '').includes('sin pasarme de tus macros'),
+            leyendaVieja: (card?.innerText || '').includes('prioridad'),
+            menu: !!card?.querySelector('[data-testid="menu-pantalla"]'),
+            flechas: card.querySelectorAll('[data-testid^="reorder-"]').length,
+        };
+    }, comida)));
+
+    // Y el modo ordenar.
+    await page.locator(`[data-testid="meal-card-${comida}"] [data-testid="menu-pantalla"]`).click();
+    await page.waitForTimeout(500);
+    console.log('menu:', JSON.stringify(await page.evaluate(() =>
+        [...document.querySelectorAll('[role="menuitem"]')].map(b => b.innerText.trim()))));
     await nav.close();
 })();

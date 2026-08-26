@@ -5,8 +5,9 @@ import { leerMacro } from '../../lib/estadoDelMacro';
 import { num0, num1, numMedio, alMedio, alDecima } from '../../lib/numeros';
 import { TOPE_GRAMOS } from '../../lib/cantidades';
 import ContadorFamilia from './ContadorFamilia';
+import MenuDeLaPantalla from './MenuDeLaPantalla';
 import {
-    ChevronDown, ChevronUp, Plus, Trash2, Minus, Zap, Wrench, RefreshCw, ArrowUp, Lock, Download, Star
+    ChevronDown, ChevronUp, Plus, Trash2, Minus, Zap, Wrench, RefreshCw, ArrowUp, ArrowUpDown, Lock, Download, Star
 } from 'lucide-react';
 
 const MACRO = { P: '#FF671F', H: '#2196F3', G: '#FFA500' };
@@ -246,7 +247,7 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFood
 const IngredientRow = ({ food, idx, mealKey, isLocked, isEditing, increment,
     moveFoodUp, removeFood, updateFoodQuantity, updateFoodQuantityDirect,
     setEditingQuantity, formatFoodQuantity,
-    esPorUnidad, pesoUnidad, acumFamilias }) => {
+    esPorUnidad, pesoUnidad, acumFamilias, ordenando = false }) => {
     // Los del método, que son los que la app cuenta. Hasta el 26-08 aquí se podía
     // enseñar en su lugar lo que dice la etiqueta (Método / Reales), y hacía falta un
     // aviso al principio de la pantalla explicando que lo que se veía no era lo que
@@ -299,15 +300,25 @@ const IngredientRow = ({ food, idx, mealKey, isLocked, isEditing, increment,
             <span className="hidden sm:inline order-3 text-[14px] lg:text-[11px] text-muted-foreground font-data whitespace-nowrap flex-shrink-0"
                 title={macrosLine(macros)}>{macrosLine(macros)}</span>
 
-            {/* Reorder (prioridad) */}
-            <button
-                className="order-2 sm:order-1 flex flex-col items-center justify-center h-9 w-7 rounded-lg text-muted-foreground hover:text-brand hover:bg-brand/10 disabled:opacity-20 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors flex-shrink-0"
-                disabled={idx === 0 || isLocked} onClick={() => moveFoodUp(mealKey, idx)} title="Subir prioridad"
-                data-testid={`reorder-${mealKey}-${idx}`}
-            >
-                <ArrowUp className="w-4 h-4" strokeWidth={2.5} />
-                <span className="text-[9px] font-data leading-none mt-0.5">{idx + 1}</span>
-            </button>
+            {/* SUBIR, SOLO MIENTRAS SE ORDENA (punto 126). Estaba siempre, y en el móvil le
+                quitaba a cada alimento el ancho que su nombre necesita: «Fiambre de pechuga
+                de pavo de buena calidad (más del 85 %)» caía a dos líneas.
+
+                Y ya no se llama «prioridad» (punto 127): la palabra hacía pensar que Cuadrar
+                reparte por ese orden, y no es verdad; esto solo coloca el alimento más
+                arriba. Fuera también el número de debajo -- la posición ya se ve porque el
+                alimento está ahí --, y con él se va el motivo por el que la flecha del
+                primero no parecía apagada: el número seguía a plena luz debajo (punto 128). */}
+            {ordenando && (
+                <button
+                    className="order-2 sm:order-1 flex items-center justify-center h-9 w-7 rounded-lg text-muted-foreground hover:text-brand hover:bg-brand/10 disabled:opacity-25 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors flex-shrink-0"
+                    disabled={idx === 0 || isLocked} onClick={() => moveFoodUp(mealKey, idx)}
+                    title={idx === 0 ? 'Ya está el primero' : 'Subirlo'}
+                    data-testid={`reorder-${mealKey}-${idx}`}
+                >
+                    <ArrowUp className="w-4 h-4" strokeWidth={2.5} />
+                </button>
+            )}
 
             {/* Cantidad (gramos) - stepper conectado. En movil se pega a la derecha (ml-auto),
                 con la prioridad a la izquierda y el nombre encima. */}
@@ -381,6 +392,8 @@ const MealCard = ({
     // la tarjeta se usa tambien desde sitios que no tienen ese modal.
     abrirFavoritasDeComida = null,
 }) => {
+    // ORDENANDO (punto 126): las flechas de subir solo salen cuando se pide.
+    const [ordenando, setOrdenando] = React.useState(false);
     const isExpanded = forceExpanded ? true : expandedMeals[mealKey];
     const target = getMealTarget(mealKey);
     const foods = mealsData[mealKey]?.alimentos || [];
@@ -593,29 +606,32 @@ const MealCard = ({
             {isExpanded && (
                 <div className={forceExpanded ? (denso ? 'p-3 sm:p-3.5 space-y-3' : 'p-4 sm:p-5 space-y-4') : 'px-3.5 sm:px-4 pb-4 pt-1 space-y-3'}>
                     {/* Modo de cálculo. En denso no va aquí: está en la cabecera de la comida. */}
+                    {/* Los números primero, que es a lo que se entra: a mover gramos hasta que
+                        cuadre. Los controles van debajo. */}
+                    <MealProgressBars mealKey={mealKey} getMealTarget={getMealTarget}
+                        calculateMealMacros={calculateMealMacros} hasFoods={foods.length > 0} />
+
+                    {/* «AJUSTE DE CANTIDADES», NO «MODO DE CÁLCULO» (punto 124 del 26-08).
+                        Y la etiqueta encima con los dos botones debajo, como Entreno/Descanso.
+
+                        Debajo iba una frase que decía lo único que hay que entender -- «Yo te
+                        ajusto las cantidades» -- y estaba escondida en `lg`: en el móvil no se
+                        veía nunca. La tapaban dos palabras de jerga. Ahora la jerga se va y la
+                        frase se queda, en los dos tamaños. */}
                     {!isPeri && !isLocked && setMealMode && !denso && (
-                        <div className="flex items-center justify-between gap-3 rounded-xl bg-muted/50 px-3.5 py-3">
-                            {/* Sin la explicación debajo del rótulo en el teléfono: «Automático»
-                                y «Manual» están ahí al lado y se entienden solos, y la frase se
-                                repetía en cada comida que se abriera. En escritorio se queda. */}
-                            <div className="min-w-0">
-                                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Modo de cálculo</p>
-                                {/* La explicación en el idioma del cliente, no del programa (Jesús,
-                                    doc 21-08, apartado 14): quién pone las cantidades y qué pasa después. */}
-                                <p className="hidden lg:block text-[11px] text-muted-foreground/80 mt-0.5">{mealMode === 'manual' ? 'Las pones tú y lo compensas en el día' : 'Yo te ajusto las cantidades'}</p>
-                            </div>
-                            <div className="inline-flex rounded-lg bg-card p-0.5 border border-border flex-shrink-0">
+                        <div className="rounded-xl bg-muted/50 px-3.5 py-3">
+                            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Ajuste de cantidades</p>
+                            <div className="inline-flex rounded-lg bg-card p-0.5 border border-border mt-1.5">
                                 <button className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${mealMode !== 'manual' ? 'bg-brand text-white' : 'text-muted-foreground'}`}
                                     onClick={() => setMealMode(mealKey, 'auto')} data-testid={`mode-auto-${mealKey}`}>Automático</button>
                                 <button className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${mealMode === 'manual' ? 'bg-brand text-white' : 'text-muted-foreground'}`}
                                     onClick={() => setMealMode(mealKey, 'manual')} data-testid={`mode-manual-${mealKey}`}>Manual</button>
                             </div>
+                            <p className="text-[11px] text-muted-foreground/80 mt-1.5" data-testid={`ajuste-explicacion-${mealKey}`}>
+                                {mealMode === 'manual' ? 'Las pones tú y lo compensas en el día' : 'Yo te ajusto las cantidades'}
+                            </p>
                         </div>
                     )}
-
-                    {/* Siempre los del metodo: el switch solo cambia la lista de abajo. */}
-                    <MealProgressBars mealKey={mealKey} getMealTarget={getMealTarget}
-                        calculateMealMacros={calculateMealMacros} hasFoods={foods.length > 0} />
 
                     {isLocked && (
                         <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/25 rounded-xl px-3 py-2">
@@ -730,10 +746,27 @@ const MealCard = ({
                     {foods.length > 0 && (
                         <div className="space-y-3">
                             <div>
+                                {/* «−/+ = gramos» Y YA (punto 127). Ponía «↑ = prioridad», y
+                                    prioridad hace pensar que Cuadrar reparte por ese orden. No
+                                    es verdad: la flecha solo coloca el alimento más arriba. */}
                                 <div className="flex items-center justify-between mb-2">
                                     <p className="caption">Ingredientes</p>
-                                    <span className="text-[11px] text-muted-foreground">↑ = prioridad · −/+ = gramos</span>
+                                    <span className="text-[11px] text-muted-foreground">−/+ = gramos</span>
                                 </div>
+                                {/* ORDENANDO (punto 126): las flechas solo aparecen cuando se
+                                    pide, y mientras tanto hay una barra que dice qué está
+                                    pasando y cómo salir. Así cada alimento recupera el ancho
+                                    que ocupaba la flecha, que es lo que hacía que «Fiambre de
+                                    pechuga de pavo de buena calidad (más del 85 %)» cayera a
+                                    dos líneas. */}
+                                {ordenando && (
+                                    <div className="flex items-center justify-between gap-3 rounded-xl bg-brand/10 border border-brand/40 px-3 py-2 mb-2"
+                                        data-testid={`ordenando-${mealKey}`}>
+                                        <span className="text-xs font-bold text-brand">Ordena los alimentos</span>
+                                        <button onClick={() => setOrdenando(false)} data-testid={`ordenar-listo-${mealKey}`}
+                                            className="text-xs font-bold text-brand hover:underline">Listo</button>
+                                    </div>
+                                )}
                                 <div className="space-y-1.5">
                                     {foods.map((food, idx) => (
                                         <React.Fragment key={idx}>
@@ -744,7 +777,7 @@ const MealCard = ({
                                                 updateFoodQuantity={updateFoodQuantityVigilada} updateFoodQuantityDirect={updateFoodQuantityDirectVigilada}
                                                 setEditingQuantity={setEditingQuantity} formatFoodQuantity={formatFoodQuantity}
                                                 esPorUnidad={esPorUnidad} pesoUnidad={pesoUnidad}
-                                                acumFamilias={acumFamilias} />
+                                                acumFamilias={acumFamilias} ordenando={ordenando} />
                                             {/* LA PUERTA: el recuadro del autoajuste, pegado al ingrediente tocado.
                                                 No es un toast: se queda hasta que el cliente decida, con los números
                                                 reales de lo que pidió y lo que la app dejó (doc 21-08, apartado 14). */}
@@ -773,22 +806,41 @@ const MealCard = ({
                                     ))}
                                 </div>
                             </div>
+                            {/* CUADRAR, ANCHO Y EXPLICADO (punto 125). Era un botón pequeño
+                                perdido entre otros cuatro, y lo que hace lo contaba un
+                                `title`: en el móvil no hay ratón, así que ningún cliente lo
+                                había leído nunca. La frase baja debajo del botón, visible.
+                                (La que él escribe no existía: la de antes hablaba de mínimos.) */}
+                            {!isLocked && onCuadrar && (
+                                <div>
+                                    <button onClick={() => onCuadrar(mealKey)} data-testid={`cuadrar-${mealKey}`}
+                                        className="btn-brand w-full py-3 rounded-xl text-sm font-bold">
+                                        Cuadrar
+                                    </button>
+                                    <p className="text-xs text-muted-foreground text-center mt-1.5">
+                                        Te ajusto las cantidades sin pasarme de tus macros.
+                                    </p>
+                                </div>
+                            )}
+                            {/* Y LO DEMÁS, DENTRO DEL «···» (punto 126). Estaban los cinco a la
+                                vista -- Automático/Manual, ver detalles, Cuadrar, la estrella y
+                                Vaciar -- compitiendo con lo único que se viene a hacer aquí. */}
                             <div className="flex items-center gap-2">
                                 <button className="flex-1 py-2.5 rounded-xl border border-dashed border-border text-brand font-semibold text-sm hover:bg-brand/5 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 transition-colors" disabled={isLocked} onClick={() => setBuildMealModal({ open: true, mealKey, startStep: 2 })}>
                                     <Plus className="w-4 h-4" /> Añadir ingrediente
                                 </button>
-                                {!isLocked && onCuadrar && <button className="text-xs font-semibold text-brand border border-brand rounded-xl px-3 py-2.5 hover:bg-brand hover:text-white transition-colors" onClick={() => onCuadrar(mealKey)} title="Ajustar las cantidades a tus macros sin pasarse (respetando el mínimo de cada alimento)">Cuadrar</button>}
-                                {/* Guardar SOLO esta comida (25-08). Antes había que guardar
-                                    el día entero y borrar lo que sobraba. */}
-                                {!isLocked && abrirFavoritasDeComida && (
-                                    <button className="text-muted-foreground hover:text-brand px-2 py-2.5 transition-colors"
-                                        onClick={() => abrirFavoritasDeComida(mealKey)}
-                                        title="Guardar esta comida en favoritas"
-                                        data-testid={`fav-comida-${mealKey}`}>
-                                        <Star className="w-4 h-4" />
-                                    </button>
+                                {!isLocked && (
+                                    <MenuDeLaPantalla etiqueta="Más opciones de esta comida" opciones={[
+                                        foods.length > 1 && { id: `ordenar-${mealKey}`, texto: 'Ordenar los alimentos',
+                                            icono: ArrowUpDown, al: () => setOrdenando(true) },
+                                        // Guardar SOLO esta comida (25-08). Antes había que
+                                        // guardar el día entero y borrar lo que sobraba.
+                                        abrirFavoritasDeComida && { id: `fav-${mealKey}`, texto: 'Guardar como favorita',
+                                            icono: Star, al: () => abrirFavoritasDeComida(mealKey) },
+                                        { id: `vaciar-${mealKey}`, texto: 'Vaciar la comida', icono: Trash2,
+                                            peligro: true, al: () => clearMeal(mealKey) },
+                                    ]} />
                                 )}
-                                {!isLocked && <button className="text-xs text-muted-foreground hover:text-red-500 px-3 py-2.5 transition-colors" onClick={() => clearMeal(mealKey)}>Vaciar</button>}
                             </div>
                         </div>
                     )}
