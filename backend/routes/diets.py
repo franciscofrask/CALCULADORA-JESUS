@@ -712,13 +712,19 @@ async def marcar_comida(fecha: str, data: dict, user = Depends(get_current_user)
     «Marcar la comida es lo que cuenta como comida»: de aquí salen Llevas y Falta del
     deslizador. Se guarda dentro de la propia comida (`comidas.{k}.marcada`) para que
     viaje con el día: la marca es del cliente en cualquier aparato, no de un navegador.
-    El peri no se marca (regla 3 del diseño), así que Intra y Post se rechazan.
+
+    EL INTRA Y EL POST TAMBIÉN SE MARCAN (punto 96 del artifact del 25-08). Hasta hoy se
+    rechazaban aquí, y esa era la razón de que Llevas no llegara nunca al total: marcabas
+    las cuatro comidas, te tomabas el batido y te seguían faltando los 40 de proteína.
+    Esto revierte la «regla 3» del diseño anterior, que decía que el peri no se marcaba;
+    lo cambió Jesús. Siguen sin ser una comida a efectos de contarlas (el contador de
+    Llevas los dice aparte), pero como toma sí cuentan.
     """
     _validar_fecha(fecha)
     comida = data.get("comida") if isinstance(data, dict) else None
     marcada = bool(data.get("marcada")) if isinstance(data, dict) else None
-    if not isinstance(comida, str) or not _re.fullmatch(r"C[1-9]", comida):
-        raise HTTPException(status_code=400, detail="Dime qué comida marco (C1 a C9).")
+    if not isinstance(comida, str) or not _re.fullmatch(r"C[1-9]|Intra|Post", comida):
+        raise HTTPException(status_code=400, detail="Dime qué comida marco (C1 a C9, Intra o Post).")
     await db.diets.update_one(
         {"user_id": user["id"], "fecha": fecha},
         {"$set": {

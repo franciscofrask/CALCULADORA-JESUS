@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Circle, ChevronRight, Zap } from 'lucide-react';
 import { leer as leerLocal, escribir as escribirLocal } from '../../lib/almacenLocal';
-import { num1 } from '../../lib/numeros';
+import { num0 } from '../../lib/numeros';
 import ExtrasDelDia from '../nutrition/ExtrasDelDia';
 
 /**
@@ -60,11 +60,18 @@ const montadoDe = (comida) => (comida?.alimentos || []).reduce((acc, a) => {
     return { P: acc.P + (m.P || 0), H: acc.H + (m.H || 0), G: acc.G + (m.G || 0) };
 }, { P: 0, H: 0, G: 0 });
 
+// SIN LETRAS Y REDONDOS (punto 98 del 25-08). Hasta hoy: «61P · 30,2H · 19,6G». Queda
+// «61 · 30 · 20»: el orden es siempre el mismo y ya está escrito arriba, en los rótulos de
+// los tres números, así que la P, la H y la G solo añaden ruido. Y el decimal en una lista
+// que se lee de un vistazo tampoco decide nada.
 const lineaMacros = (m, sinGrasa = false) => [
-    `${num1(m.P || 0)}P`, `${num1(m.H || 0)}H`, ...(sinGrasa ? [] : [`${num1(m.G || 0)}G`]),
+    num0(m.P || 0), num0(m.H || 0), ...(sinGrasa ? [] : [num0(m.G || 0)]),
 ].join(' · ');
 
 const nombreComida = (k, unica) => (unica ? 'Comida única' : `Comida ${k.slice(1)}`);
+
+// El intra y el post, en el orden en que se toman: uno detrás del otro (punto 97).
+const ORDEN_PERI = ['Intra', 'Post'];
 
 const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) => {
     const [vista, setVista] = useState('macros');
@@ -188,17 +195,68 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [dieta, numComidas]);
 
-    const hechas = claves.filter((k) => marcadas[k]);
-    const deComidas = hechas.reduce((acc, k) => ({
-        P: acc.P + montadoPorComida[k].P,
-        H: acc.H + montadoPorComida[k].H,
-        G: acc.G + montadoPorComida[k].G,
-    }), { P: 0, H: 0, G: 0 });
+    // EL INTRA Y EL POST, CADA UNO EL SUYO (puntos 96 y 97 del 25-08). Hasta hoy se fundían
+    // en una sola tarjeta llamada «Perientreno», sin casilla, y por eso Llevas no llegaba
+    // NUNCA al total: marcabas las cuatro comidas, te tomabas el batido y te seguían
+    // faltando los 40 de proteína. Son dos tomas con nombre propio, como la Comida 1 y la 2.
+    //
+    // Lo que suma al marcarlo es lo que la fila enseña: lo montado si lo hay y, si no, su
+    // objetivo. En las comidas eso no vale (lo que te comes depende de lo que montes), pero
+    // el peri es una toma fija -- el batido de siempre --, así que el número se sabe sin
+    // montarlo, y es el que hay que poder marcar para que la cuenta cierre.
+    const periPorBloque = useMemo(() => {
+        const objetivos = reparto?.periworkout || {};
+        const res = {};
+        for (const k of ORDEN_PERI) {
+            const guardada = comidasGuardadas[k];
+            const tiene = (guardada?.alimentos || []).length > 0;
+            const obj = objetivos[k];
+            if (!tiene && !obj) continue;
+            const montado = montadoDe(guardada);
+            res[k] = {
+                tiene,
+                montado,
+                objetivo: obj ? { P: obj.P || 0, H: obj.H || 0, G: 0 } : null,
+                // La grasa del peri no cuenta en el método, así que ni se pinta ni se suma.
+                suma: tiene ? { ...montado, G: 0 } : { P: obj.P || 0, H: obj.H || 0, G: 0 },
+            };
+        }
+        return res;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [dieta, reparto]);
+
+    const clavesPeri = ORDEN_PERI.filter((k) => periPorBloque[k]);
+
+    // El sitio del peri en la lista: justo después de la comida tras la que se entrena
+    // (`momento_entreno`, 0 en ayunas, 1 después de la C1...). Y los dos juntos, que se
+    // toman uno detrás de otro. Si el día tiene menos comidas que el momento apuntado, van
+    // al final: nunca desaparecen de la lista por un dato viejo.
+    const momentoEntreno = diaConfigurado
+        ? (dieta.momento_entreno != null ? dieta.momento_entreno : 1)
+        : (reparto?.config?.momento_entreno != null ? reparto.config.momento_entreno : 1);
+    const trasComida = Math.max(0, Math.min(claves.length, Number(momentoEntreno) || 0));
+
+    const filas = useMemo(() => {
+        const lista = [];
+        const meterPeri = () => clavesPeri.forEach((k) => lista.push({ clave: k, esPeri: true }));
+        if (trasComida === 0) meterPeri();
+        claves.forEach((k, i) => {
+            lista.push({ clave: k, esPeri: false });
+            if (i + 1 === trasComida) meterPeri();
+        });
+        return lista;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [claves.join(','), clavesPeri.join(','), trasComida]);
+
+    const hechas = filas.filter((f) => marcadas[f.clave]);
     // «Llevas» son las comidas marcadas y nada más: los extras NO se suman (punto 28 del
     // doc del 24-08). Ya mordió una vez -- sumarlos encogía el «Falta» del resto del día y
     // la app acababa diciéndole que se saltara una comida por haberse comido una tarta --,
     // así que si alguien vuelve a plantearlo, la respuesta es que no.
-    const llevas = deComidas;
+    const llevas = hechas.reduce((acc, f) => {
+        const m = f.esPeri ? periPorBloque[f.clave].suma : montadoPorComida[f.clave];
+        return { P: acc.P + m.P, H: acc.H + m.H, G: acc.G + (m.G || 0) };
+    }, { P: 0, H: 0, G: 0 });
 
     const falta = conPeri ? {
         P: Math.round(conPeri.P - llevas.P),
@@ -206,28 +264,6 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
         G: Math.round(conPeri.G - llevas.G),
     } : null;
     const pasadas = falta ? ['P', 'H', 'G'].filter((k) => falta[k] < 0) : [];
-
-    // El peri del día: sus objetivos (del reparto) o lo que tenga montado.
-    const periObjetivo = (() => {
-        const p = reparto?.periworkout || {};
-        const intra = p.Intra || {}; const post = p.Post || {};
-        return { P: (intra.P || 0) + (post.P || 0), H: (intra.H || 0) + (post.H || 0) };
-    })();
-    const hayPeri = periObjetivo.P > 0 || periObjetivo.H > 0 || periMontado.P > 0 || periMontado.H > 0;
-
-    // Lo que lleva el peri, por su nombre («crema de arroz y aislado de suero»).
-    const alimentosDelPeri = useMemo(() => {
-        const nombres = [];
-        for (const c of [comidasGuardadas.Intra, comidasGuardadas.Post]) {
-            for (const a of (c?.alimentos || [])) {
-                const n = (a.nombre || a.name || '').trim();
-                if (n && !nombres.includes(n)) nombres.push(n);
-            }
-        }
-        if (nombres.length <= 1) return nombres.join('');
-        return `${nombres.slice(0, -1).join(', ')} y ${nombres[nombres.length - 1]}`;
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [dieta]);
 
     const valoresDeVista = { macros: conPeri, dieta: totalDieta, llevas, falta };
     const valores = valoresDeVista[vista];
@@ -238,10 +274,7 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
     const irANutricion = () => navigate('/dashboard/nutrition');
     // El peri aterriza EN el peri (P32 del 23-08): pinchar su tarjeta te dejaba en la
     // cocina con la Comida 1 delante. Se va al bloque que el día tenga (Intra o Post).
-    const irAlPeri = () => {
-        const clave = (comidasGuardadas.Intra || (reparto?.periworkout || {}).Intra) ? 'Intra' : 'Post';
-        navigate(`/dashboard/nutrition?comida=${clave}`);
-    };
+    const irAlPeri = (clave) => navigate(`/dashboard/nutrition?comida=${clave}`);
 
     return (
         <>
@@ -360,35 +393,48 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
                     </div>
                 )}
 
-                {claves.map((k) => {
+                {/* UNA FILA POR TOMA, TODAS IGUALES (puntos 96, 97 y 101). El intra y el
+                    post llevan su círculo a la izquierda, como las comidas, y el rayo pasa
+                    a ir junto al nombre, que es donde dice algo y no donde estorba. Al
+                    marcarlos no pasa nada especial: tick verde y la línea apagada.
+                    Y no llevan suplemento debajo (punto 100): el intra y el post SON el
+                    suplemento, y colgarles otro confunde. */}
+                {filas.map(({ clave: k, esPeri }) => {
                     const marcada = !!marcadas[k];
                     if (marcada && !verHechas) return null;
-                    const montado = montadoPorComida[k];
-                    const tieneAlimentos = (comidasGuardadas[k]?.alimentos || []).length > 0;
-                    const objetivoComida = reparto?.comidas?.[k];
+                    const peri = esPeri ? periPorBloque[k] : null;
+                    const tieneAlimentos = esPeri
+                        ? peri.tiene
+                        : (comidasGuardadas[k]?.alimentos || []).length > 0;
+                    const montado = esPeri ? peri.montado : montadoPorComida[k];
+                    const objetivoFila = esPeri ? peri.objetivo : reparto?.comidas?.[k];
+                    const nombre = esPeri ? k : nombreComida(k, esUnica);
                     return (
                         <div key={k} data-testid={`comida-hoy-${k}`}
                             className={`surface p-3.5 sm:p-4 flex items-center gap-3 transition-opacity ${marcada ? 'opacity-55' : ''}`}>
                             {/* La casilla. Persistencia: ver el comentario de cabecera. */}
                             <button onClick={() => marcar(k)} role="checkbox" aria-checked={marcada}
-                                aria-label={`${nombreComida(k, esUnica)}: ${marcada ? 'comida ya marcada' : 'marcar como comida'}`}
+                                aria-label={`${nombre}: ${marcada ? 'ya marcado' : 'marcar como tomado'}`}
                                 data-testid={`marcar-${k}`} className="flex-shrink-0 p-1 -m-1">
                                 {marcada
-                                    ? <CheckCircle2 className="w-6 h-6 text-brand" />
+                                    ? <CheckCircle2 className="w-6 h-6 text-ok" />
                                     : <Circle className="w-6 h-6 text-muted-foreground" />}
                             </button>
-                            <button onClick={irANutricion} className="flex-1 min-w-0 flex items-center gap-3 text-left group">
+                            <button onClick={esPeri ? () => irAlPeri(k) : irANutricion}
+                                className="flex-1 min-w-0 flex items-center gap-3 text-left group">
                                 <div className="min-w-0 flex-1">
-                                    <p className={`font-bold text-sm text-foreground ${marcada ? 'line-through' : ''}`}>
-                                        {nombreComida(k, esUnica)}
+                                    <p className={`font-bold text-sm text-foreground flex items-center gap-1.5 ${marcada ? 'line-through' : ''}`}>
+                                        {esPeri && <Zap className="w-3.5 h-3.5 text-brand flex-shrink-0" />}
+                                        {nombre}
                                     </p>
-                                    {/* Sin `truncate`: en 390 px «Sin hacer · objetivo 47,5P · 72H · 12G»
-                                        no cabe en una línea y cortaba la grasa. Que salte de línea. */}
+                                    {/* Sin `truncate`: en 390 px «Sin hacer · objetivo 47 · 72 · 12»
+                                        puede no caber en una línea. Que salte de línea. */}
                                     <p className="text-sm text-muted-foreground font-data">
                                         {tieneAlimentos
-                                            ? lineaMacros(montado)
-                                            : objetivoComida
-                                                ? `Sin hacer · objetivo ${lineaMacros(objetivoComida)}`
+                                            ? lineaMacros(montado, esPeri)
+                                            : objetivoFila
+                                                ? (esPeri ? lineaMacros(objetivoFila, true)
+                                                    : `Sin hacer · objetivo ${lineaMacros(objetivoFila)}`)
                                                 : 'Sin hacer'}
                                     </p>
                                 </div>
@@ -397,27 +443,6 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
                         </div>
                     );
                 })}
-
-                {/* El peri va después y SIN casilla: el peri no se marca. */}
-                {hayPeri && (
-                    <button onClick={irAlPeri} data-testid="peri-hoy"
-                        className="surface surface-hover w-full p-3.5 sm:p-4 flex items-center gap-3 text-left group border-l-4 border-l-brand">
-                        <div className="w-9 h-9 bg-brand/10 rounded-xl flex items-center justify-center flex-shrink-0">
-                            <Zap className="w-4 h-4 text-brand" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                            <p className="font-bold text-sm text-foreground">Perientreno</p>
-                            {/* Con lo que lleva dentro, como la captura del 23-08:
-                                «40 P · 60 H · crema de arroz y aislado de suero». */}
-                            <p className="text-sm text-muted-foreground font-data">
-                                {(periMontado.P > 0 || periMontado.H > 0)
-                                    ? [lineaMacros(periMontado, true), alimentosDelPeri].filter(Boolean).join(' · ')
-                                    : `Objetivo ${lineaMacros(periObjetivo, true)}`}
-                            </p>
-                        </div>
-                        <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-brand transition-colors flex-shrink-0" />
-                    </button>
-                )}
             </section>
 
             {/* «EXTRAS DEL DÍA», debajo de las comidas y del peri: lo comido fuera de la

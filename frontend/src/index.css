@@ -70,6 +70,13 @@
     --macro-protein: #FF671F;
     --macro-carbs: #2196F3;
     --macro-fat: #FFA500;
+    /* LOS DOS COLORES DE ESTADO DEL INICIO (artifact del 25-08, puntos 76 y 77). El verde
+       es «esto ya está resuelto» y el naranja es «te has pasado», y ese naranja es UN TONO
+       PROPIO, distinto del de la marca: mientras el número y el botón de Guardar
+       compartían color, el naranja significaba cinco cosas a la vez y no significaba
+       ninguna. No se usan en toda la app: son del Inicio. */
+    --ok: #22C55E;
+    --pasado: #FF5A2E;
 }
 
 @layer base {
@@ -184,6 +191,11 @@
     .animate-slide-up { animation: slideUp 0.35s cubic-bezier(0.22, 1, 0.36, 1); }
     .text-brand { color: var(--brand); }
     .bg-brandc { background-color: var(--brand); }
+    /* Los dos estados del Inicio (ver los tokens de :root). */
+    .text-ok { color: var(--ok); }
+    .bg-ok { background-color: var(--ok); }
+    .text-pasado { color: var(--pasado); }
+    .bg-pasado { background-color: var(--pasado); }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     .track-stroke { stroke: hsl(var(--track)); }
