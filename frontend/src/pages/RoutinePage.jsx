@@ -76,39 +76,19 @@ const SemanaDeRutina = ({ semana, abrirPdf, tienePdf, onMarcarHoy, onSiLoHice, o
                 )}
             </div>
 
-            {/* La tira de la semana: L a D con el grupo o la luna del descanso.
-                EN EL MÓVIL, DOS FILAS DE CUATRO (Francisco, 25-08). Con siete columnas en
-                390 px cada casilla mide 44 px, y ahí no cabe ningún grupo de verdad: los
-                del catálogo de Jesús son «Dorsal Gemelo Abdomen» o «Cuádriceps Gemelo», y
-                salían cortados a media palabra («Cuadric…»), que se lee como una errata.
-                Con cuatro columnas la casilla pasa a 84 px y entran enteros.
-
-                Las siete en fila SOLO cuando la tira tiene la pagina entera para ella
-                (sm). En xl vuelve a cuatro, porque ahi esta metida en la columna izquierda
-                de 26 rem y volveria a quedarse en 57 px por casilla: el ancho que manda es
-                el del hueco donde vive, no el de la pantalla. */}
-            <div className="grid grid-cols-4 sm:grid-cols-7 xl:grid-cols-4 gap-1.5" data-testid="semana-rutina-tira">
+            {/* La tira de la semana: L a D con el grupo o la luna del descanso. */}
+            <div className="grid grid-cols-7 gap-1.5" data-testid="semana-rutina-tira">
                 {dias.map(d => (
                     <div key={d.fecha} data-testid={`semana-dia-${d.fecha}`}
-                        className={`rounded-xl border px-0.5 py-2 text-center min-w-0
+                        className={`rounded-xl border px-1 py-2 text-center min-w-0
                             ${d.hoy ? 'border-brand bg-brand/10' : 'border-border bg-card'}`}>
                         <p className={`text-[10px] font-bold uppercase ${d.hoy ? 'text-brand' : 'text-muted-foreground'}`}>
                             {DAY_LABELS[d.dia]}
                         </p>
-                        {/* EL GRUPO, ENTERO (Francisco, 25-08). Con `truncate` en siete
-                            columnas de 390 px, «Empuje» salía «Emp…» y «Dorsal Gemelo
-                            Abdomen» no se leía en absoluto: el cliente no sabe qué le toca
-                            el jueves, que es para lo que existe esta tira. Ahora parte en
-                            dos líneas y la caja crece con ellas. */}
-                        <div className="mt-1 min-h-8 flex flex-col items-center justify-center">
+                        <div className="mt-1 h-8 flex flex-col items-center justify-center">
                             {d.entrena ? (
                                 <>
-                                    {/* Se parte SOLO entre palabras: «Cuádriceps Gemelo» baja
-                                        a dos líneas, pero «Cuádriceps» no se corta por la
-                                        mitad («Cuadric/eps»), que es lo que hacía y no se
-                                        entendía. Lo que aun así no quepa se recorta, y el
-                                        nombre entero sigue estando en la tarjeta de HOY. */}
-                                    <p className="text-[9px] font-semibold text-foreground leading-tight w-full break-normal line-clamp-2 overflow-hidden"
+                                    <p className="text-[9px] font-semibold text-foreground leading-tight truncate w-full px-0.5"
                                         title={d.grupo}>{d.grupo}</p>
                                     {d.hecho ? <Check className="w-3 h-3 text-emerald-500 mt-0.5" />
                                         : d.recuperado_en ? <span className="text-[8px] text-muted-foreground">→ otro día</span>
@@ -249,39 +229,39 @@ const VistaPreviaPdf = ({ api, info, abrirPdf }) => {
     // Si ya está descargada, se abre esa y no se vuelve a pedir al servidor.
     const abrirEntera = () => (url ? window.open(url, '_blank', 'noopener') : abrirPdf());
 
-    // EN EL MÓVIL, EL BOTÓN Y YA (Francisco, 25-08: «tiene que verse bien en celulares»).
-    //
-    // Aquí había una caja de puntos que ocupaba un tercio de la pantalla para decir «Verla
-    // aquí · son unos megas», y al pulsarla el navegador del móvil casi nunca sabe pintar
-    // un PDF dentro de la página: lo que salía era otra caja disculpándose CON UN SEGUNDO
-    // botón «Abrirla entera», el mismo que ya estaba arriba. Dos botones iguales y media
-    // pantalla gastada para no enseñar nada.
-    //
-    // El visor de dentro se queda SOLO en escritorio, donde hay sitio y donde el navegador
-    // sí lo pinta. Para verlo de verdad en el móvil haría falta pdf.js, que no está en el
-    // proyecto, y no se va a meter una dependencia para esto.
+    // El MISMO ancho que la semana de arriba: con `max-w-3xl` contra su `max-w-2xl` las dos
+    // cajas quedaban centradas pero de distinto tamaño, y los bordes no cuadraban. Centrado
+    // es que las aristas coincidan, no que cada una esté centrada por su cuenta.
     return (
         <div className="surface p-4 sm:p-5 space-y-4 min-w-0" data-testid="routine-pdf-preview">
-            <div>
-                <h2 className="font-heading text-xl font-bold uppercase text-foreground leading-tight">Tu rutina, en PDF</h2>
-                <p className="text-muted-foreground text-sm">
-                    Tu entrenador te la ha preparado el {new Date(info.uploaded_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}.
-                </p>
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                    <h2 className="font-heading text-xl font-bold uppercase text-foreground leading-tight">Tu rutina, en PDF</h2>
+                    <p className="text-muted-foreground text-sm">
+                        Tu entrenador te la ha preparado el {new Date(info.uploaded_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}.
+                    </p>
+                </div>
+                <button onClick={abrirEntera} data-testid="routine-pdf-btn"
+                    className="btn-brand inline-flex items-center gap-2 shrink-0">
+                    Abrirla entera <ChevronRight className="w-4 h-4" />
+                </button>
             </div>
 
-            {/* Ancho entero en el móvil, que es donde se pulsa con el pulgar. */}
-            <button onClick={abrirEntera} data-testid="routine-pdf-btn"
-                className="btn-brand w-full sm:w-auto inline-flex items-center justify-center gap-2">
-                <FileText className="w-4 h-4" />
-                Abrir mi rutina <ChevronRight className="w-4 h-4" />
-            </button>
+            {estado === 'espera' && (
+                <button onClick={cargar} data-testid="routine-pdf-ver-aqui"
+                    className="w-full rounded-2xl border border-dashed border-border py-8 text-center hover:border-brand/50 transition-colors">
+                    <FileText className="w-7 h-7 text-brand/60 mx-auto mb-2" />
+                    <p className="font-semibold text-foreground text-sm">Verla aquí</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Son unos megas: mejor con wifi.</p>
+                </button>
+            )}
 
-            {estado === 'cargando' && !enMovil && <div className="h-64 rounded-2xl bg-muted animate-pulse" />}
+            {estado === 'cargando' && <div className="h-64 rounded-2xl bg-muted animate-pulse" />}
 
-            {estado === 'fallo' && !enMovil && (
-                <div className="rounded-2xl border border-border p-4 text-center space-y-2">
+            {estado === 'fallo' && (
+                <div className="rounded-2xl border border-border p-6 text-center space-y-3">
                     <p className="text-sm text-muted-foreground">
-                        No hemos podido enseñártela aquí dentro. Con el botón se abre igual.
+                        No hemos podido enseñártela aquí. Ábrela entera y la verás igual.
                     </p>
                     <button onClick={cargar} className="text-sm font-semibold text-brand hover:underline underline-offset-4">
                         Volver a intentarlo
@@ -289,18 +269,17 @@ const VistaPreviaPdf = ({ api, info, abrirPdf }) => {
                 </div>
             )}
 
-            {estado === 'lista' && url && !enMovil && (
+            {estado === 'lista' && url && (
                 <object data={url} type="application/pdf" aria-label="Tu rutina en PDF"
                     data-testid="routine-pdf-object"
                     className="w-full h-[60vh] min-h-[320px] rounded-2xl border border-border bg-card">
-                    {/* Donde el navegador no sabe pintar un PDF dentro de la página. Sin
-                        repetir el botón, que está justo encima, y centrado: si no, queda
-                        una caja enorme con una frase arriba del todo y parece que se ha
-                        roto algo. */}
-                    <div className="h-full flex items-center justify-center p-6 text-center">
+                    {/* Lo que se ve donde el navegador no sabe pintar un PDF dentro de la
+                        página, que en móvil es la mitad de las veces. */}
+                    <div className="p-6 text-center space-y-3">
                         <p className="text-sm text-muted-foreground">
-                            Tu navegador no la enseña aquí dentro. Ábrela con el botón de arriba.
+                            Tu navegador no la enseña aquí dentro. Ábrela entera y la verás igual.
                         </p>
+                        <button onClick={abrirEntera} className="btn-brand">Abrirla entera</button>
                     </div>
                 </object>
             )}
@@ -542,21 +521,15 @@ const RoutinePage = () => {
                    asignada». Se enseña ENTERA aquí dentro (Jesús, 24-08), y encima la
                    semana -- cabecera, tira, hoy y lo pendiente -- cuando hay reparto y sus
                    días puestos, que es el apartado 12. */
-                /* EN PANTALLA GRANDE, DOS COLUMNAS (Francisco, 25-08: «no cambiaste nada
-                   de la vista en pc»). Iba todo en una columna estrecha: en 1440 px el
-                   contenido ocupaba 815 y quedaban 600 vacíos a la derecha, con el PDF
-                   empujado tan abajo que había que bajar para verlo (la página medía
-                   1.215 px de alto). Y no cuadraban ni los bordes: la semana iba a
-                   `max-w-2xl` y el PDF a `max-w-3xl`, así que la caja de abajo sobresalía.
-
-                   Ahora la semana y el día de hoy van a la izquierda y la rutina a la
-                   derecha, a la misma altura. Por debajo de xl se apila como siempre, que
-                   es lo que ya estaba bien en el móvil. */
-                <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] gap-5 items-start"
-                    data-testid="routine-content">
+                /* UNA SOLA COLUMNA PARA TODO (Francisco, 25-08: «que quede todo en la
+                   misma columna»). El ancho se decide aqui y una sola vez: antes cada caja
+                   llevaba el suyo -- unas `max-w-2xl`, otras `max-w-3xl` y el bloque de
+                   dias ninguno, asi que ese se iba a los 1.200 px del marco y rompia la
+                   alineacion con todo lo de arriba. */
+                <div className="space-y-5 max-w-2xl mx-auto" data-testid="routine-content">
                     {semana?.hay && (
                         /* Sin el «Abrir el PDF» de la cabecera: la rutina está justo
-                           al lado, y dos botones para lo mismo a dos dedos uno de otro
+                           debajo, y dos botones para lo mismo a dos dedos uno de otro
                            solo hacen dudar. */
                         <SemanaDeRutina semana={semana} abrirPdf={abrirPdf}
                             onMarcarHoy={marcarHoy} onSiLoHice={siLoHice} onRecuperar={recuperar}
@@ -685,7 +658,7 @@ const RoutinePage = () => {
             </div>
 
             {showHistory ? (
-                <div className="space-y-3 max-w-2xl" data-testid="routine-history">
+                <div className="space-y-3 max-w-2xl mx-auto" data-testid="routine-history">
                     {routineHistory.length > 0 ? routineHistory.map((r, i) => (
                         <div key={r.id} className={`surface p-4 flex items-center justify-between ${i === 0 ? 'border-brand/40' : ''}`}>
                             <div>
@@ -697,7 +670,7 @@ const RoutinePage = () => {
                     )) : <p className="text-center text-muted-foreground py-10 text-sm">No hay rutinas anteriores.</p>}
                 </div>
             ) : (
-                <div className="space-y-5">
+                <div className="space-y-5 max-w-2xl mx-auto">
                     {/* La semana (7.1 del 21-08): también con rutina estructurada, que
                         es la que pone los grupos si el PDF no trae reparto. */}
                     <SemanaDeRutina semana={semana} abrirPdf={abrirPdf} tienePdf={!!pdfInfo}
@@ -705,88 +678,101 @@ const RoutinePage = () => {
                         marcando={marcando} />
 
                     {/* Stats */}
-                    <div className="grid grid-cols-3 gap-3 sm:gap-4 max-w-2xl">
+                    <div className="grid grid-cols-3 gap-3 sm:gap-4">
                         <StatCard value={trainingDays} label="Días entreno" color={MACRO_O} icon={Dumbbell} testId="stat-training-days" />
                         <StatCard value={totalExercises} label="Ejercicios" color="#16A34A" icon={Trophy} testId="stat-exercises" />
                         <StatCard value={7 - trainingDays} label="Descanso" color="#7C3AED" icon={Moon} testId="stat-rest-days" />
                     </div>
 
                     {/* Day selector + detail */}
-                    <div className="grid lg:grid-cols-12 gap-5 items-start">
-                        {/* Selector: horizontal en móvil, vertical en desktop */}
-                        <div className="lg:col-span-4">
-                            <p className="caption mb-2 hidden lg:block">Días</p>
-                            <div className="grid grid-cols-7 lg:grid-cols-1 gap-1.5 lg:gap-2" data-testid="day-selector">
-                                {DAYS_ES.map((day) => {
-                                    const d = getDayData(day);
-                                    const isToday = todayName === day;
-                                    const selected = selectedDay === day;
-                                    const isRest = d?.is_rest;
-                                    return (
-                                        <button key={day} onClick={() => setSelectedDay(day)} data-testid={`day-btn-${slug(day)}`}
-                                            className={`relative rounded-xl transition-all border
-                                                flex flex-col items-center py-2.5 lg:flex-row lg:items-center lg:justify-between lg:px-4 lg:py-3
-                                                ${selected ? 'bg-brand text-white border-brand shadow-sm' : 'bg-card border-border hover:border-border'}`}>
-                                            {/* Mobile */}
-                                            <span className={`lg:hidden text-[11px] font-bold uppercase ${selected ? 'text-white' : 'text-foreground'}`}>{DAY_LABELS[day]}</span>
-                                            <span className="lg:hidden text-[9px] mt-0.5">
-                                                {isRest ? <Moon className={`w-3 h-3 ${selected ? 'text-white/80' : 'text-muted-foreground'}`} /> : <span className={selected ? 'text-white/80 font-data' : 'text-muted-foreground font-data'}>{d?.exercises?.length || 0}</span>}
-                                            </span>
-                                            {/* Desktop */}
-                                            <span className="hidden lg:flex items-center gap-2">
-                                                <span className={`text-sm font-semibold capitalize ${selected ? 'text-white' : 'text-foreground'}`}>{day}</span>
-                                                {isToday && <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${selected ? 'bg-white/20 text-white' : 'bg-brand/10 text-brand'}`}>Hoy</span>}
-                                            </span>
-                                            <span className="hidden lg:flex items-center gap-1 text-xs">
-                                                {isRest
-                                                    ? <span className={`flex items-center gap-1 ${selected ? 'text-white/80' : 'text-muted-foreground'}`}><Moon className="w-3.5 h-3.5" /> Descanso</span>
-                                                    : <span className={`font-data ${selected ? 'text-white/90' : 'text-muted-foreground'}`}>{d?.exercises?.length || 0} ej</span>}
-                                            </span>
-                                            {isToday && <span className={`lg:hidden absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ${selected ? 'bg-card' : 'bg-brand'}`} />}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-
-                        {/* Detail */}
-                        <div className="lg:col-span-8 space-y-3">
-                            {dayRoutine ? (
-                                dayRoutine.is_rest ? (
-                                    <div className="surface p-8 text-center">
-                                        <Moon className="w-10 h-10 text-violet-400 mx-auto mb-3" />
-                                        <h3 className="font-heading text-xl font-bold uppercase text-foreground mb-1">Día de descanso</h3>
-                                        <p className="text-muted-foreground text-sm">Recupera energías. Tu cuerpo crece mientras descansas.</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-3" data-testid="exercises-list">
-                                        {dayRoutine.exercises?.map((exercise, index) => (
-                                            <ExerciseCard key={index} exercise={exercise} index={index} />
-                                        ))}
-                                    </div>
-                                )
+                    {/* APILADO, Y EL DETALLE ARRIBA (Francisco, 25-08). Estaba en dos
+                        columnas -- la lista de dias a la izquierda, el detalle a la
+                        derecha -- y en un dia de descanso esa mitad derecha era una linea
+                        de texto con media pantalla de hueco debajo. Ahora va lo que toca
+                        hoy, debajo la lista de dias y debajo el PDF: se lee de arriba abajo
+                        y no queda ningun hueco. */}
+                    {/* Lo que toca hoy (o el dia que se elija abajo). */}
+                    <div className="space-y-3">
+                        {dayRoutine ? (
+                            dayRoutine.is_rest ? (
+                                /* UNA LINEA, NO UN PANEL (Francisco, 25-08: «rompe toda
+                                   la armonia»). Era una caja de 8 de padding con luna
+                                   grande y titular para decir «descanso», al lado de una
+                                   lista donde esa misma fila YA pone «Descanso». Dos
+                                   veces lo mismo, y la de la derecha ocupando el hueco
+                                   de los ejercicios. */
+                                <div className="surface px-4 py-3 flex items-center gap-2.5"
+                                    data-testid="dia-de-descanso">
+                                    <Moon className="w-4 h-4 text-violet-400 flex-shrink-0" />
+                                    <p className="text-sm text-muted-foreground">
+                                        <span className="font-semibold text-foreground">Día de descanso.</span>{' '}
+                                        Tu cuerpo crece mientras descansas.
+                                    </p>
+                                </div>
                             ) : (
-                                <div className="surface p-8 text-center"><p className="text-muted-foreground text-sm">No hay ejercicios programados para este día.</p></div>
-                            )}
-
-                            {dayRoutine && !dayRoutine.is_rest && dayRoutine.cardio && (
-                                <div className="surface bg-brand/[0.04] border-brand/20 p-4 flex items-center gap-3">
-                                    <div className="w-10 h-10 bg-brand/15 rounded-xl flex items-center justify-center flex-shrink-0">
-                                        <Flame className="w-5 h-5 text-brand" />
-                                    </div>
-                                    <div>
-                                        <p className="font-bold text-foreground text-sm uppercase">Cardio · {dayRoutine.cardio.type}</p>
-                                        <p className="text-xs text-muted-foreground">{dayRoutine.cardio.duration}{dayRoutine.cardio.notes && ` - ${dayRoutine.cardio.notes}`}</p>
-                                    </div>
+                                <div className="space-y-3" data-testid="exercises-list">
+                                    {dayRoutine.exercises?.map((exercise, index) => (
+                                        <ExerciseCard key={index} exercise={exercise} index={index} />
+                                    ))}
                                 </div>
-                            )}
+                            )
+                        ) : (
+                            <div className="surface p-8 text-center"><p className="text-muted-foreground text-sm">No hay ejercicios programados para este día.</p></div>
+                        )}
 
-                            {routine.trainer_notes && (
-                                <div className="surface bg-brand/[0.04] border-brand/20 p-4">
-                                    <p className="text-[11px] font-bold text-brand uppercase tracking-wider mb-1.5">Notas del entrenador</p>
-                                    <p className="text-sm text-muted-foreground leading-relaxed">{routine.trainer_notes}</p>
+                        {dayRoutine && !dayRoutine.is_rest && dayRoutine.cardio && (
+                            <div className="surface bg-brand/[0.04] border-brand/20 p-4 flex items-center gap-3">
+                                <div className="w-10 h-10 bg-brand/15 rounded-xl flex items-center justify-center flex-shrink-0">
+                                    <Flame className="w-5 h-5 text-brand" />
                                 </div>
-                            )}
+                                <div>
+                                    <p className="font-bold text-foreground text-sm uppercase">Cardio · {dayRoutine.cardio.type}</p>
+                                    <p className="text-xs text-muted-foreground">{dayRoutine.cardio.duration}{dayRoutine.cardio.notes && ` - ${dayRoutine.cardio.notes}`}</p>
+                                </div>
+                            </div>
+                        )}
+
+                        {routine.trainer_notes && (
+                            <div className="surface bg-brand/[0.04] border-brand/20 p-4">
+                                <p className="text-[11px] font-bold text-brand uppercase tracking-wider mb-1.5">Notas del entrenador</p>
+                                <p className="text-sm text-muted-foreground leading-relaxed">{routine.trainer_notes}</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* La lista de dias, debajo de lo que toca hoy. */}
+                    <div>
+                        <p className="caption mb-2 hidden lg:block">Días</p>
+                        <div className="grid grid-cols-7 lg:grid-cols-1 gap-1.5 lg:gap-2" data-testid="day-selector">
+                            {DAYS_ES.map((day) => {
+                                const d = getDayData(day);
+                                const isToday = todayName === day;
+                                const selected = selectedDay === day;
+                                const isRest = d?.is_rest;
+                                return (
+                                    <button key={day} onClick={() => setSelectedDay(day)} data-testid={`day-btn-${slug(day)}`}
+                                        className={`relative rounded-xl transition-all border
+                                            flex flex-col items-center py-2.5 lg:flex-row lg:items-center lg:justify-between lg:px-4 lg:py-3
+                                            ${selected ? 'bg-brand text-white border-brand shadow-sm' : 'bg-card border-border hover:border-border'}`}>
+                                        {/* Mobile */}
+                                        <span className={`lg:hidden text-[11px] font-bold uppercase ${selected ? 'text-white' : 'text-foreground'}`}>{DAY_LABELS[day]}</span>
+                                        <span className="lg:hidden text-[9px] mt-0.5">
+                                            {isRest ? <Moon className={`w-3 h-3 ${selected ? 'text-white/80' : 'text-muted-foreground'}`} /> : <span className={selected ? 'text-white/80 font-data' : 'text-muted-foreground font-data'}>{d?.exercises?.length || 0}</span>}
+                                        </span>
+                                        {/* Desktop */}
+                                        <span className="hidden lg:flex items-center gap-2">
+                                            <span className={`text-sm font-semibold capitalize ${selected ? 'text-white' : 'text-foreground'}`}>{day}</span>
+                                            {isToday && <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${selected ? 'bg-white/20 text-white' : 'bg-brand/10 text-brand'}`}>Hoy</span>}
+                                        </span>
+                                        <span className="hidden lg:flex items-center gap-1 text-xs">
+                                            {isRest
+                                                ? <span className={`flex items-center gap-1 ${selected ? 'text-white/80' : 'text-muted-foreground'}`}><Moon className="w-3.5 h-3.5" /> Descanso</span>
+                                                : <span className={`font-data ${selected ? 'text-white/90' : 'text-muted-foreground'}`}>{d?.exercises?.length || 0} ej</span>}
+                                        </span>
+                                        {isToday && <span className={`lg:hidden absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ${selected ? 'bg-card' : 'bg-brand'}`} />}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
 
@@ -794,7 +780,7 @@ const RoutinePage = () => {
                         secundario (mismo patrón que el botón de EntrenoPage). */}
                     {pdfInfo && (
                         <button onClick={abrirPdf} data-testid="routine-pdf-link"
-                            className="w-full max-w-2xl flex items-center justify-between p-4 bg-card border border-border rounded-2xl hover:border-white/30 transition-colors">
+                            className="w-full flex items-center justify-between p-4 bg-card border border-border rounded-2xl hover:border-white/30 transition-colors">
                             <span className="flex items-center gap-2 font-bold text-foreground text-sm">
                                 <FileText className="w-4 h-4 text-brand" /> Tu rutina en PDF
                             </span>
