@@ -1479,7 +1479,22 @@ const NutritionPage = () => {
         });
     };
 
-    const removeFood = (mealKey, foodIndex) => {
+    // LA PAPELERA PREGUNTA (punto 129 del artifact del 26-08: «la papelera de cada
+    // ingrediente, igual. Las dos tienen que preguntar»).
+    //
+    // Era la única acción destructiva de la pantalla SIN ninguna red: un toque y el
+    // alimento fuera, sin confirmar y sin deshacer, mientras que «Vaciar» -- que se lleva la
+    // comida entera -- sí dejaba deshacer. La más pequeña era la más peligrosa, y encima el
+    // icono está a un dedo del `−` de bajar gramos.
+    const removeFood = async (mealKey, foodIndex) => {
+        const food = (mealsData[mealKey]?.alimentos || [])[foodIndex];
+        const adelante = await confirm({
+            title: `¿Quitar ${food?.nombre || 'este alimento'}?`,
+            description: 'Sale de esta comida. Los demás ingredientes se quedan como están.',
+            confirmLabel: 'Quitar',
+            danger: true,
+        });
+        if (!adelante) return;
         setMealsData(prev => ({
             ...prev,
             [mealKey]: { alimentos: (prev[mealKey]?.alimentos || []).filter((_, i) => i !== foodIndex) }
@@ -1498,12 +1513,25 @@ const NutritionPage = () => {
         });
     };
 
-    // Vaciar sin el confirm del navegador: ese dialogo bloquea la pestaña entera y no
-    // pega con el resto de la app. Se vacia directamente y se ofrece deshacer, que en
-    // movil es mas comodo y sigue siendo reversible.
-    const clearMeal = (mealKey) => {
+    // VACIAR PREGUNTA (punto 129: «vaciar se lleva la comida entera de un toque»).
+    //
+    // No con el `confirm()` del navegador -- ese diálogo bloquea la pestaña entera y no pega
+    // con el resto de la app --, sino con el de la casa, el mismo que ya protege a las
+    // favoritas. Y el «Deshacer» de después se queda: preguntar evita el toque sin querer,
+    // deshacer arregla el «sí» dado deprisa. No sobra ninguno de los dos.
+    const clearMeal = async (mealKey) => {
         const previo = mealsData[mealKey];
         const nombre = mealInfo[mealKey]?.name || 'La comida';
+        const cuantos = (previo?.alimentos || []).length;
+        const adelante = await confirm({
+            title: `¿Vaciar ${nombre}?`,
+            description: cuantos === 1
+                ? 'Se quita su único ingrediente. Podrás deshacerlo justo después.'
+                : `Se quitan sus ${cuantos} ingredientes. Podrás deshacerlo justo después.`,
+            confirmLabel: 'Vaciar',
+            danger: true,
+        });
+        if (!adelante) return;
         setMealsData(prev => ({ ...prev, [mealKey]: { alimentos: [] } }));
         toast.success(`${nombre} vaciada`, {
             duration: 8000,
