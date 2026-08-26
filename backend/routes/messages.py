@@ -110,7 +110,17 @@ async def _resolve_receiver(user: dict, receiver_id: Optional[str]) -> str:
     el coach del cliente si tiene, o el primer admin como soporte.
     Nunca se resuelve a uno mismo: un admin probando en modo cliente acababa
     chateando consigo y todos los mensajes salían en el mismo lado."""
-    if receiver_id and receiver_id != "support":
+    # NUNCA A UNO MISMO, TAMPOCO CON UN DESTINATARIO EXPLICITO (Francisco, 25-08).
+    #
+    # El candado existia, pero solo en la resolucion de «support» de mas abajo. La pantalla
+    # del cliente manda `receiver_id` = su entrenador, y hay DOS fichas en produccion cuyo
+    # `trainer_id` apunta a SU PROPIO usuario: al escribir por el chat, el mensaje salia de
+    # uno y llegaba a uno mismo. Luego la bandeja lo listaba y el hilo salia vacio, porque
+    # esa conversacion no es de nadie mas.
+    #
+    # Si el id que llega es el propio, se ignora y se resuelve como si no viniera: su
+    # entrenador de verdad, y si no, soporte.
+    if receiver_id and receiver_id != "support" and receiver_id != user["id"]:
         return receiver_id
     profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0, "trainer_id": 1})
     if profile and profile.get("trainer_id") and profile["trainer_id"] != user["id"]:
@@ -319,7 +329,12 @@ async def get_messages(with_user: Optional[str] = None, user = Depends(get_curre
         # del equipo la conversación sigue siendo de los dos, y un cliente nunca ve nada
         # que no sea suyo.
         del_equipo = set(await db.users.distinct("id", {"role": {"$in": ["admin", "trainer"]}}))
-        if user["id"] in del_equipo and with_user not in del_equipo:
+        if with_user == user["id"]:
+            # LO SUYO CONSIGO MISMO (25-08). Sale de la bandeja archivado a su nombre, asi
+            # que al abrirlo tiene que traer algo: el `$or` de abajo tambien lo encontraria,
+            # pero se deja explicito porque es el caso que estuvo roto y no se lee solo.
+            query = {"sender_id": user["id"], "receiver_id": user["id"]}
+        elif user["id"] in del_equipo and with_user not in del_equipo:
             query = {
                 "$or": [
                     {"sender_id": with_user, "receiver_id": {"$in": list(del_equipo)}},
@@ -363,13 +378,36 @@ async def get_conversations(user = Depends(get_admin_user)):
     convs: Dict[str, Any] = {}
     for m in msgs:
         emisor, receptor = m["sender_id"], m["receiver_id"]
-        # La conversación se archiva por el cliente. Entre dos del equipo, por el otro.
-        if emisor in staff_ids and receptor in staff_ids:
-            otro = receptor if emisor == user["id"] else emisor
-        else:
-            otro = receptor if emisor in staff_ids else emisor
-        if otro == user["id"]:
+
+        # LA BANDEJA COMUN ES LA DE LOS CLIENTES (Francisco, 25-08). Antes entraban tambien
+        # las conversaciones ENTRE DOS DEL EQUIPO, y con ellas la fila fantasma: se listaban
+        # a todo el mundo pero al abrirlas salia «sin mensajes con este cliente», porque el
+        # hilo -- con razon -- no enseña a un tercero lo que hablan dos compañeros. La lista
+        # prometia algo que el hilo no podia cumplir.
+        #
+        # Ahora entra lo que involucra a alguien de FUERA del equipo, que es de lo que va la
+        # bandeja, mas lo propio de cada uno. Lo que hablen dos compañeros entre ellos sigue
+        # siendo de los dos y les sale a ellos, no al resto.
+        entre_el_equipo = emisor in staff_ids and receptor in staff_ids
+        mio = user["id"] in (emisor, receptor)
+        if entre_el_equipo and not mio:
             continue
+
+        # UNA CONVERSACION DE ALGUIEN CONSIGO MISMO ES SUYA. Se archiva a su nombre y solo
+        # la ve el; antes se descartaba siempre por el `otro == user` de abajo, asi que el
+        # dueño era justo el unico que NO la veia.
+        if emisor == receptor:
+            if emisor != user["id"]:
+                continue
+            otro = emisor
+        else:
+            # La conversación se archiva por el cliente. Entre dos del equipo, por el otro.
+            if entre_el_equipo:
+                otro = receptor if emisor == user["id"] else emisor
+            else:
+                otro = receptor if emisor in staff_ids else emisor
+            if otro == user["id"]:
+                continue
         c = convs.get(otro)
         if c is None:
             # Los mensajes vienen del más nuevo al más viejo, así que el primero que se ve
