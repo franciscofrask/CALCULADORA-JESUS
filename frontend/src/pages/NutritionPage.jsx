@@ -25,7 +25,6 @@ import FavoritasDeComida from '../components/nutrition/FavoritasDeComida';
 import DayHeader from '../components/nutrition/DayHeader';
 import MealCard, { MealSelectorItem, MealTab } from '../components/nutrition/MealCard';
 import { VistaComidasSelector, leerVista, guardarVista } from '../components/nutrition/VistaComidas';
-import { ModoMacrosSelector, AvisoMacrosReales, leerModoMacros, guardarModoMacros } from '../components/nutrition/ModoMacros';
 import LibraryMenusModal from '../components/nutrition/LibraryMenusModal';
 import DietCalendar from '../components/nutrition/DietCalendar';
 import DiaVacio from '../components/nutrition/DiaVacio';
@@ -168,7 +167,7 @@ const NutritionPage = () => {
     // La configuracion del dia (comidas / horario / peri) va plegada: se resume en una
     // linea de texto y solo se despliega cuando de verdad se quiere cambiar algo.
     const [configExpanded, setConfigExpanded] = useState(false);
-    // La tuerca de «Comidas del día»: dentro van «Método/Reales» y cómo ver las comidas.
+    // La tuerca de «Comidas del día»: dentro va cómo ver las comidas.
     const [ajustesVistaAbierto, setAjustesVistaAbierto] = useState(false);
 
     // Como quiere ver las comidas del dia (lista y detalle, pestañas o todo seguido).
@@ -178,8 +177,12 @@ const NutritionPage = () => {
 
     // Macros del metodo o de la etiqueta. SOLO cambia lo que se enseña: el conteo, el
     // reparto y el estado de cada comida siguen saliendo de calculateMealMacros.
-    const [modoMacros, setModoMacros] = useState(leerModoMacros);
-    const cambiarModoMacros = useCallback((v) => { guardarModoMacros(v); setModoMacros(v); }, []);
+    // MÉTODO / REALES SE RETIRÓ (punto 112 del artifact del 25-08: «fuera, con Método /
+    // Reales»). Era un conmutador informativo que cambiaba SOLO lo que ponía la lista de
+    // ingredientes -- los totales, los objetivos y el estado de cada comida siempre han
+    // salido de `macros_efectivos` --, y le costaba a la pantalla tres líneas: el propio
+    // conmutador en dos sitios y un aviso explicando que lo que se ve no es lo que cuenta.
+    // Ahora la lista enseña siempre los del método, que es lo que la app cuenta.
 
     // Intro guiado de primera visita. POR CLIENTE, no por dispositivo (punto 4.7): si un
     // cliente lo cierra en el ordenador de casa, el siguiente que entre ahí no debería
@@ -2433,7 +2436,7 @@ const NutritionPage = () => {
         getMealStatus, loadMenuOptions, setBuildMealModal, openRepeatModal, removeFood, moveFoodUp,
         updateFoodQuantity, updateFoodQuantityDirect, editingQuantity, setEditingQuantity,
         getQuantityIncrement, clearMeal, getFoodEmoji, formatFoodQuantity, setMealMode,
-        modoMacros, esPorUnidad, pesoUnidad, abrirFavoritasDeComida,
+        esPorUnidad, pesoUnidad, abrirFavoritasDeComida,
         // Lo que lleva el día de cada familia calibrada, para el contador de la línea del
         // alimento (`ContadorFamilia`). Va en los props comunes porque el contador es el
         // mismo en todas las comidas: el tramo lo decide el día entero.
@@ -2575,14 +2578,13 @@ const NutritionPage = () => {
                         className="inline-flex items-center gap-2 surface px-3.5 py-2 text-sm font-semibold text-muted-foreground hover:text-brand transition-colors" title="Preferencias alimentarias">
                         <SlidersHorizontal size={16} /> <span className="hidden sm:inline">Preferencias</span>
                     </button>
-                    {/* LA TUERCA, ARRIBA CON LAS DEMÁS. Dentro van «Método/Reales» y cómo ver
-                        las comidas: dos conmutadores que estaban a la vista y permanentes
-                        justo encima de las comidas -- que es lo que se viene a ver -- y que
-                        se tocan de higos a brevas. Uno cambia solo lo que pone en la lista de
-                        ingredientes; el otro es una preferencia que se elige una vez. */}
+                    {/* LA TUERCA, ARRIBA CON LAS DEMÁS. Dentro va cómo ver las comidas, que
+                        es una preferencia que se elige una vez y estaba a la vista y
+                        permanente justo encima de las comidas, que es lo que se viene a ver.
+                        Le acompañaba «Método / Reales», que se retiró con el punto 112. */}
                     <button onClick={() => setAjustesVistaAbierto(v => !v)} data-testid="toggle-ajustes-vista"
                         className={`lg:hidden inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold transition-colors ${ajustesVistaAbierto ? 'rounded-2xl bg-brand text-white' : 'surface text-muted-foreground hover:text-brand'}`}
-                        title="Cómo ver las comidas y qué macros mostrar">
+                        title="Cómo ver las comidas">
                         <Settings size={16} />
                     </button>
                 </div>
@@ -2590,10 +2592,6 @@ const NutritionPage = () => {
 
             {ajustesVistaAbierto && (
                 <div className="lg:hidden surface p-4 mb-4 space-y-4" data-testid="ajustes-vista">
-                    <div>
-                        <p className="caption mb-1.5">Qué macros se muestran</p>
-                        <ModoMacrosSelector modo={modoMacros} onCambiar={cambiarModoMacros} />
-                    </div>
                     <div>
                         <p className="caption mb-1.5">Cómo ver las comidas</p>
                         <VistaComidasSelector vista={vistaComidas} onCambiar={cambiarVistaComidas} />
@@ -2725,12 +2723,8 @@ const NutritionPage = () => {
                         la tuerca de arriba. En escritorio, la fila de siempre. */}
                     <div className="hidden lg:flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-2.5">
                         <p className="caption">Comidas del día</p>
-                        <div className="flex items-center gap-3">
-                            <ModoMacrosSelector modo={modoMacros} onCambiar={cambiarModoMacros} />
-                            <VistaComidasSelector vista={vistaComidas} onCambiar={cambiarVistaComidas} />
-                        </div>
+                        <VistaComidasSelector vista={vistaComidas} onCambiar={cambiarVistaComidas} />
                     </div>
-                    {modoMacros === 'reales' && <div className="mb-3"><AvisoMacrosReales /></div>}
 
                     {vistaComidas === 'actual' && (
                         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8 items-start">

@@ -18,7 +18,6 @@ import { Link } from 'react-router-dom';
 import { Calendar, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
 import ConfigSection, { MOMENTO_OPTIONS, PERI_OPTIONS } from './ConfigSection';
 import { DayDetailTable, StatusDot } from './DaySummary';
-import { seExcede } from '../../lib/exceso';
 import { leerMacro } from '../../lib/estadoDelMacro';
 import { fraseDeLoQueFalta } from '../../lib/datosDudosos';
 
@@ -67,7 +66,6 @@ const DayHeader = ({
     const tgtP = (dayTarget.P_total ?? 0) - (totalPeriP || 0);
     const tgtH = (dayTarget.H_total ?? 0) - (totalPeriH || 0);
     const tgtG = dayTarget.G_total ?? 0;   // el objetivo del peri no lleva grasa
-    const hayPeri = tipoDia === 'entrenamiento' && opcionPeri !== 'sin_peri';
 
     // LOS NÚMEROS GRANDES ENSEÑAN EL DÍA ENTERO, PERI INCLUIDO (doc 21-08, apartado 11):
     // arriba un solo objetivo y un solo servido, con el perientreno dentro, en los cuatro
@@ -153,18 +151,6 @@ const DayHeader = ({
                 Tres estados, con su titular, que es lo que el documento echaba en falta:
                 la app no distinguía «sin empezar» de «a medias» ni de «terminado». */}
             {(() => {
-                // A cero se mira el día entero, peri incluido: con solo el batido del
-                // entreno puesto ya no vale decir «Hoy tienes que comer».
-                const nadaPuesto = macros.every(m => m.valDia === 0);
-                // Cuadrado, solo para la línea de «ya tienes cubierto» de aquí abajo. El
-                // estado que se PINTA en los números ya no sale de esta cuenta: sale de
-                // `leerMacro`, macro a macro, como en Inicio.
-                const comidaMal = (mealOrder || []).some(k => {
-                    const st = getMealStatus ? getMealStatus(k) : 'empty';
-                    return st !== 'cuadrada' && st !== 'empty';
-                });
-                const cuadrado = !nadaPuesto && !comidaMal && macros.every(m => m.tgt > 0 && (
-                    m.key === 'P' ? m.val > m.tgt - 4 : Math.abs(m.tgt - m.val) < 4));
                 return (
                     <div className="mt-5" data-testid="dia-resumen">
                         {/* UN SOLO NÚMERO Y SIEMPRE EL MISMO: LO QUE LLEVAS CREADO
@@ -225,43 +211,14 @@ const DayHeader = ({
                             data-testid="dia-pie">
                             Lo que llevas creado
                         </p>
-                        {/* LO QUE YA ESTÁ CUBIERTO, DICHO.
-                            Saber lo que falta no basta: si te quedan 60 g de grasa y la
-                            proteína ya está, ponerte a buscar proteína es perder el rato.
-                            «Saber lo que ya está cubierto evita ponerse a buscar proteína
-                            cuando lo que falta son hidratos» (Jesús, 11-08).
-                            Solo cuando hay algo puesto y algo pendiente: con el día entero
-                            cuadrado ya lo dice el titular, y a cero no hay nada que cubrir. */}
-                        {(() => {
-                            if (nadaPuesto || cuadrado) return null;
-                            const NOMBRE = { P: 'la proteína', H: 'los hidratos', G: 'la grasa' };
-                            // CUBIERTO NO ES PASADO (Francisco, 17-08, en su móvil). Con 70 g
-                            // de hidratos sobre 50 y 56 de grasa sobre 50, la cabecera decía en
-                            // rojo «Te has pasado · 20 g de hidratos y 5,5 g de grasa» y justo
-                            // debajo, en verde, «Ya tienes cubiertos los hidratos y la grasa».
-                            // Lo mismo contado como fallo y como logro en dos líneas seguidas.
-                            // Esta línea existe para que no se ponga a buscar un macro que ya
-                            // está; del que se ha pasado ya le avisa el titular, y repetirlo en
-                            // verde suena a que va bien.
-                            // Cubierto se mira sobre el día entero: con el batido del post
-                            // pendiente, la proteína del día NO está, aunque las comidas sí.
-                            const cubiertos = macros.filter(
-                                m => m.tgtDia > 0 && m.valDia >= m.tgtDia - 4 && !seExcede(m.key, m.valDia, m.tgtDia));
-                            if (!cubiertos.length || cubiertos.length === macros.filter(m => m.tgtDia > 0).length) return null;
-                            const nombres = cubiertos.map(m => NOMBRE[m.key]).filter(Boolean);
-                            const texto = nombres.length === 1
-                                ? `${nombres[0].charAt(0).toUpperCase()}${nombres[0].slice(1)} ya la tienes cubierta.`
-                                : `Ya tienes cubiertos ${nombres.slice(0, -1).join(', ')} y ${nombres[nombres.length - 1]}.`;
-                            return (
-                                // El `lg:hidden` lo llevaba el contenedor de todo este bloque,
-                                // que era solo de móvil; ahora los números son de los dos
-                                // tamaños, así que cada cosa que siga siendo de móvil se lo
-                                // pone ella. (Esta línea se va entera en el punto 109.)
-                                <p className="lg:hidden mt-2 text-sm text-emerald-600 dark:text-emerald-400" data-testid="dia-cubierto">
-                                    {texto}
-                                </p>
-                            );
-                        })()}
+                        {/* AQUÍ IBA «YA TIENES CUBIERTOS LOS HIDRATOS Y LA GRASA», y se ha
+                            ido (punto 109): «los dos números ya salen en verde y con cuadrado
+                            debajo. Es decirlo dos veces».
+
+                            Nació cuando arriba solo se decía lo que falta y no lo que ya está
+                            («saber lo que ya está cubierto evita ponerse a buscar proteína
+                            cuando lo que falta son hidratos», Jesús, 11-08). Desde que cada
+                            macro lleva su punto y su palabra, eso ya está dicho donde se mira. */}
 
                         {/* LA CONFIGURACIÓN DEL DÍA, DEBAJO DE LOS NÚMEROS y en una línea
                             (documento del 10-08, pantalla 9): «se toca una vez al mes;
@@ -323,14 +280,11 @@ const DayHeader = ({
             )}
 
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
-                {/* «Perientreno», nunca «peri» (punto 4.18): el bloque se llamaba de tres
-                    maneras distintas por la app y el abreviado no lo entiende nadie que no
-                    lleve meses aquí. */}
-                {hayPeri && (
-                    <span className="text-[11px] text-muted-foreground font-data">
-                        perientreno {servedPeriP.toFixed(0)}/{totalPeriP.toFixed(0)}P · {servedPeriH.toFixed(0)}/{totalPeriH.toFixed(0)}H
-                    </span>
-                )}
+                {/* AQUÍ IBA «perientreno 38/40P · 52/50H», y se ha ido (punto 110): «el peri
+                    está en la lista de comidas». Tenía su propio contador porque los números
+                    de arriba llevan el peri dentro y no se veía cuánto de eso era suyo; ahora
+                    el intra y el post son dos filas más de la lista, con su objetivo al lado
+                    y su estado, como cualquier comida. */}
                 {/* «Ver detalle» y su tabla, fuera del teléfono. Lo que despliega es el
                     reparto del día comida a comida, y en móvil eso mismo está justo debajo:
                     la lista de comidas con su objetivo. Era la tercera vez que se decía lo

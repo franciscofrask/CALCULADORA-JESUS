@@ -372,13 +372,28 @@ class TestCaso35ElInterruptorReales:
         assert d["total_efectivos"]["P"] == 0.0
         assert d["total_brutos"]["P"] == 17.4     # 10,5 del arroz + 6,9 de las almendras
 
-    def test_se_ve_que_ha_cambiado(self):
-        """«Y se ve que ha cambiado»: en modo reales la pantalla pinta un aviso encima de los
-        totales, no cambia los numeros en silencio."""
+    def test_la_pantalla_no_puede_enseñar_los_de_la_etiqueta_en_silencio(self):
+        """«Y se ve que ha cambiado»: los numeros de la etiqueta no pueden colarse como si
+        fueran los del metodo.
+
+        Hasta el 26-08 esto se cumplia con un aviso: la pantalla tenia un conmutador
+        «Metodo / Reales» y, en reales, un renglon encima de los totales explicando que lo
+        que se veia no era lo que contaba. El punto 112 del artifact del 25-08 se lleva las
+        dos cosas -- «fuera, con Metodo / Reales» --, asi que ahora la garantia es mas fuerte
+        que un aviso: en la lista de ingredientes ya solo hay una cifra, la del metodo.
+
+        Los dos totales SIGUEN existiendo en el backend (el test de aqui arriba), que es lo
+        que pedia el caso 35; lo que se ha retirado es la forma de verlos mezclados.
+        """
         page = fuente("pages/NutritionPage.jsx")
-        assert "modoMacros === 'reales'" in page and "AvisoMacrosReales" in page, (
-            "NutritionPage no avisa de que los totales que se estan viendo son los de la "
-            "etiqueta y no los del metodo")
+        assert "ModoMacrosSelector" not in page and "AvisoMacrosReales" not in page, (
+            "vuelve el conmutador Metodo/Reales a Nutricion (punto 112): si vuelve, tiene "
+            "que volver tambien el aviso de que lo que se ve no es lo que cuenta")
+        card = fuente("components/nutrition/MealCard.jsx")
+        assert "macrosDeVista" not in card, (
+            "la lista de ingredientes vuelve a poder pintar los macros de la etiqueta")
+        assert "macros_efectivos" in card, (
+            "la lista de ingredientes ha dejado de pintar los macros del metodo")
 
 
 # ═════════════════════════════════════════════════════════════════════════════

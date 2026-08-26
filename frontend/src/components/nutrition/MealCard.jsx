@@ -1,6 +1,5 @@
 import React from 'react';
 import { StatusDot } from './DaySummary';
-import { macrosDeVista } from './ModoMacros';
 import { margenDe, seExcede } from '../../lib/exceso';
 import { num0, num1, numMedio, alMedio, alDecima } from '../../lib/numeros';
 import { TOPE_GRAMOS } from '../../lib/cantidades';
@@ -254,9 +253,13 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFood
 // ===== Ingredient row =====
 const IngredientRow = ({ food, idx, mealKey, isLocked, isEditing, increment,
     moveFoodUp, removeFood, updateFoodQuantity, updateFoodQuantityDirect,
-    setEditingQuantity, formatFoodQuantity, modoMacros = 'metodo',
+    setEditingQuantity, formatFoodQuantity,
     esPorUnidad, pesoUnidad, acumFamilias }) => {
-    const macros = macrosDeVista(food, modoMacros);
+    // Los del método, que son los que la app cuenta. Hasta el 26-08 aquí se podía
+    // enseñar en su lugar lo que dice la etiqueta (Método / Reales), y hacía falta un
+    // aviso al principio de la pantalla explicando que lo que se veía no era lo que
+    // contaba. Punto 112: fuera las dos cosas.
+    const macros = food?.macros_efectivos || {};
     // Los alimentos por unidades se escriben en unidades ("2 huevos"), no en gramos.
     const porUnidad = esPorUnidad ? esPorUnidad(food) : false;
     const peso = pesoUnidad ? pesoUnidad(food) : 100;
@@ -378,7 +381,6 @@ const MealCard = ({
     mealMode = 'auto', setMealMode, forceExpanded = false, denso = false,
     // Solo cambia lo que pone en la LISTA de ingredientes. Los totales de la comida,
     // su estado y las cantidades siguen siendo del metodo, pase lo que pase.
-    modoMacros = 'metodo',
     // Lo que lleva el DIA de cada familia que se calibra, para el contador de la linea del
     // alimento. Viene de `mealCardProps` y es el mismo para todas las comidas: desde el
     // 13-08 el tramo lo decide el total del dia, no la comida (ver `ContadorFamilia`).
@@ -744,7 +746,7 @@ const MealCard = ({
                                                 moveFoodUp={moveFoodUp} removeFood={removeFood}
                                                 updateFoodQuantity={updateFoodQuantityVigilada} updateFoodQuantityDirect={updateFoodQuantityDirectVigilada}
                                                 setEditingQuantity={setEditingQuantity} formatFoodQuantity={formatFoodQuantity}
-                                                modoMacros={modoMacros} esPorUnidad={esPorUnidad} pesoUnidad={pesoUnidad}
+                                                esPorUnidad={esPorUnidad} pesoUnidad={pesoUnidad}
                                                 acumFamilias={acumFamilias} />
                                             {/* LA PUERTA: el recuadro del autoajuste, pegado al ingrediente tocado.
                                                 No es un toast: se queda hasta que el cliente decida, con los números

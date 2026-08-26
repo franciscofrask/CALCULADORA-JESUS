@@ -17,7 +17,6 @@ const API = process.env.REACT_APP_BACKEND_URL || '';
 
 // clave de la ficha -> clave del localStorage que leen las pantallas
 export const CLAVES_LOCALES = {
-    modo_macros: 'nutricion-modo-macros',
     vista: 'nutricion-vista-comidas',
 };
 
