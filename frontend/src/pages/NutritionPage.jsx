@@ -24,7 +24,9 @@ import FavoritesModal from '../components/nutrition/FavoritesModal';
 import FavoritasDeComida from '../components/nutrition/FavoritasDeComida';
 import DayHeader from '../components/nutrition/DayHeader';
 import MealCard, { MealSelectorItem, MealTab } from '../components/nutrition/MealCard';
-import { VistaComidasSelector, leerVista, guardarVista } from '../components/nutrition/VistaComidas';
+import { VISTAS as VISTAS_DE_COMIDAS, VistaComidasSelector, leerVista, guardarVista } from '../components/nutrition/VistaComidas';
+import MenuDeLaPantalla from '../components/nutrition/MenuDeLaPantalla';
+import { resumenDeLaConfig } from '../components/nutrition/ConfigSection';
 import LibraryMenusModal from '../components/nutrition/LibraryMenusModal';
 import DietCalendar from '../components/nutrition/DietCalendar';
 import DiaVacio from '../components/nutrition/DiaVacio';
@@ -2507,19 +2509,10 @@ const NutritionPage = () => {
         );
     };
 
-    const renderActions = (suffix = '') => (
-        <div className="surface p-3 grid grid-cols-3 gap-2">
-            <button onClick={exportPdf} disabled={exportingPdf} data-testid={`export-pdf-btn${suffix}`} className="btn-outline-brand w-full flex items-center justify-center gap-2 text-sm py-2.5">
-                {exportingPdf ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <FileDown className="w-4 h-4" />} PDF
-            </button>
-            <button onClick={() => setCopyModalOpen(true)} className="btn-outline-brand w-full flex items-center justify-center gap-2 text-sm py-2.5">
-                <Copy className="w-4 h-4" /> Copiar
-            </button>
-            <button onClick={() => { loadDietFavorites(); setFavoritesModalOpen(true); }} data-testid={`favorites-btn${suffix}`} className="btn-outline-brand w-full flex items-center justify-center gap-2 text-sm py-2.5">
-                <Star className="w-4 h-4" /> Favoritas
-            </button>
-        </div>
-    );
+    // AQUI ESTABA `renderActions`: PDF, Copiar y Favoritas repetidos ABAJO DEL TODO,
+    // detras de las comidas, porque en el movil no cabian arriba. Con el «···» ya estan
+    // arriba en los dos tamaños (punto 119), asi que esto era un tercer sitio para los
+    // mismos botones -- y el peor: nadie baja hasta el final a buscar el PDF.
 
     return (
         <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto pb-24 lg:pb-10 animate-fade-in" data-testid="nutrition-page">
@@ -2561,40 +2554,46 @@ const NutritionPage = () => {
                         </p>
                     )}
                 </div>
+                {/* DOS BOTONES, E IGUALES EN LOS DOS SITIOS (punto 119). Eran cinco en el
+                    ordenador y tres en el móvil, y los dos que faltaban eran justo PDF y
+                    Copiar: los que se usan. Reaparecían abajo del todo, detrás de las
+                    comidas, donde nadie baja a buscarlos. Ahora PDF fuera y el resto en el
+                    «···», sin `hidden sm:` ni `lg:hidden` que cambien la botonera según el
+                    ancho de la ventana. */}
                 <div className="flex items-center gap-2">
                     <button onClick={exportPdf} disabled={exportingPdf} data-testid="export-pdf-btn"
-                        className="hidden sm:inline-flex items-center gap-2 surface px-3.5 py-2 text-sm font-semibold text-muted-foreground hover:text-brand transition-colors" title="Exportar a PDF">
+                        className="inline-flex items-center gap-2 surface px-3.5 py-2 text-sm font-semibold text-muted-foreground hover:text-brand transition-colors" title="Exportar a PDF">
                         {exportingPdf ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <FileDown size={16} />} PDF
                     </button>
-                    <button onClick={() => setCopyModalOpen(true)}
-                        className="hidden sm:inline-flex items-center gap-2 surface px-3.5 py-2 text-sm font-semibold text-muted-foreground hover:text-brand transition-colors" title="Copiar dieta a otro día">
-                        <Copy size={16} /> Copiar
-                    </button>
-                    <button onClick={() => { loadDietFavorites(); setFavoritesModalOpen(true); }} data-testid="open-favorites-btn"
-                        className="inline-flex items-center gap-2 surface px-3.5 py-2 text-sm font-semibold text-muted-foreground hover:text-brand transition-colors" title="Dietas favoritas">
-                        <Star size={16} /> <span className="hidden sm:inline">Favoritas</span>
-                    </button>
-                    <button onClick={() => setShowPreferencesSetup(true)} data-testid="open-preferences-btn"
-                        className="inline-flex items-center gap-2 surface px-3.5 py-2 text-sm font-semibold text-muted-foreground hover:text-brand transition-colors" title="Preferencias alimentarias">
-                        <SlidersHorizontal size={16} /> <span className="hidden sm:inline">Preferencias</span>
-                    </button>
-                    {/* LA TUERCA, ARRIBA CON LAS DEMÁS. Dentro va cómo ver las comidas, que
-                        es una preferencia que se elige una vez y estaba a la vista y
-                        permanente justo encima de las comidas, que es lo que se viene a ver.
-                        Le acompañaba «Método / Reales», que se retiró con el punto 112. */}
-                    <button onClick={() => setAjustesVistaAbierto(v => !v)} data-testid="toggle-ajustes-vista"
-                        className={`lg:hidden inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold transition-colors ${ajustesVistaAbierto ? 'rounded-2xl bg-brand text-white' : 'surface text-muted-foreground hover:text-brand'}`}
-                        title="Cómo ver las comidas">
-                        <Settings size={16} />
-                    </button>
+                    <MenuDeLaPantalla opciones={[
+                        { id: 'copiar', texto: 'Copiar a otro día', icono: Copy, al: () => setCopyModalOpen(true) },
+                        { id: 'favoritas', texto: 'Dietas favoritas', icono: Star,
+                            al: () => { loadDietFavorites(); setFavoritesModalOpen(true); } },
+                        { id: 'preferencias', texto: 'Preferencias alimentarias', icono: SlidersHorizontal,
+                            al: () => setShowPreferencesSetup(true) },
+                        // Cómo ver las comidas: se elige una vez y estaba a la vista y
+                        // permanente encima de las comidas, que es lo que se viene a ver.
+                        { id: 'vista', texto: 'Cómo ver las comidas', icono: Settings,
+                            detalle: (VISTAS_DE_COMIDAS.find(v => v.id === vistaComidas) || {}).nombre,
+                            al: () => setAjustesVistaAbierto(true) },
+                        // PUNTO 113: el resumen de la configuración «se queda, dentro del
+                        // ···. Es corto, es cierto y además es un botón».
+                        { id: 'config', texto: 'Cambiar la configuración del día', icono: SlidersHorizontal,
+                            detalle: resumenDeLaConfig({ numComidas, tipoDia, momentoEntreno, opcionPeri }),
+                            al: () => setConfigExpanded(true) },
+                    ]} />
                 </div>
             </header>
 
             {ajustesVistaAbierto && (
-                <div className="lg:hidden surface p-4 mb-4 space-y-4" data-testid="ajustes-vista">
-                    <div>
-                        <p className="caption mb-1.5">Cómo ver las comidas</p>
+                <div className="surface p-4 mb-4" data-testid="ajustes-vista">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="caption">Cómo ver las comidas</p>
                         <VistaComidasSelector vista={vistaComidas} onCambiar={cambiarVistaComidas} />
+                        <button onClick={() => setAjustesVistaAbierto(false)}
+                            className="text-xs font-semibold text-muted-foreground hover:text-foreground">
+                            Listo
+                        </button>
                     </div>
                 </div>
             )}
@@ -2789,7 +2788,6 @@ const NutritionPage = () => {
 
                                 {/* Acciones (móvil <sm: tras las comidas; en sm+ van en la tarjeta de config) */}
                                 <div className="sm:hidden">
-                                    {renderActions('-mobile')}
                                 </div>
                             </main>
                         </div>
@@ -2817,7 +2815,6 @@ const NutritionPage = () => {
                             <div data-testid="meal-detail">
                                 {getMealOrder().includes(selectedMeal) && renderMealCard(selectedMeal, true)}
                             </div>
-                            <div className="sm:hidden">{renderActions('-mobile')}</div>
                         </div>
                     )}
 
@@ -2835,7 +2832,6 @@ const NutritionPage = () => {
                                     <div key={mealKey} className="min-w-0">{renderMealCard(mealKey, true, true)}</div>
                                 ))}
                             </div>
-                            <div className="sm:hidden mt-4">{renderActions('-mobile')}</div>
                         </div>
                     )}
                 </div>

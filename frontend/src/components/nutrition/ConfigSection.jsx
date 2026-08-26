@@ -80,3 +80,21 @@ const ConfigSection = ({ tipoDia, momentoEntreno, setMomentoEntreno, opcionPeri,
 
 export { MOMENTO_OPTIONS, PERI_OPTIONS };
 export default ConfigSection;
+
+// "4 comidas · tras comida 2 · intra + post": lo que hay configurado, en una linea.
+//
+// Vivia dentro de DayHeader, que era quien lo pintaba en un boton debajo de los numeros
+// (y en otro, gemelo, junto a la fecha en escritorio). Desde el punto 113 del artifact del
+// 25-08 ese resumen va dentro del «···» de la cabecera -- «se queda, dentro del ···. Es
+// corto, es cierto y ademas es un boton» --, asi que la frase se sube aqui, al lado de las
+// listas de las que sale, y la usan los dos.
+export const resumenDeLaConfig = ({ numComidas, tipoDia, momentoEntreno, opcionPeri }) => {
+    const partes = [numComidas === 1 ? 'comida única' : `${numComidas} comidas`];
+    if (tipoDia === 'entrenamiento' && numComidas !== 1) {
+        partes.push(momentoEntreno === 0
+            ? 'en ayunas'
+            : (MOMENTO_OPTIONS.find(o => o.value === momentoEntreno)?.label || '').replace('Después de Comida', 'tras comida'));
+        partes.push((PERI_OPTIONS.find(o => o.value === opcionPeri)?.label || '').toLowerCase());
+    }
+    return partes.filter(Boolean).join(' · ');
+};

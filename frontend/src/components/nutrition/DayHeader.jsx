@@ -15,23 +15,10 @@
  */
 import React from 'react';
 import { Calendar, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
-import ConfigSection, { MOMENTO_OPTIONS, PERI_OPTIONS } from './ConfigSection';
+import ConfigSection from './ConfigSection';
 import { DayDetailTable, StatusDot } from './DaySummary';
 import { leerMacro } from '../../lib/estadoDelMacro';
 
-
-// "4 comidas · tras comida 2 · intra + post": lo que hay configurado, en una línea, para
-// no tener tres desplegables ocupando sitio cuando casi nunca se tocan.
-const resumenConfig = ({ numComidas, tipoDia, momentoEntreno, opcionPeri }) => {
-    const partes = [numComidas === 1 ? 'comida única' : `${numComidas} comidas`];
-    if (tipoDia === 'entrenamiento' && numComidas !== 1) {
-        partes.push(momentoEntreno === 0
-            ? 'en ayunas'
-            : (MOMENTO_OPTIONS.find(o => o.value === momentoEntreno)?.label || '').replace('Después de Comida', 'tras comida'));
-        partes.push((PERI_OPTIONS.find(o => o.value === opcionPeri)?.label || '').toLowerCase());
-    }
-    return partes.filter(Boolean).join(' · ');
-};
 
 const DayHeader = ({
     // fecha
@@ -123,14 +110,10 @@ const DayHeader = ({
                         tamaños, así que esto era el mismo dato otra vez y con otro rojo. */}
                 </div>
 
-                {/* En escritorio, el resumen de la configuración va aquí arriba, como estaba.
-                    En el teléfono baja debajo de los números (documento, pantalla 9). */}
-                <button onClick={() => setConfigExpanded(!configExpanded)} data-testid="toggle-config-escritorio"
-                    className="hidden lg:flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                    title="Cambiar comidas, horario de entreno o perientreno">
-                    {resumenConfig({ numComidas, tipoDia, momentoEntreno, opcionPeri })}
-                    {configExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                </button>
+                {/* El resumen de la configuración se ha ido al «···» de la cabecera
+                    (punto 113: «se queda, dentro del ···»). Estaba aquí en escritorio y en
+                    otro botón gemelo debajo de los números en el móvil: dos sitios para el
+                    mismo botón, y ninguno de los dos era donde están las demás acciones. */}
             </div>
 
             {/* LO QUE LE QUEDA POR COMER, no lo que lleva (documento del 10-08, pantallas
@@ -214,21 +197,6 @@ const DayHeader = ({
                             cuando lo que falta son hidratos», Jesús, 11-08). Desde que cada
                             macro lleva su punto y su palabra, eso ya está dicho donde se mira. */}
 
-                        {/* LA CONFIGURACIÓN DEL DÍA, DEBAJO DE LOS NÚMEROS y en una línea
-                            (documento del 10-08, pantalla 9): «se toca una vez al mes;
-                            verla, se ve siempre». Estaba arriba, al lado de la fecha,
-                            compitiendo por el sitio con el conmutador de entreno.
-                            Solo en móvil: en escritorio está el gemelo de arriba, junto a la
-                            fecha. (El punto 113 lo mete dentro del «···», en las dos.) */}
-                        <button onClick={() => setConfigExpanded(!configExpanded)} data-testid="toggle-config"
-                            className="lg:hidden mt-3 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                            title="Cambiar comidas, horario de entreno o perientreno">
-                            {resumenConfig({ numComidas, tipoDia, momentoEntreno, opcionPeri })}
-                            {configExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                        </button>
-                        {/* Y se despliega JUSTO DEBAJO del botón que lo abre. Antes el panel
-                            salía arriba del todo y el botón estaba en otra parte: se pulsaba
-                            y no parecía que hubiera pasado nada. */}
                     </div>
                 );
             })()}
@@ -252,21 +220,28 @@ const DayHeader = ({
                 sin tener que entrar a mirar. Los números que enseña esta pantalla siguen
                 siendo los suyos: lo que hacía falta era arreglarlos donde se arreglan. */}
 
-            {/* La configuración desplegada. En el teléfono el botón que la abre está debajo
-                de los números; en escritorio, arriba con la fecha. El panel es el mismo. */}
+            {/* La configuración desplegada. Ahora la abre el «···» de la cabecera (punto
+                113), así que necesita su propia forma de cerrarse: antes se cerraba con el
+                mismo botón que la abría, y ese botón ya no está aquí. */}
             {configExpanded && (
-                <div className="flex flex-col sm:flex-row sm:items-end gap-4 mt-3" data-testid="config-section">
-                    <ConfigSection
-                        inline
-                        tipoDia={tipoDia}
-                        momentoEntreno={momentoEntreno}
-                        setMomentoEntreno={setMomentoEntreno}
-                        opcionPeri={opcionPeri}
-                        setOpcionPeri={setOpcionPeri}
-                        numComidas={numComidas}
-                        setNumComidas={setNumComidas}
-                        singleMeal={singleMeal}
-                    />
+                <div className="mt-3" data-testid="config-section">
+                    <div className="flex flex-col sm:flex-row sm:items-end gap-4">
+                        <ConfigSection
+                            inline
+                            tipoDia={tipoDia}
+                            momentoEntreno={momentoEntreno}
+                            setMomentoEntreno={setMomentoEntreno}
+                            opcionPeri={opcionPeri}
+                            setOpcionPeri={setOpcionPeri}
+                            numComidas={numComidas}
+                            setNumComidas={setNumComidas}
+                            singleMeal={singleMeal}
+                        />
+                    </div>
+                    <button onClick={() => setConfigExpanded(false)} data-testid="cerrar-config"
+                        className="mt-2 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors">
+                        Listo
+                    </button>
                 </div>
             )}
 
