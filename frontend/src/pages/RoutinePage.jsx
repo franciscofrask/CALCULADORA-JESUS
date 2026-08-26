@@ -64,7 +64,7 @@ const SemanaDeRutina = ({ semana, abrirPdf, tienePdf, onMarcarHoy, onSiLoHice, o
     const diasParaRecuperar = dias.filter(d => !d.entrena && d.fecha >= hoy.fecha);
 
     return (
-        <div className="space-y-3 max-w-2xl" data-testid="semana-rutina">
+        <div className="space-y-3 min-w-0" data-testid="semana-rutina">
             {/* Cabecera: qué rutina es, por qué semana va y el PDF a un toque. */}
             <div className="surface p-4 flex items-center justify-between gap-3 flex-wrap">
                 <p className="font-bold text-foreground text-sm" data-testid="semana-rutina-cabecera">{cab}</p>
@@ -81,9 +81,13 @@ const SemanaDeRutina = ({ semana, abrirPdf, tienePdf, onMarcarHoy, onSiLoHice, o
                 390 px cada casilla mide 44 px, y ahí no cabe ningún grupo de verdad: los
                 del catálogo de Jesús son «Dorsal Gemelo Abdomen» o «Cuádriceps Gemelo», y
                 salían cortados a media palabra («Cuadric…»), que se lee como una errata.
-                Con cuatro columnas la casilla pasa a 84 px y entran enteros. En cuanto hay
-                sitio (sm) vuelve a la fila de siete de siempre. */}
-            <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5" data-testid="semana-rutina-tira">
+                Con cuatro columnas la casilla pasa a 84 px y entran enteros.
+
+                Las siete en fila SOLO cuando la tira tiene la pagina entera para ella
+                (sm). En xl vuelve a cuatro, porque ahi esta metida en la columna izquierda
+                de 26 rem y volveria a quedarse en 57 px por casilla: el ancho que manda es
+                el del hueco donde vive, no el de la pantalla. */}
+            <div className="grid grid-cols-4 sm:grid-cols-7 xl:grid-cols-4 gap-1.5" data-testid="semana-rutina-tira">
                 {dias.map(d => (
                     <div key={d.fecha} data-testid={`semana-dia-${d.fecha}`}
                         className={`rounded-xl border px-0.5 py-2 text-center min-w-0
@@ -257,7 +261,7 @@ const VistaPreviaPdf = ({ api, info, abrirPdf }) => {
     // sí lo pinta. Para verlo de verdad en el móvil haría falta pdf.js, que no está en el
     // proyecto, y no se va a meter una dependencia para esto.
     return (
-        <div className="surface p-4 sm:p-5 space-y-4 max-w-3xl" data-testid="routine-pdf-preview">
+        <div className="surface p-4 sm:p-5 space-y-4 min-w-0" data-testid="routine-pdf-preview">
             <div>
                 <h2 className="font-heading text-xl font-bold uppercase text-foreground leading-tight">Tu rutina, en PDF</h2>
                 <p className="text-muted-foreground text-sm">
@@ -538,10 +542,21 @@ const RoutinePage = () => {
                    asignada». Se enseña ENTERA aquí dentro (Jesús, 24-08), y encima la
                    semana -- cabecera, tira, hoy y lo pendiente -- cuando hay reparto y sus
                    días puestos, que es el apartado 12. */
-                <div className="space-y-5" data-testid="routine-content">
+                /* EN PANTALLA GRANDE, DOS COLUMNAS (Francisco, 25-08: «no cambiaste nada
+                   de la vista en pc»). Iba todo en una columna estrecha: en 1440 px el
+                   contenido ocupaba 815 y quedaban 600 vacíos a la derecha, con el PDF
+                   empujado tan abajo que había que bajar para verlo (la página medía
+                   1.215 px de alto). Y no cuadraban ni los bordes: la semana iba a
+                   `max-w-2xl` y el PDF a `max-w-3xl`, así que la caja de abajo sobresalía.
+
+                   Ahora la semana y el día de hoy van a la izquierda y la rutina a la
+                   derecha, a la misma altura. Por debajo de xl se apila como siempre, que
+                   es lo que ya estaba bien en el móvil. */
+                <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] gap-5 items-start"
+                    data-testid="routine-content">
                     {semana?.hay && (
                         /* Sin el «Abrir el PDF» de la cabecera: la rutina está justo
-                           debajo, y dos botones para lo mismo a dos dedos uno de otro
+                           al lado, y dos botones para lo mismo a dos dedos uno de otro
                            solo hacen dudar. */
                         <SemanaDeRutina semana={semana} abrirPdf={abrirPdf}
                             onMarcarHoy={marcarHoy} onSiLoHice={siLoHice} onRecuperar={recuperar}
