@@ -58,39 +58,31 @@ NUTRITION_PAGE = RAIZ / "frontend" / "src" / "pages" / "NutritionPage.jsx"
 # CASOS 11-14: EL TITULAR DEL DIA, EJECUTANDO EL CODIGO QUE HAY EN DayHeader.jsx
 # =====================================================================================
 
-# El bloque que decide el titular y el numero grande, tal cual esta en el fichero, metido
-# en un envoltorio minimo. Lo unico que pone este harness es la entrada (`macros`) y la
-# salida (JSON); las cuatro decisiones -- nada puesto, pasado, cuadrado, titular -- y la
-# cuenta del numero grande son las lineas del componente, copiadas en tiempo de ejecucion.
+# LA CABECERA YA NO DECIDE NADA POR SU CUENTA (puntos 105 a 107 del artifact del 25-08).
+# Hasta el 26-08 el titular y el numero grande se calculaban con lineas sueltas dentro del
+# JSX, y este harness las recortaba del fichero para ejecutarlas. Ahora la regla vive
+# entera en `lib/estadoDelMacro`, la misma que usa Inicio, asi que se lleva el modulo DE
+# VERDAD y se llama a `leerMacro`: si manana cambia el margen o una palabra, esto se entera.
 _PLANTILLA_JS = r"""
-import { seExcede, textoExceso, fmtGramos } from './exceso.mjs';
+import { leerMacro } from './estadoDelMacro.mjs';
 const casos = %(casos)s;
-const salida = casos.map((caso) => {
-  const macros = Array.isArray(caso) ? caso : caso.macros;
-  // Lo que la cabecera sabe y no sale de los macros: que comidas hay y como estan. Por
-  // defecto ninguna montada, asi el titular se juega solo con los macros. Un caso puede
-  // pasar `comidasMal` para probar el freno del «Dia cuadrado» (doc 57, F3: con una
-  // comida descuadrada el dia no se da por bueno aunque los totales salgan).
-  const mealOrder = Array.isArray(caso)
-    ? [] : Array.from({ length: caso.comidasMal || 0 }, (_, i) => "c" + i);
-  const getMealStatus = () => 'descuadrada';
-%(bloque)s
-  const numeros = {};
+const salida = casos.map((macros) => {
+  const numeros = {}, palabras = {}, colores = {};
   for (const m of macros) {
-    // La cabecera distingue el dia SIN perientreno (`val`/`tgt`, con lo que decide si te
-    // has pasado) del dia ENTERO (`valDia`/`tgtDia`, que es el numero grande).
-    const key = m.key, val = m.val, tgt = m.tgt, valDia = m.valDia, tgtDia = m.tgtDia;
-%(over)s
-%(grande)s
-    numeros[m.key] = grande;
+    // EL NUMERO ES SIEMPRE LO CREADO. Antes era lo que FALTA mientras ibas a medias y
+    // pasaba a ser lo servido al cuadrar o al pasarte: dos magnitudes en el mismo hueco.
+    numeros[m.key] = Math.round(m.valDia);
+    const l = leerMacro({ vista: 'dieta', hay: m.valDia, objetivo: m.tgtDia });
+    palabras[m.key] = l.palabra;
+    colores[m.key] = l.color;
   }
-  return { titular, nadaPuesto, pasado, cuadrado, numeros, excesoDia };
+  return { numeros, palabras, colores };
 });
-// A ASCII: el titular lleva tilde ("Dia cuadrado") y la consola de Windows no siempre la
-// deja pasar entera. Con las escapadas \uXXXX el JSON viaja igual en cualquier consola.
+// A ASCII: las palabras llevan tilde ("valido +2") y la consola de Windows no siempre la
+// deja pasar entera. Con las escapadas uXXXX el JSON viaja igual en cualquier consola.
 console.log(JSON.stringify(salida).replace(/./gu, (c) => {
   const n = c.codePointAt(0);
-  return n > 126 ? "\\u" + n.toString(16).padStart(4, "0") : c;
+  return n > 126 ? String.fromCharCode(92) + "u" + n.toString(16).padStart(4, "0") : c;
 }));
 """
 
@@ -110,43 +102,30 @@ def _llevar_modulo(destino, nombre):
     (destino / f"{nombre}.mjs").write_text(texto, encoding="utf-8")
 
 
-def _trozo(texto, desde, hasta, que):
-    assert desde in texto, f"no encuentro {que} en DayHeader.jsx (buscaba {desde!r})"
-    i = texto.index(desde)
-    j = texto.index(hasta, i)
-    return texto[i:j]
-
-
-def _logica_del_titular():
-    """Las lineas vivas de DayHeader.jsx: el bloque del titular, `over` y `grande`."""
+def _el_numero_grande_es_lo_creado():
+    """Que el JSX siga pintando lo CREADO y no otra cosa. La regla la prueba `leerMacro`,
+    pero QUE numero se pinta solo lo dice la cabecera, y es la mitad del punto 106."""
     texto = DAY_HEADER.read_text(encoding="utf-8")
-    bloque = _trozo(texto, "const nadaPuesto", "return (", "el bloque del titular")
-    desde_el_bloque = texto[texto.index("const nadaPuesto"):]
-    over = re.search(r"const over = .*?;", desde_el_bloque)
-    grande = re.search(r"const grande = .*?;", desde_el_bloque)
-    assert over and grande, "no encuentro `over`/`grande` en DayHeader.jsx: mira si cambio la cabecera"
-    return bloque, over.group(0), grande.group(0)
+    assert "const creado = Math.round(valDia);" in texto, \
+        "el numero grande de Nutricion ha dejado de ser lo creado: vuelve a cambiar de criterio"
+    assert 'data-testid="dia-titular"' not in texto, \
+        "vuelve el titular que rotaba entre cuatro frases (punto 106)"
 
 
 @pytest.fixture(scope="module")
-def titular_de():
-    """Devuelve una funcion que evalua el titular del dia para unos macros dados."""
+def lectura_de():
+    """Devuelve una funcion que lee los macros del dia tal como los pinta la cabecera."""
     if not shutil.which("node"):
-        pytest.skip("hace falta node para ejecutar la logica del titular tal cual esta en DayHeader.jsx")
-    bloque, over, grande = _logica_del_titular()
+        pytest.skip("hace falta node para ejecutar la regla tal cual esta en lib/estadoDelMacro.js")
+    _el_numero_grande_es_lo_creado()
 
     def _evaluar(*casos):
-        js = _PLANTILLA_JS % {
-            "casos": json.dumps(list(casos)),
-            "bloque": bloque,
-            "over": "    " + over,
-            "grande": "    " + grande,
-        }
+        js = _PLANTILLA_JS % {"casos": json.dumps(list(casos))}
         with tempfile.TemporaryDirectory() as tmp:
             carpeta = pathlib.Path(tmp)
-            for modulo in ("numeros", "exceso"):
+            for modulo in ("numeros", "exceso", "estadoDelMacro"):
                 _llevar_modulo(carpeta, modulo)
-            fichero = carpeta / "titular.mjs"
+            fichero = carpeta / "lectura.mjs"
             fichero.write_text(js, encoding="utf-8")
             salida = subprocess.run(["node", str(fichero)], capture_output=True, text=True)
         assert salida.returncode == 0, f"node fallo: {salida.stderr}"
@@ -176,73 +155,87 @@ def _con_comido(p, h, g):
     return [macro("P", p, 190), macro("H", h, 135), macro("G", g, 60)]
 
 
-def test_11_el_dia_a_cero_dice_lo_que_hay_que_comer(titular_de):
-    """Caso 11: con el dia a cero, "hoy tienes que comer" y los tres numeros del objetivo."""
-    r = titular_de(OBJETIVO)[0]
-    assert r["titular"] == "Hoy tienes que comer"
-    assert r["numeros"] == {"P": 190, "H": 135, "G": 60}, "a cero, el numero grande ES el objetivo"
+def test_11_el_dia_a_cero_dice_lo_que_hay_que_comer(lectura_de):
+    """Caso 11: con el dia a cero, el cliente sabe lo que tiene que comer.
+
+    Lo decia un titular, «Hoy tienes que comer», con los tres numeros del objetivo debajo.
+    Desde el 26-08 el numero es SIEMPRE lo creado -- a cero, cero -- y lo que hay que comer
+    lo dice la palabra de cada macro: «faltan 190». Mismo dato, sin cambiar de magnitud a
+    mitad de dia (puntos 105 a 107 del artifact del 25-08).
+    """
+    r = lectura_de(OBJETIVO)[0]
+    assert r["numeros"] == {"P": 0, "H": 0, "G": 0}, "el numero es lo creado, y a cero no hay nada"
+    assert r["palabras"] == {"P": "faltan 190", "H": "faltan 135", "G": "faltan 60"}
 
 
-def test_12_con_una_comida_montada_resta_lo_comido(titular_de):
-    """Caso 12 [CRITICO]: el titular pasa a "te queda por comer" y el numero es lo que falta."""
-    r = titular_de(_con_comido(47, 51, 12))[0]
-    # «hoy» al final desde el punto 6 del doc del 23-08: es lo que queda del DIA entero,
-    # no de esa comida, y sin la palabra no quedaba claro.
-    assert r["titular"] == "Te queda por comer hoy"
-    assert r["numeros"] == {"P": 143, "H": 84, "G": 48}, "tiene que restar lo comido, no sumarlo"
+def test_12_con_una_comida_montada_resta_lo_comido(lectura_de):
+    """Caso 12 [CRITICO]: resta lo comido, no lo suma.
+
+    El numero es ahora lo creado, asi que la resta que hay que vigilar es la de la palabra:
+    con 47 de 190 tienen que faltar 143, no 237.
+    """
+    r = lectura_de(_con_comido(47, 51, 12))[0]
+    assert r["numeros"] == {"P": 47, "H": 51, "G": 12}, "el numero es lo que llevas creado"
+    assert r["palabras"] == {"P": "faltan 143", "H": "faltan 84", "G": "faltan 48"}, \
+        "tiene que restar lo comido, no sumarlo"
 
 
-def test_13_pasarse_de_un_macro_lo_dice(titular_de):
-    """Caso 13 [CRITICO]: pasarse dice "te has pasado"."""
-    r = titular_de(_con_comido(200, 175, 62))[0]
-    assert r["titular"] == "Te has pasado"
+def test_13_pasarse_de_un_macro_lo_dice(lectura_de):
+    """Caso 13 [CRITICO]: pasarse se dice, y en el macro en el que pasa."""
+    r = lectura_de(_con_comido(200, 175, 62))[0]
+    assert r["palabras"]["H"] == "sobran 40"
+    assert r["colores"]["H"] == "pasado", "pasarse tiene que pintar"
 
 
-def test_13_nunca_sale_un_numero_negativo(titular_de):
-    """Caso 13 [CRITICO]: nunca un "faltan -8 H".
+def test_13_nunca_sale_un_numero_negativo(lectura_de):
+    """Caso 13 [CRITICO]: nunca un «faltan -8 H».
 
-    Los dos caminos por los que salia: pasarse de largo (y ahi se ensena lo comido) y
-    pasarse de poco -- por debajo del margen de 4 g --, que es el que daba el negativo,
-    porque el macro no cuenta como "pasado" y se seguia restando objetivo menos comido.
+    Con el numero a lo creado el negativo ya no puede salir por ahi, pero si podria salir
+    en la palabra si alguien restara al reves. Se comprueban los dos.
     """
     casos = [
         _con_comido(200, 175, 62),     # pasado de largo
         _con_comido(193, 138, 63),     # pasado de poco: 3 g por encima en los tres
         _con_comido(190, 143, 60),     # solo un macro, y por poco
         _con_comido(400, 400, 400),    # el doble de todo
+        _con_comido(0, 0, 0),          # sin empezar
     ]
-    for entrada, r in zip(casos, titular_de(*casos)):
+    for entrada, r in zip(casos, lectura_de(*casos)):
         for clave, valor in r["numeros"].items():
             assert valor >= 0, f"numero negativo en {clave} con {entrada}: {r}"
+        for clave, palabra in r["palabras"].items():
+            assert "-" not in palabra and "\u2212" not in palabra.replace("\u2212", "", 1), \
+                f"palabra con signo raro en {clave} con {entrada}: {palabra!r}"
 
 
-def test_13_dice_por_cuanto_se_ha_pasado(titular_de):
-    """Caso 13, la otra mitad: "dice 'te has pasado' Y POR CUANTO". YA ESTA.
+def test_13_dice_por_cuanto_se_ha_pasado(lectura_de):
+    """Caso 13, la otra mitad: «dice "te has pasado" Y POR CUANTO».
 
-    Estuvo en rojo a proposito una temporada: el numero grande era lo COMIDO (200) y
-    debajo, en pequeno, "de 190", asi que el exceso lo tenia que restar el cliente de
-    cabeza. De las dos salidas que se plantearon -- cambiar el numero grande o poner una
-    linea debajo -- se hizo la segunda: al lado del titular va el texto de `lib/exceso`,
-    que dice el macro y los gramos.
+    Antes lo decia una frase al lado del titular, sacada de `lib/exceso`. Ahora lo dice
+    cada macro debajo de su numero, que es donde se mira: «sobran 40».
 
-    Y dice solo los que cuentan. Con 200 de 190 de proteina, 175 de 135 de hidratos y 62
-    de 60 de grasa, la frase habla SOLO de los hidratos: la proteina porque pasarse de
-    proteina no es un fallo (Jesus, 13-08), y la grasa porque 2 g caben en el margen de 4
-    de Calma. Que la frase no se llene de avisos por dos gramos es parte de lo pedido.
+    OJO, UNA REGLA VIEJA QUE AQUI YA NO SE APLICA. Hasta el 26-08 pasarse de PROTEINA no
+    se cantaba (Jesus, 13-08: «le estas marcando en rojo, todos los dias, algo que ha hecho
+    bien»), y `lib/exceso` sigue teniendolo asi (`MACROS_QUE_SE_PASAN = ['H','G']`). La
+    regla de color de la parte 2 no distingue macros -- «igual en las cuatro pestañas, sin
+    excepciones» -- y la parte 3 manda usar esa, asi que con 200 de 190 la proteina TAMBIEN
+    dice «sobran 10». Esta preguntado a Jesus; si dice que la excepcion se queda, se cambia
+    en `lib/estadoDelMacro` y este test lo cazara.
     """
-    r = titular_de(_con_comido(200, 175, 62))[0]
-    assert r["titular"] == "Te has pasado"
-    assert r["excesoDia"] == "40 g de hidratos", \
-        f"la cabecera no dice por cuanto te has pasado (dice {r['excesoDia']!r})"
-    assert "proteína" not in r["excesoDia"], \
-        "pasarse de proteina no es un fallo y no se canta (Jesus, 13-08)"
+    r = lectura_de(_con_comido(200, 175, 62))[0]
+    assert r["palabras"]["H"] == "sobran 40", "no dice por cuanto se ha pasado"
+    # La grasa, 2 g por encima, cabe en el margen de 4 de Calma y no es un aviso.
+    assert r["palabras"]["G"].startswith("valido".replace("valido", "v")), r["palabras"]["G"]
+    assert r["colores"]["G"] == "ok", "2 g caben en el margen: eso no es pasarse"
+    assert r["palabras"]["P"] == "sobran 10", \
+        "si esto cambia es que se ha devuelto la excepcion de la proteina: mira el docstring"
 
 
-def test_14_el_dia_cuadrado_lo_dice(titular_de):
-    """Caso 14: cuadrar el dia entero dice "dia cuadrado"."""
-    r = titular_de(_con_comido(190, 135, 60))[0]
-    assert r["titular"].replace("í", "i") == "Dia cuadrado"
-    assert r["cuadrado"] is True
+def test_14_el_dia_cuadrado_lo_dice(lectura_de):
+    """Caso 14: cuadrar el dia entero se ve, ahora en los tres macros a la vez."""
+    r = lectura_de(_con_comido(190, 135, 60))[0]
+    assert r["palabras"] == {"P": "cuadrado", "H": "cuadrado", "G": "cuadrado"}
+    assert set(r["colores"].values()) == {"ok"}, "los tres en verde son el dia cuadrado"
 
 
 def test_14_el_boton_grande_de_montar_solo_sale_con_la_comida_vacia():

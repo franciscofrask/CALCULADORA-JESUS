@@ -18,10 +18,10 @@ import { Link } from 'react-router-dom';
 import { Calendar, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
 import ConfigSection, { MOMENTO_OPTIONS, PERI_OPTIONS } from './ConfigSection';
 import { DayDetailTable, StatusDot } from './DaySummary';
-import { seExcede, textoExceso, fmtGramos } from '../../lib/exceso';
+import { seExcede } from '../../lib/exceso';
+import { leerMacro } from '../../lib/estadoDelMacro';
 import { fraseDeLoQueFalta } from '../../lib/datosDudosos';
 
-const MACRO = { P: '#FF671F', H: '#2196F3', G: '#FFA500' };
 
 // "4 comidas · tras comida 2 · intra + post": lo que hay configurado, en una línea, para
 // no tener tres desplegables ocupando sitio cuando casi nunca se tocan.
@@ -78,9 +78,9 @@ const DayHeader = ({
     // son solo lo que se pinta. El chip del perientreno sigue debajo con su propia cuenta.
     // En grasa día y comidas coinciden: el peri no lleva grasa.
     const macros = [
-        { key: 'P', label: 'Proteína', val: mainP, tgt: tgtP || 0, valDia: dayMacros.P, tgtDia: dayTarget.P_total ?? 0, color: MACRO.P },
-        { key: 'H', label: 'Hidratos', val: mainH, tgt: tgtH || 0, valDia: dayMacros.H, tgtDia: dayTarget.H_total ?? 0, color: MACRO.H },
-        { key: 'G', label: 'Grasa', val: mainG, tgt: tgtG || 0, valDia: dayMacros.G, tgtDia: tgtG || 0, color: MACRO.G },
+        { key: 'P', label: 'Proteína', val: mainP, tgt: tgtP || 0, valDia: dayMacros.P, tgtDia: dayTarget.P_total ?? 0 },
+        { key: 'H', label: 'Hidratos', val: mainH, tgt: tgtH || 0, valDia: dayMacros.H, tgtDia: dayTarget.H_total ?? 0 },
+        { key: 'G', label: 'Grasa', val: mainG, tgt: tgtG || 0, valDia: dayMacros.G, tgtDia: tgtG || 0 },
     ];
 
     return (
@@ -158,68 +158,75 @@ const DayHeader = ({
                 // A cero se mira el día entero, peri incluido: con solo el batido del
                 // entreno puesto ya no vale decir «Hoy tienes que comer».
                 const nadaPuesto = macros.every(m => m.valDia === 0);
-                // Pasarse SOLO cuenta en hidratos y grasa (Jesús, 13-08): el criterio es el
-                // de `lib/exceso`, el mismo que usan las tarjetas de comida y el chat.
-                const pasados = macros.filter(m => m.tgt > 0 && seExcede(m.key, m.val, m.tgt));
-                const pasado = pasados.length > 0;
-                // Cuadrado: hidratos y grasa dentro de margen, y la proteína al menos
-                // cubierta. Si pasarse de proteína no es un fallo, tampoco puede impedir que
-                // el día se dé por bueno.
-                // Y ninguna comida genuinamente descuadrada (doc 57, F3): mismo criterio
-                // que getDayStatus, para que el titular del móvil y el distintivo de
-                // escritorio no se contradigan.
+                // Cuadrado, solo para la línea de «ya tienes cubierto» de aquí abajo. El
+                // estado que se PINTA en los números ya no sale de esta cuenta: sale de
+                // `leerMacro`, macro a macro, como en Inicio.
                 const comidaMal = (mealOrder || []).some(k => {
                     const st = getMealStatus ? getMealStatus(k) : 'empty';
                     return st !== 'cuadrada' && st !== 'empty';
                 });
                 const cuadrado = !nadaPuesto && !comidaMal && macros.every(m => m.tgt > 0 && (
                     m.key === 'P' ? m.val > m.tgt - 4 : Math.abs(m.tgt - m.val) < 4));
-                // «Te queda por comer HOY»: es del día entero, no de una comida, y no
-                // quedaba claro (punto 6 del doc del 23-08).
-                const titular = cuadrado ? 'Día cuadrado'
-                    : nadaPuesto ? 'Hoy tienes que comer'
-                    : pasado ? 'Te has pasado' : 'Te queda por comer hoy';
-                // El «por cuánto», sobre el total del día (peri dentro), que es el que
-                // enseñan los números grandes. Puede quedar vacío: el exceso está en las
-                // comidas y el peri aún pendiente lo compensa; entonces no se pone cifra.
-                const excesoDia = pasado ? textoExceso(
-                    Object.fromEntries(macros.map(m => [m.key, m.valDia])),
-                    Object.fromEntries(macros.map(m => [m.key, m.tgtDia]))) : '';
                 return (
-                    <div className="mt-5 lg:hidden" data-testid="dia-resumen">
-                        <p className={`text-sm font-bold ${cuadrado ? 'text-emerald-600 dark:text-emerald-400' : pasado ? 'text-red-500' : 'text-muted-foreground'}`}
-                            data-testid="dia-titular">
-                            {titular}
-                            {/* POR CUÁNTO. «Te has pasado» a secas obliga a restar de cabeza
-                                mirando los tres números de abajo (Jesús, 13-08). */}
-                            {pasado && excesoDia && <span className="font-semibold"> · {excesoDia}</span>}
-                        </p>
-                        <div className="grid grid-cols-3 gap-3 max-w-md mt-2">
-                            {macros.map(({ key, label, valDia, tgtDia, color }) => {
-                                const over = tgtDia > 0 && seExcede(key, valDia, tgtDia);
-                                // Cuadrado o pasado, el número que importa es el total, no un
-                                // «te quedan 0» repetido tres veces.
-                                const grande = (cuadrado || over) ? Math.round(valDia) : Math.max(0, Math.round(tgtDia - valDia));
+                    <div className="mt-5" data-testid="dia-resumen">
+                        {/* UN SOLO NÚMERO Y SIEMPRE EL MISMO: LO QUE LLEVAS CREADO
+                            (puntos 105 a 107 del artifact del 25-08).
+
+                            «Inicio es cómo vas. Nutrición es lo que llevas creado. Cada
+                            pantalla enseña un solo número y siempre el mismo.»
+
+                            Hasta hoy este bloque cambiaba de criterio SOLO, y de dos maneras
+                            a la vez. El titular rotaba entre cuatro frases -- «Día cuadrado»,
+                            «Hoy tienes que comer», «Te has pasado», «Te queda por comer hoy»
+                            -- y, peor, EL NÚMERO cambiaba con él: era lo que FALTA mientras
+                            ibas a medias y pasaba a ser lo SERVIDO al cuadrar o al pasarte.
+                            El mismo hueco, dos magnitudes distintas, y nadie te decía cuál
+                            estabas mirando. Y en escritorio no era ninguna de las dos: eran
+                            tres barras de 1 px con «Te faltan N de X», un tercer criterio.
+
+                            Ahora es siempre lo creado, en los dos tamaños, y el estado lo
+                            dicen el punto, la palabra y la barra, con el mismo motor y el
+                            mismo margen de 4 g que el Inicio (lib/estadoDelMacro): «el color,
+                            el margen de 4 y las palabras son los mismos de la parte 2». */}
+                        <div className="grid grid-cols-3 gap-3 max-w-md">
+                            {macros.map(({ key, label, valDia, tgtDia }) => {
+                                const creado = Math.round(valDia);
+                                const lectura = leerMacro({ vista: 'dieta', hay: valDia, objetivo: tgtDia });
                                 return (
                                     // Centrado dentro de su columna, como en Inicio: los tres
                                     // números tienen anchos distintos (235, 60) y alineados a
                                     // la izquierda el bloque se ve descolgado.
                                     <div key={key} className="text-center" data-testid={`dia-${key}`}>
-                                        {/* Más grandes por el punto 6 del 23-08: eran 30/34. */}
-                                        <p className="font-data font-bold leading-none text-foreground text-[36px] sm:text-[42px]">{grande}</p>
-                                        <p className="text-sm font-bold mt-1" style={{ color: over ? '#EF4444' : color }}>{label}</p>
-                                        {/* Con el día a cero, el número grande YA ES el total:
-                                            «235 · de 235 en total» lo dice dos veces. La línea
-                                            solo aporta cuando ya has comido algo (Jesús, 11-08). */}
-                                        {!nadaPuesto && (
-                                            <p className="text-xs text-muted-foreground font-data">
-                                                {cuadrado || over ? `de ${tgtDia.toFixed(0)}` : `de ${tgtDia.toFixed(0)} en total`}
-                                            </p>
+                                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-center gap-1">
+                                            {label}
+                                            {lectura.color && (
+                                                <span data-testid={`dia-punto-${key}`}
+                                                    className={`w-1.5 h-1.5 rounded-full ${lectura.color === 'ok' ? 'bg-ok' : 'bg-pasado'}`} />
+                                            )}
+                                        </p>
+                                        <p className="numero-grande font-data leading-none text-[34px] sm:text-[40px] mt-1.5 text-foreground">
+                                            {creado}
+                                        </p>
+                                        <p data-testid={`dia-palabra-${key}`}
+                                            className={`text-xs mt-1 ${lectura.color === 'ok' ? 'text-ok font-medium'
+                                                : lectura.color === 'pasado' ? 'text-pasado font-medium' : 'text-muted-foreground'}`}>
+                                            {lectura.palabra}
+                                        </p>
+                                        {lectura.barra && (
+                                            <div className="h-1 rounded-full bg-muted mt-1.5 overflow-hidden">
+                                                <div data-testid={`dia-barra-${key}`}
+                                                    className={`h-full rounded-full ${lectura.barra.color === 'ok' ? 'bg-ok' : 'bg-pasado'}`}
+                                                    style={{ width: `${lectura.barra.largo}%` }} />
+                                            </div>
                                         )}
                                     </div>
                                 );
                             })}
                         </div>
+                        <p className="text-xs text-muted-foreground mt-3 max-w-md text-center"
+                            data-testid="dia-pie">
+                            Lo que llevas creado
+                        </p>
                         {/* LO QUE YA ESTÁ CUBIERTO, DICHO.
                             Saber lo que falta no basta: si te quedan 60 g de grasa y la
                             proteína ya está, ponerte a buscar proteína es perder el rato.
@@ -248,7 +255,11 @@ const DayHeader = ({
                                 ? `${nombres[0].charAt(0).toUpperCase()}${nombres[0].slice(1)} ya la tienes cubierta.`
                                 : `Ya tienes cubiertos ${nombres.slice(0, -1).join(', ')} y ${nombres[nombres.length - 1]}.`;
                             return (
-                                <p className="mt-2 text-sm text-emerald-600 dark:text-emerald-400" data-testid="dia-cubierto">
+                                // El `lg:hidden` lo llevaba el contenedor de todo este bloque,
+                                // que era solo de móvil; ahora los números son de los dos
+                                // tamaños, así que cada cosa que siga siendo de móvil se lo
+                                // pone ella. (Esta línea se va entera en el punto 109.)
+                                <p className="lg:hidden mt-2 text-sm text-emerald-600 dark:text-emerald-400" data-testid="dia-cubierto">
                                     {texto}
                                 </p>
                             );
@@ -257,9 +268,11 @@ const DayHeader = ({
                         {/* LA CONFIGURACIÓN DEL DÍA, DEBAJO DE LOS NÚMEROS y en una línea
                             (documento del 10-08, pantalla 9): «se toca una vez al mes;
                             verla, se ve siempre». Estaba arriba, al lado de la fecha,
-                            compitiendo por el sitio con el conmutador de entreno. */}
+                            compitiendo por el sitio con el conmutador de entreno.
+                            Solo en móvil: en escritorio está el gemelo de arriba, junto a la
+                            fecha. (El punto 113 lo mete dentro del «···», en las dos.) */}
                         <button onClick={() => setConfigExpanded(!configExpanded)} data-testid="toggle-config"
-                            className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                            className="lg:hidden mt-3 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
                             title="Cambiar comidas, horario de entreno o perientreno">
                             {resumenConfig({ numComidas, tipoDia, momentoEntreno, opcionPeri })}
                             {configExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -271,53 +284,12 @@ const DayHeader = ({
                 );
             })()}
 
-            {/* ESCRITORIO: las tres barras de siempre, pero diciendo LO QUE FALTA.
-                «Arriba dice lo que ha comido; abajo, lo que le falta» (Jesús, 16-08). En la
-                misma pantalla, esta línea ponía «152 / 135» y «+16,3 g» mientras la comida de
-                tres centímetros más abajo ponía «faltan 4,1 g», y el Inicio nuevo dice «Te
-                faltan 94, de 120». Tres formas de decir lo mismo, y solo una contesta a la
-                pregunta con la que se abre la app.
-
-                Así que aquí también «Te faltan X de Y», igual que abajo, que en el teléfono y
-                que en Inicio. Lo que sobra se sigue diciendo con la palabra de siempre
-                («sobran»), que es la que Jesús da por buena dentro de la calculadora. */}
-            <div className="hidden lg:block mt-5 max-w-2xl space-y-2">
-                {/* Aquí también el día entero, peri incluido (doc 21-08, apartado 11),
-                    como en el teléfono: un solo objetivo y un solo servido. */}
-                {macros.map(({ key, label, valDia, tgtDia, color }) => {
-                    const over = tgtDia > 0 && seExcede(key, valDia, tgtDia);
-                    const falta = Math.max(0, tgtDia - valDia);
-                    // Cubierto: dentro del mismo margen de 4 g con el que la comida se da por
-                    // cuadrada, para no decir «te faltan 0» ni contradecir a la tarjeta.
-                    const cubierto = !over && (tgtDia <= 0 || falta < 4);
-                    return (
-                        <div key={key} className="flex items-center gap-3">
-                            <span className="text-[13px] text-muted-foreground w-[64px] flex-shrink-0">{label}</span>
-                            <span className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
-                                <span className="block h-full rounded-full transition-all duration-300"
-                                    style={{ width: `${tgtDia > 0 ? Math.min((valDia / tgtDia) * 100, 100) : 0}%`, backgroundColor: over ? '#EF4444' : color }} />
-                            </span>
-                            <span className={`font-data text-[13px] text-right w-[150px] flex-shrink-0 ${over ? 'text-red-500 font-bold' : 'text-foreground'}`}
-                                data-testid={`dia-escritorio-${key}`}
-                                title={`Llevas ${valDia.toFixed(0)} g de ${tgtDia.toFixed(0)} g`}>
-                                {over
-                                    ? <>sobran {fmtGramos(valDia - tgtDia)} g</>
-                                    : cubierto
-                                        ? <>Ya está <span className="text-muted-foreground">· de {tgtDia.toFixed(0)}</span></>
-                                        : <>Te faltan {Math.round(falta)}
-                                            {/* EL «DE X» VA SIEMPRE (punto 13 del 17-08).
-                                                Se ocultaba con el día a cero, pensando que
-                                                «235 de 235» lo dice dos veces. En pantalla se
-                                                lee al revés: la línea cambia de forma según el
-                                                día y el cliente pierde la referencia justo
-                                                cuando abre la app y todo está a cero. Inicio ya
-                                                lo pinta siempre; esto era el segundo criterio. */}
-                                            <span className="text-muted-foreground"> de {tgtDia.toFixed(0)}</span></>}
-                            </span>
-                        </div>
-                    );
-                })}
-            </div>
+            {/* AQUÍ IBAN LAS TRES BARRAS DE ESCRITORIO, y se han ido (puntos 105 a 107).
+                Decían «Te faltan 94 de 120», o sea LO QUE FALTA, mientras los números del
+                teléfono decían unas veces lo que falta y otras lo servido: tres criterios
+                para el mismo dato en la misma pantalla, según el tamaño de la ventana y
+                según cómo fuera el día. Ahora el bloque de números de arriba es el mismo en
+                los dos tamaños y dice siempre lo mismo: lo que llevas creado. */}
 
             {/* OBJETIVOS PROVISIONALES (tarea 1.4). Los macros del día se calcularon con un
                 perfil con huecos o con datos imposibles (edad 5, estatura de 1 cm de la
