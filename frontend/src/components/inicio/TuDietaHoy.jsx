@@ -1,27 +1,31 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, CheckSquare, ChevronRight, Circle, Square, Zap } from 'lucide-react';
 import { leer as leerLocal, escribir as escribirLocal } from '../../lib/almacenLocal';
-import { num0, num1 } from '../../lib/numeros';
+import { num0 } from '../../lib/numeros';
 import { leerMacro } from '../../lib/estadoDelMacro';
 import ExtrasDelDia from '../nutrition/ExtrasDelDia';
 
 /**
- * «TU DIETA HOY» (doc de Jesús del 21-08, tarea 4.2; repintado con el doc del 23-08,
- * punto 1): el deslizador de cuatro posiciones sobre los tres números por macro -- el
- * nombre encima, el número en naranja y, en Falta, «para llegar» con su barra --, y
- * debajo «Marca lo que ya te has comido» con las hechas contraídas y el peri en su
- * propia tarjeta, con lo que lleva dentro.
+ * «TU DIETA HOY» (doc de Jesús del 21-08, tarea 4.2; repintado con el del 23-08 y cerrado
+ * con el artifact del 25-08, puntos 75 a 101): el deslizador de cuatro posiciones sobre los
+ * tres números por macro -- el nombre con su punto encima, el número en blanco, la palabra
+ * del estado debajo y la barra -- y, debajo, «Marca lo que ya te has comido» con las hechas
+ * contraídas y una fila por toma, el intra y el post incluidos.
  *
  *  - Macros  · el objetivo del día CON el perientreno dentro. Es el mismo número que la
  *              cabecera de Nutrición: `resumen.P_total/H_total` del reparto vivo
  *              (`POST /calculator/distribute`) llevan el peri sumado, y `G_total` no lo
- *              lleva porque en el método la grasa del peri no cuenta.
+ *              lleva porque en el método la grasa del peri no cuenta. Aquí vive el
+ *              interruptor que lo separa, y solo aquí.
  *  - Dieta   · la suma de lo montado: `servido_comidas` (lo cuenta el servidor, calibrado)
  *              más lo montado en el peri (P/H; la grasa del peri va fuera, como arriba).
- *  - Llevas  · la suma de las comidas MARCADAS con su casilla. Los Extras del día NO
+ *  - Llevas  · la suma de lo MARCADO con su casilla, comidas y peri. Los Extras del día NO
  *              entran (punto 28 del doc del 24-08): ver abajo.
- *  - Falta   · Macros menos Llevas. PUEDE quedar en negativo y se dice tal cual («Te has
- *              pasado de 12 g de hidratos»), en tono tostado, sin bronca.
+ *  - Falta   · Macros menos Llevas. PUEDE quedar en negativo y se dice tal cual («te pasas
+ *              14»), en el naranja de pasarse y sin bronca: es un dato.
+ *
+ * QUÉ COLOR LLEVA CADA COSA NO SE DECIDE AQUÍ: la regla entera está en
+ * lib/estadoDelMacro, y las cuatro pestañas le preguntan lo mismo.
  *
  * LOS EXTRAS NO TOCAN NADA DE ESTO. Hasta el 24-08 se sumaban en Llevas y por eso le
  * encogían el Falta: si se comía una tarta a media tarde, la app le decía «ya no te comas
@@ -37,7 +41,6 @@ import ExtrasDelDia from '../nutrition/ExtrasDelDia';
  */
 
 const NOMBRE = { P: 'Proteína', H: 'Hidratos', G: 'Grasa' };
-const NOMBRE_LLANO = { P: 'proteína', H: 'hidratos', G: 'grasa' };
 
 const VISTAS = [
     { id: 'macros', label: 'Macros' },
@@ -49,8 +52,24 @@ const VISTAS = [
 const PIE_DE_VISTA = {
     // El texto del punto 2 del doc del 23-08, palabra por palabra.
     macros: 'Los macros totales a los que tienes que llegar hoy. Debajo verás el desglose por comidas.',
-    dieta: 'Lo que tienes creado en la calculadora',
+    // Con «TU» (punto 91 del 25-08). Es su calculadora, no «la» calculadora: la diferencia
+    // entre una herramienta que le han dado y una que es suya.
+    dieta: 'Lo que tienes creado en tu calculadora',
     falta: 'Lo que te queda para cuadrar el día',
+};
+
+// EL CONTADOR DE «LLEVAS», CON EL PERI APARTE (punto 93). El perientreno no es una comida y
+// no se suma al número de comidas: son sus palabras. Se dice al lado, que es donde no
+// estorba y donde se entiende sin explicarlo.
+const contarLoMarcado = (comidas, peris) => {
+    const deComidas = comidas === 0 ? '' : (comidas === 1 ? '1 comida marcada' : `${comidas} comidas marcadas`);
+    const losDos = peris.length === 2;
+    const dePeri = peris.length === 0 ? ''
+        : (losDos ? 'intra y post' : `el ${peris[0].toLowerCase()}`);
+    if (!dePeri) return deComidas;
+    // Sin ninguna comida marcada el peri se dice solo, y en mayúscula: «El intra».
+    if (!deComidas) return dePeri.charAt(0).toUpperCase() + dePeri.slice(1);
+    return losDos ? `${deComidas}, ${dePeri}` : `${deComidas} y ${dePeri}`;
 };
 
 // Suma de `macros_efectivos` de los alimentos de una comida guardada. Es el mismo campo
@@ -263,16 +282,12 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
         return { P: acc.P + m.P, H: acc.H + m.H, G: acc.G + (m.G || 0) };
     }, { P: 0, H: 0, G: 0 });
 
-    // Lo que falta, redondeado, que es lo que se pinta. El desvío EXACTO se guarda aparte:
-    // es el único decimal que sobrevive en todo el Inicio (punto 80), y solo para la línea
-    // de aviso, que es donde el gramo de verdad sirve para algo.
-    const faltaExacto = conPeri ? {
-        P: conPeri.P - llevas.P, H: conPeri.H - llevas.H, G: conPeri.G - llevas.G,
+    // Lo que falta, redondeado: NI UN DECIMAL en todo el Inicio (punto 80).
+    const falta = conPeri ? {
+        P: Math.round(conPeri.P - llevas.P),
+        H: Math.round(conPeri.H - llevas.H),
+        G: Math.round(conPeri.G - llevas.G),
     } : null;
-    const falta = faltaExacto ? {
-        P: Math.round(faltaExacto.P), H: Math.round(faltaExacto.H), G: Math.round(faltaExacto.G),
-    } : null;
-    const pasadas = falta ? ['P', 'H', 'G'].filter((k) => falta[k] < 0) : [];
 
     // EL PERIENTRENO, DENTRO O APARTE (puntos 86 a 88). Los dos números salen del MISMO
     // reparto, así que la resta cuadra siempre: el total lleva el peri sumado
@@ -296,6 +311,18 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
     // Con un extra apuntado y ninguna comida marcada, Llevas vuelve a decir «Todavía no
     // has marcado nada»: desde que los extras no suman, el número sería un 0 pelado.
     const nadaMarcado = hechas.length === 0;
+
+    // El contador de Llevas: las comidas por un lado y el peri por otro (punto 93).
+    const contadorDeLlevas = contarLoMarcado(
+        hechas.filter((f) => !f.esPeri).length,
+        hechas.filter((f) => f.esPeri).map((f) => f.clave));
+
+    // EL PIE DE FALTA CAMBIA CUANDO EL DÍA ESTÁ HECHO: los tres ceros en verde son el final
+    // del día, y el pie lo dice en vez de seguir pidiendo lo que ya no queda.
+    const diaCuadrado = Boolean(conPeri) && ['P', 'H', 'G'].every((k) => leerMacro({
+        vista: 'falta', hay: llevas[k], objetivo: conPeri[k],
+    }).color === 'ok');
+    const pieDeFalta = diaCuadrado ? 'Día cuadrado. Mañana seguimos.' : PIE_DE_VISTA.falta;
 
     const irANutricion = () => navigate('/dashboard/nutrition');
     // El peri aterriza EN el peri (P32 del 23-08): pinchar su tarjeta te dejaba en la
@@ -329,7 +356,10 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
                         <p className="text-center text-sm py-8" data-testid="llevas-vacio">
                             <span className="text-foreground font-semibold">Todavía no has marcado nada.</span>
                             <br />
-                            <span className="text-muted-foreground">Marca abajo lo que ya te has comido.</span>
+                            {/* «Lo que VAYAS comiendo» (punto 94), no «lo que ya te has
+                                comido»: lo de arriba mira atrás y esto mira al resto del día,
+                                que es lo que le queda por hacer. */}
+                            <span className="text-muted-foreground">Marca abajo lo que vayas comiendo.</span>
                         </p>
                     ) : (
                         <>
@@ -393,27 +423,25 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
                                     );
                                 })}
                             </div>
-                            {/* Lo pasado se dice tal cual, en el naranja de «te has pasado»
-                                (#FF5A2E, punto 76) y sin bronca. Es el ÚNICO sitio del Inicio
-                                donde el número puede llevar decimal (punto 80). */}
-                            {vista === 'falta' && pasadas.length > 0 && (
-                                <div className="mt-3 space-y-0.5" data-testid="falta-pasado">
-                                    {pasadas.map((k) => (
-                                        <p key={k} className="text-sm text-center font-medium text-pasado">
-                                            Te has pasado {num1(Math.abs(faltaExacto[k]))} g de {NOMBRE_LLANO[k]}
-                                        </p>
-                                    ))}
-                                </div>
-                            )}
+                            {/* AQUÍ IBA LA LÍNEA DE AVISO, y se ha ido (punto 90): «si cada
+                                macro lo dice debajo de su número, la frase de arriba lo
+                                repite. Una línea menos». Decía «Te has pasado de 13 g de
+                                hidratos» debajo de un «te pasas 14» que ya lo contaba. En
+                                ninguna de las veinte pantallas de escenarios del 25-08
+                                aparece esa frase, ni con un macro pasado ni con dos. */}
                             {vista === 'llevas' ? (
-                                /* Solo las comidas: los extras no se nombran aquí porque no
-                                   entran en la cuenta, y verlos al lado del número sería
-                                   volver a prometer que suman. */
-                                <p className="text-xs text-muted-foreground text-center mt-3">
-                                    {hechas.length === 1 ? '1 comida marcada' : `${hechas.length} comidas marcadas`}
+                                /* Solo las comidas y el peri: los extras no se nombran aquí
+                                   porque no entran en la cuenta, y verlos al lado del número
+                                   sería volver a prometer que suman. */
+                                <p className="text-xs text-muted-foreground text-center mt-3"
+                                    data-testid="contador-llevas">
+                                    {contadorDeLlevas}
                                 </p>
                             ) : PIE_DE_VISTA[vista] ? (
-                                <p className="text-xs text-muted-foreground text-center mt-3">{PIE_DE_VISTA[vista]}</p>
+                                <p className="text-xs text-muted-foreground text-center mt-3"
+                                    data-testid={`pie-${vista}`}>
+                                    {vista === 'falta' ? pieDeFalta : PIE_DE_VISTA[vista]}
+                                </p>
                             ) : null}
 
                             {/* EL INTERRUPTOR DEL PERIENTRENO, Y SOLO EN MACROS (puntos 86 a
