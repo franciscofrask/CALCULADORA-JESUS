@@ -14,12 +14,10 @@
  *   - el peri y el detalle por comida, en pequeño.
  */
 import React from 'react';
-import { Link } from 'react-router-dom';
 import { Calendar, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
 import ConfigSection, { MOMENTO_OPTIONS, PERI_OPTIONS } from './ConfigSection';
 import { DayDetailTable, StatusDot } from './DaySummary';
 import { leerMacro } from '../../lib/estadoDelMacro';
-import { fraseDeLoQueFalta } from '../../lib/datosDudosos';
 
 
 // "4 comidas · tras comida 2 · intra + post": lo que hay configurado, en una línea, para
@@ -44,10 +42,6 @@ const DayHeader = ({
     configExpanded, setConfigExpanded,
     // macros
     dayMacros, dayTarget, servedPeriP, servedPeriH, servedPeriG = 0, totalPeriP, totalPeriH,
-    // Datos del perfil faltantes o imposibles (tarea 1.4): viene con la respuesta de
-    // /distribute, que viaja con las cabeceras de «actuar como» -- el perfil evaluado es
-    // el del cliente sobre el que se trabaja, no el del que ha iniciado sesión.
-    datosDudosos,
     // detalle
     summaryExpanded, setSummaryExpanded,
     mealOrder, mealInfo, calculateMealMacros, getMealStatus,
@@ -251,15 +245,12 @@ const DayHeader = ({
                 importación de Calma): no se recalcula nada ni se cambia ningún número, solo
                 se rotula y se empuja a la pantalla de completar que ya existe. Rótulo
                 discreto, no un aviso: los objetivos siguen siendo los suyos. */}
-            {(datosDudosos || []).length > 0 && (
-                <p className="mt-2 text-xs text-amber-600 dark:text-amber-400" data-testid="macros-provisionales">
-                    {/* El texto del punto 5 del 23-08, y CON el dato concreto (punto 24). */}
-                    Macros provisionales · {fraseDeLoQueFalta(datosDudosos)}{' '}
-                    <Link to="/questionnaire?completar=1" className="underline font-semibold">
-                        Completar mis datos
-                    </Link>
-                </p>
-            )}
+            {/* AQUÍ IBA «Macros provisionales · nos falta tu altura y revisa tu edad...»,
+                y se ha ido a Mi perfil (punto 111): «es un problema de ficha metido en la
+                pantalla de comer, y ocupa tres líneas». En el menú queda un punto naranja
+                (ClientDashboard, `fichaPendiente`) para que se vea que hay algo pendiente
+                sin tener que entrar a mirar. Los números que enseña esta pantalla siguen
+                siendo los suyos: lo que hacía falta era arreglarlos donde se arreglan. */}
 
             {/* La configuración desplegada. En el teléfono el botón que la abre está debajo
                 de los números; en escritorio, arriba con la fecha. El panel es el mismo. */}

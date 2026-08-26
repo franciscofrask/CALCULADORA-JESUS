@@ -2637,7 +2637,6 @@ const NutritionPage = () => {
                     setSummaryExpanded={setSummaryExpanded}
                     dayMacros={dayMacros}
                     dayTarget={dayTarget}
-                    datosDudosos={distribution?.datos_dudosos}
                     servedPeriP={servedPeriP}
                     servedPeriH={servedPeriH}
                     servedPeriG={servedPeriG}

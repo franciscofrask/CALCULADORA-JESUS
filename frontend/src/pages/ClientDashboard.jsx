@@ -1636,7 +1636,7 @@ const BOTTOM_ITEMS = [
     { path: '/dashboard/profile', icon: User, label: 'Perfil' },
 ];
 
-const SidebarLink = ({ item, collapsed, unread, onClick }) => (
+const SidebarLink = ({ item, collapsed, unread, fichaPendiente, onClick }) => (
     <NavLink to={item.path} end={item.end} onClick={onClick}
         title={collapsed ? item.label : undefined}
         className={({ isActive }) => `relative flex items-center gap-3 rounded-xl transition-all ${collapsed ? 'justify-center px-0 py-3' : 'px-3.5 py-2.5'} ${isActive ? 'bg-brand text-white font-semibold' : 'text-white/60 hover:text-white hover:bg-white/[0.07]'}`}
@@ -1645,6 +1645,15 @@ const SidebarLink = ({ item, collapsed, unread, onClick }) => (
             <item.icon className="w-5 h-5" strokeWidth={2} />
             {item.path.includes('messages') && unread > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 min-w-4 h-4 px-1 bg-brand text-white text-[10px] rounded-full flex items-center justify-center font-bold border border-ink">{unread}</span>
+            )}
+            {/* EL PUNTO DE «TIENES ALGO PENDIENTE EN TU FICHA» (punto 111 del artifact del
+                25-08). El aviso de macros provisionales vivía en la pantalla de comer y
+                ocupaba tres líneas: «es un problema de ficha metido en la pantalla de
+                comer». Se ha ido a Mi perfil, que es donde se arregla, y aquí queda esto
+                para que se vea que hay algo que hacer sin tener que entrar a mirar. */}
+            {item.path.includes('profile') && fichaPendiente && (
+                <span data-testid="punto-ficha-pendiente"
+                    className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-pasado rounded-full border border-ink" />
             )}
         </span>
         {!collapsed && <span className="text-sm">{item.label}</span>}
@@ -1655,6 +1664,12 @@ const SidebarLink = ({ item, collapsed, unread, onClick }) => (
 
 const ClientLayout = () => {
     const { user, logout, profile, perfilNoCargado, api, can, planUnpaid, myPlan, pantalla, refreshProfile } = useAuth();
+
+    // ALGO PENDIENTE EN LA FICHA (punto 111): datos que faltan o que no pueden ser
+    // (edad 5, estatura de 1 cm de la importación de Calma). Lo calcula el servidor al
+    // leer el perfil (core/datos_dudosos.py) y ya viajaba en `profile`; aquí solo se usa
+    // para encender el punto del menú, que es lo que sustituye al aviso de Nutrición.
+    const fichaPendiente = (profile?.datos_dudosos || []).length > 0;
 
     // AVISO DE MODO PRUEBAS: si el que prueba ha puesto su cuenta en un estado ficticio
     // (caducado, sin plan...), puede quedarse sin forma de volver desde esa misma pantalla.
@@ -1813,7 +1828,7 @@ const ClientLayout = () => {
                         </span>
                         {!collapsed && <span className="text-sm">Avisos</span>}
                     </button>
-                    {navItems.map(item => <SidebarLink key={item.path} item={item} collapsed={collapsed} unread={unread} />)}
+                    {navItems.map(item => <SidebarLink key={item.path} item={item} collapsed={collapsed} unread={unread} fichaPendiente={fichaPendiente} />)}
                 </nav>
                 <div className="p-3 border-t border-white/10 space-y-2">
                     <UserChip compact={collapsed} />
@@ -1880,7 +1895,7 @@ const ClientLayout = () => {
                 del MISMO interruptor que el Inicio nuevo (t1_inicio_nuevo) para que el
                 lunes se encienda todo junto. Apagado, la barra de siempre, sin cambios. */}
             {pantalla('t1_inicio_nuevo') ? (
-                <BottomNav items={navItems} unread={unread} />
+                <BottomNav items={navItems} unread={unread} fichaPendiente={fichaPendiente} />
             ) : (
             <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-ink border-t border-white/10" data-testid="mobile-bottom-nav">
                 <div className="flex items-stretch h-16">
@@ -1994,7 +2009,7 @@ const ClientLayout = () => {
                             </button>
                         </div>
                         <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-                            {navItems.map(item => <SidebarLink key={item.path} item={item} collapsed={false} unread={unread} onClick={() => setDrawerOpen(false)} />)}
+                            {navItems.map(item => <SidebarLink key={item.path} item={item} collapsed={false} unread={unread} fichaPendiente={fichaPendiente} onClick={() => setDrawerOpen(false)} />)}
                         </nav>
                         <div className="p-3 border-t border-white/10 space-y-2">
                             <UserChip />

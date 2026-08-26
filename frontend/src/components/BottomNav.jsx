@@ -20,7 +20,7 @@ import { Home, CalendarRange, Dumbbell, Menu, X } from 'lucide-react';
 // testids ASCII-estables, el mismo criterio que ClientDashboard.
 const slug = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-');
 
-const BottomNav = ({ items = [], unread = 0 }) => {
+const BottomNav = ({ items = [], unread = 0, fichaPendiente = false }) => {
     const location = useLocation();
     const [hojaAbierta, setHojaAbierta] = useState(false);
 
@@ -71,6 +71,13 @@ const BottomNav = ({ items = [], unread = 0 }) => {
                                         {item.path.includes('messages') && unread > 0 && (
                                             <span className="absolute -top-1.5 -right-1.5 min-w-4 h-4 px-1 bg-brand text-white text-[10px] rounded-full flex items-center justify-center font-bold">{unread}</span>
                                         )}
+                                        {/* Algo pendiente en la ficha (punto 111): el aviso
+                                            de macros provisionales se fue de la pantalla de
+                                            comer a Mi perfil, y esto es lo que lo dice. */}
+                                        {item.path.includes('profile') && fichaPendiente && (
+                                            <span data-testid="punto-ficha-pendiente-hoja"
+                                                className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-pasado rounded-full" />
+                                        )}
                                     </span>
                                     <span className="text-sm">{item.label}</span>
                                 </NavLink>
@@ -97,6 +104,9 @@ const BottomNav = ({ items = [], unread = 0 }) => {
                         <span className="relative">
                             <Menu className="w-[22px] h-[22px] flex-shrink-0" strokeWidth={masActivo ? 2.5 : 2} />
                             {unread > 0 && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-brand rounded-full" />}
+                            {/* Mi perfil vive dentro de «Más», así que sin esto el punto
+                                de la ficha no se vería nunca sin abrir la hoja. */}
+                            {!unread && fichaPendiente && <span data-testid="punto-ficha-pendiente-mas" className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-pasado rounded-full" />}
                         </span>
                         <span className={`text-[10px] max-w-full truncate ${masActivo ? 'font-bold' : 'font-medium'}`}>Más</span>
                     </button>

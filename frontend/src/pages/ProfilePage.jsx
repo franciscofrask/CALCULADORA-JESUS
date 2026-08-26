@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useOnboarding } from '../context/OnboardingContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { toast } from 'sonner';
 import { PlanBadge } from './ClientDashboard';
 import { queIncluyeElPlan } from '../lib/planAccess';
+import { fraseDeLoQueFalta } from '../lib/datosDudosos';
 import {
     User, Mail,
     LogOut, Lock, ChevronRight, Crown,
@@ -211,6 +212,29 @@ const ProfilePage = () => {
         <div className="p-4 md:p-6 pb-24 md:pb-6 animate-fade-in bg-background min-h-screen relative overflow-hidden">
             <div className="relative z-10 space-y-6 max-w-lg mx-auto">
                 <h1 className="text-2xl font-bold text-foreground tracking-tight" style={{ fontFamily: 'Barlow Condensed' }} data-testid="profile-heading">MI PERFIL</h1>
+
+                {/* LOS DATOS QUE FALTAN O QUE NO PUEDEN SER, AQUÍ (punto 111 del artifact
+                    del 25-08). Esto vivía en la pantalla de Nutrición, encima de las
+                    comidas, y ocupaba tres líneas: «es un problema de ficha metido en la
+                    pantalla de comer». Aquí es donde se arregla, así que aquí se dice; en
+                    el menú queda un punto naranja para que se vea sin entrar.
+
+                    No se recalcula nada ni se cambia ningún número: los macros siguen
+                    siendo los suyos, solo que salieron de un perfil con huecos o con datos
+                    imposibles (edad 5, estatura de 1 cm de la importación de Calma). */}
+                {(profile?.datos_dudosos || []).length > 0 && (
+                    <div className="rounded-xl border border-pasado/40 bg-pasado/5 px-4 py-3"
+                        data-testid="macros-provisionales">
+                        <p className="text-sm text-foreground">
+                            <span className="font-bold text-pasado">Macros provisionales</span>{' '}
+                            {fraseDeLoQueFalta(profile.datos_dudosos)}
+                        </p>
+                        <Link to="/questionnaire?completar=1"
+                            className="inline-block mt-2 text-sm font-bold text-pasado underline">
+                            Completar mis datos
+                        </Link>
+                    </div>
+                )}
 
                 {/* Profile Card */}
                 <Card className="bg-card border-border">
