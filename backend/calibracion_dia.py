@@ -92,6 +92,34 @@ def _por_100_de_etiqueta(food: dict) -> Tuple[float, float, float]:
     return (_per100(food, "proteinas"), _per100(food, "hidratos"), _per100(food, "grasas"))
 
 
+def la_proteina_llega_al_tercio(food: dict) -> bool:
+    """¿La proteína de este alimento cuenta ALGUNA VEZ, comas lo que comas?
+
+    Es la puerta de entrada de la calibración, y estaba escondida dentro del cálculo:
+    antes del tramo hay un filtro que exige que la proteína llegue a un tercio del macro
+    dominante de su bloque (los hidratos en cereales y panes, la grasa en frutos secos).
+    Si no llega, esa proteína NO cuenta nunca, y el tramo da igual.
+
+    Se saca aquí para que la pantalla pueda decirlo (punto 133 del artifact del 26-08): el
+    cartel de «frutos secos hoy: 25 de 40 g · su proteína te cuenta a la mitad» le salía a
+    TODOS los frutos secos por igual, y a las nueces (23 %) o al cóctel (30,5 %) les
+    prometía una proteína que aporta 0. «Que salga sólo en los que llegan al tercio. A los
+    demás, una sola frase y para siempre: su proteína no te cuenta.»
+
+    Devuelve True también para los que cuentan siempre al 100 (proteínas en polvo y
+    vegetales en doble categoría): a ésos no se les aplica ni filtro ni tramo.
+    """
+    bloque = clasificar_bloque(food)
+    if bloque is None:
+        return True                       # fuera de los bloques no hay puerta que pasar
+    if cuenta_siempre_al_100(food):
+        return True
+    p100, h100, g100 = _por_100_de_etiqueta(food)
+    if bloque == "cereal_pan":
+        return h100 > 0 and p100 > h100 / 3.0
+    return g100 > 0 and p100 > g100 / 3.0
+
+
 def macros_item_calibrados(food: dict, cantidad_g: float,
                            pct_cp: float, pct_fs: float) -> Dict[str, float]:
     """Macros efectivos {P,H,G} de UN alimento aplicando la calibración del día.

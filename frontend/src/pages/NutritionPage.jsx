@@ -1277,6 +1277,11 @@ const NutritionPage = () => {
                                     // De qué familia calibrada es (o null): lo necesita el
                                     // contador de la línea para saber qué cuenta enseñar.
                                     bloque: r.bloque ?? null,
+                                    // Y si su proteína llega al tercio, que es la puerta de
+                                    // entrada de la calibración (punto 133): sin esto el
+                                    // contador le prometía tramos a alimentos cuya proteína
+                                    // no cuenta nunca.
+                                    proteina_cuenta: r.proteina_cuenta ?? true,
                                 };
                             }),
                         };

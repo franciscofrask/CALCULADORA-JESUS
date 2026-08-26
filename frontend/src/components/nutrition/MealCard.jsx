@@ -290,7 +290,8 @@ const IngredientRow = ({ food, idx, mealKey, isLocked, isEditing, increment,
                     13-08: «un contador en la línea del alimento desde el primer gramo».
                     Va debajo del nombre y no en su propia fila: en un móvil de 335 px la
                     fila ya está repartida al milímetro (ver el comentario de arriba). */}
-                <ContadorFamilia bloque={food.bloque} gramos={acumFamilias?.[food.bloque]?.gramos} />
+                <ContadorFamilia bloque={food.bloque} gramos={acumFamilias?.[food.bloque]?.gramos}
+                    proteinaCuenta={food.proteina_cuenta !== false} />
             </div>
 
             {/* Macros: en movil comparten linea con los controles, para no gastar una fila

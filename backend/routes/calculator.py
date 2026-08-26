@@ -1558,7 +1558,7 @@ async def calibrar_dia_endpoint(data: dict, user = Depends(get_current_user)):
     Devuelve por item macros_efectivos/brutos/que_cuenta (null si el alimento ya
     no existe: el front conserva lo que tenía) y los acumulados por comida.
     """
-    from calibracion_dia import calibrar_dia as _calibrar, clasificar_bloque
+    from calibracion_dia import calibrar_dia as _calibrar, clasificar_bloque, la_proteina_llega_al_tercio
 
     meal_order = [str(k) for k in (data.get("meal_order") or [])]
     comidas_in = data.get("comidas") or {}
@@ -1621,6 +1621,10 @@ async def calibrar_dia_endpoint(data: dict, user = Depends(get_current_user)):
                 "macros_brutos": brutos,
                 "que_cuenta": {"P": ef["P"] > 0, "H": ef["H"] > 0, "G": ef["G"] > 0},
                 "bloque": clasificar_bloque(food),
+                # LA PUERTA DEL TERCIO, PARA QUE LA PANTALLA PUEDA DECIRLA (punto 133 del
+                # 26-08). Sin esto el cartel de la calibracion le salia a todos los frutos
+                # secos por igual y les prometia una proteina que aporta 0.
+                "proteina_cuenta": la_proteina_llega_al_tercio(food),
             })
         out[k] = items_out
 
