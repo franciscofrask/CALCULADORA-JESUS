@@ -29,7 +29,7 @@ const FAMILIAS = {
     cereal_pan: { tramos: [50, 100] },
 };
 
-export const ContadorFamilia = ({ bloque, gramos, proteinaCuenta = true }) => {
+export const ContadorFamilia = ({ bloque, gramos, proteinaCuenta = true, proteinaCrece = true }) => {
     const cfg = FAMILIAS[bloque];
     if (!cfg) return null;
 
@@ -43,6 +43,13 @@ export const ContadorFamilia = ({ bloque, gramos, proteinaCuenta = true }) => {
             </div>
         );
     }
+
+    // EL OTRO EXTREMO, Y TAMBIÉN SIN CONTADOR (26-08). Los 44 cereales y panes proteicos del
+    // catálogo pasan la puerta del tercio pero no tienen tramo: su proteína cuenta entera
+    // desde el primer gramo. A ésos el contador les decía «su proteína todavía no te cuenta ·
+    // con 50 g te cuenta la mitad» mientras ya se la estaba contando toda. Ni contador, ni
+    // frase: no hay nada que avisar cuando ya lo tienes todo.
+    if (!proteinaCrece) return null;
 
     if (gramos == null) return null;
 

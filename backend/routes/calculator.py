@@ -253,6 +253,52 @@ def _fmt_macros(m: dict) -> str:
             parts.append(f"{_n1(v)}g {label}")
     return " / ".join(parts)
 
+#: Los dos bloques que se calibran, con sus tramos y el nombre con el que se los nombra al
+#: cliente. Los gramos son los de `calma_engine` y los mismos que aplica `calibracion_dia`.
+_TRAMOS_CALIBRACION = {
+    "fruto_seco": {"familia": "frutos secos y semillas", "tramos": [20, 40]},
+    "cereal_pan": {"familia": "cereales y panes, juntos", "tramos": [50, 100]},
+}
+
+
+def _calibracion_del_alimento(food: dict) -> Optional[dict]:
+    """Si a este alimento le crece la proteína con lo que lleves comido en el día.
+
+    Devuelve el bloque y sus tramos, o None si no depende de la cantidad. Quedan fuera los
+    dos extremos: el fruto seco que no pasa la puerta del tercio -- las nueces, el 23 % --,
+    porque su proteína no cuenta nunca y enseñarle tramos sería prometerle algo que no va a
+    llegar (punto 133); y el pan proteico, porque ya le cuenta entera desde el primer gramo.
+    Ver `la_proteina_crece_con_el_dia`.
+    """
+    from calibracion_dia import clasificar_bloque, la_proteina_crece_con_el_dia
+    bloque = clasificar_bloque(food)
+    if not bloque or not la_proteina_crece_con_el_dia(food):
+        return None
+    cfg = _TRAMOS_CALIBRACION.get(bloque)
+    if not cfg:
+        return None
+    return {"bloque": bloque, "familia": cfg["familia"], "tramos": cfg["tramos"]}
+
+
+def _proteina_que_no_cuenta_nunca(food: dict) -> bool:
+    """Si su proteína está condenada de antemano por la puerta del tercio.
+
+    EL LISTADO PROMETÍA PROTEÍNA QUE EL DÍA NO DA. Los macros de esta pantalla salían de
+    `aplicar_regla_macros` (la regla de categoría de Calma) y esa regla no conoce la puerta
+    del tercio, que vive en `calibracion_dia`. Resultado: **39 panes y cereales del catálogo**
+    -- el pan de centeno 55 %, la media hogaza de avena, los fibra sticks -- salían aquí con
+    su proteína en la etiqueta verde y con la frase «Te cuenta proteína y hidratos», y al
+    ponerlos en una comida aportaban 0 de proteína, comiera uno lo que comiera.
+
+    Es la misma mentira que arregla el punto 139, del revés: allí la lista NEGABA una
+    proteína que sí llega comiendo más, aquí la PROMETE cuando no va a llegar nunca. En los
+    frutos secos no pasaba (la regla de categoría ya se los zeraba); es cosa de los cereales
+    y panes, donde la regla de Calma los deja pasar y la puerta del tercio los para después.
+    """
+    from calibracion_dia import clasificar_bloque, la_proteina_llega_al_tercio
+    return bool(clasificar_bloque(food)) and not la_proteina_llega_al_tercio(food)
+
+
 @router.get("/foods-listado")
 async def get_foods_listado(
     limit: Optional[int] = Query(None, ge=0),
@@ -280,6 +326,11 @@ async def get_foods_listado(
         eff = {"proteinas": float(f.get("proteinas") or 0),
                "hidratos": float(f.get("hidratos") or 0),
                "grasas": float(f.get("grasas") or 0)}
+        # La regla de categoría no conoce la puerta del tercio: ver `_proteina_que_no_cuenta_nunca`.
+        # Se toca la copia que viaja, no `f`, para no mover `cantidad_minima` ni la sugerencia,
+        # que son del sugeridor y tienen su propio filtro.
+        if _proteina_que_no_cuenta_nunca(f):
+            eff["proteinas"] = 0.0
         cm = cantidad_minima_calma(f)
         mins_str = _fmt_macros(macros_at_calma(f, cm))
         out.append({
@@ -293,7 +344,13 @@ async def get_foods_listado(
             "hidratos": eff["hidratos"],
             "grasas": eff["grasas"],
             "tiene_macros": any(v > 0 for v in eff.values()),
-            "info_etiqueta": _fmt_macros(orig) if eff != orig else None,
+            # «MACROS REALES», NO «EN LA ETIQUETA PONE» (punto 142). Un generico no tiene
+            # etiqueta: «Almendras» no es el bote de nadie, y esos 23 / 4,8 / 53,1 salen de
+            # tabla de composicion. El nombre nuevo vale para los dos casos -- en una marca
+            # son los de su envase, en un generico los de tabla -- y ademas dice QUE es, que
+            # es lo que faltaba: el otro numero pasa a llamarse «macros del metodo».
+            "macros_reales": {"P": orig["proteinas"], "H": orig["hidratos"], "G": orig["grasas"]}
+                             if eff != orig else None,
             "cantidad_minima": cm,
             "sugerencia": (f"Necesita {mins_str} para ser sugerido" if mins_str else "Siempre puede ser sugerido"),
             # QUE LE CUENTA DE ESTE ALIMENTO, EN CRISTIANO.
@@ -306,7 +363,13 @@ async def get_foods_listado(
             #
             # El dato ya estaba: `orig` son los macros de la etiqueta y `eff` los que cuentan
             # despues de aplicar la regla. Lo que sobraba era traducirlo.
-            "que_te_cuenta": _que_te_cuenta(orig, eff),
+            # SI SU PROTEINA CRECE CON LA CANTIDAD DEL DIA (puntos 138 a 140). De aqui sale
+            # el punto que lo distingue en la lista -- «hoy los tres se ven exactamente
+            # igual» -- y los tramos que se enseñan al abrirlo. No basta con ser de la
+            # familia: hay que pasar ademas la puerta del tercio, o la proteina no cuenta
+            # nunca y no hay tramo ninguno que enseñar.
+            "calibracion": _calibracion_del_alimento(f),
+            "que_te_cuenta": _que_te_cuenta(orig, eff, se_calibra=bool(_calibracion_del_alimento(f))),
         })
     return out
 
@@ -318,11 +381,20 @@ _NOMBRE_MACRO = {"proteinas": "proteína", "hidratos": "hidratos", "grasas": "gr
 _SUYO_MACRO = {"proteinas": "su proteína", "hidratos": "sus hidratos", "grasas": "su grasa"}
 
 
-def _que_te_cuenta(orig: dict, eff: dict) -> str:
-    """Una frase que dice que macros de este alimento cuentan para sus objetivos."""
+def _que_te_cuenta(orig: dict, eff: dict, se_calibra: bool = False) -> str:
+    """Una frase que dice que macros de este alimento cuentan para sus objetivos.
+
+    `se_calibra`: si a este alimento le crece la proteina con la cantidad del dia (punto 139
+    del artifact del 26-08). En esos la frase SE ACORTA: las almendras pasan de «Te cuenta
+    grasa. Ni su proteina ni sus hidratos te cuentan» a «Te cuenta grasa». Menos texto, y
+    sobre todo deja de decir algo que solo es cierto si comes menos de 20 g -- la lista
+    enseña el alimento sin saber cuanto vas a comer, asi que la exclusion ahi es una
+    prediccion, no un dato. Lo que si depende de la cantidad lo cuenta el punto y, al
+    abrirlo, los tramos.
+    """
     tiene = [k for k in ("proteinas", "hidratos", "grasas") if (orig.get(k) or 0) > 0]
     cuentan = [k for k in tiene if (eff.get(k) or 0) > 0]
-    no_cuentan = [k for k in tiene if (eff.get(k) or 0) <= 0]
+    no_cuentan = [] if se_calibra else [k for k in tiene if (eff.get(k) or 0) <= 0]
 
     if not tiene or not cuentan:
         return "No te cuenta nada: come lo que quieras."
@@ -1558,7 +1630,8 @@ async def calibrar_dia_endpoint(data: dict, user = Depends(get_current_user)):
     Devuelve por item macros_efectivos/brutos/que_cuenta (null si el alimento ya
     no existe: el front conserva lo que tenía) y los acumulados por comida.
     """
-    from calibracion_dia import calibrar_dia as _calibrar, clasificar_bloque, la_proteina_llega_al_tercio
+    from calibracion_dia import (calibrar_dia as _calibrar, clasificar_bloque,
+                                 la_proteina_llega_al_tercio, la_proteina_crece_con_el_dia)
 
     meal_order = [str(k) for k in (data.get("meal_order") or [])]
     comidas_in = data.get("comidas") or {}
@@ -1625,6 +1698,10 @@ async def calibrar_dia_endpoint(data: dict, user = Depends(get_current_user)):
                 # 26-08). Sin esto el cartel de la calibracion le salia a todos los frutos
                 # secos por igual y les prometia una proteina que aporta 0.
                 "proteina_cuenta": la_proteina_llega_al_tercio(food),
+                # Y el otro extremo: los 44 cereales y panes proteicos, a los que ya les
+                # cuenta entera desde el primer gramo. El contador les enseñaba un tramo que
+                # no les aplica. Ver `la_proteina_crece_con_el_dia`.
+                "proteina_crece": la_proteina_crece_con_el_dia(food),
             })
         out[k] = items_out
 

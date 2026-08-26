@@ -120,6 +120,30 @@ def la_proteina_llega_al_tercio(food: dict) -> bool:
     return g100 > 0 and p100 > g100 / 3.0
 
 
+def la_proteina_crece_con_el_dia(food: dict) -> bool:
+    """¿A este alimento le crece la proteína según lo que lleves comido en el día?
+
+    Es la pregunta que hace la PANTALLA, y no es la misma que la de arriba. «Su proteína
+    cuenta alguna vez» tiene tres respuestas posibles y sólo una de ellas depende de la
+    cantidad:
+
+      · no cuenta nunca (no pasa el tercio) -> ni punto ni tramos, una frase y para siempre;
+      · cuenta entera desde el primer gramo (los proteicos y los vegetales en doble
+        categoría, que `cuenta_siempre_al_100` deja fuera del tramo) -> tampoco hay nada que
+        contar, ya la tienes toda;
+      · crece por tramos -> esto es lo que enseña el punto y el contador de la comida.
+
+    Los 44 cereales y panes proteicos del catálogo caían en el segundo caso y se les estaba
+    tratando como al tercero, porque `la_proteina_llega_al_tercio` responde True para ellos.
+    Al de la granola proteica le salía «su proteína todavía no te cuenta, con 50 g te cuenta
+    la mitad» cuando ya le contaba entera con 10.
+    """
+    bloque = clasificar_bloque(food)
+    if bloque is None or cuenta_siempre_al_100(food):
+        return False
+    return la_proteina_llega_al_tercio(food)
+
+
 def macros_item_calibrados(food: dict, cantidad_g: float,
                            pct_cp: float, pct_fs: float) -> Dict[str, float]:
     """Macros efectivos {P,H,G} de UN alimento aplicando la calibración del día.

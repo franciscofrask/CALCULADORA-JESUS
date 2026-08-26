@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, X, Plus } from 'lucide-react';
+import { Search, X, Plus, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { descripcionCategoria, CATEGORIA_NOMBRES } from '../components/nutrition/calmaCategorias';
 import SuggestFoodModal from '../components/nutrition/SuggestFoodModal';
 import { useEsTelefono } from '../lib/esTelefono';
+import { num1 } from '../lib/numeros';
 // La búsqueda por nombre (filtro + relevancia, portada de Calma) vive en lib para que la
 // use también el panel de «Añadir ingrediente» de Nutrición: era el mismo catálogo con dos
 // buscadores distintos, y el de montar la dieta era el roto (Jesús, 15-08).
@@ -16,8 +17,10 @@ const tokenMatchesCode = (token, code) =>
 
 const foodCats = (food) => String(food.categorias || '').split('|').map(t => t.trim()).filter(Boolean);
 
-// redondeo Calma d(n,1)
-const r1 = (n) => Math.round(Number(n || 0) * 10) / 10;
+// Redondeo Calma d(n,1), y escrito como se escribe en español: «53,1» y no «53.1». Esta
+// pantalla se había quedado fuera del arreglo de la coma decimal del 15-08 (lib/numeros),
+// y encima el propio Jesús escribe «4,8 H · 53,1 G» en el punto 143.
+const r1 = (n) => num1(n);
 
 // ── Filtro de categorías (réplica de Calma ListadoAlimentos) ────────────────
 const inAny = (f, codes) => codes.some(c => foodCats(f).some(t => tokenMatchesCode(t, c)));
@@ -88,25 +91,50 @@ const MACRO_DEFS = [
     ['grasas', 'g grasa', 'bg-red-100 text-red-700'],
 ];
 
+// Los dos números de un alimento, con su nombre delante (puntos 142 y 143). «Cada alimento
+// enseña sus dos números y dice cuál es cuál»: los macros del MÉTODO son lo que te cuenta a
+// ti, ya con las reglas aplicadas, y los REALES lo que de verdad contiene. No se
+// contradicen -- las almendras llevan 23 de proteína y de esos tres números el método te
+// cuenta uno, los 53,1 de grasa --, pero hasta hoy la app enseñaba los dos sin decir cuál
+// era cuál, y a uno lo llamaba «lo que pone la etiqueta» aunque fuera un genérico sin bote.
+const LETRA = { proteinas: 'P', hidratos: 'H', grasas: 'G' };
+const lineaDeMacros = (m) => ['proteinas', 'hidratos', 'grasas']
+    .filter((k) => Number(m[k] || 0) > 0)
+    .map((k) => `${r1(m[k])} ${LETRA[k]}`)
+    .join(' · ');
+
 const FoodRow = ({ food }) => {
     const cats = foodCats(food).map(descripcionCategoria).filter(Boolean);
+    const [abierto, setAbierto] = React.useState(false);
+    const cal = food.calibracion;
+    const reales = food.macros_reales
+        ? lineaDeMacros({ proteinas: food.macros_reales.P, hidratos: food.macros_reales.H, grasas: food.macros_reales.G })
+        : null;
     return (
-        <div className="bg-card border border-border rounded-lg p-3 shadow-sm">
+        <div className="bg-card border border-border rounded-lg p-3 shadow-sm" data-testid="alimento">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 sm:gap-3">
-                <div className="min-w-0">
-                    {food.url ? (
-                        <a href={food.url} target="_blank" rel="noopener noreferrer"
-                            className="text-sm font-medium text-[#FF671F] underline underline-offset-2 break-words">
-                            {food.nombre}
-                        </a>
-                    ) : (
-                        <span className="text-sm font-medium text-foreground break-words">{food.nombre}</span>
-                    )}
+                <div className="min-w-0 flex items-start gap-1.5">
+                    {/* EL PUNTO, Y NADA MÁS (punto 138). «Cero texto añadido por alimento. Y
+                        el punto separa los que dependen de la cantidad de los que no — hoy
+                        los tres se ven exactamente igual.» */}
+                    {cal && <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-brand flex-shrink-0"
+                        title="Te cuenta más proteína cuanta más cantidad comes en el día" />}
+                    <div className="min-w-0">
+                        {food.url ? (
+                            <a href={food.url} target="_blank" rel="noopener noreferrer"
+                                className="text-sm font-medium text-[#FF671F] underline underline-offset-2 break-words">
+                                {food.nombre}
+                            </a>
+                        ) : (
+                            <span className="text-sm font-medium text-foreground break-words">{food.nombre}</span>
+                        )}
+                    </div>
                 </div>
                 <div className="flex-shrink-0 sm:text-right">
                     {food.tiene_macros ? (
                         <>
-                            <div className="flex flex-wrap gap-1 sm:justify-end">
+                            <div className="flex flex-wrap gap-1 sm:justify-end items-baseline">
+                                <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Macros del método</span>
                                 {MACRO_DEFS.map(([k, label, cls]) =>
                                     Number(food[k] || 0) > 0 ? (
                                         <span key={k} className={`text-xs px-2 py-0.5 rounded-full font-medium tabular-nums ${cls}`}>
@@ -115,6 +143,12 @@ const FoodRow = ({ food }) => {
                                     ) : null
                                 )}
                             </div>
+                            {reales && (
+                                <p className="text-xs text-muted-foreground mt-1 font-data">
+                                    <span className="font-sans text-[10px] uppercase tracking-wider mr-1.5">Macros reales</span>
+                                    {reales}
+                                </p>
+                            )}
                             <p className="text-xs text-muted-foreground mt-1">
                                 por cada {food.unidades ? `unidad de ${food.racion}g` : '100 gramos'}
                             </p>
@@ -134,12 +168,39 @@ const FoodRow = ({ food }) => {
                 Y esta es justo la pantalla donde alguien viene a entender por qué la app le
                 cuenta unas cosas y otras no: era la ocasión de explicar el método y se
                 gastaba en jerga (Jesús, 11-08). La frase la arma el servidor comparando lo
-                que dice la etiqueta con lo que de verdad cuenta. */}
+                que dice la etiqueta con lo que de verdad cuenta.
+                En los que llevan punto va acortada (punto 139): ver `_que_te_cuenta`. */}
             {food.que_te_cuenta && (
                 <p className="text-xs text-brand-orange mt-1">{food.que_te_cuenta}</p>
             )}
-            {food.info_etiqueta && (
-                <p className="text-xs text-muted-foreground">En la etiqueta pone: {food.info_etiqueta}</p>
+            {/* AL ABRIRLO, LOS TRES TRAMOS (punto 140). «En la lista no hacen falta, con el
+                punto basta»: aquí es donde se explica de qué depende esa proteína. Hasta hoy
+                un alimento de la lista no se podía abrir. */}
+            {cal && (
+                <>
+                    <button onClick={() => setAbierto((v) => !v)} data-testid={`tramos-${food.id}`}
+                        className="mt-1.5 text-xs font-semibold text-brand flex items-center gap-1">
+                        {abierto ? 'Ocultar' : 'Y su proteína, según lo que lleves en el día'}
+                        {abierto ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    </button>
+                    {abierto && (
+                        <div className="mt-1.5 rounded-lg bg-muted/50 p-2.5 space-y-1" data-testid={`tramos-abiertos-${food.id}`}>
+                            <p className="text-[11px] text-muted-foreground">
+                                Cuenta lo que lleves de <b className="text-foreground">{cal.familia}</b> en todo el día:
+                            </p>
+                            {[
+                                { hasta: `hasta ${cal.tramos[0]} g`, que: 'nada' },
+                                { hasta: `${cal.tramos[0]} a ${cal.tramos[1]} g`, que: 'la mitad' },
+                                { hasta: `más de ${cal.tramos[1]} g`, que: 'toda' },
+                            ].map((t) => (
+                                <p key={t.hasta} className="text-xs flex items-center justify-between gap-3">
+                                    <span className="text-muted-foreground">{t.hasta}</span>
+                                    <span className="font-semibold text-foreground">{t.que}</span>
+                                </p>
+                            ))}
+                        </div>
+                    )}
+                </>
             )}
         </div>
     );
@@ -223,15 +284,34 @@ const FoodSearchPage = () => {
                             Sugerir alimento
                         </button>
                     </div>
+                    {/* TRES LÍNEAS ARRIBA, Y LA REGLA UNA SOLA VEZ (punto 137 del 26-08).
+
+                        Sale «Ordenados por coincidencia con el nombre»: es verdad -- primero
+                        los que empiezan igual y luego los que lo llevan dentro -- pero nadie
+                        entra a buscar un alimento preguntándose con qué criterio se ordenan
+                        los resultados. Ese sitio hace falta para explicar QUÉ ES UN GENÉRICO,
+                        que es lo que hoy no se dice en ningún sitio. */}
                     <p className="text-muted-foreground text-sm mb-1">
-                        Busca entre todos los alimentos cargados en la calculadora. Ordenados por coincidencia con el nombre.
+                        Busca entre todos los alimentos cargados en la calculadora.
                     </p>
                     {/* El subrayado naranja distingue marca de genérico y nadie lo decía en
                         ningún sitio (P40, doc 23-08). Una línea, con el estilo puesto encima
                         para que se reconozca sin explicarlo dos veces. */}
-                    <p className="text-xs text-muted-foreground mb-4">
-                        Los nombres <span className="text-[#FF671F] underline underline-offset-2">subrayados en naranja</span> son
-                        marcas: tocando el nombre vas a su web.
+                    <p className="text-xs text-muted-foreground mb-1">
+                        Los <b className="text-foreground">genéricos</b> son alimentos sin marca: pollo, arroz, almendras.
+                        Las marcas llevan el nombre <span className="text-[#FF671F] underline underline-offset-2">subrayado en naranja</span> y
+                        tocando el nombre vas a su web.
+                    </p>
+                    {/* Y LA CALIBRACIÓN, AQUÍ Y NO EN CADA ALIMENTO. Era un párrafo por
+                        alimento, y en uno de cada tres decía algo que solo es verdad si comes
+                        poco. Arriba una vez, y abajo el punto. */}
+                    <p className="text-xs text-muted-foreground mb-4 flex items-start gap-1.5">
+                        <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-brand flex-shrink-0" />
+                        <span>
+                            Los que llevan punto te cuentan <b className="text-foreground">más proteína cuanta más cantidad comes en el día</b>.
+                            Frutos secos y semillas: desde 20 g la mitad, desde 40 g toda.
+                            Cereales y panes, juntos: desde 50 g la mitad, desde 100 g toda.
+                        </span>
                     </p>
 
                     <div className="relative mb-3">

@@ -1282,6 +1282,11 @@ const NutritionPage = () => {
                                     // contador le prometía tramos a alimentos cuya proteína
                                     // no cuenta nunca.
                                     proteina_cuenta: r.proteina_cuenta ?? true,
+                                    // Y si además CRECE con la cantidad del día. Los panes
+                                    // proteicos pasan la puerta pero no tienen tramo: ya les
+                                    // cuenta entera desde el primer gramo, y el contador les
+                                    // decía «todavía no te cuenta».
+                                    proteina_crece: r.proteina_crece ?? true,
                                 };
                             }),
                         };
