@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Circle, ChevronRight, Zap } from 'lucide-react';
 import { leer as leerLocal, escribir as escribirLocal } from '../../lib/almacenLocal';
-import { num0 } from '../../lib/numeros';
+import { num0, num1 } from '../../lib/numeros';
+import { leerMacro } from '../../lib/estadoDelMacro';
 import ExtrasDelDia from '../nutrition/ExtrasDelDia';
 
 /**
@@ -258,10 +259,14 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
         return { P: acc.P + m.P, H: acc.H + m.H, G: acc.G + (m.G || 0) };
     }, { P: 0, H: 0, G: 0 });
 
-    const falta = conPeri ? {
-        P: Math.round(conPeri.P - llevas.P),
-        H: Math.round(conPeri.H - llevas.H),
-        G: Math.round(conPeri.G - llevas.G),
+    // Lo que falta, redondeado, que es lo que se pinta. El desvío EXACTO se guarda aparte:
+    // es el único decimal que sobrevive en todo el Inicio (punto 80), y solo para la línea
+    // de aviso, que es donde el gramo de verdad sirve para algo.
+    const faltaExacto = conPeri ? {
+        P: conPeri.P - llevas.P, H: conPeri.H - llevas.H, G: conPeri.G - llevas.G,
+    } : null;
+    const falta = faltaExacto ? {
+        P: Math.round(faltaExacto.P), H: Math.round(faltaExacto.H), G: Math.round(faltaExacto.G),
     } : null;
     const pasadas = falta ? ['P', 'H', 'G'].filter((k) => falta[k] < 0) : [];
 
@@ -307,8 +312,10 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
                         </p>
                     ) : (
                         <>
-                            {/* Se pintan POR MACRO: el nombre encima, el número grande y, en
-                                Falta, «para llegar» debajo con su barra.
+                            {/* Se pintan POR MACRO y las cuatro pestañas se pintan IGUAL: el
+                                nombre con su punto encima, el número grande, la palabra del
+                                estado debajo y la barra. La regla de qué estado es cada cosa
+                                vive entera en lib/estadoDelMacro; aquí solo se pinta.
 
                                 EL NÚMERO VA EN BLANCO (punto 75 del 25-08). Iba en el naranja
                                 de la marca, el mismo del botón de Guardar y de la pestaña
@@ -317,36 +324,49 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
                                 y la barra (puntos 82 y 83); el número solo dice cuánto. */}
                             <div className="grid grid-cols-3 gap-3 mt-4">
                                 {['P', 'H', 'G'].map((k) => {
-                                    /* En Falta, el negativo NO se deja en cero (doc 21-08,
-                                       apartado 5): se enseña lo pasado, en tostado, con
-                                       «de más» debajo. La bronca no existe: es un dato. */
                                     const crudo = valores ? Math.round(valores[k] || 0) : null;
-                                    const pasado = vista === 'falta' && crudo != null && crudo < 0;
                                     const objetivoK = conPeri ? Math.round(conPeri[k] || 0) : 0;
-                                    /* La barra de Falta: cuánto del objetivo lleva ya. */
-                                    const progreso = objetivoK > 0
-                                        ? Math.max(0, Math.min(100, (llevas[k] / objetivoK) * 100)) : 0;
+                                    /* LO QUE HAY YA, que es de donde sale el estado: lo creado
+                                       en Dieta y lo comido en Llevas y en Falta (Falta enseña
+                                       el mismo dato del revés, así que su estado es el mismo).
+                                       En Macros no hay estado: el número ES el objetivo. */
+                                    const hayK = vista === 'dieta' ? Math.round(totalDieta[k] || 0)
+                                        : Math.round(llevas[k] || 0);
+                                    const lectura = leerMacro({ vista, hay: hayK, objetivo: objetivoK });
+                                    /* En Falta, el negativo NO se deja en cero (doc 21-08,
+                                       apartado 5): se enseña lo pasado. La bronca no existe:
+                                       es un dato, y la palabra de debajo ya dice qué es. */
+                                    const impreso = crudo == null ? null
+                                        : (vista === 'falta' ? Math.abs(crudo) : Math.max(0, crudo));
                                     return (
                                         <div key={k} className="text-center" data-testid={`dieta-hoy-${vista}-${k}`}>
-                                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                            {/* EL PUNTO, JUNTO AL NOMBRE (punto 82). Sin punto
+                                                significa que no hay nada que mirar, y por eso no
+                                                hace falta leyenda que aprenderse. */}
+                                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-center gap-1">
                                                 {NOMBRE[k]}
+                                                {lectura.color && (
+                                                    <span data-testid={`punto-${vista}-${k}`}
+                                                        className={`w-1.5 h-1.5 rounded-full ${lectura.color === 'ok' ? 'bg-ok' : 'bg-pasado'}`} />
+                                                )}
                                             </p>
                                             <p className="numero-grande font-data leading-none text-[34px] sm:text-[40px] mt-1.5 text-foreground">
-                                                {crudo == null ? '·' : (pasado ? Math.abs(crudo) : Math.max(0, crudo))}
+                                                {impreso == null ? '·' : impreso}
                                             </p>
-                                            {vista === 'falta' && (
-                                                <>
-                                                    <p className={`text-xs mt-1 ${pasado ? 'text-pasado font-medium' : 'text-muted-foreground'}`}>
-                                                        {pasado ? 'de más' : 'para llegar'}
-                                                    </p>
-                                                    <div className="h-1 rounded-full bg-muted mt-1.5 overflow-hidden">
-                                                        <div className={`h-full rounded-full ${pasado ? 'bg-pasado' : 'bg-brand'}`}
-                                                            style={{ width: `${pasado ? 100 : progreso}%` }} />
-                                                    </div>
-                                                </>
-                                            )}
-                                            {(vista === 'dieta' || vista === 'llevas') && conPeri && (
-                                                <p className="text-sm text-muted-foreground font-data mt-1">de {objetivoK}</p>
+                                            <p data-testid={`palabra-${vista}-${k}`}
+                                                className={`text-xs mt-1 ${lectura.color === 'ok' ? 'text-ok font-medium'
+                                                    : lectura.color === 'pasado' ? 'text-pasado font-medium' : 'text-muted-foreground'}`}>
+                                                {lectura.palabra}
+                                            </p>
+                                            {/* La barra, en las cuatro menos en Macros: allí no
+                                                hay nada que recorrer. */}
+                                            {lectura.barra && (
+                                                <div className="h-1 rounded-full bg-muted mt-1.5 overflow-hidden">
+                                                    <div data-testid={`barra-${vista}-${k}`}
+                                                        className={`h-full rounded-full ${lectura.barra.color === 'ok' ? 'bg-ok'
+                                                            : lectura.barra.color === 'pasado' ? 'bg-pasado' : 'bg-neutro'}`}
+                                                        style={{ width: `${lectura.barra.largo}%` }} />
+                                                </div>
                                             )}
                                         </div>
                                     );
@@ -359,7 +379,7 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
                                 <div className="mt-3 space-y-0.5" data-testid="falta-pasado">
                                     {pasadas.map((k) => (
                                         <p key={k} className="text-sm text-center font-medium text-pasado">
-                                            Te has pasado de {Math.abs(falta[k])} g de {NOMBRE_LLANO[k]}
+                                            Te has pasado {num1(Math.abs(faltaExacto[k]))} g de {NOMBRE_LLANO[k]}
                                         </p>
                                     ))}
                                 </div>
