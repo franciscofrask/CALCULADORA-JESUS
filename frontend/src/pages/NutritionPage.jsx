@@ -1401,14 +1401,50 @@ const NutritionPage = () => {
     const cantidadMinima = (food) => (esPorUnidad(food) ? pesoUnidad(food) : 1);
 
     /**
+     * El aviso de los dos caminos que sacan un alimento por quedarse corto de cantidad.
+     *
+     * El respiro de antes no es adorno. Por el camino de escribir la cantidad, esto se llama
+     * desde el `onKeyDown` de la casilla, y la casilla se desmonta en ese mismo instante
+     * (`setEditingQuantity(null)`). El diálogo devuelve el foco a quien lo abrió, y quien lo
+     * abrió ya no existe: se abría y se cerraba en el mismo suspiro, así que no se veía nada
+     * y el alimento no se quitaba ni se quedaba. Se espera al siguiente ciclo, cuando la
+     * casilla ya se ha ido y el foco se ha asentado.
+     */
+    const preguntarSiLoQuito = async (food) => {
+        await new Promise((sigue) => setTimeout(sigue, 0));
+        return confirm({
+            title: `¿Quitar ${food?.nombre || 'este alimento'}?`,
+            description: 'Bajar de su cantidad mínima lo saca de la comida. Los demás ingredientes se quedan como están.',
+            confirmLabel: 'Quitar',
+            danger: true,
+        });
+    };
+
+    /**
      * Cambia la cantidad de un alimento, y lo QUITA si baja de su minimo.
      *
      * Antes el suelo era `Math.max(1, ...)`: 1 gramo. En un alimento por unidades eso
      * dejaba "0 ud" en pantalla -- un huevo que ni esta ni deja de estar -- pero
      * seguia contando su gramo en los macros de la comida. Bajar del minimo es decir
      * "quitalo", asi que se quita.
+     *
+     * Y PREGUNTA ANTES (punto 129, el tercer camino). Jesús nombró Vaciar y la papelera,
+     * pero había un tercero que se llevaba el alimento SIN AVISO NINGUNO Y SIN DESHACER: a
+     * fuerza de «−» se cruza el mínimo y desaparece. Es el más fácil de disparar sin querer
+     * de los tres -- el botón está a un dedo de la papelera y se pulsa repetido, sin mirar --
+     * y era el único que no tenía red. Francisco lo cerró el 26-08: «también debe preguntar».
      */
-    const updateFoodQuantity = (mealKey, foodIndex, delta) => {
+    const updateFoodQuantity = async (mealKey, foodIndex, delta) => {
+        // Lo único que se mira fuera del `setMealsData` es si esta pulsación cruza el mínimo,
+        // porque preguntar no se puede hacer dentro del actualizador. El resto sigue yendo
+        // por el `prev`, que es lo que aguanta las pulsaciones seguidas.
+        const actual = (mealsData[mealKey]?.alimentos || [])[foodIndex];
+        if (actual) {
+            const paso = delta !== null ? delta : getQuantityIncrement(actual);
+            if ((actual.cantidad_g || 0) + paso < cantidadMinima(actual)) {
+                if (!(await preguntarSiLoQuito(actual))) return;
+            }
+        }
         setMealsData(prev => {
             const foods = [...(prev[mealKey]?.alimentos || [])];
             const food = foods[foodIndex];
@@ -1447,9 +1483,11 @@ const NutritionPage = () => {
      * el 0 estaba por debajo del mínimo, que significa «quítalo». Un guion puesto sin querer
      * y el alimento desaparecía sin decir nada y sin forma de recuperarlo. Ahora se rechaza
      * el valor y se queda el que había. Bajar de verdad del mínimo (escribir 0) sí lo quita,
-     * porque es lo que se está pidiendo, pero se puede deshacer.
+     * porque es lo que se está pidiendo, pero pregunta antes (punto 129) y se puede deshacer.
+     * Los dos, igual que en Vaciar: preguntar evita el toque sin querer y deshacer arregla el
+     * «sí» dado deprisa. No sobra ninguno de los dos.
      */
-    const updateFoodQuantityDirect = (mealKey, foodIndex, valor) => {
+    const updateFoodQuantityDirect = async (mealKey, foodIndex, valor) => {
         const food = (mealsData[mealKey]?.alimentos || [])[foodIndex];
         setEditingQuantity({ mealKey: null, foodIndex: null });
         if (!food) return;
@@ -1465,6 +1503,7 @@ const NutritionPage = () => {
         if (lectura.estado === 'negativo') { toast.error(AVISO_NEGATIVO); return; }
 
         if (lectura.estado === 'por_debajo_del_minimo') {
+            if (!(await preguntarSiLoQuito(food))) return;
             const previo = mealsData[mealKey];
             setMealsData(prev => ({
                 ...prev,
