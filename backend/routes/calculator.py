@@ -261,7 +261,27 @@ _TRAMOS_CALIBRACION = {
 }
 
 
-def _calibracion_del_alimento(food: dict) -> Optional[dict]:
+def _como_cuenta_su_proteina(food: dict) -> tuple:
+    """Las tres cosas que hay que saber de un alimento, preguntadas UNA vez.
+
+    Se pregunta a la vez porque cada respuesta cuesta recorrer las categorías del alimento y
+    el listado son 3.200 fichas: pedirlas por separado ponía cuatro pasadas por alimento y
+    la pantalla de Alimentos pasó de 1,4 s a 2,0 s, lo justo para despertar al test de los
+    tres segundos. Con una sola clasificación vuelve a lo de antes.
+
+    Devuelve (bloque, cuenta_alguna_vez, crece_con_el_dia).
+    """
+    from calibracion_dia import (clasificar_bloque, la_proteina_llega_al_tercio,
+                                 cuenta_siempre_al_100)
+    bloque = clasificar_bloque(food)
+    if bloque is None:
+        return None, True, False
+    llega = la_proteina_llega_al_tercio(food)
+    crece = llega and not cuenta_siempre_al_100(food)
+    return bloque, llega, crece
+
+
+def _calibracion_del_alimento(bloque: Optional[str], crece: bool) -> Optional[dict]:
     """Si a este alimento le crece la proteína con lo que lleves comido en el día.
 
     Devuelve el bloque y sus tramos, o None si no depende de la cantidad. Quedan fuera los
@@ -270,9 +290,7 @@ def _calibracion_del_alimento(food: dict) -> Optional[dict]:
     llegar (punto 133); y el pan proteico, porque ya le cuenta entera desde el primer gramo.
     Ver `la_proteina_crece_con_el_dia`.
     """
-    from calibracion_dia import clasificar_bloque, la_proteina_crece_con_el_dia
-    bloque = clasificar_bloque(food)
-    if not bloque or not la_proteina_crece_con_el_dia(food):
+    if not bloque or not crece:
         return None
     cfg = _TRAMOS_CALIBRACION.get(bloque)
     if not cfg:
@@ -280,7 +298,7 @@ def _calibracion_del_alimento(food: dict) -> Optional[dict]:
     return {"bloque": bloque, "familia": cfg["familia"], "tramos": cfg["tramos"]}
 
 
-def _proteina_que_no_cuenta_nunca(food: dict) -> bool:
+def _proteina_que_no_cuenta_nunca(bloque, llega_al_tercio: bool) -> bool:
     """Si su proteína está condenada de antemano por la puerta del tercio.
 
     EL LISTADO PROMETÍA PROTEÍNA QUE EL DÍA NO DA. Los macros de esta pantalla salían de
@@ -295,8 +313,37 @@ def _proteina_que_no_cuenta_nunca(food: dict) -> bool:
     frutos secos no pasaba (la regla de categoría ya se los zeraba); es cosa de los cereales
     y panes, donde la regla de Calma los deja pasar y la puerta del tercio los para después.
     """
-    from calibracion_dia import clasificar_bloque, la_proteina_llega_al_tercio
-    return bool(clasificar_bloque(food)) and not la_proteina_llega_al_tercio(food)
+    return bool(bloque) and not llega_al_tercio
+
+
+def _lo_que_depende_del_tramo(bloque, crece: bool) -> tuple:
+    """Los macros de este alimento que la lista NO puede dar por contados.
+
+    DOS VARAS PARA MEDIR LA MISMA PROTEÍNA (punto 136 del 26-08). Jesús lo encontró en dos
+    cacahuetes: el natural (26 P / 52 G) dice «ni su proteína ni sus hidratos te cuentan» y
+    el de Hacendado (24,1 / 45,1) dice «te cuenta proteína y grasa», siendo casi el mismo
+    alimento, de la misma categoría y pasando los dos la puerta del tercio.
+
+    No son datos mal puestos: **son dos reglas distintas midiendo lo mismo**. La de Calma
+    zera la proteína de un fruto seco cuando `P·2 <= G` (la mitad, `calma_suggest:181`) y la
+    calibración del día la deja pasar con `P > G/3` (el tercio, la spec del 07-08). Los tres
+    cacahuetes caen justo en medio de las dos: 26·2 = 52 ≤ 52 zera, 24,1·2 = 48,2 > 45,1 no
+    zera, 24·2 = 48 ≤ 50,4 zera. De ahí que uno diga una cosa y el de al lado la contraria.
+
+    La vara buena es la del tercio: la calibración progresiva SUSTITUYÓ al ajuste legado de
+    Calma en estos dos bloques (ver `_base_regla`), y es la que decide lo que el cliente ve
+    en sus macros. Pero entonces esa proteína **depende del tramo del día**, y la lista no
+    sabe cuánto vas a comer: no puede ponerla en «Macros del método» como si contara siempre.
+
+    Así que en los que llevan punto no sale, y lo cuentan el punto y los tramos. Es el mismo
+    criterio del punto 139 llevado del texto al número: 32 alimentos enseñaban una proteína
+    que con menos de 20 g vale 0, y 30 idénticos ya la callaban. Ahora los 62 dicen lo mismo.
+
+    En frutos secos alcanza también a los hidratos (7 alimentos), que van por el mismo tramo.
+    """
+    if not crece:
+        return ()
+    return ("proteinas", "hidratos") if bloque == "fruto_seco" else ("proteinas",)
 
 
 @router.get("/foods-listado")
@@ -322,6 +369,9 @@ async def get_foods_listado(
         orig = {"proteinas": float(f.get("proteinas") or 0),
                 "hidratos": float(f.get("hidratos") or 0),
                 "grasas": float(f.get("grasas") or 0)}
+        # Las tres preguntas de la calibración, en una sola pasada por sus categorías: son
+        # 3.200 fichas y repetirlas se nota en la pantalla (ver `_como_cuenta_su_proteina`).
+        bloque, llega_al_tercio, crece_con_el_dia = _como_cuenta_su_proteina(f)
         aplicar_regla_macros_calma(f)  # zera macros que no cuentan (in place) + fija _ajuste
         eff = {"proteinas": float(f.get("proteinas") or 0),
                "hidratos": float(f.get("hidratos") or 0),
@@ -329,8 +379,13 @@ async def get_foods_listado(
         # La regla de categoría no conoce la puerta del tercio: ver `_proteina_que_no_cuenta_nunca`.
         # Se toca la copia que viaja, no `f`, para no mover `cantidad_minima` ni la sugerencia,
         # que son del sugeridor y tienen su propio filtro.
-        if _proteina_que_no_cuenta_nunca(f):
+        if _proteina_que_no_cuenta_nunca(bloque, llega_al_tercio):
             eff["proteinas"] = 0.0
+        # Y lo que sólo llega si comes bastante tampoco se cuenta aquí como fijo, que es lo
+        # que hacía decir cosas distintas a dos cacahuetes iguales: ver `_lo_que_depende_del_tramo`.
+        for macro in _lo_que_depende_del_tramo(bloque, crece_con_el_dia):
+            eff[macro] = 0.0
+        calibracion = _calibracion_del_alimento(bloque, crece_con_el_dia)
         cm = cantidad_minima_calma(f)
         mins_str = _fmt_macros(macros_at_calma(f, cm))
         out.append({
@@ -368,8 +423,8 @@ async def get_foods_listado(
             # igual» -- y los tramos que se enseñan al abrirlo. No basta con ser de la
             # familia: hay que pasar ademas la puerta del tercio, o la proteina no cuenta
             # nunca y no hay tramo ninguno que enseñar.
-            "calibracion": _calibracion_del_alimento(f),
-            "que_te_cuenta": _que_te_cuenta(orig, eff, se_calibra=bool(_calibracion_del_alimento(f))),
+            "calibracion": calibracion,
+            "que_te_cuenta": _que_te_cuenta(orig, eff, se_calibra=bool(calibracion)),
         })
     return out
 
@@ -465,7 +520,8 @@ def _redondear_para_el_cliente(alimento: dict, cantidad_g: float) -> float:
     return redondear_cantidad(alimento, cantidad_g, minimo_g=_minimo_en_gramos(alimento))
 
 
-def _efectivos_calma(alimento: dict, cantidad_g: float):
+def _efectivos_calma(alimento: dict, cantidad_g: float,
+                     dia_cp: Optional[float] = None, dia_fs: Optional[float] = None):
     """Macros efectivos/brutos at `cantidad_g` using the SAME engine as the suggestion/
     add path (calma_suggest), so editing a food's quantity stays consistent with how it
     was first added. The legacy calcular_macros_efectivos divided granel macros by `racion`
@@ -477,7 +533,21 @@ def _efectivos_calma(alimento: dict, cantidad_g: float):
     Returns ({P,H,G} efectivos, {P,H,G} brutos, {P,H,G} bool que_cuenta)."""
     es_unidad = bool(alimento.get("unidades"))
     racion = float(alimento.get("racion") or 100) or 100.0
-    m = macros_efectivos_calma(alimento, cantidad_g)  # funcion canonica (calma_suggest)
+    # CON EL DÍA, SI SE LO DAN (punto 135). `macros_efectivos_calma` es el motor de antes de
+    # que existiera la calibración, y por eso la ventana de montar comidas decía «P 0» de
+    # unas almendras que al guardar contaban 2,9. Ahora, cuando quien llama sabe lo que lleva
+    # el día, se calcula como lo calculará la comida. Fuera de las dos familias calibradas
+    # devuelve exactamente lo mismo. Ver `macros_al_anadirlo`.
+    #
+    # Sin contexto del día se deja el motor de siempre A PROPÓSITO, y no vale poner ceros:
+    # «día a cero» es un contexto real (tramo 0) y no es lo mismo que «esto no es un día».
+    # Por aquí pasan también las COMIDAS SUELTAS -- la biblioteca de menús, `/macros-comida`
+    # --, donde la calibración no aplica porque no hay día que acumular.
+    if dia_cp is None and dia_fs is None:
+        m = macros_efectivos_calma(alimento, cantidad_g)
+    else:
+        from calibracion_dia import macros_al_anadirlo
+        m = macros_al_anadirlo(alimento, cantidad_g, dia_cp or 0.0, dia_fs or 0.0)
     efectivos = {"P": round(m["P"], 1), "H": round(m["H"], 1), "G": round(m["G"], 1)}
     scale = (cantidad_g / racion) if es_unidad else (cantidad_g / 100.0)
     brutos = {
@@ -499,7 +569,12 @@ async def get_macros_efectivos(data: dict, user = Depends(get_current_user)):
     if not alimento:
         raise HTTPException(status_code=404, detail="Alimento no encontrado")
 
-    efectivos, brutos, cuenta = _efectivos_calma(alimento, cantidad_g)
+    # Sólo si quien llama dice lo que lleva el día; si no, motor de siempre (comida suelta).
+    tiene_dia = data.get("dia_cp") is not None or data.get("dia_fs") is not None
+    efectivos, brutos, cuenta = _efectivos_calma(
+        alimento, cantidad_g,
+        dia_cp=float(data.get("dia_cp") or 0) if tiene_dia else None,
+        dia_fs=float(data.get("dia_fs") or 0) if tiene_dia else None)
 
     return {
         "alimento": {
@@ -511,7 +586,10 @@ async def get_macros_efectivos(data: dict, user = Depends(get_current_user)):
         "cantidad_g": cantidad_g,
         "efectivos": efectivos,
         "brutos": brutos,
-        "que_cuenta": cuenta
+        "que_cuenta": cuenta,
+        # La familia calibrada a la que pertenece (o null), para que quien lo añade sepa que
+        # tiene que contarlo en el acumulado del día de la siguiente búsqueda.
+        "bloque": __import__("calibracion_dia").clasificar_bloque(alimento),
     }
 
 @router.post("/adjust")
@@ -735,6 +813,12 @@ async def search_foods_endpoint(
     cuadrar: bool = False,
     peri: Optional[str] = None,
     solo_cantidad: bool = False,
+    # Lo que el día lleva ya de cada familia calibrada. Sin esto los macros que enseña el
+    # buscador son los de antes de que existiera la calibración: ver `macros_al_anadirlo`.
+    # Sin mandarlos NO se calibra: quien busca para un menú suelto de la biblioteca no tiene
+    # día que acumular, y ahí la regla no aplica.
+    dia_cp: Optional[float] = None,
+    dia_fs: Optional[float] = None,
     user = Depends(get_current_user)
 ):
     """Búsqueda de alimentos con macros efectivos (CALMA).
@@ -840,6 +924,9 @@ async def search_foods_endpoint(
         return 2
 
     has_macros_context = p_rest is not None or h_rest is not None or g_rest is not None
+    # Si quien busca ha dicho lo que lleva el día, sus macros se calculan como los calculará
+    # la comida al guardarse (punto 135). Ver el uso más abajo.
+    hay_dia = dia_cp is not None or dia_fs is not None
     # Calma's remaining uses raw-gram macros keyed proteinas/hidratos/grasas.
     # Unspecified macro -> inf (unconstrained); negatives clamped inside the engine.
     remaining = {
@@ -882,12 +969,22 @@ async def search_foods_endpoint(
             cant_mostrada = (cant * racion) if es_unidad else cant
             cant_mostrada = _redondear_para_el_cliente(a, cant_mostrada)
             a["_cantidad_sugerida"] = cant_mostrada
-            contrib_mostrado = macros_at_calma(a, (cant_mostrada / racion) if es_unidad else cant_mostrada)
-            a["_macros_sugeridos"] = {
-                "P": round(contrib_mostrado["proteinas"], 1),
-                "H": round(contrib_mostrado["hidratos"], 1),
-                "G": round(contrib_mostrado["grasas"], 1),
-            }
+            # LOS MACROS QUE SE ENSEÑAN, CON LA CALIBRACIÓN DEL DÍA PUESTA (punto 135).
+            # El orden y la cantidad los sigue decidiendo el motor de Calma más arriba
+            # (`contrib` y `_diferencia`): aquí sólo se calcula el número que se lee, que es
+            # el que tiene que coincidir con el que quedará en la comida al guardar.
+            from calibracion_dia import macros_al_anadirlo, clasificar_bloque
+            if hay_dia:
+                ef = macros_al_anadirlo(a, cant_mostrada, dia_cp or 0.0, dia_fs or 0.0)
+                ef = {"proteinas": ef["P"], "hidratos": ef["H"], "grasas": ef["G"]}
+            else:
+                ef = macros_at_calma(a, (cant_mostrada / racion) if es_unidad else cant_mostrada)
+            a["_macros_sugeridos"] = {"P": round(ef["proteinas"], 1),
+                                      "H": round(ef["hidratos"], 1),
+                                      "G": round(ef["grasas"], 1)}
+            # De qué familia calibrada es, para que la ventana pueda ir sumando lo que lleva
+            # puesto sin tener que repetir aquí la clasificación por categorías.
+            a["bloque"] = clasificar_bloque(a)
             a["_diferencia"] = diferencia_de_macros_calma(contrib, remaining)
             a["_aporte_total"] = contrib["proteinas"] + contrib["hidratos"] + contrib["grasas"]
             procesados.append(a)

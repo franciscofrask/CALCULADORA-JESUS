@@ -190,6 +190,34 @@ def macros_item_calibrados(food: dict, cantidad_g: float,
     return {"P": round(p_ef, 2), "H": round(h_ef, 2), "G": round(m["grasas"], 2)}
 
 
+def macros_al_anadirlo(food: dict, cantidad_g: float,
+                       ya_del_dia_cp: float = 0.0, ya_del_dia_fs: float = 0.0) -> Dict[str, float]:
+    """Los macros con los que este alimento va a entrar de verdad, contando el día.
+
+    EL BUSCADOR DE DENTRO DE LA COMIDA NO SABÍA NADA DEL DÍA (punto 135 del 26-08). Jesús:
+    «añades 100 g de almendras y la proteína no se mueve; al guardar, pasa a contar los
+    23 g». Reproducido con 25 g: el modal decía «P 0 · H 0 · G 13» y la comida guardada
+    «2,9 P · 13,3 G». Los 2,9 salían de la nada al cerrar la ventana.
+
+    No era un error de cuenta: eran dos motores. Lo que se enseña al añadir lo calculaba
+    `macros_efectivos_calma` -- la regla de categoría más el `_ajuste` legado -- y lo que
+    queda en la comida lo calcula la calibración progresiva. El modal enseñaba el número de
+    antes de que existiera la calibración.
+
+    El tramo se mide sobre el total que va a quedar (lo que ya llevas MÁS lo que añades),
+    que es la cuenta que hará el día en cuanto guardes. Con el día a cero y 25 g de
+    almendras: 25 cae en el tramo 20-40, la mitad, 23 × 0,25 × 0,5 = 2,9. El mismo número.
+
+    Los alimentos que no son de familia calibrada pasan por el motor de siempre, intacto.
+    """
+    bloque = clasificar_bloque(food)
+    total_cp = (ya_del_dia_cp or 0.0) + (cantidad_g if bloque == "cereal_pan" else 0.0)
+    total_fs = (ya_del_dia_fs or 0.0) + (cantidad_g if bloque == "fruto_seco" else 0.0)
+    return macros_item_calibrados(food, cantidad_g,
+                                  _calibracion_cereales_panes(total_cp),
+                                  _calibracion_frutos_secos(total_fs))
+
+
 def totales_del_dia(meals: List[Tuple[str, List[Tuple[dict, float]]]]) -> Tuple[float, float]:
     """Gramos de cada familia calibrada en TODO el día: (cereales+panes, frutos secos)."""
     total_cp = sum(c for _, items in meals for f, c in items

@@ -229,7 +229,11 @@ const BuildMealModal = ({
     setMealMode,
     getFoodEmoji,
     userPreferences = [],
-    avoidedCategories = []
+    avoidedCategories = [],
+    // Lo que el día lleva ya de cada familia calibrada. Sin esto esta ventana calculaba con
+    // el motor de antes de la calibración y enseñaba números que cambiaban al guardar
+    // (punto 135 del 26-08): ver `getDiaParams`.
+    acumFamilias = null,
 }) => {
     const [paso, setPaso] = useState(1);
     const [tempFoods, setTempFoods] = useState([]);
@@ -275,18 +279,23 @@ const BuildMealModal = ({
     // 14 g) and reorder the list. Rebuild the contribution from the raw fields, gated by
     // macros_efectivos so regla-25% zeroed macros stay zero; fall back to the rounded
     // efectivos when raw fields are absent (older saved diets).
+    /**
+     * LO QUE APORTA UN ALIMENTO DE LA VENTANA: LOS MACROS EFECTIVOS, Y NADA MÁS.
+     *
+     * Esto rehacía la cuenta desde los macros de la etiqueta (`f.proteinas * factor`) y sólo
+     * usaba los efectivos como interruptor de encendido, para no perder decimales por el
+     * redondeo. Con la calibración del día eso ya no vale: el crudo no sabe en qué tramo
+     * está el día, así que reconstruirlo da otro número. Las almendras del punto 135 lo
+     * enseñaban de las dos formas a la vez en la misma pantalla -- el resumen de abajo
+     * decía «P 3» y la barra de arriba «40 g» sin servido --, porque el alimento llega del
+     * servidor con la proteína ya puesta a cero por la regla de categoría y el crudo valía 0.
+     *
+     * Los efectivos vienen redondeados a la décima, que es exactamente lo que se escribe en
+     * pantalla en todas partes. La precisión que se pierde no se ve; la contradicción sí.
+     */
     const foodContrib = (f) => {
         const ef = f.macros_efectivos || {};
-        const isUnit = f.por_unidad ?? f.unidades;
-        const racion = f.racion || 100;
-        const qty = f.cantidad_g ?? f.cantidad ?? 0;
-        const factor = isUnit ? (racion ? qty / racion : 0) : qty / 100;
-        const m = (rawKey, efVal) => {
-            if (!(efVal > 0)) return 0;                       // zeroed by regla -> stays 0
-            const raw = f[rawKey];
-            return (raw != null && qty) ? raw * factor : (efVal || 0);  // unrounded if raw present
-        };
-        return { P: m('proteinas', ef.P), H: m('hidratos', ef.H), G: m('grasas', ef.G) };
+        return { P: ef.P || 0, H: ef.H || 0, G: ef.G || 0 };
     };
     const sumContrib = (list, acc) => list.reduce((a, f) => {
         const c = foodContrib(f);
@@ -533,7 +542,7 @@ const BuildMealModal = ({
             setLoadingFoods(true);
             // Calma: frequent foods (top-20 by raw count) go through the SAME engine -
             // suggested quantity + macro rule + diferencia ordering, using the meal remaining.
-            const params = new URLSearchParams({ frequent: 'true', limit: '20' });
+            const params = new URLSearchParams({ frequent: 'true', limit: '20', ...getDiaParams() });
             const mp = getMacrosParams();
             Object.entries(mp).forEach(([k, v]) => params.set(k, v));
             api(`/api/calculator/search?${params}`).then(result => {
@@ -542,7 +551,7 @@ const BuildMealModal = ({
         } else if (selectedCategories.length > 0) {
             setLoadingFoods(true);
             const categoryParam = selectedCategories.flatMap(c => c.prefixes || []).filter(Boolean).join(',');
-            const params = new URLSearchParams({ q: '', category: categoryParam, limit: '100' });
+            const params = new URLSearchParams({ q: '', category: categoryParam, limit: '100', ...getDiaParams() });
             // Manual: send NO macro context, so the backend returns the plain category list
             // (no suggested quantity, no diferencia ordering). Frontend sorts it alphabetically.
             if (!isManual) {
@@ -582,6 +591,92 @@ const BuildMealModal = ({
         return () => { cancelled = true; };
     }, [remaining.P, remaining.H, remaining.G, selectedCategories, selectedPreparations, isManual]); // eslint-disable-line
 
+    /**
+     * LO QUE LLEVA EL DÍA DE CADA FAMILIA CALIBRADA, PARA QUE LOS NÚMEROS NO CAMBIEN AL
+     * GUARDAR (punto 135 del 26-08).
+     *
+     * Jesús: «añades 100 g de almendras y la proteína no se mueve; al guardar, pasa a contar
+     * los 23 g». Reproducido con 25 g: aquí ponía «P 0 · H 0 · G 13» y la comida guardada
+     * decía «2,9 P». Esta ventana calculaba con el motor de Calma, que es el de antes de que
+     * existiera la calibración progresiva; la comida, con la calibración.
+     *
+     * La cuenta tiene tres sumandos y hacen falta los tres, porque `tempFoods` arranca
+     * PRECARGADO con lo que esta comida ya tenía guardado y el acumulado del día también lo
+     * cuenta: sumarlos sin más lo contaba dos veces, y con 25 g de almendras guardadas el
+     * tramo saltaba al lleno antes de tiempo. Se descuenta lo que la comida tenía y se suma
+     * lo que tiene ahora, así valen igual añadir, quitar y cambiar la cantidad aquí dentro.
+     *
+     * El bloque de cada alimento lo dice el servidor, para no repetir aquí la clasificación
+     * por categorías.
+     */
+    const getDiaParams = () => {
+        const gramosDe = (lista, bloque) => (lista || [])
+            .filter((f) => f.bloque === bloque)
+            .reduce((s, f) => s + (Number(f.cantidad_g) || 0), 0);
+        const guardados = mealsData[mealKey]?.alimentos || [];
+        const delDia = (bloque, acum) => Math.max(0,
+            (acum || 0) - gramosDe(guardados, bloque) + gramosDe(tempFoods, bloque));
+        return {
+            dia_cp: delDia('cereal_pan', acumFamilias?.cereal_pan?.gramos),
+            dia_fs: delDia('fruto_seco', acumFamilias?.fruto_seco?.gramos),
+        };
+    };
+
+    /**
+     * LA VENTANA LE PREGUNTA AL MISMO MOTOR QUE LA COMIDA (punto 135, la parte de fondo).
+     *
+     * Aquí se calculaban los macros de tres maneras distintas -- el sugeridor al listar, la
+     * regla de categoría al añadir y una regla de tres al cambiar la cantidad -- y ninguna
+     * era la del día. Por eso los números cambiaban al guardar.
+     *
+     * En vez de repetir la calibración aquí, se le pide al servidor que calibre el día
+     * ENTERO con esta comida tal y como está en la ventana. Es la misma llamada que ya usa
+     * Nutrición, así que por definición da lo mismo que quedará guardado, y cierra de paso
+     * los casos que el cálculo al añadir no puede ver: subir la cantidad hasta cruzar de
+     * tramo, quitar un alimento y que los demás bajen, o que dos frutos secos se sumen.
+     *
+     * Con retardo, porque los botones de cantidad se pulsan seguidos. Y si el servidor
+     * devuelve lo mismo que ya había, se conserva el array anterior: si se creara uno nuevo
+     * cada vez, este mismo efecto se volvería a disparar y no pararía nunca.
+     */
+    useEffect(() => {
+        if (!open || !mealKey || tempFoods.length === 0) return undefined;
+        const t = setTimeout(async () => {
+            try {
+                const comidas = {};
+                Object.entries(mealsData || {}).forEach(([k, v]) => {
+                    comidas[k] = (v?.alimentos || []).map((f) => ({
+                        alimento_id: f.alimento_id, cantidad_g: f.cantidad_g,
+                    }));
+                });
+                comidas[mealKey] = tempFoods.map((f) => ({
+                    alimento_id: f.alimento_id, cantidad_g: f.cantidad_g,
+                }));
+                const res = await api('/api/calculator/calibrar-dia', {
+                    method: 'POST', body: JSON.stringify({ comidas }),
+                });
+                const fila = res?.comidas?.[mealKey] || [];
+                setTempFoods((prev) => {
+                    let cambio = false;
+                    const next = prev.map((f, i) => {
+                        const ef = fila[i]?.macros_efectivos;
+                        if (!ef) return f;
+                        const a = f.macros_efectivos || {};
+                        const bloque = fila[i].bloque ?? null;
+                        if (a.P === ef.P && a.H === ef.H && a.G === ef.G && (f.bloque ?? null) === bloque) return f;
+                        cambio = true;
+                        return { ...f, macros_efectivos: ef, bloque };
+                    });
+                    return cambio ? next : prev;
+                });
+            } catch (e) {
+                // Si no llega, se quedan los macros estimados: el guardado los cuadra igual.
+                console.error('[calibrar-dia en la ventana]', e);
+            }
+        }, 350);
+        return () => clearTimeout(t);
+    }, [tempFoods, open, mealKey]); // eslint-disable-line
+
     const getMacrosParams = () => {
         // Calma's manual builder uses ONE unified remaining (full meal target minus
         // added ingredients), all three macros, NO tolerance. The engine (calma_suggest)
@@ -620,7 +715,7 @@ const BuildMealModal = ({
         try {
             if (category.id === '__frequent__') {
                 // Frequent foods through the same engine (quantity + macro rule + diferencia).
-                const params = new URLSearchParams({ frequent: 'true', limit: '20', ...getMacrosParams() });
+                const params = new URLSearchParams({ frequent: 'true', limit: '20', ...getMacrosParams(), ...getDiaParams() });
                 const result = await api(`/api/calculator/search?${params}`);
                 setCategoryFoods(result.alimentos || []);
                 setAvailablePreps(result.available_preps || []);
@@ -629,7 +724,8 @@ const BuildMealModal = ({
                     q: '',
                     category: category.prefixes[0],
                     limit: '100',
-                    ...getMacrosParams()
+                    ...getMacrosParams(),
+                    ...getDiaParams(),
                 });
                 const result = await api(`/api/calculator/search?${params}`);
                 setCategoryFoods(result.alimentos || []);
@@ -687,7 +783,7 @@ const BuildMealModal = ({
 
         try {
             const macrosParams = getMacrosParams();
-            const params = new URLSearchParams({ q: texto, limit: '200', ...macrosParams });
+            const params = new URLSearchParams({ q: texto, limit: '200', ...macrosParams, ...getDiaParams() });
             if (Object.keys(macrosParams).length > 0) params.set('solo_cantidad', 'true');
             if (isIntraMode || isPostMode) params.set('peri', isIntraMode ? 'intra' : 'post');
             const result = await api(`/api/calculator/search?${params}`);
@@ -722,16 +818,21 @@ const BuildMealModal = ({
             // contaría lo que dice la etiqueta y no lo que cuenta el método, y en los
             // alimentos por unidades lo multiplicaría además por la ración equivocada.
             let macrosEf;
+            let bloque = food.bloque ?? null;
             if (food._macros_sugeridos && Object.keys(food._macros_sugeridos).length > 0) {
                 macrosEf = { P: food._macros_sugeridos.P || 0, H: food._macros_sugeridos.H || 0, G: food._macros_sugeridos.G || 0 };
             } else {
                 try {
                     const res = await api('/api/calculator/macros-efectivos', {
                         method: 'POST',
-                        body: JSON.stringify({ alimento_id: foodId, cantidad_g: quantity, es_vegano: false }),
+                        // Con lo que lleva el día: sin esto la comida manual enseñaba la
+                        // proteína de unas almendras a cero y al guardar aparecía (punto 135).
+                        body: JSON.stringify({ alimento_id: foodId, cantidad_g: quantity, es_vegano: false,
+                                               ...getDiaParams() }),
                     });
                     const ef = res.efectivos || {};
                     macrosEf = { P: ef.P || 0, H: ef.H || 0, G: ef.G || 0 };
+                    bloque = res.bloque ?? bloque;
                 } catch (e) {
                     console.error('[macros-efectivos]', e);
                     const isUnit = food.por_unidad ?? food.unidades;
@@ -771,7 +872,10 @@ const BuildMealModal = ({
                 por_unidad: food.por_unidad ?? food.unidades ?? false,
                 peso_unidad: food.peso_unidad || food.racion || 100,
                 racion: food.racion || 100,
-                macros_efectivos: macrosEf
+                macros_efectivos: macrosEf,
+                // La familia calibrada, para que el siguiente alimento que se busque cuente
+                // ya estos gramos en el tramo del día (`getDiaParams`).
+                bloque,
             };
 
             setTempFoods(prev => [...prev, foodToAdd]);
@@ -854,20 +958,24 @@ const BuildMealModal = ({
     };
 
     // Recalcula macros efectivos para una cantidad (en gramos) dada.
+    /**
+     * Al cambiar la cantidad, los macros se escalan y el servidor los confirma.
+     *
+     * Esto rehacía la cuenta desde los macros de la etiqueta (`f.proteinas * mult`), y esos
+     * llegan del servidor ya puestos a cero por la regla de categoría: al pulsar «+» sobre
+     * unos anacardos su proteína calibrada se iba a cero. Escalar lo que ya cuenta nunca
+     * inventa un cero, y el efecto de abajo lo cuadra con el motor del día en cuanto
+     * responde -- que es quien sabe si al subir la cantidad se ha cruzado de tramo.
+     */
     const recalcFoodMacros = (f, newQty) => {
-        const isUnit = f.por_unidad ?? f.unidades;
-        const racion = f.racion || 100;
-        // For `unidades` foods the macro fields are PER UNIT, so scale by number of
-        // units (newQty/racion), NOT by grams/100 (that's only for granel).
-        const mult = isUnit ? (newQty / racion) : (newQty / 100);
+        const antes = Number(f.cantidad_g ?? f.cantidad ?? 0);
+        const ef = f.macros_efectivos || {};
+        const k = antes > 0 ? newQty / antes : 0;
+        const e = (v) => Math.round((v || 0) * k * 10) / 10;
         return {
             ...f,
             cantidad_g: newQty,
-            macros_efectivos: {
-                P: Math.round((f.proteinas || 0) * mult * 10) / 10,
-                H: Math.round((f.hidratos || 0) * mult * 10) / 10,
-                G: Math.round((f.grasas || 0) * mult * 10) / 10
-            }
+            macros_efectivos: { P: e(ef.P), H: e(ef.H), G: e(ef.G) },
         };
     };
 
@@ -1252,6 +1360,7 @@ const BuildMealModal = ({
                                                 <div className="flex items-center gap-1">
                                                     <button
                                                         onClick={() => handleFoodQuantityChange(idx, -1)}
+                                                        data-testid={`temp-menos-${idx}`}
                                                         className="w-6 h-6 flex items-center justify-center bg-muted rounded"
                                                     >
                                                         <Minus className="w-3 h-3" />
@@ -1292,6 +1401,7 @@ const BuildMealModal = ({
                                                     })()}
                                                     <button
                                                         onClick={() => handleFoodQuantityChange(idx, 1)}
+                                                        data-testid={`temp-mas-${idx}`}
                                                         className="w-6 h-6 flex items-center justify-center bg-muted rounded"
                                                     >
                                                         <Plus className="w-3 h-3" />

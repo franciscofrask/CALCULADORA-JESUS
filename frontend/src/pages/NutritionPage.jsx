@@ -2922,6 +2922,10 @@ const NutritionPage = () => {
                 getFoodEmoji={getFoodEmoji}
                 userPreferences={userPreferences}
                 avoidedCategories={avoidedCategories}
+                // Lo que lleva el día de las familias calibradas: sin esto la ventana
+                // calculaba con el motor de antes de la calibración y sus números cambiaban
+                // al guardar (punto 135 del 26-08).
+                acumFamilias={acumFamilias}
             />
 
             {/* Repeat Meal Modal */}
