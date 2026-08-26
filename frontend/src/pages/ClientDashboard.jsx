@@ -756,16 +756,19 @@ const InicioNuevo = () => {
         });
     });
 
-    // LA FRASE SOLO SALE EL DÍA QUE ES SUYA. El servidor guarda una sola frase y solo la
-    // reemplaza cuando le vence otra de la cola (routes/settings.py, ajustes_app). Con la cola
-    // vacía --que es como está producción-- esto pintaba la misma frase todos los días para
-    // siempre, y una frase del día que se repite tres semanas seguidas dice que la app está
-    // muerta. Mejor que no salga: en cuanto se carguen las 84 (una por día de ciclo) vuelve
-    // sola, sin tocar nada.
-    const hoyDelCliente = hoyLocal();
-    const frase = pantalla('frase_del_dia') && appSettings?.frase_del_dia?.fecha === hoyDelCliente
-        ? appSettings.frase_del_dia.texto
-        : null;
+    // LA FRASE NO PUEDE DESAPARECER (punto 103 del 25-08). El panel lo promete con estas
+    // palabras: «si un día no hay frase nueva, el cliente sigue viendo la última»
+    // (AdminPlansPage). Aquí se exigía ADEMÁS que la frase guardada fuese la de hoy, así que
+    // en cuanto la cola se vaciaba el hueco se quedaba en blanco: dos días seguidos con 125
+    // clientes entrando. Se quitó ese candado porque intentaba resolver otra cosa (que una
+    // misma frase no se repitiera semanas) tapando el bloque entero, y un hueco vacío se ve
+    // más que una frase repetida.
+    //
+    // La cola sigue mandando: cuando a una programada le llega su día, `ajustes_app` la
+    // asciende a frase del día (routes/settings.py) y ésta pasa a ser la última. Sin cola,
+    // se queda la que hay, que es justo lo prometido. La variedad se resuelve cargando
+    // frases (backend/_cargar_frases.py), no escondiendo el bloque.
+    const frase = pantalla('frase_del_dia') ? (appSettings?.frase_del_dia?.texto || null) : null;
 
     return (
         <div className="pb-6 animate-fade-in" data-testid="inicio-nuevo">

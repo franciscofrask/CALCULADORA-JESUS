@@ -1,0 +1,16 @@
+# Las frases del día que mandó Jesús (La frase del dia.docx, 26-08).
+# Van a la ROTACIÓN: una por día, en este orden, y al llegar al final vuelve a empezar.
+#   python _cargar_frases.py ../_internos_proceso/frases_del_dia_jesus_2608.txt --rotacion
+# Se guardan sin las comillas: el Inicio ya las pinta con « ».
+Hoy empezamos juntos algo grande. Gracias por estar aquí.
+No existe la dieta perfecta, pero esta se le parece mucho.
+Prioriza tu hora de entrenamiento como si fuera la reunión más importante del día.
+Prueba a comer sin móvil y disfrutando del placer de hacer solo una cosa al mismo tiempo. Prueba y verás.
+Mejor entrenar mal acompañado que solo (con que te ayude a descargar la prensa nos vale).
+Si toda la gente de éxito millonaria sin tiempo entrena, será por algo, no?
+Tu peso puede variar hasta tres o cuatro kilos de un día para otro, o incluso en el mismo día. Solo encuentra la explicación que hay detrás.
+No te compares con nadie, casi nunca lo que parece es lo que es. Solo sigue tu camino.
+Improvisar sobre la marcha es una decisión suicida para tu dieta. Planifica siempre.
+Los buenos suplementos te ayudan a ir más rápido y mejor. Y no son doping.
+Una buena planificación la noche de antes es la mejor inversión que puedes hacer en tu vida: compras tiempo.
+Si duele, no lo hagas, pero entrena. Busca un ejercicio alternativo, que seguro que lo hay, pero repito: entrena.

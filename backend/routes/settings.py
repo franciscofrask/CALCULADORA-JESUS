@@ -14,6 +14,14 @@ Dos cosas viven aquí:
   - `frase_del_dia`: la frase de Inicio (T1). La escribe el panel, es la misma para
     todos, y si un día no hay nueva se queda la del día anterior (por eso se guarda
     con su fecha: Inicio decide si la enseña con o sin estreno).
+  - `frases_rotacion`: el repertorio que ROTA DÍA A DÍA (26-08). La cola y el panel se
+    quedan para poner una frase concreta un día concreto; la rotación es lo que hay el
+    resto de los días, y no se agota nunca: se elige por la fecha, así que el mismo día
+    da siempre la misma frase y todos los clientes ven la misma.
+
+El orden de mando para saber qué frase se enseña hoy:
+    frase puesta para HOY (panel o cola vencida) > la rotación de hoy > la última que
+    hubo. El hueco vacío es lo único que no puede pasar (punto 103 del 25-08).
 """
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, Optional
@@ -87,6 +95,35 @@ def _aplicar_modo_pruebas(pantallas: Dict[str, bool], frase: Any) -> tuple[Dict[
     return pantallas, frase
 
 
+def _normalizar_rotacion(rotacion: Any) -> list[str]:
+    """El repertorio como lista de textos limpios. Acepta los dos formatos con los que
+    puede venir guardado -- textos pelados o diccionarios con `texto` -- y tira lo vacío,
+    que si no correría el turno de todos los días siguientes."""
+    textos = []
+    for f in (rotacion or []):
+        texto = f if isinstance(f, str) else (f or {}).get("texto")
+        texto = str(texto or "").strip()
+        if texto:
+            textos.append(texto)
+    return textos
+
+
+def _frase_por_rotacion(rotacion: Any, dia: date) -> Optional[Dict[str, Any]]:
+    """La frase que le toca a un día concreto del repertorio que rota.
+
+    Se elige por la fecha, no por un contador guardado: así no hay estado que
+    desincronizar, no hace falta escribir nada al leer, y dos peticiones del mismo día
+    dan siempre la misma frase (para todos los clientes, que es la gracia)."""
+    textos = _normalizar_rotacion(rotacion)
+    if not textos:
+        return None
+    return {
+        "texto": textos[dia.toordinal() % len(textos)],
+        "fecha": dia.isoformat(),
+        "puesta_por": "rotacion",
+    }
+
+
 async def ajustes_app(con_overrides: bool = True) -> Dict[str, Any]:
     """Los ajustes vivos, para backend y para servir al front.
 
@@ -100,7 +137,8 @@ async def ajustes_app(con_overrides: bool = True) -> Dict[str, Any]:
     # que los avisos.
     frase = doc.get("frase_del_dia")
     cola = doc.get("frases_programadas") or []
-    hoy = ahora_madrid().date().isoformat()
+    dia = ahora_madrid().date()
+    hoy = dia.isoformat()
     vencidas = [f for f in cola if f.get("fecha") and f["fecha"] <= hoy]
     if vencidas:
         frase = max(vencidas, key=lambda f: f["fecha"])
@@ -110,6 +148,14 @@ async def ajustes_app(con_overrides: bool = True) -> Dict[str, Any]:
             {"$set": {"frase_del_dia": frase, "frases_programadas": pendientes}})
         cola = pendientes
 
+    # LA ROTACIÓN, cuando nadie ha puesto frase PARA HOY. Se calcula, no se guarda: en la
+    # base sigue estando la última frase del panel, que es la red de abajo del todo si un
+    # día no hubiera repertorio. Sin esto, la cola se vaciaba y el bloque desaparecía.
+    if not (frase and frase.get("fecha") == hoy):
+        de_rotacion = _frase_por_rotacion(doc.get("frases_rotacion"), dia)
+        if de_rotacion:
+            frase = de_rotacion
+
     pantallas = _mezclar_pantallas(doc.get("pantallas"))
     if con_overrides:
         pantallas, frase = _aplicar_modo_pruebas(pantallas, frase)
@@ -118,6 +164,9 @@ async def ajustes_app(con_overrides: bool = True) -> Dict[str, Any]:
         "pantallas": pantallas,
         "frase_del_dia": frase,
         "frases_programadas": cola,
+        # Cuántas frases hay rotando. El texto no viaja entero: al panel le basta el
+        # número para saber si el repertorio está cargado, y al cliente no le hace falta.
+        "frases_en_rotacion": len(_normalizar_rotacion(doc.get("frases_rotacion"))),
     }
 
 

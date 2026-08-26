@@ -169,7 +169,15 @@ const PantallasDeLaApp = () => {
                             {fechaFrase ? 'Programar' : 'Guardar'}
                         </Button>
                     </div>
-                    <p className="text-[11px] text-white/40">Si un día no hay frase nueva, el cliente sigue viendo la última. Con fecha, la frase se programa (hasta una semana) y entra sola su día.</p>
+                    {/* LA PROMESA DE ESTA LÍNEA HAY QUE CUMPLIRLA (punto 103 del 25-08):
+                        se leyó como un contrato y el Inicio no la cumplía. Si se cambia
+                        el orden de mando de la frase, se cambia también aquí. */}
+                    <p className="text-[11px] text-white/40">
+                        {ajustes.frases_en_rotacion > 0
+                            ? `Hay ${ajustes.frases_en_rotacion} frases rotando, una por día, sin agotarse. Lo que pongas aquí manda solo el día que le toque.`
+                            : 'Si un día no hay frase nueva, el cliente sigue viendo la última.'}
+                        {' '}Con fecha, la frase se programa (hasta una semana) y entra sola su día.
+                    </p>
                     {(ajustes.frases_programadas || []).length > 0 && (
                         <div className="space-y-0.5">
                             {ajustes.frases_programadas.map((f) => (

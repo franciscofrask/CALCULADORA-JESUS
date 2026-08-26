@@ -1,18 +1,28 @@
 # -*- coding: utf-8 -*-
-"""Carga DE GOLPE la cola de frases del día (punto 4 del doc del 23-08).
+"""Carga DE GOLPE las frases del día (punto 4 del doc del 23-08).
 
-El panel solo programa a 7 días vista (a propósito), así que las 84 -- una por día
-de ciclo -- entran por aquí, directo a `app_settings.frases_programadas`, que es la
-cola que `ajustes_app()` resuelve al leer.
+Escribe en `db.app_settings`, documento «app», y sirve para las dos listas:
 
-El fichero de entrada es texto plano, una frase por línea. Dos formatos:
-  - «2026-08-25 | La frase de ese día»  -> con su fecha
-  - «La frase de ese día»               -> sin fecha: se numeran seguidas desde --desde
+  - LA ROTACIÓN (`--rotacion`, lo normal desde el 26-08): el repertorio que rota día a
+    día y no se agota nunca. Va a `frases_rotacion` y NO lleva fechas: la fecha decide
+    sola cuál toca (routes/settings.py, `_frase_por_rotacion`).
+  - LA COLA (por defecto): frases atadas a un día concreto. Va a `frases_programadas`,
+    que `ajustes_app()` resuelve al leer. El panel solo programa a 7 días vista, así que
+    las tandas largas entran por aquí.
 
-Uso (contra PROD, por el túnel del 27018, con backup previo):
-  python _cargar_frases.py frases.txt --desde 2026-08-25 [--mongo mongodb://127.0.0.1:27018] [--db jg12_prod]
-Sin --mongo usa el MONGO_URL del .env (dev). NO borra la cola: funde por fecha
-(una fecha repetida se reemplaza) y deja el resultado ordenado.
+El fichero de entrada es texto plano, una frase por línea (`#` para comentar). Formatos:
+  - «2026-08-25 | La frase de ese día»  -> con su fecha (cola)
+  - «La frase de ese día»               -> sin fecha: en la cola se numeran seguidas
+                                           desde --desde; en la rotación van tal cual
+
+Uso:
+  python _cargar_frases.py frases.txt --rotacion
+  python _cargar_frases.py frases.txt --desde 2026-08-25
+Contra PROD, por el túnel del 27018 y con backup previo:
+  ... --mongo mongodb://127.0.0.1:27018 --db jg12_prod
+Sin --mongo usa el MONGO_URL del .env (dev). La cola NO se borra: funde por fecha (una
+fecha repetida se reemplaza) y deja el resultado ordenado. La rotación SÍ se reemplaza
+entera: es un repertorio, no un histórico, y fundirlo dejaría frases viejas dentro.
 """
 import argparse
 import datetime as dt
@@ -51,17 +61,30 @@ def leer_frases(ruta: str, desde: str):
     return frases
 
 
+def leer_textos(ruta: str):
+    """Para la rotación: solo el texto, sin fechas. Si una línea trae fecha delante se
+    le quita, para poder reutilizar el mismo fichero que la cola."""
+    textos = []
+    for linea in open(ruta, encoding="utf-8"):
+        linea = linea.strip()
+        if not linea or linea.startswith("#"):
+            continue
+        if "|" in linea and linea.split("|", 1)[0].strip().count("-") == 2:
+            linea = linea.split("|", 1)[1].strip()
+        if linea:
+            textos.append(linea)
+    return textos
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("fichero")
+    ap.add_argument("--rotacion", action="store_true",
+                    help="carga el repertorio que rota día a día (frases_rotacion) en vez de la cola")
     ap.add_argument("--desde", default=None, help="fecha de la primera línea sin fecha (YYYY-MM-DD)")
     ap.add_argument("--mongo", default=os.environ.get("MONGO_URL"))
     ap.add_argument("--db", default=os.environ.get("DB_NAME", "jg12_restored"))
     args = ap.parse_args()
-
-    nuevas = leer_frases(args.fichero, args.desde)
-    if not nuevas:
-        sys.exit("El fichero no trae ninguna frase.")
 
     db = MongoClient(args.mongo)[args.db]
     doc = db.app_settings.find_one({"id": DOC_ID}, {"_id": 0}) or {}
@@ -70,6 +93,23 @@ def main():
     sello = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
     ruta_backup = os.path.join(os.path.dirname(__file__), f"_backup_frases_{sello}.json")
     json.dump(doc, open(ruta_backup, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+
+    if args.rotacion:
+        textos = leer_textos(args.fichero)
+        if not textos:
+            sys.exit("El fichero no trae ninguna frase.")
+        # La rotación se reemplaza entera a propósito (ver cabecera).
+        db.app_settings.update_one(
+            {"id": DOC_ID},
+            {"$set": {"frases_rotacion": [{"texto": t} for t in textos]}}, upsert=True)
+        antes = len(doc.get("frases_rotacion") or [])
+        print(f"Rotación cargada: {len(textos)} frases (antes había {antes}).")
+        print(f"Rota una por día, sin agotarse. Backup: {ruta_backup}")
+        return
+
+    nuevas = leer_frases(args.fichero, args.desde)
+    if not nuevas:
+        sys.exit("El fichero no trae ninguna frase.")
 
     # Fundir por fecha: lo nuevo pisa a lo viejo de esa fecha; el resto se queda.
     cola = {f["fecha"]: f for f in (doc.get("frases_programadas") or []) if f.get("fecha")}
