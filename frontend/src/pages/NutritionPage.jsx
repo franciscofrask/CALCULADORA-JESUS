@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { suplementosPorComida } from '../lib/suplementosDelDia';
+import { pasoDeCantidad } from '../lib/pasoDeCantidad';
 import { useOnboarding } from '../context/OnboardingContext';
 import { leer as leerLocal, escribir as escribirLocal, borrar as borrarLocal } from '../lib/almacenLocal';
 import { excesos, textoExceso, margenDe, MARGEN } from '../lib/exceso';
@@ -987,18 +989,25 @@ const NutritionPage = () => {
         setCurrentDate(`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`);
     };
 
+    // EL DÍA CON SU NOMBRE, TAMBIÉN HOY (maqueta de la parte 6): «Jueves, 27 de agosto» y no
+    // «Hoy». En esta pantalla se anda de un día a otro con las flechas, y «Hoy» era lo único
+    // que no decía QUÉ día es: al volver de mirar el sábado, la cabecera dejaba de dar la
+    // referencia justo cuando hacía falta. El nombre entero, además, es como se dice en el
+    // Inicio, así que las dos pantallas hablan igual.
     const formatDate = (dateStr) => {
-        if (dateStr === hoyISO()) return 'Hoy';
         const [y, m, d] = dateStr.split('-').map(Number);
         const local = new Date(y, m - 1, d);
         // CON EL AÑO SI NO ES ESTE (QA 15-08). Se podía acabar montando la dieta en enero
         // de 2020 y la cabecera solo decía «Mié, 1 Ene»: nada en pantalla te sacaba del
         // error. El año solo aparece cuando hace falta, para no ensuciar el día a día.
         const esteAno = new Date().getFullYear();
-        return local.toLocaleDateString('es-ES', {
-            weekday: 'short', day: 'numeric', month: 'short',
+        const texto = local.toLocaleDateString('es-ES', {
+            weekday: 'long', day: 'numeric', month: 'long',
             ...(y !== esteAno ? { year: 'numeric' } : {}),
         });
+        // «jueves, 27 de agosto» -> «Jueves, 27 de agosto». En español el día va en minúscula,
+        // pero aquí abre la línea y se lee como un título.
+        return texto.charAt(0).toUpperCase() + texto.slice(1);
     };
 
     // Un día fuera de temporada no tiene plan: los macros que se pintan son los de hoy
@@ -1303,27 +1312,14 @@ const NutritionPage = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [calibracionSig, calibracionIntento]);
 
-    // Get quantity increment based on food category
-    // REGLA: Para alimentos con unidades, incrementar por 1 unidad (= racion gramos)
-    // Para alimentos sin unidades, incrementar por categoría
-    const getQuantityIncrement = (food) => {
-        const cat = food.categorias?.split(' | ')[0]?.split('.')[0] || '';
-        const subCat = food.categorias?.split(' | ')[0] || '';
-        // Alimentos con unidades: incrementar 1 unidad = lo que pesa una unidad
-        if (esPorUnidad(food)) return pesoUnidad(food);
-        
-        // Verduras (cat 13): ±50g
-        if (cat === '13') return 50;
-        
-        // Bebidas vegetales (cat 24): ±50g
-        if (cat === '24') return 50;
-        
-        // Salsas zero (cat 16.1): ±5g
-        if (subCat.startsWith('16.1')) return 5;
-        
-        // TODO lo demás: ±1g
-        return 1;
-    };
+    // DE CUÁNTO EN CUÁNTO SE MUEVEN LOS GRAMOS con los botones − y +.
+    //
+    // Aquí había una tabla propia que decía «todo lo demás, ±1 g», y el servidor tiene la suya
+    // y dice ±5. Así que el cliente subía de gramo en gramo y en cuanto la app tocaba esa
+    // cantidad se la dejaba en un múltiplo de 5. En el intra se veía en todos los ingredientes
+    // (Francisco, 27-08). La regla, con los números que lo destapan, en lib/pasoDeCantidad.
+    const getQuantityIncrement = (food) =>
+        pasoDeCantidad(food, esPorUnidad(food), pesoUnidad(food));
 
     // ¿Este alimento se cuenta por unidades (huevos, piezas de fruta, lonchas)?
     // Segun por donde haya entrado, el campo se llama de tres maneras distintas:
@@ -1376,12 +1372,43 @@ const NutritionPage = () => {
      * SI depende del resto del dia, pero de eso ya se encarga el recalculo del
      * servidor que se dispara tras cada cambio; esto es solo el eco inmediato.
      */
+    /**
+     * LA REGLA DE TRES NO VALE PARA UN ALIMENTO CALIBRADO (Francisco, 27-08).
+     *
+     * Al cambiar la cantidad, aquí se escalaban los macros en proporción para que el número se
+     * moviera con el dedo y no esperase al servidor. Eso es exacto en 3.157 alimentos del
+     * catálogo, y **falso en 62**: los que se calibran (frutos secos, cereales y panes) no
+     * cuentan su proteína en proporción, sino POR ESCALONES según los gramos que lleve el DÍA
+     * de esa familia -- hasta 20 g nada, de 20 a 40 la mitad, de 40 en adelante toda.
+     *
+     * Medido en la app, bajando unas almendras con el «−»:
+     *
+     *     45 -> 40 g   la pantalla pintaba 9,2 g de proteína  ·  el motor dice 4,6   (el doble)
+     *     25 -> 20 g   la pantalla pintaba 2,3                ·  el motor dice 0
+     *
+     * Al cruzar un escalón la regla de tres se pasa de largo, y 300 ms después llega el
+     * recálculo del servidor y el número cambia solo delante del cliente. Y por el camino la
+     * comida podía darse por cuadrada con una proteína que no la respalda ningún motor.
+     *
+     * Así que aquí ya no se calcula nada de eso: los calibrados cambian de cantidad y sus
+     * macros los pone quien sabe el día entero (`/calibrar-dia`, 300 ms después). El resto
+     * siguen escalando, que en ellos la proporción es exacta y el número responde al instante.
+     *
+     * Cómo se sabe si uno se calibra: `bloque` y `proteina_crece` los escribe el propio
+     * recálculo en cada alimento, y `/macros-efectivos` devuelve `bloque` al añadirlo. Si no
+     * consta -- un alimento recién puesto que aún no ha pasado por ninguno de los dos --, se
+     * trata como calibrado: esperar medio segundo no rompe nada y enseñar el doble sí.
+     */
+    const seCalibra = (food) => (
+        food?.bloque != null ? food.proteina_crece !== false
+        : (food?.macros_efectivos === undefined || food?.macros_efectivos === null));
+
     const scaleFood = (food, newQty) => {
         const qtyPrevia = food.cantidad_g || 0;
         const ef = food.macros_efectivos;
         const r1 = (x) => Math.round((x || 0) * 10) / 10;
 
-        if (qtyPrevia > 0 && ef && typeof ef.P === 'number') {
+        if (qtyPrevia > 0 && ef && typeof ef.P === 'number' && !seCalibra(food)) {
             const factor = newQty / qtyPrevia;
             return {
                 ...food,
@@ -1390,8 +1417,8 @@ const NutritionPage = () => {
             };
         }
 
-        // Sin cantidad previa (o sin macros ya calculados) no hay proporcion que aplicar.
-        // Se deja la cantidad y se conservan los macros que hubiera: el recalculo del
+        // Sin cantidad previa, sin macros ya calculados, o calibrado: no hay proporcion que
+        // aplicar. Se deja la cantidad y se conservan los macros que hubiera; el recalculo del
         // servidor los pondra bien. Inventarlos con los crudos es lo que fallaba antes.
         return { ...food, cantidad_g: newQty };
     };
@@ -2302,6 +2329,27 @@ const NutritionPage = () => {
     // ofrecía rehacerlos. El motor ya existía (refit-diet, el mismo de las favoritas):
     // reajusta cantidades sin pasarse y respetando el mínimo de cada alimento.
     const [recuadrando, setRecuadrando] = useState(false);
+
+    // La suplementación del cliente, para poder poner «+ Creatina» debajo de su comida. Se
+    // pide UNA vez al montar la pantalla: no cambia al pasar de un día a otro. Si el plan no
+    // la lleva, el servidor devuelve 403 y se queda vacía sin decir nada.
+    const [suplementos, setSuplementos] = useState([]);
+    useEffect(() => {
+        let vivo = true;
+        api('/api/supplements/current')
+            .then(r => { if (vivo) setSuplementos(r?.actual || []); })
+            .catch(() => {});
+        return () => { vivo = false; };
+    }, [api]);
+
+    // LOS SUPLEMENTOS DEL DÍA (maqueta de la parte 6). El protocolo ya trae resuelto con qué
+    // comida va cada uno (`en_comidas`, punto 174); aquí sólo se reparten entre las comidas que
+    // este día tiene, con la misma regla que el Inicio. Si la petición falla -- o el plan no
+    // lleva suplementación y devuelve 403 --, no sale nada y la pantalla sigue igual.
+    const supPorComida = React.useMemo(
+        () => suplementosPorComida(suplementos, getMealOrder().filter(k => k !== 'Intra' && k !== 'Post')),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [suplementos, numComidas, momentoEntreno, opcionPeri]);
     const handleRecuadrarDia = async () => {
         setRecuadrando(true);
         try {
@@ -2315,12 +2363,14 @@ const NutritionPage = () => {
             });
             setMealsData(res.comidas || {});
             const fuera = (res.excluidos || []).length;
+            // La misma palabra que el botón: si el botón dice «Cuadrar el día», lo que sale
+            // después no puede decir «reajustado» (parte 6).
             toast.success(fuera
-                ? `Día recuadrado a tus macros. ${fuera === 1 ? 'Un alimento no cabía ni al mínimo y se quitó' : `${fuera} alimentos no cabían ni al mínimo y se quitaron`}.`
-                : 'Día recuadrado a tus macros.');
+                ? `Día cuadrado a tus macros. ${fuera === 1 ? 'Un alimento no cabía ni al mínimo y se quitó' : `${fuera} alimentos no cabían ni al mínimo y se quitaron`}.`
+                : 'Día cuadrado a tus macros.');
         } catch (err) {
-            console.error('[recuadrar dia]', err);
-            toast.error('No hemos podido recuadrar el día. Inténtalo de nuevo.');
+            console.error('[cuadrar dia]', err);
+            toast.error('No hemos podido cuadrar el día. Inténtalo de nuevo.');
         } finally {
             setRecuadrando(false);
         }
@@ -2527,6 +2577,9 @@ const NutritionPage = () => {
             forceExpanded={forceExpanded}
             denso={denso}
             mealKey={mealKey}
+            // Los suplementos que le tocan con esta comida (maqueta de la parte 6: «+ Creatina»
+            // debajo de la 3). El mismo dato y la misma regla que en Inicio: lib/suplementosDelDia.
+            suplementos={supPorComida[mealKey]}
             {...mealCardProps}
             isLocked={isMealLocked(mealKey)}
             canVolcar={mealKey === volcarTargetMeal}
@@ -2618,7 +2671,10 @@ const NutritionPage = () => {
                         está marcada «Nutrición» en naranja, así que a 48 px lo dice por
                         tercera vez. En escritorio se queda, que ahí no hay barra inferior.
                         «Plan nutricional» y el estado de guardado se quedan siempre. */}
-                    <p className="caption text-brand mb-1">Plan nutricional</p>
+                    {/* «NUTRICIÓN», NO «PLAN NUTRICIONAL» (maqueta de la parte 6). Se llama
+                        igual que en el menú, en la barra de abajo y en la ruta; «Plan
+                        nutricional» era el único sitio de la app donde tenía otro nombre. */}
+                    <p className="caption text-brand mb-1">Nutrición</p>
                     <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground leading-none hidden lg:block">Nutrición</h1>
                     <div className="mt-1 h-4">{renderEstadoGuardado()}</div>
                     {/* Este día se lo montó su entrenador (punto 4.11). */}
@@ -2760,15 +2816,24 @@ const NutritionPage = () => {
                         && Object.values(mealsData).some(c => (c?.alimentos || []).length > 0) && (
                         <div className="surface p-4 mb-4 flex items-center justify-between gap-3 border-amber-500/30"
                             data-testid="banner-recuadrar">
+                            {/* LAS PALABRAS SON LAS DE LA MAQUETA DE LA PARTE 6, que es la que
+                                manda (Francisco, 27-08).
+                                En el vídeo de esa misma mañana, leyendo esta frase en voz alta,
+                                dijo «sería, de tus macros ACTUALES» y «pondríamos recuadrar el
+                                día. No. Pondríamos REAJUSTAR», y así se dejó unas horas. La
+                                parte 6 la dibuja con «de ahora», «te reajustamos» y el botón en
+                                «Cuadrar el día», y el documento va por delante del vídeo.
+                                Si algún día se vuelve a lo del vídeo, es aquí y son tres
+                                palabras. */}
                             <div className="min-w-0">
                                 <p className="font-bold text-foreground">Este día se pasa de tus macros de ahora</p>
-                                <p className="text-xs text-muted-foreground">Si tus macros han cambiado, podemos reajustar las cantidades sin quitarte nada.</p>
+                                <p className="text-xs text-muted-foreground">Si tus macros han cambiado, te reajustamos las cantidades sin quitarte nada.</p>
                             </div>
                             <button
                                 className="shrink-0 rounded-xl font-bold text-sm px-4 py-2 border border-brand text-brand hover:bg-brand hover:text-white transition-colors disabled:opacity-50"
                                 onClick={handleRecuadrarDia} disabled={recuadrando}
                                 data-testid="boton-recuadrar-dia">
-                                {recuadrando ? 'Recuadrando...' : 'Recuadrar el día'}
+                                {recuadrando ? 'Cuadrando...' : 'Cuadrar el día'}
                             </button>
                         </div>
                     )}
@@ -2793,12 +2858,18 @@ const NutritionPage = () => {
                     {/* Cabecera de sección: el título y, a la derecha, cómo quiere verlas.
                         El switch de macros vive aquí porque solo cambia lo que pone en
                         la lista de ingredientes; ni los totales ni el reparto se mueven. */}
-                    {/* En el teléfono, sin «COMIDAS DEL DÍA» y sin los dos conmutadores:
-                        debajo vienen las comidas con su nombre, y los conmutadores están en
-                        la tuerca de arriba. En escritorio, la fila de siempre. */}
-                    <div className="hidden lg:flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-2.5">
+                    {/* «COMIDAS DEL DÍA» TAMBIÉN EN EL TELÉFONO (maqueta de la parte 6). Estaba
+                        escondido en `lg`: se quitó del móvil porque «debajo vienen las comidas
+                        con su nombre», pero encima de ellas hay tres números grandes, el pie de
+                        «lo que llevas creado» y, algunos días, el aviso de que te pasas. Sin el
+                        rótulo, la lista empieza sin que nada diga que empieza.
+                        Los dos conmutadores sí se quedan sólo en escritorio: en el móvil viven
+                        en la tuerca de arriba y aquí competirían con el rótulo por el ancho. */}
+                    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-2.5">
                         <p className="caption">Comidas del día</p>
-                        <VistaComidasSelector vista={vistaComidas} onCambiar={cambiarVistaComidas} />
+                        <span className="hidden lg:inline-flex">
+                            <VistaComidasSelector vista={vistaComidas} onCambiar={cambiarVistaComidas} />
+                        </span>
                     </div>
 
                     {vistaComidas === 'actual' && (
@@ -2858,6 +2929,12 @@ const NutritionPage = () => {
                                     }}
                                     fecha={currentDate}
                                     origen="nutricion"
+                                    // PLEGADO AQUÍ, ABIERTO EN INICIO (maqueta de la parte 6):
+                                    // esto es lo último de una pantalla larga y el campo abierto
+                                    // se llevaba media pantalla para algo que la mayoría de los
+                                    // días no se usa. En Inicio se apunta sobre la marcha y un
+                                    // toque de más es justo donde se pierde la gente.
+                                    plegable
                                     extras={extrasDia}
                                     onAnadido={(extra) => setExtrasDia((prev) => [...prev, extra])}
                                     onQuitado={(id) => setExtrasDia((prev) => prev.filter((e) => e.id !== id))}

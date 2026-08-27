@@ -55,6 +55,13 @@ Z_MIN = {
 # El resto del mapa esta PENDIENTE de repasar con Jesus: en el doc queda como "media hora de
 # repasarlas con Jesus". El caso que el pone como ejemplo son los copos de avena, que hoy
 # salen a 10 g (una cucharada) porque la categoria 7 tiene ese minimo.
+#
+# NO CUADRAN CON LA MAQUETA DEL 27-08, Y ES A PROPOSITO. El punto 148 saca los minimos de
+# CALMA y escribe «Almendras · desde 5 g» y «Lechuga · desde 50 g», que son justo los dos
+# valores que Jesus cambio despues: los frutos secos el 07-08 y las verduras el 15-08
+# («los vegetales siempre que sugiera 100 gramos, no 50 por defecto»). Manda lo que decidio
+# mirando la app, no la maqueta hecha desde Calma. Preguntado; hasta que conteste, se quedan
+# el 10 y el 100. Si algun dia se tocan, se tocan aqui y cambian tambien el sugeridor.
 MINIMOS_JESUS = {"17.2": 10, "13": 100}
 Z_MIN.update(MINIMOS_JESUS)
 

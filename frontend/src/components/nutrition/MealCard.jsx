@@ -1,7 +1,7 @@
 import React from 'react';
 import { StatusDot } from './DaySummary';
 import { margenDe, seExcede } from '../../lib/exceso';
-import { leerMacro } from '../../lib/estadoDelMacro';
+import { leerMacro, claseDelMacro, fondoDelMacro, llevaPunto } from '../../lib/estadoDelMacro';
 import { num0, num1, numMedio, alMedio, alDecima } from '../../lib/numeros';
 import { TOPE_GRAMOS } from '../../lib/cantidades';
 import ContadorFamilia from './ContadorFamilia';
@@ -38,10 +38,17 @@ const estadoDeLaComida = (status, target, served, cuantosAlimentos, esPeri = fal
     // como «Cuadrada» en verde mientras el día decía «te falta» (punto 11 del 23-08:
     // «una de las dos cosas está mal»). La que mentía era el verde: bloqueada no es
     // cuadrada, es que ya no juega.
-    if (bloqueada) return { texto: 'bloqueada', color: null };
-    // SIN CREAR, EN NARANJA (punto 117). Le falta todo, así que cae del mismo lado que
-    // cualquier macro fuera de margen: «lo que te pide algo se ve, lo que ya está se apaga».
-    if (!cuantosAlimentos) return { texto: 'sin crear', color: 'pasado' };
+    if (bloqueada) return { texto: 'bloqueada', color: 'apagado' };
+    // «SIN CREAR» EN GRIS Y SIN PUNTO (punto 196 del 27-08, que corrige el 116 y el 117).
+    //
+    // Iba en naranja porque el 117 decía «lo que te pide algo se ve», y se escribió ANTES de
+    // cerrar la regla del color del punto 76: el naranja es sólo para lo que se pasa. Una
+    // comida sin crear no es un error -- es que aún no la has hecho --, y con el naranja
+    // puesto un día recién empezado salía entero en color de aviso sin haber nada mal.
+    //
+    // Y sin punto: «faltan 11 de proteína» es un número y lleva el suyo; «sin crear» no es un
+    // número, es una etiqueta que dice que ahí no hay nada.
+    if (!cuantosAlimentos) return { texto: 'sin crear', color: 'apagado' };
 
     const claves = esPeri ? ['P', 'H'] : ['P', 'H', 'G'];
     // EL MARGEN DE CADA MACRO ES EL DE LA COMIDA (`margenDe`), no los 4 g planos del día.
@@ -64,13 +71,18 @@ const estadoDeLaComida = (status, target, served, cuantosAlimentos, esPeri = fal
             color: 'pasado',
         };
     }
+    // «FALTAN 11 DE PROTEÍNA» VA EN BLANCO, NO EN NARANJA (punto 196 del 27-08, que remite al
+    // 82). Es la regla de color de la app entera, la del punto 76: verde si ese macro ya está
+    // resuelto, naranja si te has PASADO, y sin color mientras vas por debajo. Ir corto no es
+    // un error, es que todavía no has terminado -- y el naranja aquí se gastaba en la mitad de
+    // las comidas de cualquier día a medio montar.
     if (status === 'falta') {
         const faltan = fuera.filter((x) => x.d < 0);
         return {
             texto: faltan.length
                 ? `faltan ${enumerar(faltan.map((x) => `${num0(-x.d)} de ${NOMBRE_MACRO[x.k]}`))}`
                 : 'faltan',
-            color: 'pasado',
+            color: null,
         };
     }
     // Cuadrada. Si clava, se dice y ya; si baila dentro del margen, se dice cuánto, con las
@@ -82,11 +94,30 @@ const estadoDeLaComida = (status, target, served, cuantosAlimentos, esPeri = fal
 };
 
 // El punto de color que va delante de la palabra del estado (punto 116).
-const PuntoDeEstado = ({ color }) => (color ? (
+/**
+ * LOS CUATRO ESTADOS DE UNA COMIDA (punto 196 del 27-08). La lista, con sus palabras:
+ *
+ *     ● cuadrada        verde
+ *     ● válido +2       verde
+ *     ● sobran 6 de grasa   #FF5A2E
+ *       faltan 11 de proteína   en blanco, «que es un número y va con su número»
+ *       sin crear         en gris, y SIN punto
+ *
+ * O sea tres tonos y no dos, y el punto solo lo llevan los dos primeros: el punto marca que
+ * hay algo que mirar, y ni lo que te falta ni lo que no has empezado lo son.
+ *
+ * `null` es «vas por debajo» -- blanco, la regla de color del punto 76 -- y `apagado` es «aquí
+ * no hay nada»: la comida sin crear y la bloqueada.
+ */
+const PuntoDeEstado = ({ color }) => (color === 'ok' || color === 'pasado' ? (
     <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${color === 'ok' ? 'bg-ok' : 'bg-pasado'}`} />
 ) : null);
 
-const claseDelEstado = (color) => (color === 'ok' ? 'text-ok' : color === 'pasado' ? 'text-pasado' : 'text-muted-foreground');
+const claseDelEstado = (color) => (
+    color === 'ok' ? 'text-ok'
+    : color === 'pasado' ? 'text-pasado'
+    : color === 'apagado' ? 'text-muted-foreground'
+    : 'text-foreground');
 
 // Los números con coma decimal y sin decimales cuando son cero, en un solo sitio para toda
 // la pantalla (Jesús, 15-08, fallo 43: «34.2/37.5g»).
@@ -216,8 +247,8 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFood
                     <div key={k} className="text-center" data-testid={`comida-macro-${mealKey}-${k}`}>
                         <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-center gap-1">
                             {NOMBRE[k]}
-                            {hasFoods && lectura.color && (
-                                <span className={`w-1.5 h-1.5 rounded-full ${lectura.color === 'ok' ? 'bg-ok' : 'bg-pasado'}`} />
+                            {hasFoods && llevaPunto(lectura.color) && (
+                                <span className={`w-1.5 h-1.5 rounded-full ${fondoDelMacro(lectura.color)}`} />
                             )}
                         </p>
                         <p className="numero-grande font-data leading-none text-[26px] sm:text-[30px] mt-1.5 text-foreground">
@@ -225,14 +256,13 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFood
                         </p>
                         {hasFoods && (
                             <p data-testid={`comida-palabra-${mealKey}-${k}`}
-                                className={`text-xs mt-1 ${lectura.color === 'ok' ? 'text-ok font-medium'
-                                    : lectura.color === 'pasado' ? 'text-pasado font-medium' : 'text-muted-foreground'}`}>
+                                className={`text-xs mt-1 ${claseDelMacro(lectura.color)}`}>
                                 {lectura.palabra}
                             </p>
                         )}
                         {hasFoods && lectura.barra && (
                             <div className="h-1 rounded-full bg-muted mt-1.5 overflow-hidden">
-                                <div className={`h-full rounded-full ${lectura.barra.color === 'ok' ? 'bg-ok' : 'bg-pasado'}`}
+                                <div className={`h-full rounded-full ${fondoDelMacro(lectura.barra.color)}`}
                                     style={{ width: `${lectura.barra.largo}%` }} />
                             </div>
                         )}
@@ -377,6 +407,9 @@ const IngredientRow = ({ food, idx, mealKey, isLocked, isEditing, increment,
 // ===== Meal card =====
 const MealCard = ({
     mealKey, mealInfo, mealsData, expandedMeals, setExpandedMeals,
+    // Los suplementos que le tocan con esta comida (maqueta de la parte 6). Solo los
+    // nombres: la dosis vive en su pantalla. El intra y el post no traen nunca.
+    suplementos,
     getMealTarget, calculateMealMacros, getMealStatus,
     loadMenuOptions, setBuildMealModal, openRepeatModal,
     removeFood, moveFoodUp, updateFoodQuantity, updateFoodQuantityDirect,
@@ -410,16 +443,26 @@ const MealCard = ({
     // lado, así que esos no se tocan.
     const estado = estadoDeLaComida(status, target, calculateMealMacros(mealKey), foods.length, isPeri, isLocked);
 
-    // SIN LETRAS Y SIN DECIMALES (punto 115): «52,5P · 10H · 15G» pasa a «53 · 10 · 15».
+    // CON LETRA Y SIN DECIMALES: «33P · 20H · 10G» (maqueta de la parte 6).
+    // El punto 115 las había quitado -- «53 · 10 · 15» -- y esto lo revierte, igual que el
+    // punto 173 revirtió el 98 para el Inicio: en el resto de la app los macros llevan su
+    // letra, y tres números sueltos sólo se entienden si te sabes el orden de memoria.
+    // Los decimales no vuelven: eso el documento no lo toca.
     // La grasa del peri no cuenta en el método, así que ahí son dos números.
     const lineaObjetivo = isPeri
-        ? `${num0(target.P)} · ${num0(target.H)}`
-        : `${num0(target.P)} · ${num0(target.H)} · ${num0(target.G)}`;
+        ? `${num0(target.P)}P · ${num0(target.H)}H`
+        : `${num0(target.P)}P · ${num0(target.H)}H · ${num0(target.G)}G`;
 
-    // LO QUE TE PIDE ALGO SE VE, LO QUE YA ESTÁ SE APAGA (punto 117, «como en Inicio»).
-    // La comida sin crear va en naranja entera -- borde y fondo --, y la que ya está
-    // cuadrada baja de intensidad: la lista se recorre buscando lo que falta por hacer.
-    const sinCrear = !isLocked && !isPeri && foods.length === 0;
+    // SE APAGA LO HECHO, EN VEZ DE PINTAR LO QUE FALTA (punto 197 del 27-08).
+    //
+    // El 117 pedía «lo que te pide algo se ve, lo que ya está se apaga», y eso se queda: lo que
+    // cambia es cómo se consigue. La comida sin crear iba en NARANJA entera, borde y fondo, y
+    // eso gastaba el único color que la app tiene reservado para lo que se pasa (punto 76).
+    // Ahora sólo se baja la opacidad de la que ya está cuadrada: mismo efecto, sin color.
+    //
+    // Y sale mejor de lo que pedía el 117: abres Nutrición y lo que se ve es lo que te queda
+    // por hacer. En un día a medias no hay ni un color en pantalla, porque no hay nada que
+    // corregir -- sólo cosas que hacer.
     const yaEsta = !isLocked && estado.color === 'ok';
 
     // ── LA PUERTA DEL AUTOAJUSTE (Jesús, doc 21-08, apartado 14) ─────────────────────
@@ -550,7 +593,10 @@ const MealCard = ({
                         arriba. Cada uno en su línea cabe entero y no se corta ninguno. */}
                     <div className="flex flex-col items-start gap-0.5 mt-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
                         <p className="text-xs text-muted-foreground font-data" data-testid={`objetivo-${mealKey}`}>
-                            <span className="mr-1.5">Objetivo</span>
+                            {/* Con el punto, como en la maqueta: «Objetivo · 33P · 20H · 10G».
+                                Separa el rótulo de los números con el mismo signo que los
+                                separa entre sí, en vez de fiarlo todo a un margen. */}
+                            <span className="mr-1.5">Objetivo ·</span>
                             {lineaObjetivo}
                         </p>
                         {/* CON LA COMIDA ABIERTA, EL ESTADO NO SE REPITE (punto 120). Dentro
@@ -558,7 +604,13 @@ const MealCard = ({
                             además «faltan 20 de proteína» aquí arriba es contar lo mismo dos
                             veces, y peor, porque lo resume. Cerrada sí: ahí es lo único que
                             dice en qué punto está esa comida. */}
-                        {!isPeri && !isExpanded && (
+                        {/* EL INTRA Y EL POST TAMBIÉN LLEVAN SU ESTADO (maqueta de la parte 6:
+                            «Intra · Objetivo · 9P · 6H · cuadrada»). Estaban excluidos, así que
+                            en una lista de seis tomas dos no decían en qué punto estaban y
+                            había que abrirlas para saberlo. Su estado se calcula igual, sólo
+                            con P y H, porque en el método la grasa del peri no cuenta
+                            (`estadoDeLaComida` ya lo hace con `esPeri`). */}
+                        {!isExpanded && (
                             <span className={`text-xs font-bold flex items-start gap-1.5 sm:text-right ${claseDelEstado(estado.color)}`}
                                 data-testid={`estado-comida-${mealKey}`}>
                                 <span className="mt-1"><PuntoDeEstado color={estado.color} /></span>
@@ -566,6 +618,14 @@ const MealCard = ({
                             </span>
                         )}
                     </div>
+                    {/* «+ CREATINA», DEBAJO DE LOS MACROS DE SU COMIDA (maqueta de la parte 6).
+                        El mismo dato que en Inicio y con la misma regla (lib/suplementosDelDia):
+                        sólo el nombre, y el intra y el post no llevan ninguno. */}
+                    {!isPeri && (suplementos || []).length > 0 && (
+                        <p className="text-xs text-brand mt-1" data-testid={`suplementos-comida-${mealKey}`}>
+                            + {suplementos.join(' · ')}
+                        </p>
+                    )}
                 </div>
             </div>
 
@@ -588,7 +648,7 @@ const MealCard = ({
     );
 
     return (
-        <div className={`surface overflow-hidden ${isPeri ? 'border-l-4 border-l-brand' : ''} ${isLocked ? 'opacity-70' : ''} ${!forceExpanded && !isExpanded ? 'surface-hover' : ''} ${sinCrear ? 'ring-1 ring-pasado/40 bg-pasado/5' : ''} ${yaEsta && !isExpanded ? 'opacity-70' : ''}`} data-testid={`meal-card-${mealKey}`}>
+        <div className={`surface overflow-hidden ${isPeri ? 'border-l-4 border-l-brand' : ''} ${isLocked ? 'opacity-70' : ''} ${!forceExpanded && !isExpanded ? 'surface-hover' : ''} ${yaEsta && !isExpanded ? 'opacity-70' : ''}`} data-testid={`meal-card-${mealKey}`}>
             {/* Header */}
             {forceExpanded ? (
                 <div className={`${denso ? 'p-3 sm:p-3.5' : 'p-4 sm:p-5'} flex items-center justify-between gap-3 border-b border-border`}>{HeaderInner}</div>
@@ -629,8 +689,19 @@ const MealCard = ({
                                 <button className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${mealMode === 'manual' ? 'bg-brand text-white' : 'text-muted-foreground'}`}
                                     onClick={() => setMealMode(mealKey, 'manual')} data-testid={`mode-manual-${mealKey}`}>Manual</button>
                             </div>
+                            {/* LA FRASE DE AUTOMÁTICO (punto 191 del 27-08). Decía «Yo te ajusto
+                                las cantidades»: sale del singular -- era una de las seis frases
+                                en primera persona -- y de paso dice A QUÉ ajusta, que es lo que
+                                faltaba. Mismo sitio, mismo tamaño, mismo gris.
+
+                                LA DE MANUAL NO SE TOCA (punto 192): «las pones tú y lo compensas
+                                en el día» ya es la buena. No dice quién pone las cantidades:
+                                dice qué hay que hacer después, y va justo donde el cliente está
+                                a punto de saltarse el cálculo. */}
                             <p className="text-[11px] text-muted-foreground/80 mt-1.5" data-testid={`ajuste-explicacion-${mealKey}`}>
-                                {mealMode === 'manual' ? 'Las pones tú y lo compensas en el día' : 'Yo te ajusto las cantidades'}
+                                {mealMode === 'manual'
+                                    ? 'Las pones tú y lo compensas en el día'
+                                    : 'Ajusta las cantidades de los alimentos a tus macros'}
                             </p>
                         </div>
                     )}
@@ -834,8 +905,18 @@ const MealCard = ({
                                         className="btn-brand w-full py-3 rounded-xl text-sm font-bold">
                                         Cuadrar
                                     </button>
+                                    {/* Y LA FRASE, FUERA DEL SINGULAR (punto 193 del 27-08): era
+                                        «Te ajusto las cantidades sin pasarme de tus macros.», con
+                                        punto final. El botón ancho ya estaba desplegado; esta
+                                        frase se había quedado.
+
+                                        SE PARECE A LA DE AUTOMÁTICO Y NO ES UN COPIADO (punto
+                                        194): Automático es EL MODO -- trabaja solo, según montas
+                                        la comida -- y Cuadrar es EL BOTÓN: ajusta ahora, el plato
+                                        entero, de una vez. Queda dicho aquí para que quien las
+                                        lea seguidas no las «arregle». */}
                                     <p className="text-xs text-muted-foreground text-center mt-1.5">
-                                        Te ajusto las cantidades sin pasarme de tus macros.
+                                        Ajusta las cantidades sin pasarse de tus macros
                                     </p>
                                 </div>
                             )}

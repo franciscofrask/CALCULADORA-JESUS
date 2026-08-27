@@ -387,7 +387,6 @@ async def get_foods_listado(
             eff[macro] = 0.0
         calibracion = _calibracion_del_alimento(bloque, crece_con_el_dia)
         cm = cantidad_minima_calma(f)
-        mins_str = _fmt_macros(macros_at_calma(f, cm))
         out.append({
             "id": f.get("id"),
             "nombre": f.get("nombre"),
@@ -407,7 +406,27 @@ async def get_foods_listado(
             "macros_reales": {"P": orig["proteinas"], "H": orig["hidratos"], "G": orig["grasas"]}
                              if eff != orig else None,
             "cantidad_minima": cm,
-            "sugerencia": (f"Necesita {mins_str} para ser sugerido" if mins_str else "Siempre puede ser sugerido"),
+            # AQUI VIAJABA `sugerencia`, una frase por alimento: «Necesita 9g proteínas / 5.5g
+            # hidratos / 5.5g grasas para ser sugerido». La pantalla dejo de pintarla el 26-08
+            # (la sustituyo `que_te_cuenta`) y desde el 27-08 lo que dice lo dicen `desde` y
+            # `necesitas`, asi que era texto muerto: 224 KB de los 1.644 que pesa el catalogo.
+            # Con 3.219 fichas y el tope de tres segundos de Jesus, eso no es limpieza, es
+            # margen. Si alguna vez hace falta la frase, se arma con los dos campos de abajo.
+            # LA CUARTA LINEA DEL ALIMENTO: «Desde 5 g · necesitas 2,7 G» (puntos 148 a 150).
+            # Van juntas porque separadas no dicen nada: 5 g solo es un numero y 2,7 G solo es
+            # otro. El minimo se escribe como se dice (`_desde_cuanto`) y lo que aporta con la
+            # letra de cada macro, igual que en el resto de la pantalla.
+            # Cuando no cuenta nada, `necesitas` viaja vacio y la pantalla escribe «siempre
+            # cabe»: el minimo existe -- no se meten 10 g de lechuga -- pero no hay nada que
+            # comprobar (en Calma, «Siempre puede ser sugerido»).
+            "desde": _desde_cuanto(f, cm),
+            # Los macros que aporta esa cantidad minima, en crudo: la pantalla los escribe con
+            # su letra y su coma decimal (lib/numeros), igual que hace con `macros_reales`.
+            # Vacio -- no cero -- cuando no aporta ninguno, que es lo que distingue «necesitas
+            # 2,7 G» de «siempre cabe».
+            "necesitas": _necesitas(f, eff, cm),
+            # Para escribir «por 100 ml» en vez de «por 100 g» y «Bebe» en vez de «Come».
+            "es_liquido": _es_liquido(f),
             # QUE LE CUENTA DE ESTE ALIMENTO, EN CRISTIANO.
             #
             # Debajo de cada alimento salia «Necesita 9g proteinas / 5.5g hidratos / 5.5g
@@ -429,40 +448,157 @@ async def get_foods_listado(
     return out
 
 
-#: Cada macro con el nombre y el articulo con que se lo decimos al cliente. Se guardan los
-#: dos porque «su proteina» y «sus hidratos» no concuerdan igual, y una frase mal concordada
-#: en la pantalla que explica el metodo se lee como un descuido.
-_NOMBRE_MACRO = {"proteinas": "proteína", "hidratos": "hidratos", "grasas": "grasa"}
-_SUYO_MACRO = {"proteinas": "su proteína", "hidratos": "sus hidratos", "grasas": "su grasa"}
+#: Cada macro con su articulo, tal y como se lo decimos al cliente. En singular los tres:
+#: «el hidrato», no «los hidratos» (punto 147 del 27-08, y es como esta escrito en su
+#: documento). Una frase mal concordada en la pantalla que explica el metodo se lee como un
+#: descuido.
+_NOMBRE_MACRO = {"proteinas": "la proteína", "hidratos": "el hidrato", "grasas": "la grasa"}
+
+_LOS_TRES = ("proteinas", "hidratos", "grasas")
 
 
 def _que_te_cuenta(orig: dict, eff: dict, se_calibra: bool = False) -> str:
     """Una frase que dice que macros de este alimento cuentan para sus objetivos.
 
+    LAS CUATRO FORMAS (punto 147 del 27-08). Se comparan los macros que CUENTAN con los que
+    el alimento TIENE, no con los tres siempre:
+
+      - «Te cuenta todo»            le cuentan todos los que lleva. El huevo entra aqui:
+                                    tiene proteina y grasa, no tiene hidratos, y las dos
+                                    cuentan. Antes esto decia «Te cuentan los tres», que del
+                                    huevo es sencillamente falso.
+      - «Te cuenta solo la grasa»   lleva mas de uno y solo le cuenta ese.
+      - «Te cuenta la proteína y la grasa»   lleva los tres y le cuentan dos.
+      - «No te cuenta nada»         las verduras libres y los zero.
+
     `se_calibra`: si a este alimento le crece la proteina con la cantidad del dia (punto 139
-    del artifact del 26-08). En esos la frase SE ACORTA: las almendras pasan de «Te cuenta
-    grasa. Ni su proteina ni sus hidratos te cuentan» a «Te cuenta grasa». Menos texto, y
-    sobre todo deja de decir algo que solo es cierto si comes menos de 20 g -- la lista
-    enseña el alimento sin saber cuanto vas a comer, asi que la exclusion ahi es una
-    prediccion, no un dato. Lo que si depende de la cantidad lo cuenta el punto y, al
-    abrirlo, los tramos.
+    del 26-08). En esos CAE EL «SOLO»: «Te cuenta la grasa», sin mas. En las almendras la
+    proteina si cuenta a partir de 20 g, asi que decir «solo» seria mentira medio dia. En las
+    nueces, que no cuentan nunca, si va. Lo que depende de la cantidad lo dice el punto y, al
+    abrir el alimento, los tramos.
+
+    Y con esto desaparece la coletilla «Su proteína no te cuenta»: el «solo» ya lo dice, y es
+    una linea menos por alimento.
     """
-    tiene = [k for k in ("proteinas", "hidratos", "grasas") if (orig.get(k) or 0) > 0]
+    tiene = [k for k in _LOS_TRES if (orig.get(k) or 0) > 0]
     cuentan = [k for k in tiene if (eff.get(k) or 0) > 0]
-    no_cuentan = [] if se_calibra else [k for k in tiene if (eff.get(k) or 0) <= 0]
 
-    if not tiene or not cuentan:
-        return "No te cuenta nada: come lo que quieras."
-    if not no_cuentan:
-        return ("Te cuentan los tres." if len(cuentan) == 3
-                else "Te cuenta " + _lista([_NOMBRE_MACRO[k] for k in cuentan]) + ".")
+    if not cuentan:
+        return "No te cuenta nada"
+    if len(cuentan) == len(tiene):
+        return "Te cuenta todo"
+    if len(cuentan) == 1:
+        solo = "" if se_calibra else "solo "
+        return f"Te cuenta {solo}{_NOMBRE_MACRO[cuentan[0]]}"
+    return "Te cuenta " + _lista([_NOMBRE_MACRO[k] for k in cuentan])
 
-    fuera = [_SUYO_MACRO[k] for k in no_cuentan]
-    if len(fuera) == 1:
-        cola = f"{fuera[0].capitalize()} no te cuenta."
-    else:
-        cola = "Ni " + " ni ".join(fuera) + " te cuentan."
-    return "Te cuenta " + _lista([_NOMBRE_MACRO[k] for k in cuentan]) + ". " + cola
+
+#: LO QUE SE BEBE, PARA QUE EL MINIMO VAYA EN MILILITROS Y LA FRASE DIGA «BEBE».
+#: La maqueta del 27-08 escribe la Coca-Cola Zero como «por 100 ml ... Desde 100 ml · siempre
+#: cabe» y «Bebe lo que quieras», y la lechuga como «por 100 g» y «Come lo que quieras». En la
+#: base no hay ningun campo que diga si algo es liquido, asi que sale de la categoria.
+#: Quedan FUERA a proposito los polvos que viven en ramas de bebidas: los hidratos para
+#: entrenar (18.3) y el cafe en polvo (19.3.3) se pesan, no se miden.
+_CATEGORIAS_LIQUIDAS = ("5.1", "6.1", "11.5", "18.1", "19.1", "19.2", "19.3.1", "19.3.2", "24")
+
+
+def _es_liquido(food: dict) -> bool:
+    return any(food_in_cat_calma(food, c) for c in _CATEGORIAS_LIQUIDAS)
+
+
+#: EL NOMBRE DE LA UNIDAD, PARA LOS QUE EMPIEZAN EN MEDIA (punto 149 del 27-08).
+#:
+#: «Desde media hamburguesa · desde media tarrina · desde 1 unidad»: en los tres ejemplos que
+#: da Jesus el nombre aparece SOLO donde dice «media». El huevo, que va por unidad entera, es
+#: «desde 1 unidad» y no «desde 1 huevo». Asi que la unidad entera no necesita nombre y la
+#: media si, porque «media unidad» no se entiende.
+#:
+#: Son 142 fichas de 3.219 las que empiezan en media unidad, y esta tabla las cubre casi
+#: todas. El orden IMPORTA: «Pan de hamburguesa 2 rebanadas» lleva la palabra «hamburguesa»
+#: dentro y no es una hamburguesa, asi que el pan va primero.
+#:
+#: Se resuelve por regla y no por un campo en la ficha porque el catalogo crece todas las
+#: semanas (el viernes a las 10, punto 168) y sobre todo con hamburguesas: una regla coge las
+#: nuevas sola, y un campo habria que rellenarlo a mano cada vez.
+_NOMBRE_DE_LA_UNIDAD = (
+    ("pan de hamburguesa", "medio pan"),
+    ("hamburguesa", "media hamburguesa"),
+    ("tarrina", "media tarrina"),
+    ("bagel", "medio bagel"),
+    ("bizcocho", "medio bizcocho"),
+    ("brazo de gitano", "medio brazo"),
+    ("donut", "medio donut"),
+    ("ensalada", "media ensalada"),
+    ("bolsita", "media bolsita"),
+    ("lata", "media lata"),
+    ("yogur", "medio yogur"),
+    ("manzana", "media manzana"),
+    ("naranja", "media naranja"),
+    ("mandarina", "media mandarina"),
+    ("ciruela", "media ciruela"),
+    ("nectarina", "media nectarina"),
+    ("pera", "media pera"),
+    ("platano", "medio plátano"),
+    ("melocoton", "medio melocotón"),
+    ("kiwi", "medio kiwi"),
+    ("caqui", "medio caqui"),
+    ("kaki", "medio kaki"),
+)
+
+
+def _media_unidad_de(nombre: str) -> str:
+    """«media hamburguesa», «media tarrina»... y «media unidad» si no se reconoce."""
+    n = normalize_text(nombre or "")
+    for palabra, texto in _NOMBRE_DE_LA_UNIDAD:
+        if palabra in n:
+            return texto
+    return "media unidad"
+
+
+def _necesitas(food: dict, eff: dict, minimo: float) -> Optional[dict]:
+    """Lo que TE CUENTA la cantidad minima, o None si no te cuenta nada.
+
+    De los macros EFECTIVOS, no de los de la etiqueta. En las almendras la maqueta escribe
+    «Desde 5 g · necesitas 2,7 G» y nada mas: la proteina y los hidratos que lleva no salen,
+    porque a esa cantidad no cuentan. Con los crudos saldria «2,3 P · 0,5 H · 2,7 G», que es
+    justo lo que el punto 147 quita de la linea de arriba y volveria a colarse aqui.
+
+    `eff` ya trae aplicadas las tres reglas (la de categoria, la puerta del tercio y el tramo
+    de la calibracion), asi que solo hay que escalarlo: `minimo` viene en unidades si el
+    alimento va por unidades y en gramos si va a granel, y los macros estan en la misma
+    referencia (por unidad o por 100 g).
+
+    Sale en numeros, como `macros_reales`, para que la pantalla los escriba con su letra y su
+    coma decimal: el punto y la coma son cosa de como se escribe en español y eso lo resuelve
+    `lib/numeros` en el front.
+    """
+    escala = float(minimo) if food.get("unidades") else float(minimo) / 100.0
+    fuera = {k: float(eff.get(n) or 0) * escala
+             for k, n in (("P", "proteinas"), ("H", "hidratos"), ("G", "grasas"))}
+    return fuera if any(v > 0 for v in fuera.values()) else None
+
+
+def _con_coma(x: float) -> str:
+    """El numero como se escribe en español: «5» y «12,5», nunca «12.5»."""
+    return _n1(x).replace(".", ",")
+
+
+def _desde_cuanto(food: dict, minimo: float) -> str:
+    """A partir de cuanto se puede ofrecer este alimento, dicho como se le dice al cliente.
+
+    LA CANTIDAD MINIMA ESTA EN CALMA Y FALTABA EN LA APP (punto 148 del 27-08). Es del metodo
+    igual que los macros: la app solo sugiere un alimento si su minimo cabe en lo que queda
+    por cubrir, sin pasarse de ninguno. Si te quedan 5 g de proteina y 3 de grasa, el salmon
+    no se sugiere -- su minimo son 50 g y eso son 10 de proteina -- y el aceite si.
+
+    `minimo` viene del motor en SUS unidades: piezas si el alimento va por unidades, gramos
+    si va a granel (`calma_suggest.cantidad_minima`).
+    """
+    if food.get("unidades"):
+        if minimo <= 0.75:
+            return _media_unidad_de(food.get("nombre"))
+        return "1 unidad" if minimo == 1 else f"{_con_coma(minimo)} unidades"
+    return f"{_con_coma(minimo)} {'ml' if _es_liquido(food) else 'g'}"
 
 
 def _lista(partes: list) -> str:
@@ -1600,36 +1736,93 @@ async def _store_suggestion_photo(suggestion_id: str, kind: str, file: UploadFil
     })
 
 
+async def _peticiones_que_le_quedan(client_id: str) -> int:
+    """Cuántas solicitudes le quedan a este cliente esta semana."""
+    gastadas = await db.food_suggestions.count_documents({
+        "client_id": client_id,
+        "created_at": {"$gte": _week_start_iso()},
+    })
+    return max(0, WEEKLY_SUGGESTION_LIMIT - gastadas)
+
+
+@router.get("/food-suggestions/restantes")
+async def food_suggestions_restantes(user = Depends(get_current_user)):
+    """«Te quedan 2 peticiones esta semana» (punto 167 del 27-08).
+
+    El límite existía desde siempre en el servidor, pero no se le decía a nadie: el cliente
+    rellenaba el formulario entero -- dos fotos incluidas -- y se llevaba un 429 al pulsar.
+    Ahora el número viaja antes, y la pantalla lo enseña debajo del botón.
+    """
+    profile = await db.client_profiles.find_one({"user_id": user["id"]})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+    return {"restantes": await _peticiones_que_le_quedan(profile["id"]),
+            "limite": WEEKLY_SUGGESTION_LIMIT}
+
+
 @router.post("/suggest-food", response_model=FoodSuggestionResponse)
 async def suggest_new_food(
     nombre: str = Form(...),
     por_unidad: bool = Form(False),
     racion: float = Form(100.0),
+    es_conserva: bool = Form(False),
     peso_tipo: str = Form("neto"),
     proteinas: float = Form(0.0),
     hidratos: float = Form(0.0),
     grasas: float = Form(0.0),
     url: Optional[str] = Form(None),
+    sin_web: bool = Form(False),
     foto_frontal: Optional[UploadFile] = File(None),
     foto_reverso: Optional[UploadFile] = File(None),
     user = Depends(get_current_user),
 ):
-    """El cliente sugiere un nuevo alimento (nombre, tipo de ración, macros, enlace y,
-    opcionalmente, fotos frontal y del reverso). Se registra como 'pendiente' hasta que
-    el admin lo revise. Cada cliente puede sugerir un máximo de 2 alimentos por semana."""
+    """El cliente solicita un alimento nuevo. Se registra como 'pendiente' hasta que el admin
+    lo revise. Cada cliente puede pedir un máximo de 2 por semana.
+
+    TODO ES OBLIGATORIO (punto 161 del 27-08). Hasta hoy se podía mandar con el nombre y nada
+    más: las fotos salían como «opcionales, pero ayudan a la revisión» y los macros tampoco se
+    exigían. Y una solicitud así NO SE PUEDE DAR DE ALTA -- hay que escribirle, preguntarle y
+    esperar --, o sea que era el cuello de botella entero del proceso.
+
+    Y se comprueba AQUÍ además de en la pantalla: el botón apagado evita el descuido, no la
+    petición hecha a mano ni la pantalla vieja que se haya quedado en la caché de alguien.
+    """
     profile = await db.client_profiles.find_one({"user_id": user["id"]})
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
 
     # Límite semanal (lunes-domingo)
-    used = await db.food_suggestions.count_documents({
-        "client_id": profile["id"],
-        "created_at": {"$gte": _week_start_iso()},
-    })
-    if used >= WEEKLY_SUGGESTION_LIMIT:
+    if await _peticiones_que_le_quedan(profile["id"]) <= 0:
         raise HTTPException(
             status_code=429,
-            detail=f"Solo puedes sugerir {WEEKLY_SUGGESTION_LIMIT} alimentos por semana. Vuelve a intentarlo la próxima semana.",
+            detail=f"Solo puedes pedir {WEEKLY_SUGGESTION_LIMIT} alimentos por semana. Vuelve a intentarlo la próxima semana.",
+        )
+
+    # Lo que falta, dicho todo junto: un viaje por campo es un formulario que se contesta a
+    # ciegas, y aquí el cliente acaba de hacer dos fotos.
+    hay_frontal = foto_frontal is not None and bool(foto_frontal.filename)
+    hay_reverso = foto_reverso is not None and bool(foto_reverso.filename)
+    enlace = (url or "").strip()
+    faltan = []
+    if not nombre.strip():
+        faltan.append("el nombre del alimento")
+    if not hay_frontal:
+        faltan.append("la foto frontal")
+    if not hay_reverso:
+        faltan.append("la foto del reverso o el lateral")
+    if por_unidad and not (float(racion or 0) > 0):
+        faltan.append("el peso de la unidad")
+    # Los tres macros a cero es una etiqueta sin copiar, no un alimento sin macros: los que de
+    # verdad no aportan nada (la lechuga, los zero) ya están en el catálogo.
+    if not any(float(v or 0) > 0 for v in (proteinas, hidratos, grasas)):
+        faltan.append("los macros del envase")
+    if not enlace and not sin_web:
+        faltan.append("el enlace de la fuente (o marcar «No tiene web»)")
+    if faltan:
+        raise HTTPException(
+            status_code=400,
+            detail="Para pedir un alimento falta " + (
+                faltan[0] if len(faltan) == 1 else ", ".join(faltan[:-1]) + " y " + faltan[-1]) + ".",
         )
 
     # racion: por 100 g -> 100; por unidad -> peso indicado (mínimo 1 g)
@@ -1638,23 +1831,24 @@ async def suggest_new_food(
         nombre=nombre.strip(),
         por_unidad=por_unidad,
         racion=racion_g,
-        peso_tipo=("escurrido" if peso_tipo == "escurrido" else "neto"),
+        es_conserva=es_conserva,
+        # Fuera de las conservas no se pregunta, así que no se guarda una respuesta que nadie
+        # ha dado: sin lata, el peso es el neto y punto.
+        peso_tipo=("escurrido" if (es_conserva and peso_tipo == "escurrido") else "neto"),
         proteinas=float(proteinas or 0),
         hidratos=float(hidratos or 0),
         grasas=float(grasas or 0),
-        url=(url.strip() if url and url.strip() else None),
+        url=(enlace or None),
+        sin_web=bool(sin_web),
     )
 
     suggestion_id = str(uuid.uuid4())
 
-    # Las fotos son opcionales: se guardan solo las que el cliente adjunte.
     photos = []
-    if foto_frontal is not None and foto_frontal.filename:
-        await _store_suggestion_photo(suggestion_id, "frontal", foto_frontal)
-        photos.append("frontal")
-    if foto_reverso is not None and foto_reverso.filename:
-        await _store_suggestion_photo(suggestion_id, "reverso", foto_reverso)
-        photos.append("reverso")
+    await _store_suggestion_photo(suggestion_id, "frontal", foto_frontal)
+    photos.append("frontal")
+    await _store_suggestion_photo(suggestion_id, "reverso", foto_reverso)
+    photos.append("reverso")
 
     suggestion = {
         "id": suggestion_id,

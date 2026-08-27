@@ -52,10 +52,21 @@ const detalleDelExtra = (e) => [
     lineaMacros(e.macros) || null,
 ].filter(Boolean).join(' · ');
 
-const ExtrasDelDia = ({ api, fecha, extras = [], onAnadido, onQuitado, origen }) => {
+/**
+ * `plegable`: el bloque nace cerrado y se abre con el «+» (maqueta de la parte 6, en
+ * Nutrición). Ahí abajo es lo último de una pantalla larga y con la caja de escribir abierta
+ * se lleva media pantalla para algo que la mayoría de los días no se usa: la frase se queda
+ * -- que es lo que dice para qué sirve -- y el campo aparece cuando se va a escribir.
+ *
+ * En el Inicio NO se pliega: allí es el sitio donde se apunta lo del día sobre la marcha, y
+ * un toque de más entre «me he comido algo» y apuntarlo es justo donde se pierde la gente.
+ * Con algo ya apuntado se abre solo: la lista tiene que verse sin buscarla.
+ */
+const ExtrasDelDia = ({ api, fecha, extras = [], onAnadido, onQuitado, origen, plegable = false }) => {
     const [texto, setTexto] = useState('');
     const [guardando, setGuardando] = useState(false);
     const [quitando, setQuitando] = useState(null);
+    const [abierto, setAbierto] = useState(!plegable);
 
     const apuntar = async () => {
         const limpio = texto.trim();
@@ -89,16 +100,32 @@ const ExtrasDelDia = ({ api, fecha, extras = [], onAnadido, onQuitado, origen })
         }
     };
 
+    // Con algo apuntado se abre solo: la lista no se esconde detrás de un botón.
+    const desplegado = abierto || extras.length > 0;
+
     return (
         <section className="space-y-3" data-testid="extras-del-dia">
-            <p className="caption">Extras del día</p>
-
             {/* El texto de Jesús, literal (punto 30). Se ve SIEMPRE, no solo con la lista
                 vacía: es el rótulo del bloque, y con lista llena es cuando más falta hace
-                que se entienda que esto es para lo de fuera de la dieta. */}
-            <p className="text-sm text-muted-foreground">
-                Si comes algo que no estaba en tu dieta, ponlo aquí en cuanto pase.
-            </p>
+                que se entienda que esto es para lo de fuera de la dieta.
+                «PREVISTO» (punto 175 del 27-08): decía «algo que no estaba en tu dieta», que
+                se lee como una falta. Previsto quita la culpa -- no está prohibido, es que no
+                entraba en el plan de hoy -- y así lo apunta en vez de callárselo. */}
+            <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <p className="caption">Extras del día</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                        Si comes algo que no estaba previsto en tu dieta, ponlo aquí en cuanto pase.
+                    </p>
+                </div>
+                {plegable && !desplegado && (
+                    <button onClick={() => setAbierto(true)} data-testid="extras-abrir"
+                        aria-label="Apuntar un extra del día"
+                        className="flex-shrink-0 w-9 h-9 rounded-full border border-border text-brand text-xl font-bold leading-none flex items-center justify-center hover:border-brand/50 transition-colors">
+                        +
+                    </button>
+                )}
+            </div>
 
             {/* Lo apuntado, encima del campo (punto 29). */}
             {extras.map((e) => {
@@ -122,7 +149,7 @@ const ExtrasDelDia = ({ api, fecha, extras = [], onAnadido, onQuitado, origen })
                 );
             })}
 
-            <div className="space-y-2">
+            <div className={`space-y-2 ${desplegado ? '' : 'hidden'}`}>
                 {/* El «a ojo» va DENTRO del campo (punto 31), que es donde lo lee justo
                     cuando va a escribir, y no gasta una línea de la pantalla. Tres filas
                     porque en un móvil de 390 px el gris ocupa tres líneas y con dos se
@@ -138,7 +165,13 @@ const ExtrasDelDia = ({ api, fecha, extras = [], onAnadido, onQuitado, origen })
                     /* El campo no tiene etiqueta encima (el rótulo es el del bloque), así que
                        el nombre para quien lo lee con voz sale de aquí. */
                     aria-label="Apunta un extra del día"
-                    className="rounded-xl bg-muted border-0 resize-none"
+                    /* EL «A OJO» PESA MENOS QUE LA INSTRUCCIÓN (punto 176 del 27-08). Salía
+                       casi del mismo tamaño que la frase de arriba y competían: aquélla dice
+                       qué es esto, y ésta es ayuda de mientras escribe.
+                       Se toca SOLO el `placeholder`, no el texto que teclea: en el móvil un
+                       campo por debajo de 16 px hace que el navegador dé un salto de zoom al
+                       entrar, y eso vale para lo que se escribe, no para lo que sugiere. */
+                    className="rounded-xl bg-muted border-0 resize-none placeholder:text-xs"
                     /* `extras-` y no `extra-`: cada fila apuntada es `extra-{id}`, así que
                        un guión que busque `[data-testid^="extra-"]` para contar lo apuntado
                        se llevaría también el campo y la cuenta. */

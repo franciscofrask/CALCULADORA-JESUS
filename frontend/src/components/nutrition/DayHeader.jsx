@@ -17,7 +17,7 @@ import React from 'react';
 import { Calendar, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
 import ConfigSection from './ConfigSection';
 import { DayDetailTable, StatusDot } from './DaySummary';
-import { leerMacro } from '../../lib/estadoDelMacro';
+import { leerMacro, claseDelMacro, fondoDelMacro, llevaPunto } from '../../lib/estadoDelMacro';
 
 
 const DayHeader = ({
@@ -53,11 +53,22 @@ const DayHeader = ({
     // modos de peri. El reparto interno no cambia: `val`/`tgt` siguen siendo los de las
     // comidas y de ahí sale el estado (el mismo criterio que getDayStatus); `valDia`/`tgtDia`
     // son solo lo que se pinta. El chip del perientreno sigue debajo con su propia cuenta.
-    // En grasa día y comidas coinciden: el peri no lleva grasa.
+    //
+    // LA GRASA VA SIN EL PERI, Y ESE ERA EL DESCUADRE DEL PUNTO 178 (27-08): «el mismo día,
+    // la grasa dice 40 aquí y 41 en Nutrición».
+    // Aquí ponía `valDia: dayMacros.G`, que SÍ lleva la grasa del intra y del post, y lo
+    // comparaba contra `tgtDia: tgtG`, que NO la lleva (en el método el objetivo del peri no
+    // tiene grasa). Creado y objetivo medían cosas distintas en la misma columna. Y el Inicio
+    // no tenía el fallo: allí lo montado sale de `servido_comidas`, que el servidor cuenta
+    // sin el peri. Dos pantallas, dos números, y el bueno era el del Inicio.
+    // La línea de arriba decía «en grasa día y comidas coinciden: el peri no lleva grasa»:
+    // es una suposición, y en producción hay 27 días guardados que la desmienten (batidos
+    // con 2 a 4 g de grasa en el intra o el post). `mainG` ya era el número bueno -- de él
+    // sale el estado del día -- y solo se pintaba el otro.
     const macros = [
         { key: 'P', label: 'Proteína', val: mainP, tgt: tgtP || 0, valDia: dayMacros.P, tgtDia: dayTarget.P_total ?? 0 },
         { key: 'H', label: 'Hidratos', val: mainH, tgt: tgtH || 0, valDia: dayMacros.H, tgtDia: dayTarget.H_total ?? 0 },
-        { key: 'G', label: 'Grasa', val: mainG, tgt: tgtG || 0, valDia: dayMacros.G, tgtDia: tgtG || 0 },
+        { key: 'G', label: 'Grasa', val: mainG, tgt: tgtG || 0, valDia: mainG, tgtDia: tgtG || 0 },
     ];
 
     return (
@@ -77,7 +88,11 @@ const DayHeader = ({
                     <button onClick={() => setCalendarOpen(true)} data-testid="open-calendar-btn"
                         className="flex items-center gap-2 min-w-0 h-9 px-2 rounded-xl hover:bg-muted/60 transition-colors">
                         <Calendar className="w-4 h-4 text-brand flex-shrink-0" />
-                        <span className="font-heading font-bold text-lg text-foreground capitalize truncate">{formatDate(currentDate)}</span>
+                        {/* Sin `capitalize`: desde la parte 6 la fecha es «Jueves, 27 de
+                            agosto» y esa clase pone mayúscula en CADA palabra («27 De
+                            Agosto»). La primera letra ya la pone `formatDate`, que es la
+                            única que va en mayúscula. */}
+                        <span className="font-heading font-bold text-lg text-foreground truncate">{formatDate(currentDate)}</span>
                     </button>
                     <button onClick={() => changeDate(1)} aria-label="Día siguiente"
                         className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-brand hover:bg-brand/10 transition-colors flex-shrink-0">
@@ -160,23 +175,22 @@ const DayHeader = ({
                                     <div key={key} className="text-center" data-testid={`dia-${key}`}>
                                         <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-center gap-1">
                                             {label}
-                                            {lectura.color && (
+                                            {llevaPunto(lectura.color) && (
                                                 <span data-testid={`dia-punto-${key}`}
-                                                    className={`w-1.5 h-1.5 rounded-full ${lectura.color === 'ok' ? 'bg-ok' : 'bg-pasado'}`} />
+                                                    className={`w-1.5 h-1.5 rounded-full ${fondoDelMacro(lectura.color)}`} />
                                             )}
                                         </p>
                                         <p className="numero-grande font-data leading-none text-[34px] sm:text-[40px] mt-1.5 text-foreground">
                                             {creado}
                                         </p>
                                         <p data-testid={`dia-palabra-${key}`}
-                                            className={`text-xs mt-1 ${lectura.color === 'ok' ? 'text-ok font-medium'
-                                                : lectura.color === 'pasado' ? 'text-pasado font-medium' : 'text-muted-foreground'}`}>
+                                            className={`text-xs mt-1 ${claseDelMacro(lectura.color)}`}>
                                             {lectura.palabra}
                                         </p>
                                         {lectura.barra && (
                                             <div className="h-1 rounded-full bg-muted mt-1.5 overflow-hidden">
                                                 <div data-testid={`dia-barra-${key}`}
-                                                    className={`h-full rounded-full ${lectura.barra.color === 'ok' ? 'bg-ok' : 'bg-pasado'}`}
+                                                    className={`h-full rounded-full ${fondoDelMacro(lectura.barra.color)}`}
                                                     style={{ width: `${lectura.barra.largo}%` }} />
                                             </div>
                                         )}

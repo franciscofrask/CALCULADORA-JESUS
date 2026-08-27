@@ -28,13 +28,20 @@ export const ProgressBar = ({ value, max, color, height = 6, showCheck = false, 
 
 // DOS COLORES Y NINGÚN AMARILLO (punto 116 del artifact del 25-08: «el amarillo desaparece
 // de la app»). Aquí había cuatro tonos -- gris, verde, rojo y ámbar -- para decir lo que
-// ahora dicen dos: verde si está resuelto y naranja si te pide algo. Sin crear también es
-// naranja: le falta todo (punto 117).
+// ahora dicen dos: verde si está resuelto y naranja si te pide algo.
+//
+// LA COMIDA VACÍA VUELVE AL GRIS (punto 196 del 27-08, que corrige el 116 y el 117). Estaba
+// en naranja «porque le falta todo», y eso se escribió antes de cerrar la regla del color del
+// punto 76: el naranja es sólo para lo que se PASA. Una comida sin crear no es un error, es
+// que aún no la has hecho, y con el naranja puesto un día a medias salía entero en color de
+// aviso sin haber nada mal. El punto se queda -- dice de qué comida hablamos -- pero apagado.
+// Y lo mismo con la que va corta: ir por debajo no es un error, es que no has terminado, así
+// que el naranja se queda SOLO para la que se pasa. Es la misma lista del punto 196.
 const STATUS_DOT = {
-    empty: 'bg-pasado',
+    empty: 'bg-muted-foreground/40',
     cuadrada: 'bg-ok',
     sobra: 'bg-pasado',
-    falta: 'bg-pasado',
+    falta: 'bg-muted-foreground/40',
 };
 export const StatusDot = ({ status, className = '' }) => (
     <span className={`inline-block w-2.5 h-2.5 rounded-full ${STATUS_DOT[status] || STATUS_DOT.empty} ${className}`} />

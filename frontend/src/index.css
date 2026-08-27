@@ -137,17 +137,21 @@
        resetea el 'ss01'/'cv11' heredado del body para que los dígitos salgan limpios. */
     .font-data { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; }
 
-    /* LOS TRES NÚMEROS DEL INICIO (punto 81 del 25-08): «más altos y menos gordos».
-       Mismo tipo y peso 700 -- que es el que ya tenían, aunque el documento diga 850 --;
-       lo que cambia es la caja: se estiran a lo alto y se estrechan. Con tres cifras en
-       una pantalla de 390 px eso es lo que decide si respiran o se tocan.
-       El `transform` no toca el hueco que ocupan, así que la rejilla de tres columnas se
-       queda donde está y ninguna otra pantalla se entera. */
+    /* LOS TRES NÚMEROS DEL INICIO (punto 172 del 27-08): 44 px y peso 850.
+       El 25-08 (punto 81) se pidió «más altos y menos gordos» y se resolvió dejando el peso
+       en 700 -- el documento decía 850 y aquí no había 850 que dar -- y estirando la caja con
+       un `transform: scaleY(1.12) scaleX(0.9)`. Jesús lo vuelve a pedir mirando la app: «40
+       con peso 700 se queda fino para ser lo primero que se mira de la pantalla».
+       Así que ahora va el valor de verdad. Y el `transform` se cae: el `scaleX(0.9)` estaba
+       ahí para adelgazarlos y ahora trabajaría contra el peso nuevo, que es justo lo que se
+       quiere ver. El tamaño lo pone quien lo usa (44 px), no esta clase. */
     .numero-grande {
         display: inline-block;
-        font-weight: 700;
+        font-weight: 850;
+        /* Inter se carga en rango (public/index.html): sin esto, un 850 en un navegador que
+           resuelva por pesos discretos cae al 800 y el cambio no se ve. */
+        font-variation-settings: 'wght' 850;
         letter-spacing: -0.015em;
-        transform: scaleY(1.12) scaleX(0.9);
     }
 
     .heading-1 { @apply font-heading text-4xl md:text-5xl font-bold tracking-tight uppercase; }
