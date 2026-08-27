@@ -4,47 +4,49 @@
 <meta charset="utf-8">
 <title>12EN12 · Lo trabajado el 26 de agosto</title>
 <style>
-  @page { size: A4; margin: 17mm 15mm 15mm 15mm; }
+  @page { size: A4; margin: 16mm 14mm 14mm 14mm; }
   * { box-sizing: border-box; }
   body {
     font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    font-size: 10.4pt; line-height: 1.5; color: #1a1a1a; margin: 0;
+    font-size: 10pt; line-height: 1.45; color: #1a1a1a; margin: 0;
   }
-  h1 { font-size: 21pt; margin: 0 0 2mm; letter-spacing: -.4px; }
-  .sub { color: #666; font-size: 10pt; margin: 0 0 8mm; }
+  h1 { font-size: 20pt; margin: 0 0 2mm; letter-spacing: -.4px; }
+  .sub { color: #666; font-size: 9.6pt; margin: 0 0 6mm; }
   h2 {
-    font-size: 13pt; margin: 9mm 0 3mm; padding-bottom: 1.5mm;
+    font-size: 12.5pt; margin: 7mm 0 2.5mm; padding-bottom: 1.2mm;
     border-bottom: 2px solid #FF671F; page-break-after: avoid;
   }
-  h3 { font-size: 11pt; margin: 5mm 0 1.5mm; page-break-after: avoid; }
-  p { margin: 0 0 2.5mm; }
-  ul { margin: 0 0 3mm; padding-left: 5mm; }
-  li { margin-bottom: 1.2mm; }
+  h2 .pts { font-size: 9pt; color: #888; font-weight: 400; }
+  h3 { font-size: 10.4pt; margin: 4mm 0 1mm; page-break-after: avoid; }
+  p { margin: 0 0 2mm; }
+  ul { margin: 0 0 2.5mm; padding-left: 5mm; }
+  li { margin-bottom: 1mm; }
   .fase {
-    border-left: 3px solid #ddd; padding: 0 0 0 4mm; margin: 0 0 4mm;
+    border-left: 3px solid #e2e2e2; padding: 0 0 0 3.5mm; margin: 0 0 3mm;
     page-break-inside: avoid;
   }
   .fase h3 { margin-top: 0; }
-  .cita {
-    color: #555; font-style: italic; border-left: 2px solid #FF671F;
-    padding-left: 3mm; margin: 2mm 0;
+  .fase h3 .num {
+    display: inline-block; background: #FF671F; color: #fff; font-size: 7.6pt;
+    padding: 0.3mm 1.4mm; border-radius: 2px; margin-right: 1.5mm;
+    vertical-align: 1px; font-weight: 700; letter-spacing: .3px;
   }
   .caja {
     background: #fdf5f0; border: 1px solid #f3d9c8; border-radius: 3px;
-    padding: 3mm 4mm; margin: 3mm 0; page-break-inside: avoid;
+    padding: 2.5mm 3.5mm; margin: 2.5mm 0; page-break-inside: avoid;
   }
-  .caja.gris { background: #f6f6f6; border-color: #e0e0e0; }
+  .caja.gris { background: #f7f7f7; border-color: #e2e2e2; }
   .caja h3 { margin-top: 0; }
-  code { font-family: Consolas, monospace; font-size: 9.2pt; background: #f0f0f0;
-         padding: 0 1mm; border-radius: 2px; }
-  table { width: 100%; border-collapse: collapse; margin: 2mm 0 4mm; font-size: 9.4pt; }
-  th, td { text-align: left; padding: 1.6mm 2mm; border-bottom: 1px solid #e4e4e4;
+  code { font-family: Consolas, monospace; font-size: 8.8pt; background: #f0f0f0;
+         padding: 0 0.8mm; border-radius: 2px; }
+  table { width: 100%; border-collapse: collapse; margin: 1.5mm 0 3mm; font-size: 9pt; }
+  th, td { text-align: left; padding: 1.4mm 1.8mm; border-bottom: 1px solid #e6e6e6;
            vertical-align: top; }
-  th { background: #f6f6f6; font-weight: 600; }
-  .n { color: #FF671F; font-weight: 700; }
+  th { background: #f7f7f7; font-weight: 600; }
+  .n { color: #FF671F; font-weight: 700; white-space: nowrap; }
   .cifra { font-weight: 700; }
-  .pie { margin-top: 8mm; padding-top: 3mm; border-top: 1px solid #ddd;
-         color: #777; font-size: 8.8pt; }
+  .pie { margin-top: 6mm; padding-top: 2.5mm; border-top: 1px solid #ddd;
+         color: #777; font-size: 8.4pt; }
   .salto { page-break-before: always; }
 </style>
 </head>
@@ -53,7 +55,7 @@
 <h1>Lo trabajado el 26 de agosto</h1>
 <p class="sub">
   Los tres artifacts de Jesús (partes 2, 3 y 4 de «Para el equipo»), puntos 75 al 143.
-  Diecisiete fases, veintiún commits. Todo en producción desde hoy.
+  Diecisiete fases, veinticuatro commits. Todo en producción.
 </p>
 
 <div class="caja">
@@ -61,103 +63,159 @@
   <ul>
     <li>Los <span class="cifra">69 puntos</span> de los tres documentos, ejecutados y comprobados en el navegador a 390 px y a 1280 px.</li>
     <li>Al cotejar contra el catálogo real salieron <span class="cifra">seis fallos de fondo</span> que no estaban en ningún punto: la app decía una cosa y contaba otra.</li>
-    <li>Quedan <span class="cifra">dos preguntas</span> para Jesús, y las dos bloquean una fase entera.</li>
+    <li>Quedan <span class="cifra">dos preguntas</span> para Jesús, y cada una bloquea una fase entera.</li>
     <li>Y <span class="cifra">seis tests rojos</span> anteriores a este trabajo que conviene mirar.</li>
   </ul>
 </div>
 
-<h2>Parte 2 · El Inicio del cliente (puntos 75 a 104)</h2>
+<h2>Parte 2 · El Inicio del cliente <span class="pts">(puntos 75 a 104, seis fases)</span></h2>
 
 <div class="fase">
-  <h3>La frase del día desaparecía</h3>
+  <h3><span class="num">1</span>La frase del día desaparecía</h3>
   <p>
-    La pantalla exigía que la frase tuviera la fecha de hoy, así que en cuanto se acababan
-    las escritas, el hueco se quedaba vacío. Ahora rotan: la frase sale de la fecha, así que
-    nunca se agotan y no hace falta que nadie las cargue cada mañana.
+    La pantalla exigía que la frase llevara la fecha de hoy, así que en cuanto se acababan las
+    escritas el hueco se quedaba vacío. Ahora rota: la frase sale de la fecha, nunca se agotan
+    y nadie tiene que cargarlas cada mañana.
   </p>
 </div>
 
 <div class="fase">
-  <h3>«Lo que llevas» no podía llegar nunca al total</h3>
+  <h3><span class="num">2</span>«Lo que llevas» no podía llegar nunca al total</h3>
   <p>
     El intra y el post no se dejaban marcar por una regla escrita a propósito, de modo que el
-    contador se quedaba corto por diseño. Eran <span class="cifra">tres candados distintos</span>
-    y había que quitar los tres. El punto 96 cambia ese criterio, así que se levantaron.
+    contador se quedaba corto por diseño. Eran <strong>tres candados distintos</strong> y
+    había que quitar los tres. El punto 96 cambia ese criterio.
   </p>
 </div>
 
 <div class="fase">
-  <h3>Los números del Inicio, y una sola regla de color</h3>
+  <h3><span class="num">3</span>Los números del Inicio, en blanco y menos gruesos</h3>
   <p>
-    Los números pasan a blanco y menos gruesos, y todos los decimales se van salvo el de la
-    línea de aviso, que es donde hace falta la cifra exacta.
-  </p>
-  <p>
-    El cambio de fondo es otro: <strong>había cuatro criterios de color distintos</strong> en
-    las cuatro pestañas del Inicio, cada uno inventado en su sitio. Ahora hay uno solo
-    (<code>lib/estadoDelMacro</code>) y las cuatro preguntan al mismo.
-  </p>
-</div>
-
-<h2>Parte 3 · La pantalla de Nutrición (puntos 105 a 119)</h2>
-
-<div class="fase">
-  <h3>El número de arriba se contaba de tres maneras</h3>
-  <p>
-    La cabecera enseñaba un número que, según dónde mirases, salía de un criterio o de otro:
-    <strong>el mismo dato con tres cuentas distintas</strong>. Ahora hay un solo número y
-    dice lo que es: lo que llevas creado.
+    Y todos los decimales fuera salvo el de la línea de aviso, que es donde hace falta la
+    cifra exacta: «te has pasado 13,7 g de hidratos».
   </p>
 </div>
 
 <div class="fase">
-  <h3>La cabecera tenía cinco botones en el ordenador y tres en el móvil</h3>
+  <h3><span class="num">4</span>Una sola regla de color para las cuatro pestañas</h3>
   <p>
-    Y desaparecían justo PDF y Copiar, que son los que se usan. Peor: en el móvil
-    reaparecían abajo del todo, después de las comidas, donde nadie baja a buscarlos. Tres
-    sitios para cinco botones. Ahora queda PDF fuera y el resto dentro del «···», igual en
-    los dos tamaños.
+    Había <strong>cuatro criterios de color distintos</strong> en las cuatro pestañas del
+    Inicio, cada uno inventado en su sitio. Ahora hay uno solo (<code>lib/estadoDelMacro</code>)
+    y las cuatro preguntan al mismo.
   </p>
 </div>
 
 <div class="fase">
-  <h3>El nombre de la comida desaparecía en el móvil</h3>
+  <h3><span class="num">5</span>El perientreno, un interruptor y no una frase suelta</h3>
   <p>
-    No es que se cortara: había una regla que lo quitaba entero cuando la comida se pasaba de
-    macros. Justo cuando más falta hace saber de qué comida hablamos.
-  </p>
-</div>
-
-<h2>Parte 4 · La comida por dentro, la calibración y el buscador (puntos 120 a 143)</h2>
-
-<div class="fase">
-  <h3>Los números de la comida, siempre y con decimales</h3>
-  <p>
-    Las barras de macros de cada comida sólo aparecían a veces. Ahora están siempre, con su
-    número, su palabra y su color, y con el margen proporcional que protege al intra: cuatro
-    gramos sobre los nueve de proteína que pide un intra son casi la mitad.
+    Y el contador cuenta el peri aparte, que es lo que permite saber cuánto de lo que llevas
+    es suyo.
   </p>
 </div>
 
 <div class="fase">
-  <h3>Vaciar, la papelera y el tercer camino</h3>
+  <h3><span class="num">6</span>A partir de 5, naranja, falte o sobre</h3>
   <p>
-    Jesús pidió que Vaciar y la papelera preguntaran. Al mirarlo apareció un tercero, y era
-    el peor de los tres: <strong>bajar la cantidad por debajo del mínimo saca el alimento de
-    la comida</strong>, y por el botón «−» lo hacía sin preguntar, sin aviso y sin deshacer.
-    Era la única de las cuatro formas de borrar sin ninguna red, y la más fácil de disparar
-    sin querer: se pulsa repetido, sin mirar, y está a un dedo de la papelera.
+    Su frase de cabecera y su maqueta se contradecían en el borde del margen. Manda la frase:
+    por debajo también pinta. Y vuelve la línea del decimal, que es otra distinta de la que
+    el punto 90 manda quitar.
   </p>
-  <p>Los cuatro caminos preguntan ahora, con el mismo diálogo.</p>
+</div>
+
+<h2>Parte 3 · La pantalla de Nutrición <span class="pts">(puntos 105 a 119, cinco fases)</span></h2>
+
+<div class="fase">
+  <h3><span class="num">1</span>Un solo número, y siempre el mismo</h3>
+  <p>
+    La cabecera <strong>cambiaba de criterio sola, y de dos maneras a la vez</strong>. El
+    titular rotaba entre cuatro frases, y con él cambiaba la magnitud del número: era lo que
+    <em>falta</em> mientras ibas a medias y pasaba a ser lo <em>servido</em> al cuadrar o al
+    pasarte. El mismo hueco, dos cosas distintas, y nadie decía cuál estabas mirando. Y en
+    escritorio había un tercer criterio.
+  </p>
+  <p>Su regla: «Inicio es cómo vas. Nutrición es lo que llevas creado».</p>
 </div>
 
 <div class="fase">
-  <h3>El cartel de la calibración prometía lo que no iba a pasar</h3>
+  <h3><span class="num">2</span>Las comidas, con su nombre y sin amarillo</h3>
+  <p>
+    Pasaban dos cosas: el nombre se cortaba a «COMID…» porque iba a 24 px peleándose en la
+    misma línea con el estado y con Automático/Manual; y <strong>cuando la comida se pasaba,
+    el nombre DESAPARECÍA del móvil</strong> por una regla explícita, quedando sólo el
+    cuadrito «C1». Justo cuando más falta hace saber de qué comida hablamos.
+  </p>
+</div>
+
+<div class="fase">
+  <h3><span class="num">3</span>Las cinco líneas de antes de la primera comida</h3>
+  <p>
+    «Es lo que hay hoy antes de ver la primera comida, en el móvil.» Eran cinco líneas de
+    texto entre los números y las comidas; queda una. Las que se van decían cosas que ya
+    estaban dichas donde se mira.
+  </p>
+</div>
+
+<div class="fase">
+  <h3><span class="num">4</span>El aviso de la ficha se muda a Mi perfil</h3>
+  <p>
+    «Macros provisionales, nos falta tu altura» ocupaba tres líneas encima de las comidas:
+    es un problema de ficha metido en la pantalla de comer. Se va a donde se arregla, y en el
+    menú queda un punto naranja — en los tres sitios donde vive esa entrada, incluido el
+    propio botón «Más», que es lo único visible sin abrirlo.
+  </p>
+</div>
+
+<div class="fase">
+  <h3><span class="num">5</span>La cabecera, en dos botones</h3>
+  <p>
+    Había cinco en el ordenador y tres en el móvil, y desaparecían justo PDF y Copiar, que
+    son los que se usan. Peor: en el móvil reaparecían <strong>abajo del todo, detrás de las
+    comidas</strong>. Tres sitios para cinco botones. Ahora queda PDF fuera y el resto en un
+    «···» que hubo que escribir, igual en 390 px y en 1280.
+  </p>
+</div>
+
+<h2>Parte 4 · La comida por dentro, la calibración y el buscador <span class="pts">(puntos 120 a 143, seis fases)</span></h2>
+
+<div class="fase">
+  <h3><span class="num">1</span>Los números de la comida, siempre y con decimales</h3>
+  <p>
+    Estaban <strong>escondidos detrás de un «ver detalles» en gris</strong> que en el teléfono
+    nacía cerrado: para saber qué le faltaba a la comida había que pedirlo. Y lo que enseñaba
+    era otro formato distinto del de Inicio y del de la cabecera. Ahora es el de la casa
+    — número, punto, palabra y barra — y con el margen proporcional, que protege al intra:
+    cuatro gramos sobre los nueve de proteína que pide son casi la mitad.
+  </p>
+</div>
+
+<div class="fase">
+  <h3><span class="num">2</span>Cuadrar delante y el resto en el «···»</h3>
+  <p>
+    «¿A qué se entra aquí? A mover gramos hasta que cuadre. Lo que no sirva para eso, sobra.»
+    Había cinco controles a la vista. «Modo de cálculo» pasa a «AJUSTE DE CANTIDADES», y sale
+    de su escondite la frase que dice lo único que hay que entender — «Yo te ajusto las
+    cantidades» —, que vivía en un <code>hidden lg:block</code>: <strong>en el móvil no se
+    veía nunca</strong>.
+  </p>
+</div>
+
+<div class="fase">
+  <h3><span class="num">3</span>Vaciar y la papelera preguntan</h3>
+  <p>
+    La papelera era la peor, y no por lo que se lleva sino por lo que no tenía: era la
+    <strong>única acción destructiva de la pantalla sin ninguna red</strong>, ni pregunta ni
+    deshacer, mientras que Vaciar — que se lleva la comida entera — sí dejaba deshacer. La
+    más pequeña era la más peligrosa, y su icono está a un dedo del «−» de bajar gramos.
+  </p>
+</div>
+
+<div class="fase">
+  <h3><span class="num">4</span>El cartel de la calibración deja de prometer</h3>
   <p>
     El aviso de «frutos secos hoy: 25 de 40 g, su proteína te cuenta a la mitad» le salía a
     todos los frutos secos por igual. Pero antes del tramo hay una puerta: la proteína tiene
-    que llegar a un tercio del macro dominante o no cuenta nunca, comas lo que comas. A las
-    nueces (23 %) y al cóctel (30,5 %) les prometía una proteína que aporta cero.
+    que llegar a un tercio del macro dominante o <strong>no cuenta nunca, comas lo que
+    comas</strong>. A las nueces (23 %) y al cóctel (30,5 %) les prometía cero.
   </p>
   <p>
     Comprobado contra el catálogo entero, y coincide con los cinco casos que él nombró:
@@ -166,16 +224,24 @@
 </div>
 
 <div class="fase">
-  <h3>El buscador de alimentos dice cuál es cuál</h3>
+  <h3><span class="num">5</span>El buscador de alimentos dice cuál es cuál</h3>
   <p>
     Cada alimento enseñaba dos números sin decir cuál era cuál, y a uno lo llamaba «lo que
     pone la etiqueta» aunque fuera un genérico sin bote. Ahora son <strong>«Macros del
     método»</strong> (lo que te cuenta) y <strong>«Macros reales»</strong> (lo que contiene).
   </p>
   <p>
-    Arriba se explica qué es un genérico, que no se decía en ningún sitio, y los alimentos a
-    los que la proteína les crece con la cantidad llevan un punto delante; al abrirlos
-    enseñan sus tres tramos. Hasta hoy un alimento de la lista no se podía abrir.
+    Arriba se explica qué es un genérico, que no se decía en ningún sitio. Los alimentos a
+    los que la proteína les crece con la cantidad llevan un punto, y al abrirlos enseñan sus
+    tres tramos: <strong>hasta hoy un alimento de la lista no se podía abrir</strong>.
+  </p>
+</div>
+
+<div class="fase">
+  <h3><span class="num">6</span>Los dos hallazgos de fondo</h3>
+  <p>
+    Los números de montar una comida cambiaban al guardarla, y dos alimentos idénticos decían
+    lo contrario el uno del otro. Los dos salen en la tabla de abajo.
   </p>
 </div>
 
@@ -188,7 +254,7 @@
 </p>
 
 <table>
-  <tr><th style="width:26%">Qué pasaba</th><th style="width:16%">A cuántos</th><th>Por qué</th></tr>
+  <tr><th style="width:25%">Qué pasaba</th><th style="width:16%">A cuántos</th><th>Por qué</th></tr>
   <tr>
     <td>El buscador prometía proteína que el día no da</td>
     <td class="n">39 panes y cereales</td>
@@ -231,10 +297,34 @@
   </p>
 </div>
 
+<h2>Lo que apareció después, ya con la app desplegada</h2>
+
+<p>Tres cosas del móvil que vio Francisco mirando la app, no los documentos:</p>
+
+<ul>
+  <li>
+    <strong>El borde naranja del intra y el post había desaparecido</strong> de la lista del
+    Inicio. Regresión propia: esa fila era un solo botón y llevaba el borde puesto en él; al
+    partirla en dos para meter la casilla de marcar, el borde se quedó en el trozo que se
+    pulsa y dejó de verse. El rayo del nombre siguió ahí, así que no cantaba.
+  </li>
+  <li>
+    <strong>«Lo hago yo» salía partido en tres líneas</strong>, una por palabra. El botón mide
+    101 px en la rejilla de tres columnas y el estilo base se comía 45 en padding. Y el
+    arreglo evidente cambiaba un fallo por otro: al dejar de partirse el texto, el que se
+    encogía era el icono, que se aplastaba a cero.
+  </li>
+  <li>
+    <strong>En Mi rutina se cortaba «Entreno»</strong> a «Entr…» en la tira de la semana, y en
+    los móviles de 360 px se salían «Ejercicios» y «Descanso» de sus tarjetas. Las dos son de
+    ancho: cada píxel de padding se lo quitaba a la palabra.
+  </li>
+</ul>
+
 <h2>Cómo se comprobó</h2>
 
 <ul>
-  <li><strong>En el navegador de verdad</strong>, a 390 px y a 1280 px, pantalla por pantalla. No con capturas de un test.</li>
+  <li><strong>En el navegador de verdad</strong>, a 360, 390 y 1280 px, pantalla por pantalla. No con capturas de un test.</li>
   <li>
     <strong>Contra el catálogo entero</strong> (3.219 alimentos), no contra los ejemplos del
     documento. De ahí salieron los seis fallos de fondo y las cifras exactas de cada uno.
@@ -248,11 +338,15 @@
     de 15 a 16 g el día cruza los 40 g, y la proteína salta de 4,5 a 9,3 con las almendras
     subiendo solas sin tocarlas.
   </li>
+  <li>
+    <strong>Dentro del pod de producción</strong> tras el despliegue, no sólo mirando el log:
+    que el código está y que el backend lo importa.
+  </li>
 </ul>
 
 <h2>Lo que queda</h2>
 
-<h3>Dos preguntas para Jesús, y las dos bloquean una fase entera</h3>
+<h3>Dos preguntas para Jesús, y cada una bloquea una fase entera</h3>
 <ol>
   <li>
     <strong>Los suplementos por comida</strong> (puntos 99 y 118). Hoy la app no sabe qué
@@ -267,8 +361,7 @@
 
 <h3>Seis tests rojos anteriores a este trabajo</h3>
 <p>
-  Comprobados uno a uno revirtiendo los cambios: fallan igual sin ellos. No son ruido, son
-  cosas que conviene mirar.
+  Comprobados uno a uno revirtiendo los cambios: fallan igual sin ellos. No son ruido.
 </p>
 <ul>
   <li>Las categorías 7, 8 y 22 se abren <strong>vacías</strong> en el constructor de comidas.</li>
@@ -281,7 +374,7 @@
 
 <div class="pie">
   Informe generado el 26 de agosto de 2026 · 12EN12 · commits <code>42deb8a</code> a
-  <code>a3b7395</code>, desplegados en 12en12app.jesusgallegopt.com
+  <code>9344861</code> · 12en12app.jesusgallegopt.com y el clon de pruebas
 </div>
 
 </body>
