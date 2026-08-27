@@ -9,6 +9,7 @@ import {
     aFecha, diaLocal, hoyLocal, etiquetaMomento, fechaLargaDeHoy, textoPlazo,
 } from '../lib/horaEspana';
 import { useEsTelefono } from '../lib/esTelefono';
+import { abrirRutinaPdf } from '../lib/abrirRutina';
 import { useOnboarding } from '../context/OnboardingContext';
 import { Card, CardContent } from '../components/ui/card';
 import BodyFatSlider from '../components/SelectorGrasa';
@@ -359,6 +360,23 @@ const mananaDeLaDieta = () =>
 
 const estrellas = (n) => (n >= 1 && n <= 5 ? '★'.repeat(n) + '☆'.repeat(5 - n) : '');
 
+// LA FRASE DEL DÍA, SIN PUNTO FINAL (punto 177 del 27-08): «es una frase suelta, no un
+// párrafo; el punto la hace sonar a texto de sistema».
+//
+// Se limpia AL PINTAR y no en la base a propósito: las frases las carga un guión
+// (backend/_cargar_frases.py) y las escribe gente, así que limpiar las de hoy no impide que
+// la de mañana vuelva a venir con punto.
+//
+// Cae SOLO el punto suelto. Los suspensivos se quedan (son parte de la frase y quitarles uno
+// los deja en dos, que es una errata), y la interrogación y la exclamación ni se tocan.
+// Sin lookbehind a posta: no lo entienden los Safari anteriores al 16.4 y un `SyntaxError`
+// en un fichero de éstos no rompe la frase, rompe la aplicación entera al cargar.
+const sinPuntoFinal = (texto) => {
+    const t = String(texto || '').trim();
+    if (!t.endsWith('.') || t.endsWith('..')) return t;
+    return t.slice(0, -1);
+};
+
 // Una línea de «Lo que toca hoy» o de «Pendiente»: título, detalle y, a la derecha, la
 // flecha de entrar o el «✓ hecho». Nada de rojos ni de la palabra «pendiente».
 const LineaDeHoy = ({ icono: Icono, titulo, detalle, cursiva, extra, hecho, onClick, testId }) => {
@@ -590,12 +608,10 @@ const InicioNuevo = () => {
 
     // El PDF se abre vía blob porque el visor del navegador no manda el token (mismo
     // camino que RoutinePage y EntrenoPage).
-    const abrirPdfRutina = async () => {
-        try {
-            const r = await api.get('/routines/pdf', { responseType: 'blob' });
-            window.open(URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' })), '_blank');
-        } catch { toast.error('No hemos podido abrir tu rutina. Inténtalo en un momento.'); }
-    };
+    // «Que directamente, si tienes rutina, que le abra» (vídeo del 27-08). Un toque y se abre.
+    // Aquí estaba el fallo que él vivió en directo -- «toco y no abre» --: la ventana se pedía
+    // después de bajar el fichero y el iPhone la bloqueaba en silencio. Ver lib/abrirRutina.
+    const abrirPdfRutina = () => abrirRutinaPdf(api);
 
     // ── 4.3: PLAN POR PLAN, POR EL CATÁLOGO (habilitaciones), jamás por nombre de plan ──
     const h = habilitaciones || {};
@@ -735,7 +751,15 @@ const InicioNuevo = () => {
     // asciende a frase del día (routes/settings.py) y ésta pasa a ser la última. Sin cola,
     // se queda la que hay, que es justo lo prometido. La variedad se resuelve cargando
     // frases (backend/_cargar_frases.py), no escondiendo el bloque.
-    const frase = pantalla('frase_del_dia') ? (appSettings?.frase_del_dia?.texto || null) : null;
+    // SIN PUNTO FINAL (punto 177 del 27-08): «es una frase suelta, no un párrafo; el punto la
+    // hace sonar a texto de sistema». Se quita AL PINTAR y no en la base a propósito: las
+    // frases las carga un guión (backend/_cargar_frases.py) y las escribe gente, así que
+    // limpiar las de hoy no impide que la de mañana venga con punto. Aquí se limpia siempre.
+    // Solo cae el punto: los puntos suspensivos, la interrogación y la exclamación se quedan,
+    // que ésos sí son parte de la frase.
+    const frase = pantalla('frase_del_dia')
+        ? (sinPuntoFinal(appSettings?.frase_del_dia?.texto) || null)
+        : null;
 
     return (
         <div className="pb-6 animate-fade-in" data-testid="inicio-nuevo">
@@ -769,7 +793,7 @@ const InicioNuevo = () => {
             <div className="px-4 sm:px-6 lg:px-8 max-w-3xl mx-auto space-y-6 mt-4">
 
             {/* «TU DIETA HOY» (doc del 21-08, tarea 4.2): el deslizador Macros · Dieta ·
-                Llevas · Falta y, debajo, «Marca lo que ya te has comido». Vive en
+                Llevas · Falta y, debajo, «Marca lo que te vayas comiendo». Vive en
                 components/inicio/TuDietaHoy.
 
                 MIENTRAS NO SE SEPA EL OBJETIVO, NO HAY NÚMEROS: la regla de siempre. Un
@@ -786,8 +810,13 @@ const InicioNuevo = () => {
                    perientreno va dentro, en el pie de «Macros»: hasta el 25-08 aquí había
                    una frase suelta explicándolo, y hacía falta un truco de `order` para que
                    cayera pegada a los números en vez de dentro de los extras. */
+                /* `suplementos` baja para que cada comida enseñe el suyo debajo (punto 174 del
+                   27-08). Ya se pedían aquí para la línea de «Tu suplementación», así que no
+                   hay petición nueva: es el mismo dato pintado donde el cliente lo va a mirar,
+                   que es al lado de la comida y no en una pestaña aparte. */
                 <TuDietaHoy api={api} userId={user?.id} fecha={hoyDeLaDieta()} dieta={dieta}
-                    objetivo={objetivo} servido={comido} navigate={navigate} />
+                    objetivo={objetivo} servido={comido} navigate={navigate}
+                    suplementos={suplementos} />
             ) : (
                 <>
                     <LineaDeHoy icono={Scale} titulo="Configura tus macros"
@@ -864,7 +893,9 @@ const InicioNuevo = () => {
                                 detalle="Hoy no te toca entrenar" testId="linea-entreno-descanso"
                                 onClick={() => navigate('/dashboard/routine')} />
                         ) : (
-                            <LineaDeHoy icono={FileText} titulo="Tu rutina, en PDF"
+                            /* «Olvida la palabra PDF. Eso no tiene sentido» (27-08): en qué
+                               fichero viene su rutina es cosa nuestra. */
+                            <LineaDeHoy icono={Dumbbell} titulo="Tu rutina"
                                 detalle="Abrirla" testId="linea-entreno-pdf" onClick={abrirPdfRutina} />
                         )
                     ) : rutinaDelMes ? (
@@ -1564,9 +1595,10 @@ const ClientDashboard = () => {
                                 ? <p className="text-muted-foreground text-sm">Día de descanso activo</p>
                                 : <p className="text-muted-foreground text-sm">{plural(todayRoutine.exercises?.length || 0, 'ejercicio')} programados</p>
                         ) : hayPdfRutina
-                            /* Con PDF subido no hay «sin rutina» que valga: la tarjeta ya
-                               lleva a /dashboard/routine, donde se abre. */
-                            ? <p className="text-muted-foreground text-sm">Tu rutina está en PDF. Entra a verla</p>
+                            /* Con rutina subida no hay «sin rutina» que valga: la tarjeta ya
+                               lleva a /dashboard/routine, donde se abre. Y sin decir en qué
+                               fichero viene, que eso es cosa nuestra (27-08). */
+                            ? <p className="text-muted-foreground text-sm">Ya tienes tu rutina. Entra a verla</p>
                             : <p className="text-muted-foreground text-sm">Sin rutina asignada</p>}
                     </div>
                 </div>

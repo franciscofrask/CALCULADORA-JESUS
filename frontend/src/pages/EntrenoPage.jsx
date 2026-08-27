@@ -12,6 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ChevronLeft, ChevronRight, Loader2, Plus, Star, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { abrirRutinaPdf } from '../lib/abrirRutina';
 
 const inputCls = "w-full bg-muted border border-input rounded-xl px-3 py-2.5 text-foreground text-sm placeholder-white/20 focus:outline-none focus:border-[#FF671F] transition-colors";
 
@@ -162,14 +163,12 @@ const EntrenoPage = () => {
             </button>
             {hayPdf && (
                 <button data-testid="entreno-pdf-rutina"
-                    onClick={async () => {
-                        try {
-                            const r = await api.get('/routines/pdf', { responseType: 'blob' });
-                            window.open(URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' })), '_blank');
-                        } catch { toast.error('No hemos podido abrir tu rutina. Inténtalo en un momento.'); }
-                    }}
+                    /* La ventana se abre dentro del toque: aquí estaba el mismo fallo que en
+                       el Inicio -- en el iPhone se tocaba y no pasaba nada. Ver
+                       lib/abrirRutina, que es donde está contado. */
+                    onClick={() => abrirRutinaPdf(api)}
                     className="w-full flex items-center justify-between p-4 bg-card border border-border rounded-2xl hover:border-white/30 transition-colors">
-                    <span className="font-bold text-foreground">Tu rutina en PDF</span>
+                    <span className="font-bold text-foreground">Tu rutina</span>
                     <ChevronRight className="w-4 h-4 text-foreground/40" />
                 </button>
             )}

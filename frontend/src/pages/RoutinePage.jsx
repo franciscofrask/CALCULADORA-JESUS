@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { plural } from '../lib/labels';
+import { abrirRutinaPdf } from '../lib/abrirRutina';
 import {
     Dumbbell, Repeat, ChevronDown, ChevronUp, History,
     Flame, Moon, Play, Timer, Trophy, ChevronRight, FileText, Check
@@ -71,7 +72,9 @@ const SemanaDeRutina = ({ semana, abrirPdf, tienePdf, onMarcarHoy, onSiLoHice, o
                 {tienePdf && (
                     <button onClick={abrirPdf} data-testid="semana-rutina-pdf"
                         className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand hover:underline underline-offset-4">
-                        <FileText className="w-4 h-4" /> Abrir el PDF
+                        {/* «Abrir el PDF» -> «Abrirla entera», la misma palabra que el botón
+                            de abajo (vídeo del 27-08: fuera la palabra PDF). */}
+                        <FileText className="w-4 h-4" /> Abrirla entera
                     </button>
                 )}
             </div>
@@ -245,10 +248,16 @@ const VistaPreviaPdf = ({ api, info, abrirPdf }) => {
     return (
         <div className="surface p-4 sm:p-5 space-y-4 min-w-0" data-testid="routine-pdf-preview">
             <div className="flex items-start justify-between gap-3 flex-wrap">
+                {/* «OLVIDA LA PALABRA PDF» (vídeo del 27-08, minuto 8:46). Ponía «Tu rutina,
+                    en PDF» y debajo «Tu entrenador te la ha preparado el…», y sus palabras
+                    fueron: «esto no. Que directamente, si tienes rutina, que le abra. Olvida
+                    el PDF. Olvida la palabra PDF. Eso no tiene sentido».
+                    En qué fichero viene su rutina es cosa nuestra, no suya. La fecha se queda
+                    -- saber de cuándo es sí le dice algo -- pero dicha en corto. */}
                 <div>
-                    <h2 className="font-heading text-xl font-bold uppercase text-foreground leading-tight">Tu rutina, en PDF</h2>
+                    <h2 className="font-heading text-xl font-bold uppercase text-foreground leading-tight">Tu rutina</h2>
                     <p className="text-muted-foreground text-sm">
-                        Tu entrenador te la ha preparado el {new Date(info.uploaded_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}.
+                        Preparada el {new Date(info.uploaded_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}.
                     </p>
                 </div>
                 <button onClick={abrirEntera} data-testid="routine-pdf-btn"
@@ -280,7 +289,7 @@ const VistaPreviaPdf = ({ api, info, abrirPdf }) => {
             )}
 
             {estado === 'lista' && url && (
-                <object data={url} type="application/pdf" aria-label="Tu rutina en PDF"
+                <object data={url} type="application/pdf" aria-label="Tu rutina"
                     data-testid="routine-pdf-object"
                     className="w-full h-[60vh] min-h-[320px] rounded-2xl border border-border bg-card">
                     {/* Lo que se ve donde el navegador no sabe pintar un PDF dentro de la
@@ -471,14 +480,10 @@ const RoutinePage = () => {
         finally { setMarcando(false); }
     };
 
-    // Se abre vía blob porque el visor del navegador no manda el token (mismo camino que
-    // EntrenoPage).
-    const abrirPdf = async () => {
-        try {
-            const r = await api.get('/routines/pdf', { responseType: 'blob' });
-            window.open(URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' })), '_blank');
-        } catch { toast.error('No hemos podido abrir tu rutina. Inténtalo en un momento.'); }
-    };
+    // Se abre vía blob porque el visor del navegador no manda el token. La ventana se abre
+    // dentro del toque y luego se le pone el fichero: ver lib/abrirRutina, que es donde está
+    // contado por qué en el iPhone no abría.
+    const abrirPdf = () => abrirRutinaPdf(api);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { fetchRoutine(); }, []);
@@ -792,7 +797,7 @@ const RoutinePage = () => {
                         <button onClick={abrirPdf} data-testid="routine-pdf-link"
                             className="w-full flex items-center justify-between p-4 bg-card border border-border rounded-2xl hover:border-white/30 transition-colors">
                             <span className="flex items-center gap-2 font-bold text-foreground text-sm">
-                                <FileText className="w-4 h-4 text-brand" /> Tu rutina en PDF
+                                <FileText className="w-4 h-4 text-brand" /> Abrir tu rutina
                             </span>
                             <ChevronRight className="w-4 h-4 text-foreground/40" />
                         </button>
