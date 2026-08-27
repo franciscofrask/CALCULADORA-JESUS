@@ -80,7 +80,10 @@ const SemanaDeRutina = ({ semana, abrirPdf, tienePdf, onMarcarHoy, onSiLoHice, o
             <div className="grid grid-cols-7 gap-1.5" data-testid="semana-rutina-tira">
                 {dias.map(d => (
                     <div key={d.fecha} data-testid={`semana-dia-${d.fecha}`}
-                        className={`rounded-xl border px-1 py-2 text-center min-w-0
+                        // El padding lateral va al mínimo: son siete casillas repartiéndose
+                        // 390 px y cada píxel que se come el hueco se lo quita al nombre del
+                        // grupo. Ver el `truncate` de abajo.
+                        className={`rounded-xl border px-0.5 py-2 text-center min-w-0
                             ${d.hoy ? 'border-brand bg-brand/10' : 'border-border bg-card'}`}>
                         <p className={`text-[10px] font-bold uppercase ${d.hoy ? 'text-brand' : 'text-muted-foreground'}`}>
                             {DAY_LABELS[d.dia]}
@@ -88,7 +91,14 @@ const SemanaDeRutina = ({ semana, abrirPdf, tienePdf, onMarcarHoy, onSiLoHice, o
                         <div className="mt-1 h-8 flex flex-col items-center justify-center">
                             {d.entrena ? (
                                 <>
-                                    <p className="text-[9px] font-semibold text-foreground leading-tight truncate w-full px-0.5"
+                                    {/* SIN PADDING PROPIO: la casilla ya lo pone. En 390 px
+                                        quedaban 34 px útiles y «Entreno» pide 38, así que la
+                                        palabra corriente de un día de entreno salía cortada
+                                        («Entr...») en la mitad de la semana (Francisco,
+                                        26-08). Los nombres de grupo largos sí se cortan, y
+                                        para eso está el `title`; pero la palabra genérica
+                                        tiene que caber entera. */}
+                                    <p className="text-[9px] font-semibold text-foreground leading-tight truncate w-full"
                                         title={d.grupo}>{d.grupo}</p>
                                     {d.hecho ? <Check className="w-3 h-3 text-emerald-500 mt-0.5" />
                                         : d.recuperado_en ? <span className="text-[8px] text-muted-foreground">→ otro día</span>
@@ -795,8 +805,12 @@ const RoutinePage = () => {
 
 const MACRO_O = '#FF671F';
 
+// El padding lateral se estrecha en el móvil: son tres tarjetas repartiéndose el ancho, y
+// con `p-4` en 360 px quedaban 61 px útiles mientras «Ejercicios» pide 70. La palabra se
+// salía de su tarjeta. A 390 px cabía por poco, así que solo se veía en los móviles
+// estrechos (26-08).
 const StatCard = ({ value, label, color, icon: Icon, testId }) => (
-    <div className="surface p-4 text-center" data-testid={testId}>
+    <div className="surface py-4 px-2 sm:px-4 text-center" data-testid={testId}>
         <div className="flex items-center justify-center gap-1.5 mb-1">
             <Icon className="w-4 h-4" style={{ color }} />
             <span className="font-heading text-3xl font-bold" style={{ color }}>{value}</span>
