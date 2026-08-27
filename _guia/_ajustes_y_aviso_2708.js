@@ -180,13 +180,10 @@ const ok = (b) => (b ? 'BIEN' : 'MAL ');
     console.log(`la frase del día ya no está aquí    ${ok(sigueLaFrase === 0)}`);
     console.log(`el bloque global ya no está aquí    ${ok(hayGlobales === 0)}`);
     console.log(`el de correos, solo en «pruebas»    ${ok(correos.every(c => c === 'mi modo pruebas'))}   [${correos.join(', ') || 'no sale'}]`);
-    console.log(`deja el rastro a «Ajustes»          ${ok(rastro > 0)}`);
+    // Se puso un rastro («esto está ahora en Ajustes») y Francisco lo quitó: Planes son
+    // planes y punto. Se comprueba que no quede, que un cartel a medio borrar es peor.
+    console.log(`sin cartel de la mudanza            ${ok(rastro === 0)}`);
     console.log(`y los planes siguen saliendo        ${ok(hayPlanes > 0)}`);
-    if (rastro > 0) {
-        await page.locator('[data-testid="planes-a-ajustes"]').click();
-        await page.waitForTimeout(3000);
-        console.log(`el rastro lleva a Ajustes           ${ok(page.url().includes('/admin/ajustes'))}`);
-    }
     await page.screenshot({ path: `_guia/_planes_sin_interruptores_${ancho}.png`, fullPage: true });
 
     console.log(`\nerrores de JavaScript: ${errores.length ? errores.join(' | ') : 'ninguno'}`);

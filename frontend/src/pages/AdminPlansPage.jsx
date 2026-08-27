@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -7,7 +6,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 import { toast } from 'sonner';
-import { Layers, Pencil, RotateCcw, FlaskConical, Info, SlidersHorizontal } from 'lucide-react';
+import { Layers, Pencil, RotateCcw, FlaskConical, Info } from 'lucide-react';
 import { queIncluyeElPlan, ACOMPANAMIENTO_OPTS, FRECUENCIA_CONTACTO_OPTS as FRECUENCIA_OPTS, etiquetaAcompanamiento, etiquetaFrecuencia, etiquetaCalculadora } from '../lib/planAccess';
 import { mensajeDeError } from '../lib/mensajeDeError';
 import HelpTooltip from '../components/HelpTooltip';
@@ -485,17 +484,6 @@ const AdminPlansPage = () => {
 
             {user?.es_pruebas && <MiModoPruebas />}
 
-            {/* EL RASTRO DE LA MUDANZA. Los interruptores llevaban meses aquí abajo: quien
-                los busque donde estaban tiene que encontrar la puerta, no un hueco. */}
-            <Link to="/admin/ajustes"
-                className="flex items-center gap-3 rounded-xl border border-[#2a2a2a] bg-[#111] px-4 py-3 hover:border-[#FF671F]/40 transition-colors"
-                data-testid="planes-a-ajustes">
-                <SlidersHorizontal className="w-4 h-4 text-[#FF671F] shrink-0" />
-                <span className="text-xs text-white/70">
-                    <span className="text-white/90 font-semibold">Las pantallas de la app y la frase del día están ahora en «Ajustes».</span>
-                    {' '}Aquí solo se editan los planes.
-                </span>
-            </Link>
 
             {loading ? (
                 <div className="flex justify-center py-16"><div className="animate-spin w-7 h-7 border-2 border-[#FF671F] border-t-transparent rounded-full" /></div>
