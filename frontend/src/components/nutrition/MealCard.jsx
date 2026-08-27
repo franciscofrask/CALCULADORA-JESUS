@@ -644,7 +644,22 @@ const MealCard = ({
 
                     {/* Empty states. En denso (día entero desplegado) las tres maneras de
                         empezar caben en una sola fila: el bloque alto repetido seis veces
-                        convertía la pantalla en un pasillo de botones naranjas. */}
+                        convertía la pantalla en un pasillo de botones naranjas.
+
+                        POR QUÉ ESTOS BOTONES LLEVAN CUATRO COSAS PEGADAS A LA CLASE.
+                        `btn-outline-brand` está pensado para un botón ancho y trae `px-5`:
+                        45 px de padding. En una rejilla de tres columnas a 390 px el botón
+                        mide 101 px, así que al texto le quedaban 34 px y «Lo hago yo» salía
+                        partido EN TRES LÍNEAS, una por palabra, con el botón estirado a 50 px
+                        de alto (Francisco, 26-08).
+
+                        Y no basta con `px-2 whitespace-nowrap`: al dejar de partirse, el
+                        texto empujaba y el que se encogía era el ICONO, que en un flex sin
+                        `flex-shrink-0` se aplasta a cero. La llave de «Lo hago yo» y la
+                        estrella de «Favoritas» desaparecían y sólo sobrevivía la de
+                        «Repetir», que es el rótulo más corto. Cambiado un fallo por otro.
+                        Así que el texto baja a `text-xs` en el móvil (vuelve a `sm` en
+                        cuanto hay ancho) y el icono se declara irreductible. */}
                     {foods.length === 0 && !isPeri && !isLocked && (
                         denso ? (
                             // Mismas tres opciones y con su nombre entero; solo cambia que caben
@@ -655,11 +670,11 @@ const MealCard = ({
                                     onClick={() => loadMenuOptions(mealKey)} data-testid={`menu-options-${mealKey}`}>
                                     <Zap className="w-4 h-4" /> Sugiéreme un menú
                                 </button>
-                                <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 text-sm"
+                                <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 px-2 whitespace-nowrap text-xs sm:text-sm [&>svg]:flex-shrink-0"
                                     onClick={() => setBuildMealModal({ open: true, mealKey, mode: 'normal' })} data-testid={`build-meal-${mealKey}`}>
                                     <Wrench className="w-4 h-4" /> Lo hago yo
                                 </button>
-                                <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 text-sm"
+                                <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 px-2 whitespace-nowrap text-xs sm:text-sm [&>svg]:flex-shrink-0"
                                     onClick={() => openRepeatModal(mealKey)} data-testid={`repeat-meal-${mealKey}`}>
                                     <RefreshCw className="w-4 h-4" /> Repetir
                                 </button>
@@ -671,17 +686,17 @@ const MealCard = ({
                                 <Zap className="w-5 h-5" /> Sugiéreme un menú
                             </button>
                             <div className={`grid gap-2 ${abrirFavoritasDeComida ? 'grid-cols-3' : 'grid-cols-2'}`}>
-                                <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 text-sm"
+                                <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 px-2 whitespace-nowrap text-xs sm:text-sm [&>svg]:flex-shrink-0"
                                     onClick={() => setBuildMealModal({ open: true, mealKey, mode: 'normal' })} data-testid={`build-meal-${mealKey}`}>
                                     <Wrench className="w-4 h-4" /> Lo hago yo
                                 </button>
-                                <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 text-sm"
+                                <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 px-2 whitespace-nowrap text-xs sm:text-sm [&>svg]:flex-shrink-0"
                                     onClick={() => openRepeatModal(mealKey)} data-testid={`repeat-meal-${mealKey}`}>
                                     <RefreshCw className="w-4 h-4" /> Repetir
                                 </button>
                                 {/* Traer una comida guardada, sin arrastrar el día entero. */}
                                 {abrirFavoritasDeComida && (
-                                    <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 text-sm"
+                                    <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 px-2 whitespace-nowrap text-xs sm:text-sm [&>svg]:flex-shrink-0"
                                         onClick={() => abrirFavoritasDeComida(mealKey)} data-testid={`fav-comida-vacia-${mealKey}`}>
                                         <Star className="w-4 h-4" /> Favoritas
                                     </button>
@@ -711,12 +726,12 @@ const MealCard = ({
                                     <Zap className={denso ? 'w-4 h-4' : 'w-5 h-5'} /> Prepárame el intra
                                 </button>
                                 <div className={`grid gap-2 ${abrirFavoritasDeComida ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                                    <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 text-sm"
+                                    <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 px-2 whitespace-nowrap text-xs sm:text-sm [&>svg]:flex-shrink-0"
                                         onClick={() => openRepeatModal(mealKey)} data-testid={`repeat-meal-${mealKey}`}>
                                         <RefreshCw className="w-4 h-4" /> Repetir
                                     </button>
                                     {abrirFavoritasDeComida && (
-                                        <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 text-sm"
+                                        <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 px-2 whitespace-nowrap text-xs sm:text-sm [&>svg]:flex-shrink-0"
                                             onClick={() => abrirFavoritasDeComida(mealKey)} data-testid={`fav-comida-vacia-${mealKey}`}>
                                             <Star className="w-4 h-4" /> Favoritas
                                         </button>
@@ -725,17 +740,17 @@ const MealCard = ({
                             </div>
                         ) : (
                             <div className={`grid gap-2 ${abrirFavoritasDeComida ? 'grid-cols-3' : 'grid-cols-2'}`}>
-                                <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 text-sm"
+                                <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 px-2 whitespace-nowrap text-xs sm:text-sm [&>svg]:flex-shrink-0"
                                     onClick={() => setBuildMealModal({ open: true, mealKey, mode: 'post' })}
                                     data-testid={`build-meal-${mealKey}`}>
                                     <Wrench className="w-4 h-4" /> Lo hago yo
                                 </button>
-                                <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 text-sm"
+                                <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 px-2 whitespace-nowrap text-xs sm:text-sm [&>svg]:flex-shrink-0"
                                     onClick={() => openRepeatModal(mealKey)} data-testid={`repeat-meal-${mealKey}`}>
                                     <RefreshCw className="w-4 h-4" /> Repetir
                                 </button>
                                 {abrirFavoritasDeComida && (
-                                    <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 text-sm"
+                                    <button className="btn-outline-brand h-11 flex items-center justify-center gap-1.5 px-2 whitespace-nowrap text-xs sm:text-sm [&>svg]:flex-shrink-0"
                                         onClick={() => abrirFavoritasDeComida(mealKey)} data-testid={`fav-comida-vacia-${mealKey}`}>
                                         <Star className="w-4 h-4" /> Favoritas
                                     </button>
