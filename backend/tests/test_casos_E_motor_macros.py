@@ -25,6 +25,7 @@ Como esta escrito:
 Lo que sale en ROJO esta explicado en el docstring de cada test. Un rojo aqui no es un test
 mal escrito: es que el metodo no se esta aplicando por ese camino.
 """
+import base64
 import os
 import sys
 import time
@@ -81,6 +82,13 @@ class _SoloLaFrase:
 def frase(food: dict) -> str:
     """La frase con la que el asistente le dice al cliente que le cuenta de un alimento."""
     return AgentTools._frase_que_cuenta(_SoloLaFrase(), food)
+
+
+#: Un PNG de un pixel. Desde el punto 161 del 27-08 las dos fotos son obligatorias para pedir
+#: un alimento, asi que los casos que mandan una solicitud tienen que adjuntar algo. El
+#: servidor comprueba el tipo y el tamano, no lo que se ve.
+_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
 
 
 def pedir(metodo: str, ruta: str, **kw):
@@ -181,10 +189,16 @@ class TestCaso31ElArroz:
         assert frase(ARROZ) == "te cuenta los hidratos; la proteína y la grasa no"
 
     def test_el_buscador_lo_dice_en_la_linea_del_alimento(self, catalogo):
-        """En el Buscador de alimentos si sale, debajo del nombre (`que_te_cuenta`)."""
+        """En el Buscador de alimentos si sale, debajo del nombre (`que_te_cuenta`).
+
+        LA REDACCION CAMBIO EL 27-08 (punto 147). Decia «Te cuenta hidratos. Ni su proteína
+        ni su grasa te cuentan.»; ahora el «solo» dice lo mismo en tres palabras y se ahorra
+        la coletilla, que era una linea por alimento. El arroz lleva mas de un macro y solo
+        le cuenta uno, asi que es el caso del «solo».
+        """
         ficha = catalogo.get(ARROZ["id"])
         assert ficha, "El arroz blanco (id 1657) ya no esta en el catalogo"
-        assert ficha["que_te_cuenta"] == "Te cuenta hidratos. Ni su proteína ni su grasa te cuentan."
+        assert ficha["que_te_cuenta"] == "Te cuenta solo el hidrato"
 
     def test_la_linea_de_nutricion_tambien_lo_dice(self):
         """FALLA A PROPOSITO. Jesus pide que se diga «en la propia linea del alimento», y la
@@ -277,9 +291,15 @@ class TestCaso33LaLecheEntera:
         assert frase(LECHE) == "cuenta los tres macros"
 
     def test_el_buscador_dice_que_cuentan_los_tres(self, catalogo):
+        """«Te cuenta todo» desde el 27-08 (punto 147).
+
+        Decia «Te cuentan los tres», y del huevo eso es falso: tiene proteina y grasa, no
+        tiene hidratos, y las dos le cuentan. La frase compara con lo que el alimento TIENE,
+        no con tres siempre, asi que la leche y el huevo dicen lo mismo y los dos aciertan.
+        """
         ficha = catalogo.get(LECHE["id"])
         assert ficha, "La leche entera (id 358) ya no esta en el catalogo"
-        assert ficha["que_te_cuenta"] == "Te cuentan los tres."
+        assert ficha["que_te_cuenta"] == "Te cuenta todo"
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -310,11 +330,25 @@ class TestCaso34LaVerduraLibre:
         assert frase(CALABACIN) == "no cuenta ningún macro (es libre)"
 
     def test_sale_como_come_lo_que_quieras(self, catalogo):
-        """La frase literal del caso, tal y como la pinta el Buscador de alimentos."""
+        """La frase literal del caso, tal y como la pinta el Buscador de alimentos.
+
+        Desde el 27-08 la frase se parte en dos (puntos 145 y 150): «No te cuenta nada» va en
+        la linea de que te cuenta, y «Come lo que quieras» ocupa el sitio del numero. Lo pone
+        la pantalla, porque de un liquido dice «Bebe lo que quieras» y eso es cosa de como se
+        escribe, no del motor.
+
+        Y son 100 g, no los 50 de la maqueta. El punto 148 saca los minimos de CALMA, y el de
+        las verduras es uno de los dos que Jesus cambio despues: video 3 del 15-08, «los
+        vegetales siempre que sugiera 100 gramos, no 50 por defecto». Manda lo que decidio
+        mirando la app. Ver MINIMOS_JESUS en calma_suggest.py.
+        """
         ficha = catalogo.get(CALABACIN["id"])
         assert ficha, "El calabacin (id 110) ya no esta en el catalogo"
-        assert ficha["que_te_cuenta"] == "No te cuenta nada: come lo que quieras."
+        assert ficha["que_te_cuenta"] == "No te cuenta nada"
         assert ficha["tiene_macros"] is False
+        # Y su minimo sigue existiendo aunque no cuente nada (punto 150): «Desde 50 g».
+        assert ficha["desde"] == "100 g"
+        assert ficha["necesitas"] is None
 
     @pytest.mark.skip(reason="visual: hay que ver la pantalla. Lo comprobable desde aqui es "
                              "que el motor le sigue dando una cantidad minima (50 g), y que "
@@ -326,11 +360,18 @@ class TestCaso34LaVerduraLibre:
     def test_aun_asi_el_motor_le_asigna_un_minimo(self):
         """El dato que hace falta para decidir el caso de arriba, ya medido.
 
-        Un alimento libre no queda fuera del motor: sigue teniendo cantidad minima (50 g para
-        la categoria 13) porque hay que escribir algo en el plato. Que eso se le ENSENE o no
-        al cliente es la decision de pantalla que pide el caso.
+        Un alimento libre no queda fuera del motor: sigue teniendo cantidad minima porque hay
+        que escribir algo en el plato. Que eso se le ENSENE o no al cliente era la decision de
+        pantalla que pedia el caso, y desde el punto 150 del 27-08 SE LE ENSENA: «Desde 100 g
+        · siempre cabe».
+
+        ERAN 50 Y SON 100, y por eso este test estaba en rojo. El 50 es el de la categoria 13
+        en el mapa portado de Calma; Jesus lo subio a 100 el 15-08 viendo las sugerencias del
+        chat («los vegetales siempre que sugiera 100 gramos, no 50 por defecto»), y desde
+        entonces el numero bueno es el de MINIMOS_JESUS. El test se habia quedado con el
+        heredado.
         """
-        assert cantidad_minima(CALABACIN) == 50
+        assert cantidad_minima(CALABACIN) == 100
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -423,10 +464,29 @@ class TestCaso36Cuadrar:
     @pytest.mark.parametrize("cantidad", [51, 76, 101, 127.3, 199.9])
     def test_no_lo_deja_a_medias(self, food, cantidad):
         """«Sin dejarlo a medias»: sale un numero redondo y mayor que cero. Nadie pesa 127,3 g
-        y un alimento no puede desaparecer del plato por haberlo redondeado."""
+        y un alimento no puede desaparecer del plato por haberlo redondeado.
+
+        CON UNA SALIDA, Y ES LA QUE TENIA ESTE TEST EN ROJO. Si ni bajando al multiplo de 5 se
+        llega al minimo del alimento, `redondear_a_la_baja` devuelve la cantidad tal cual:
+        «falsearla seria peor que tener un numero feo». El caso es el calabacin a 51 y a 76 g,
+        con minimo 100.
+
+        No es un fallo nuevo: se destapo el 15-08, cuando Jesus subio las verduras de 50 a 100
+        («los vegetales siempre que sugiera 100 gramos, no 50 por defecto»). Con el minimo en
+        50, los 51 g bajaban a 50 y el test pasaba; con el minimo en 100 ya no hay ningun
+        multiplo por debajo que valga. Nadie ato las dos cosas y el rojo se quedo ahi.
+
+        Lo que se comprueba es la regla entera, no media: redondo Y por encima del minimo, o
+        la cantidad intacta cuando eso es imposible.
+        """
         minimo = cantidad_minima(food)
         salida = redondear_cantidad(food, cantidad, minimo)
         assert salida > 0, f"{food['nombre']}: {cantidad} g se quedaron en 0"
+        if cantidad < minimo:
+            assert salida == cantidad, (
+                f"{food['nombre']}: {cantidad} g no llegan a su minimo ({minimo} g), asi que "
+                f"tienen que salir tal cual y salieron {salida}")
+            return
         assert salida % 5 == 0, f"{food['nombre']}: {cantidad} g salieron a {salida}"
         assert salida >= minimo, f"{food['nombre']}: {salida} g por debajo del minimo {minimo}"
 
@@ -508,9 +568,14 @@ class TestCaso37LaCategoriaEsObligatoria:
         sepa que excepcion del filtro se le aplica, o sea sin saber que macros le cuentan al
         cliente, y eso no se ve hasta meses despues en unas cuentas que no cuadran.
         """
+        # Las dos fotos y el enlace son obligatorios desde el punto 161 del 27-08: una
+        # solicitud sin ellos no se puede dar de alta y el servidor la rechaza con un 400.
+        # Este caso va de la CATEGORIA, no del formulario, asi que se manda completa.
         r = pedir("POST", "/calculator/suggest-food", headers=cabeceras_cliente, data={
             "nombre": "Alimento de prueba caso 37", "por_unidad": "false", "racion": "100",
-            "proteinas": "10", "hidratos": "20", "grasas": "5"})
+            "proteinas": "10", "hidratos": "20", "grasas": "5", "sin_web": "true"},
+            files={"foto_frontal": ("frontal.png", _PNG, "image/png"),
+                   "foto_reverso": ("reverso.png", _PNG, "image/png")})
         if r.status_code == 429:
             pytest.skip("El cliente de prueba ya gasto sus sugerencias de la semana")
         assert r.status_code == 200, r.text[:300]
@@ -575,9 +640,13 @@ class TestCaso37LaCategoriaEsObligatoria:
     def test_con_categoria_si_se_aprueba(self, cabeceras_cliente, cabeceras_admin):
         """La otra mitad: puesta la categoria, la sugerencia se aprueba y el alimento entra
         al catalogo con esa categoria escrita, que es de lo que luego cuelga el conteo."""
+        # Completa, como la de arriba: desde el punto 161 las dos fotos son obligatorias.
         r = pedir("POST", "/calculator/suggest-food", headers=cabeceras_cliente, data={
             "nombre": "Alimento de prueba caso 37 (con categoria)", "por_unidad": "false",
-            "racion": "100", "proteinas": "10", "hidratos": "20", "grasas": "5"})
+            "racion": "100", "proteinas": "10", "hidratos": "20", "grasas": "5",
+            "sin_web": "true"},
+            files={"foto_frontal": ("frontal.png", _PNG, "image/png"),
+                   "foto_reverso": ("reverso.png", _PNG, "image/png")})
         if r.status_code == 429:
             pytest.skip("El cliente de prueba ya gasto sus sugerencias de la semana")
         assert r.status_code == 200, r.text[:300]

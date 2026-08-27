@@ -63,7 +63,7 @@ Complemento de `GUIA-COMPLETA-12EN12.md`. La guía explica **qué hace la app**;
 |---|---|
 | `GET /calculator/foods` | Lista con filtro de texto y categoría |
 | `GET /calculator/foods/count` | Cuántos alimentos hay |
-| `GET /calculator/foods-listado` | El catálogo entero enriquecido: macros efectivos, cantidad mínima y por qué se sugeriría |
+| `GET /calculator/foods-listado` | El catálogo entero enriquecido: macros efectivos y reales, qué te cuenta, desde cuánto y qué aporta esa cantidad mínima |
 | `GET /calculator/categories` · `/count` | Las categorías |
 | `GET /calculator/food-config/{id}` | Unidades, mínimos y pasos de un alimento |
 

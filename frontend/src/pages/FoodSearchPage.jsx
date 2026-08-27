@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, X, Plus, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { descripcionCategoria, CATEGORIA_NOMBRES } from '../components/nutrition/calmaCategorias';
 import SuggestFoodModal from '../components/nutrition/SuggestFoodModal';
+import SinResultados from '../components/nutrition/SinResultados';
 import { useEsTelefono } from '../lib/esTelefono';
 import { num1 } from '../lib/numeros';
 // La búsqueda por nombre (filtro + relevancia, portada de Calma) vive en lib para que la
@@ -82,14 +83,16 @@ const TODAS_CATEGORIAS = (() => {
 const CAP_TELEFONO = 20;
 const CAP_ORDENADOR = 40;
 
-// Calma EtiquetasMacros: badge por macro > 0 (P verde, H azul, G rojo), 1 decimal.
-const MACRO_DEFS = [
-    // Con unidad y en singular: «18 g proteína» y no «18 proteínas», que no es nada
-    // (Jesús, 11-08).
-    ['proteinas', 'g proteína', 'bg-green-100 text-green-700'],
-    ['hidratos', 'g hidratos', 'bg-blue-100 text-blue-700'],
-    ['grasas', 'g grasa', 'bg-red-100 text-red-700'],
-];
+// SIN COLORES (punto 160 del 27-08). Aquí había una píldora por macro -- verde la proteína,
+// azul los hidratos, rojo la grasa -- y eso rompía la regla de color de la app, que está
+// escrita en la parte 4: «verde si ese macro ya está resuelto, naranja si te has pasado, sin
+// color mientras vas por debajo». El color significa ESTADO, no tipo de macro, y aquí se
+// estaba usando la misma paleta con dos significados distintos en la misma aplicación: el
+// cliente aprende en Inicio que verde es «ya está», entra en Alimentos y ve verde en la
+// proteína de los 3.211. Encima aparecía el azul, que no existe en el sistema.
+// En el buscador no hay ningún estado que pintar -- es un catálogo, no su día --, así que los
+// números van en el color del texto. Y de paso caben en una línea: en el móvil las píldoras
+// partían «11 g grasa» a la línea siguiente.
 
 // Los dos números de un alimento, con su nombre delante (puntos 142 y 143). «Cada alimento
 // enseña sus dos números y dice cuál es cuál»: los macros del MÉTODO son lo que te cuenta a
@@ -103,94 +106,154 @@ const lineaDeMacros = (m) => ['proteinas', 'hidratos', 'grasas']
     .map((k) => `${r1(m[k])} ${LETRA[k]}`)
     .join(' · ');
 
+// Lo mismo, para los que ya vienen en {P,H,G}: `macros_reales` y `necesitas`.
+const linea_PHG = (m) => ['P', 'H', 'G']
+    .filter((k) => Number(m?.[k] || 0) > 0)
+    .map((k) => `${r1(m[k])} ${k}`)
+    .join(' · ');
+
+// POR CUÁNTO ES, Y VA LO PRIMERO (punto 146). «No es lo mismo por 100 g que por unidad, de
+// 63 g que por unidad, de 125 g. Sin ese dato, los números de debajo no significan nada»:
+// los 38,8 hidratos de la tarrina son de la tarrina entera, y quien los lea como por 100 g
+// se equivoca en un 25%. Los mililitros son de los líquidos y los pone el servidor.
+const porCuantoEs = (food) => (food.unidades
+    ? `por unidad, de ${r1(food.racion)} g`
+    : `por 100 ${food.es_liquido ? 'ml' : 'g'}`);
+
+// UNA CATEGORÍA, NO CUATRO (punto 153). Salían las cuatro seguidas -- «Frutos secos sin
+// grasas y/o azúcares añadidos | Listo para comer | Alimentos ricos en grasas de buena
+// calidad | Frutos secos» -- y se comían dos líneas. Queda la primera, «que es la que
+// manda»; las otras son ramas padre y etiquetas operativas.
+//
+// LA PRIMERA NUMÉRICA, no la primera a secas: en `categorias` las etiquetas transversales
+// (YA, POL, SNA...) van mezcladas con los códigos, y medido contra producción hay 35 fichas
+// de 3.219 donde la etiqueta va delante -- «Harina de espelta integral (Hacendado)» es
+// `POL | 7.2.3` --, que con la regla ingenua saldrían clasificadas como «En polvo».
+//
+// Y no es decoración: la categoría explica las otras dos líneas. Las almendras cuentan grasa
+// porque son frutos secos sin grasas añadidas, y su mínimo sale de lo mismo.
+const esCodigoNumerico = (c) => /^\d/.test(c);
+const categoriaQueManda = (food) => {
+    const cats = foodCats(food);
+    const clave = cats.find(esCodigoNumerico) || cats[0];
+    return (clave && descripcionCategoria(clave)) || '';
+};
+
+/**
+ * UN ALIMENTO, EN CUATRO LÍNEAS Y TODAS A LA IZQUIERDA (puntos 145 a 155 del 27-08).
+ *
+ *   [·] Almendras                                    GENÉRICO
+ *       Frutos secos sin grasas y/o azúcares añadidos · por 100 g
+ *       Te cuenta la grasa   53,1 G
+ *       Desde 10 g · necesitas 5,3 G
+ *
+ * Antes los macros iban arrinconados en la esquina derecha, en un tercio del ancho, y en el
+ * móvil ese tercio era la mitad de estrecho. Todo a la izquierda, como en CALMA.
+ *
+ * EL NOMBRE ABRE LA FICHA; LA WEB TIENE SU BOTÓN (punto 152). Hasta hoy el nombre subrayado
+ * ERA el enlace, así que tocar el de una marca te sacaba de la aplicación a la web del
+ * supermercado y tocar el de un genérico abría la ficha: el mismo gesto hacía dos cosas
+ * distintas. Ahora el nombre siempre abre la ficha, la web va aparte y con su flecha, y el
+ * nombre deja de ir subrayado (en veinte resultados eso era bastante ruido).
+ * En la esquina, o `GENÉRICO` o `Ver web ↗`: poner las dos en una marca sobra, porque si hay
+ * web es que es una marca.
+ *
+ * AL ABRIRLO, LOS REALES Y LA CALIBRACIÓN ENTERA (punto 154). Los macros reales bajan aquí
+ * -- antes se comían un renglón en la lista, y en veinte resultados eso es una pantalla --
+ * y con ellos los tres tramos, con el del cliente marcado. La categoría no se repite dentro:
+ * ya salió arriba. Y ahora se puede abrir CUALQUIER alimento, no solo los que llevan punto.
+ */
 const FoodRow = ({ food }) => {
-    const cats = foodCats(food).map(descripcionCategoria).filter(Boolean);
+    const categoria = categoriaQueManda(food);
     const [abierto, setAbierto] = React.useState(false);
     const cal = food.calibracion;
-    const reales = food.macros_reales
-        ? lineaDeMacros({ proteinas: food.macros_reales.P, hidratos: food.macros_reales.H, grasas: food.macros_reales.G })
-        : null;
+    const reales = linea_PHG(food.macros_reales);
+    const necesita = linea_PHG(food.necesitas);
+    // «Come lo que quieras» / «Bebe lo que quieras» ocupa el sitio del número cuando no le
+    // cuenta nada (punto 150). El verbo lo decide si se bebe: es lo que hace la maqueta con
+    // la Coca-Cola Zero, y decirle «come» a un refresco se nota.
+    const loQueQuieras = `${food.es_liquido ? 'Bebe' : 'Come'} lo que quieras`;
     return (
         <div className="bg-card border border-border rounded-lg p-3 shadow-sm" data-testid="alimento">
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 sm:gap-3">
-                <div className="min-w-0 flex items-start gap-1.5">
+            {/* Línea 1 · el nombre, y al lado GENÉRICO o Ver web ↗ */}
+            <div className="flex items-start justify-between gap-2">
+                <button onClick={() => setAbierto((v) => !v)} data-testid={`abrir-${food.id}`}
+                    aria-expanded={abierto}
+                    className="min-w-0 flex items-start gap-1.5 text-left">
                     {/* EL PUNTO, Y NADA MÁS (punto 138). «Cero texto añadido por alimento. Y
                         el punto separa los que dependen de la cantidad de los que no — hoy
-                        los tres se ven exactamente igual.» */}
+                        los tres se ven exactamente igual.»
+                        EL MISMO PUNTO QUE EL DE LA LEYENDA (punto 155): arriba va de viñeta y
+                        aquí pegado al nombre, y si no fueran idénticos no se entendería que
+                        hablan de lo mismo. Si se toca uno, se tocan los dos. */}
                     {cal && <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-brand flex-shrink-0"
                         title="Te cuenta más proteína cuanta más cantidad comes en el día" />}
-                    <div className="min-w-0">
-                        {food.url ? (
-                            <a href={food.url} target="_blank" rel="noopener noreferrer"
-                                className="text-sm font-medium text-[#FF671F] underline underline-offset-2 break-words">
-                                {food.nombre}
-                            </a>
-                        ) : (
-                            <span className="text-sm font-medium text-foreground break-words">{food.nombre}</span>
-                        )}
-                    </div>
-                </div>
-                <div className="flex-shrink-0 sm:text-right">
-                    {food.tiene_macros ? (
-                        <>
-                            <div className="flex flex-wrap gap-1 sm:justify-end items-baseline">
-                                <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Macros del método</span>
-                                {MACRO_DEFS.map(([k, label, cls]) =>
-                                    Number(food[k] || 0) > 0 ? (
-                                        <span key={k} className={`text-xs px-2 py-0.5 rounded-full font-medium tabular-nums ${cls}`}>
-                                            {r1(food[k])} {label}
-                                        </span>
-                                    ) : null
-                                )}
-                            </div>
-                            {reales && (
-                                <p className="text-xs text-muted-foreground mt-1 font-data">
-                                    <span className="font-sans text-[10px] uppercase tracking-wider mr-1.5">Macros reales</span>
-                                    {reales}
-                                </p>
-                            )}
-                            <p className="text-xs text-muted-foreground mt-1">
-                                por cada {food.unidades ? `unidad de ${food.racion}g` : '100 gramos'}
-                            </p>
-                        </>
-                    ) : (
-                        <em className="text-xs text-muted-foreground">Come lo que quieras</em>
-                    )}
-                </div>
+                    <span className="text-sm font-medium text-foreground break-words">{food.nombre}</span>
+                </button>
+                {food.url ? (
+                    <a href={food.url} target="_blank" rel="noopener noreferrer"
+                        data-testid={`ver-web-${food.id}`}
+                        className="flex-shrink-0 text-xs font-semibold text-brand-orange whitespace-nowrap">
+                        Ver web ↗
+                    </a>
+                ) : (
+                    <span data-testid={`generico-${food.id}`}
+                        className="flex-shrink-0 text-[10px] uppercase tracking-wider text-muted-foreground whitespace-nowrap">
+                        Genérico
+                    </span>
+                )}
             </div>
-            {cats.length > 0 && (
-                <p className="text-xs text-muted-foreground mt-1">{cats.join(' | ')}</p>
+
+            {/* Línea 2 · la categoría que manda y por cuánto es */}
+            <p className="text-xs text-muted-foreground mt-1" data-testid={`categoria-${food.id}`}>
+                {[categoria, porCuantoEs(food)].filter(Boolean).join(' · ')}
+            </p>
+
+            {/* Línea 3 · qué te cuenta, y el número.
+                La frase la arma el servidor comparando lo que el alimento TIENE con lo que de
+                verdad le cuenta (`_que_te_cuenta`). Antes esto ponía «Necesita 9g proteínas /
+                5.5g hidratos / 5.5g grasas para ser sugerido», que es el filtro del tercio
+                dicho al revés y en lenguaje de programador, justo en la pantalla donde alguien
+                viene a entender por qué la app le cuenta unas cosas y otras no (Jesús, 11-08). */}
+            <p className="text-xs mt-1 flex flex-wrap items-baseline gap-x-2" data-testid={`cuenta-${food.id}`}>
+                <span className="text-brand-orange">{food.que_te_cuenta}</span>
+                <span className="text-foreground font-data">
+                    {food.tiene_macros ? lineaDeMacros(food) : loQueQuieras}
+                </span>
+            </p>
+
+            {/* Línea 4 · desde cuánto, y cuánto necesita.
+                Los dos juntos porque separados no dicen nada: 10 g solo es un número y 5,3 G
+                solo es otro (punto 148). Y en los que no cuentan nada el mínimo existe igual
+                -- no se meten 10 g de lechuga -- pero no hay que comprobar si cabe: «siempre
+                cabe», que en CALMA es «Siempre puede ser sugerido» (punto 150). */}
+            {food.desde && (
+                <p className="text-xs text-muted-foreground mt-1 font-data" data-testid={`desde-${food.id}`}>
+                    Desde {food.desde} · {necesita ? `necesitas ${necesita}` : 'siempre cabe'}
+                </p>
             )}
-            {/* QUÉ TE CUENTA, EN VEZ DEL FILTRO DEL TERCIO AL REVÉS.
-                Aquí ponía «Necesita 9g proteínas / 5.5g hidratos / 5.5g grasas para ser
-                sugerido» y, debajo, «cantidad mínima: 50». Lo primero es el filtro dicho en
-                lenguaje de programador; lo segundo, un dato interno sin unidad ni contexto.
-                Y esta es justo la pantalla donde alguien viene a entender por qué la app le
-                cuenta unas cosas y otras no: era la ocasión de explicar el método y se
-                gastaba en jerga (Jesús, 11-08). La frase la arma el servidor comparando lo
-                que dice la etiqueta con lo que de verdad cuenta.
-                En los que llevan punto va acortada (punto 139): ver `_que_te_cuenta`. */}
-            {food.que_te_cuenta && (
-                <p className="text-xs text-brand-orange mt-1">{food.que_te_cuenta}</p>
-            )}
-            {/* AL ABRIRLO, LOS TRES TRAMOS (punto 140). «En la lista no hacen falta, con el
-                punto basta»: aquí es donde se explica de qué depende esa proteína. Hasta hoy
-                un alimento de la lista no se podía abrir. */}
-            {cal && (
-                <>
-                    <button onClick={() => setAbierto((v) => !v)} data-testid={`tramos-${food.id}`}
-                        className="mt-1.5 text-xs font-semibold text-brand flex items-center gap-1">
-                        {abierto ? 'Ocultar' : 'Y su proteína, según lo que lleves en el día'}
-                        {abierto ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                    </button>
-                    {abierto && (
-                        <div className="mt-1.5 rounded-lg bg-muted/50 p-2.5 space-y-1" data-testid={`tramos-abiertos-${food.id}`}>
+
+            {/* AL ABRIRLO: LOS REALES Y LA CALIBRACIÓN ENTERA (punto 154). */}
+            {abierto && (
+                <div className="mt-2 rounded-lg bg-muted/50 p-2.5 space-y-2" data-testid={`ficha-${food.id}`}>
+                    {/* TENER MACROS Y CONTARLOS NO ES LO MISMO (punto 151). El kétchup zero
+                        tiene 1,6 P · 5,4 H · 0,1 G y no le cuentan, así que sí lleva esta
+                        fila; la lechuga no la lleva porque no tiene macros que enseñar. Es
+                        donde mejor se ve para qué están las dos cifras. */}
+                    {reales && (
+                        <p className="text-xs text-muted-foreground font-data">
+                            <span className="font-sans text-[10px] uppercase tracking-wider mr-1.5">Macros reales</span>
+                            {reales}
+                        </p>
+                    )}
+                    {cal && (
+                        <div className="space-y-1">
                             <p className="text-[11px] text-muted-foreground">
-                                Cuenta lo que lleves de <b className="text-foreground">{cal.familia}</b> en todo el día:
+                                Su proteína, según lo que lleves de <b className="text-foreground">{cal.familia}</b> en todo el día:
                             </p>
                             {[
                                 { hasta: `hasta ${cal.tramos[0]} g`, que: 'nada' },
-                                { hasta: `${cal.tramos[0]} a ${cal.tramos[1]} g`, que: 'la mitad' },
+                                { hasta: `de ${cal.tramos[0]} a ${cal.tramos[1]} g`, que: 'la mitad' },
                                 { hasta: `más de ${cal.tramos[1]} g`, que: 'toda' },
                             ].map((t) => (
                                 <p key={t.hasta} className="text-xs flex items-center justify-between gap-3">
@@ -200,7 +263,15 @@ const FoodRow = ({ food }) => {
                             ))}
                         </div>
                     )}
-                </>
+                    {/* Un alimento sin reales y sin calibración se puede abrir igual -- el
+                        gesto tiene que ser el mismo en los 3.211 -- y entonces esto dice lo
+                        único que queda por decir. */}
+                    {!reales && !cal && (
+                        <p className="text-xs text-muted-foreground">
+                            De este alimento te cuenta lo que pone arriba, comas la cantidad que comas.
+                        </p>
+                    )}
+                </div>
             )}
         </div>
     );
@@ -269,50 +340,12 @@ const FoodSearchPage = () => {
         <div className="min-h-screen bg-background p-4 md:p-6">
             <div className="max-w-3xl mx-auto">
                 <div className="bg-card border border-border rounded-xl p-4 mb-4">
-                    {/* EL TÍTULO Y EL BOTÓN, UNO DEBAJO DE OTRO SI NO CABEN.
-                        Iban en una fila con el botón `flex-shrink-0`, o sea que no encogía
-                        nunca: en un móvil estrecho se salía 27 px de la pantalla y arrastraba
-                        la página entera de lado. Con `flex-wrap` baja de línea en vez de
-                        empujar, y el título puede encoger porque ya no tiene el ancho tomado. */}
-                    <div className="flex items-start justify-between gap-3 mb-1 flex-wrap">
-                        <h1 className="text-xl font-bold text-foreground min-w-0">Buscador de alimentos</h1>
-                        <button
-                            onClick={() => setSuggestOpen(true)}
-                            className="flex-shrink-0 inline-flex items-center gap-1.5 bg-brand-orange hover:bg-brand-orange/90 text-white text-sm font-medium rounded-lg px-3 py-2 transition-colors"
-                        >
-                            <Plus className="w-4 h-4" />
-                            Sugerir alimento
-                        </button>
-                    </div>
-                    {/* TRES LÍNEAS ARRIBA, Y LA REGLA UNA SOLA VEZ (punto 137 del 26-08).
-
-                        Sale «Ordenados por coincidencia con el nombre»: es verdad -- primero
-                        los que empiezan igual y luego los que lo llevan dentro -- pero nadie
-                        entra a buscar un alimento preguntándose con qué criterio se ordenan
-                        los resultados. Ese sitio hace falta para explicar QUÉ ES UN GENÉRICO,
-                        que es lo que hoy no se dice en ningún sitio. */}
-                    <p className="text-muted-foreground text-sm mb-1">
-                        Busca entre todos los alimentos cargados en la calculadora.
-                    </p>
-                    {/* El subrayado naranja distingue marca de genérico y nadie lo decía en
-                        ningún sitio (P40, doc 23-08). Una línea, con el estilo puesto encima
-                        para que se reconozca sin explicarlo dos veces. */}
-                    <p className="text-xs text-muted-foreground mb-1">
-                        Los <b className="text-foreground">genéricos</b> son alimentos sin marca: pollo, arroz, almendras.
-                        Las marcas llevan el nombre <span className="text-[#FF671F] underline underline-offset-2">subrayado en naranja</span> y
-                        tocando el nombre vas a su web.
-                    </p>
-                    {/* Y LA CALIBRACIÓN, AQUÍ Y NO EN CADA ALIMENTO. Era un párrafo por
-                        alimento, y en uno de cada tres decía algo que solo es verdad si comes
-                        poco. Arriba una vez, y abajo el punto. */}
-                    <p className="text-xs text-muted-foreground mb-4 flex items-start gap-1.5">
-                        <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-brand flex-shrink-0" />
-                        <span>
-                            Los que llevan punto te cuentan <b className="text-foreground">más proteína cuanta más cantidad comes en el día</b>.
-                            Frutos secos y semillas: desde 20 g la mitad, desde 40 g toda.
-                            Cereales y panes, juntos: desde 50 g la mitad, desde 100 g toda.
-                        </span>
-                    </p>
+                    {/* SE ENTRA Y SE ESCRIBE (punto 156 del 27-08). Antes de llegar al campo
+                        de buscar había cinco párrafos y el botón de pedir, así que en el móvil
+                        había que hacer scroll para poder escribir, que es a lo que se entra.
+                        El orden es: campo · filtros · leyenda · resultados, y el enlace de
+                        pedir al final de la lista. */}
+                    <h1 className="text-xl font-bold text-foreground mb-3">Buscador de alimentos</h1>
 
                     <div className="relative mb-3">
                         <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
@@ -321,6 +354,7 @@ const FoodSearchPage = () => {
                             value={query}
                             onChange={e => setQuery(e.target.value)}
                             placeholder="Texto en el alimento"
+                            data-testid="buscador-campo"
                             className="w-full bg-card text-foreground placeholder:text-muted-foreground border border-input rounded-lg pl-9 pr-9 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/40"
                         />
                         {query && (
@@ -330,9 +364,14 @@ const FoodSearchPage = () => {
                         )}
                     </div>
 
-                    {/* Categoría (cascada: añade más para ajustar) */}
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Categoría</label>
-                    <div className="space-y-2">
+                    {/* LOS TRES FILTROS, EN UNA FILA (punto 156). Eran seis líneas: la etiqueta
+                        «Categoría» con su desplegable, la etiqueta «Opciones» con la suya y dos
+                        redondeles. Ahora van juntos y sin etiquetas: el desplegable ya dice
+                        «Todas las categorías» y los dos botones dicen lo que hacen.
+                        La cascada se conserva -- se pueden encadenar varias categorías para
+                        ajustar -- y los desplegables de más solo aparecen cuando ya hay una
+                        escogida, que es cuando ocupan sitio por algo. */}
+                    <div className="flex flex-wrap items-start gap-2">
                         {[...cats, ''].map((sel, idx) => {
                           const otras = cats.filter((_, i) => i !== idx);
                           const opciones = TODAS_CATEGORIAS.filter(c => !otras.includes(c.clave));
@@ -341,7 +380,8 @@ const FoodSearchPage = () => {
                                 key={idx}
                                 value={sel}
                                 onChange={e => setCatAt(idx, e.target.value)}
-                                className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-brand-orange/40"
+                                data-testid={`filtro-categoria-${idx}`}
+                                className="flex-1 min-w-[11rem] border border-input rounded-lg px-3 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-brand-orange/40"
                             >
                                 <option value="">
                                     {idx === 0 ? 'Todas las categorías' : (sel ? 'Quitar este filtro' : 'Añade otra categoría para ajustar')}
@@ -358,24 +398,65 @@ const FoodSearchPage = () => {
                             </select>
                           );
                         })}
+                        {/* «NO APORTAN MACROS», QUE ES COMO SE LLAMA EN CALMA (punto 150).
+                            Se llamaba «Verduras libres» y dejaba fuera a la mitad de lo que
+                            filtra: el Aquarius zero, la Coca-Cola Zero, la Fanta Zero, el
+                            Powerade zero y el kétchup de Heinz no son verduras y salen aquí,
+                            porque lo que tienen en común es que no cuentan, no que sean
+                            verdura. */}
+                        {/* Los dos van EN SU PROPIA CAJA para que compartan línea: sueltos en
+                            el `flex-wrap` de fuera, el desplegable se lleva la primera fila
+                            entera y cada botón caía en la suya, que son tres líneas otra vez.
+                            Juntos caben de sobra en 390 px. */}
+                        <div className="flex items-center gap-2">
+                            {[['genericos', 'Sólo genéricos'], ['sinMacros', 'No aportan macros']].map(([id, texto]) => (
+                                <button key={id} type="button" role="checkbox" aria-checked={opcion === id}
+                                    data-testid={`filtro-${id}`}
+                                    onClick={() => setOpcion(opcion === id ? '' : id)}
+                                    className={`flex-shrink-0 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                                        opcion === id
+                                            ? 'border-brand-orange bg-brand-orange text-white'
+                                            : 'border-input bg-card text-muted-foreground hover:text-foreground'}`}>
+                                    {texto}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
-                    {/* Opciones */}
-                    <label className="block text-xs font-semibold text-muted-foreground mt-3 mb-1">Opciones</label>
-                    <div className="flex flex-col gap-1">
-                        <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
-                            <input type="radio" name="opcion" checked={opcion === 'genericos'} onChange={() => {}}
-                                onClick={() => setOpcion(opcion === 'genericos' ? '' : 'genericos')}
-                                className="appearance-none shrink-0 w-3.5 h-3.5 rounded-full border border-input bg-card checked:bg-brand-orange checked:border-brand-orange cursor-pointer" />
-                            Mostrar sólo genéricos
-                        </label>
-                        <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
-                            <input type="radio" name="opcion" checked={opcion === 'sinMacros'} onChange={() => {}}
-                                onClick={() => setOpcion(opcion === 'sinMacros' ? '' : 'sinMacros')}
-                                className="appearance-none shrink-0 w-3.5 h-3.5 rounded-full border border-input bg-card checked:bg-brand-orange checked:border-brand-orange cursor-pointer" />
-                            Verduras libres
-                        </label>
-                    </div>
+                    {/* LA LEYENDA, EN DOS LÍNEAS (puntos 157 y 159).
+                        Se caen los tramos -- «desde 20 g la mitad, desde 40 g toda» y los de
+                        cereales y panes --: ahora viven dentro de cada alimento, al abrirlo,
+                        con el tramo del cliente marcado, y arriba estaban repetidos y se
+                        comían cuatro líneas. Queda lo que no está en ningún otro sitio: qué es
+                        un genérico y qué significa el punto.
+
+                        Y LA JERARQUÍA, DEL DERECHO (punto 159). La línea que menos dice -- la
+                        de «busca entre todos los alimentos» -- iba más grande que las dos que
+                        explican el método. Ahora es la pequeña.
+
+                        LAS DOS PALABRAS EN NEGRITA, no una: `genéricos` y `marcas` son los dos
+                        términos que se definen, y con una sola parecía que solo se definía uno.
+                        Y el guion, que se había cambiado por dos puntos.
+
+                        LO QUE DICE DE LAS MARCAS SE REESCRIBE. El punto 137 decía «llevan el
+                        nombre subrayado en naranja y tocando el nombre vas a su web», y el
+                        punto 152 quita las dos cosas: ya no hay subrayado y el nombre abre la
+                        ficha. Mantener la frase sería describir algo que no pasa. */}
+                    <p className="text-xs text-muted-foreground mt-3">
+                        Busca entre todos los alimentos cargados en la calculadora.
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                        Los <b className="text-foreground">genéricos</b> son alimentos sin marca - pollo, arroz, almendras.
+                        Las <b className="text-foreground">marcas</b> llevan <span className="text-brand-orange font-semibold">Ver web ↗</span>.
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1 flex items-start gap-1.5">
+                        {/* El mismo punto que el de la lista (punto 155): mismo tamaño y mismo
+                            color, o no se entiende que hablen de lo mismo. */}
+                        <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-brand flex-shrink-0" />
+                        <span>
+                            Los que llevan punto te cuentan <b className="text-foreground">más proteína cuanta más cantidad comes en el día</b>. Ábrelos para ver desde cuánto.
+                        </span>
+                    </p>
                 </div>
 
                 {loading ? (
@@ -396,9 +477,7 @@ const FoodSearchPage = () => {
                             {filtered.slice(0, aLaVista).map((f, i) => (
                                 <FoodRow key={f.id ?? i} food={f} />
                             ))}
-                            {filtered.length === 0 && (
-                                <p className="text-center text-muted-foreground text-sm py-12">Sin resultados</p>
-                            )}
+                            {filtered.length === 0 && <SinResultados />}
                         </div>
                         {aLaVista < filtered.length && (
                             <button onClick={() => setDeMas(n => n + porTanda)} data-testid="ver-mas-alimentos"
@@ -406,6 +485,21 @@ const FoodSearchPage = () => {
                                 Ver {Math.min(porTanda, filtered.length - aLaVista)} más
                             </button>
                         )}
+                        {/* EL ENLACE DE PEDIR, AL FINAL DE LA LISTA (punto 158).
+                            Estaba arriba del todo, en amarillo y a media pantalla de ancho,
+                            antes incluso del texto que explica la pantalla: era lo primero que
+                            se veía. Aquí abajo lo encuentra el que ha mirado los veinte
+                            resultados y de verdad no está -- con 121 clientes, un botón así
+                            arriba son solicitudes todos los días -- y ni siquiera hace falta
+                            botón, basta el enlace. Ese amarillo, además, no era de la casa: no
+                            aparece en ninguna otra pantalla. */}
+                        <p className="text-sm text-muted-foreground text-center mt-6" data-testid="pedir-alimento">
+                            ¿No encuentras alguno?{' '}
+                            <button onClick={() => setSuggestOpen(true)}
+                                className="font-semibold text-brand-orange underline underline-offset-2">
+                                Solicitar alimento
+                            </button>
+                        </p>
                     </>
                 )}
             </div>

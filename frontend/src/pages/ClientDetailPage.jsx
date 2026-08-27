@@ -1020,7 +1020,11 @@ const ClientDetailPage = () => {
     };
 
     // ── Suplementos ──
-    const catalogToItem = (c) => ({ catalog_id: c.id, titulo: c.titulo, imagen: c.imagen, enlaces: c.enlaces || [], cuando: c.cuando || '', cuanto: c.cuanto || '', observaciones: c.observaciones || '' });
+    // `comida` viaja con lo demás (punto 174 del 27-08): la línea del cliente es una copia de
+    // la ficha, y si no se copiara, el suplemento pautado hoy saldría en otra comida que el
+    // mismo suplemento pautado mañana. Vacío significa «que lo deduzca del ¿Cuándo?», que es
+    // lo normal, y el `catalog_id` deja que la ficha siga mandando si algún día se cambia.
+    const catalogToItem = (c) => ({ catalog_id: c.id, titulo: c.titulo, imagen: c.imagen, enlaces: c.enlaces || [], cuando: c.cuando || '', cuanto: c.cuanto || '', observaciones: c.observaciones || '', comida: c.comida || '' });
     const supAdd = (bloque, catId) => {
         const c = supCatalog.find(x => x.id === catId);
         if (!c) return;

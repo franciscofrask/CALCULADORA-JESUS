@@ -12,6 +12,7 @@ import { seExcede } from '../../lib/exceso';
 import { num1, numMedio } from '../../lib/numeros';
 import { leerCantidad, avisoRazonable, TOPE_GRAMOS, AVISO_TOPE, AVISO_NEGATIVO } from '../../lib/cantidades';
 import { FOOD_FAVORITES_UI } from './SearchFoodModal';
+import SinResultados from './SinResultados';
 import {
     faStopwatch20,
     faEgg, faBacon, faBurger, faDove, faCow, faPiggyBank, faDrumstickBite,
@@ -1230,13 +1231,19 @@ const BuildMealModal = ({
                                     {loadingFoods ? (
                                         <div className="text-center py-8 text-muted-foreground">Cargando...</div>
                                     ) : displayFoods.length === 0 ? (
+                                        /* BUSCANDO Y SIN NADA, EL MISMO TEXTO QUE EN ALIMENTOS
+                                           (punto 144 del 27-08: «igual en los dos sitios»).
+                                           Los otros dos vacíos NO son éste y se quedan como
+                                           están: uno es no tener frecuentes todavía y el otro
+                                           una categoría vacía, y ninguno de los dos es «no lo
+                                           tenemos». */
+                                        isSearching ? <SinResultados /> : (
                                         <div className="text-center py-8 text-muted-foreground">
-                                            {isSearching
-                                                ? 'No se encontraron alimentos'
-                                                : selectedCategories.some(c => c.id === '__frequent__')
-                                                    ? 'Aún no tienes alimentos frecuentes - guarda algunas dietas primero'
-                                                    : 'No hay alimentos en esta categoría'}
+                                            {selectedCategories.some(c => c.id === '__frequent__')
+                                                ? 'Aún no tienes alimentos frecuentes - guarda algunas dietas primero'
+                                                : 'No hay alimentos en esta categoría'}
                                         </div>
+                                        )
                                     ) : (
                                         <div className="space-y-1">
                                             {/* DE DÓNDE SALE ESTA LISTA. Jesús, 15-08: «que lo que

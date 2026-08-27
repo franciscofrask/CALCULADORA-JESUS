@@ -291,16 +291,28 @@ const AdminFoodSuggestionsPage = () => {
                                                 <span className="text-xs px-2 py-0.5 rounded-full bg-[#0A0A0A] border border-[#222] text-white/50">
                                                     {f.por_unidad ? `por unidad de ${r1(f.racion)}g` : 'por 100 g'}
                                                 </span>
-                                                <span className="text-xs px-2 py-0.5 rounded-full bg-[#0A0A0A] border border-[#222] text-white/50">
-                                                    {f.peso_tipo === 'escurrido' ? 'peso escurrido' : 'peso neto'}
-                                                </span>
+                                                {/* LO DE LA LATA, SOLO SI ES LATA (punto 165 del 27-08).
+                                                    Antes salía siempre «peso neto» aunque nadie lo hubiera
+                                                    contestado, porque el formulario preguntaba el tipo de peso
+                                                    a todo el mundo. Ahora sólo se pregunta a las conservas, así
+                                                    que enseñarlo en un yogur sería enseñar un dato inventado. */}
+                                                {f.es_conserva && (
+                                                    <span className="text-xs px-2 py-0.5 rounded-full bg-[#0A0A0A] border border-[#222] text-white/50">
+                                                        lata o conserva · {f.peso_tipo === 'escurrido' ? 'peso escurrido' : 'peso neto'}
+                                                    </span>
+                                                )}
                                             </div>
-                                            {f.url && (
+                                            {f.url ? (
                                                 <a href={f.url} target="_blank" rel="noopener noreferrer"
                                                     className="inline-flex items-center gap-1 text-xs text-[#FF671F] hover:underline mb-2 break-all">
                                                     <ExternalLink className="w-3 h-3 flex-shrink-0" /> {f.url}
                                                 </a>
-                                            )}
+                                            ) : f.sin_web ? (
+                                                /* Lo dijo él, no es que se le olvidara: el enlace es obligatorio
+                                                   y ésta es la única salida (punto 166). Sin distinguirlo, quien
+                                                   revisa no sabe si buscar la fuente o darlo por genérico. */
+                                                <p className="text-xs text-white/40 mb-2">Dice que no tiene web</p>
+                                            ) : null}
                                             <p className="text-xs text-white/50">
                                                 Categorías: {s.categorias ? <span className="text-white/80">{s.categorias}</span> : <em className="text-white/30">sin asignar</em>}
                                             </p>

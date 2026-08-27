@@ -14,7 +14,12 @@
         <meta name="apple-mobile-web-app-title" content="12EN12" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-        <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <!-- INTER, EN RANGO Y NO EN PESOS SUELTOS (punto 172 del 27-08). Pedía los números
+             del Inicio a peso 850 y aquí se cargaban los estáticos 300;400;500;600;700;800:
+             un 850 con esa lista se redondea al 800 y el navegador no avisa. Con `300..900`
+             viene la variable y el 850 es el 850. Es un fichero, no ocho, así que no cuesta
+             red; y quien no soporte variables se queda en el peso más cercano, como antes. -->
+        <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800&family=Inter:wght@300..900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
         <title>12EN12</title>
     </head>
     <body>

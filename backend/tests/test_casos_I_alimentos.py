@@ -22,6 +22,7 @@ Lo que es de pintado -- cuántas fichas se montan en el DOM, qué se ve al abrir
 comprueba leyendo el fuente del front, porque el dato que decide eso está escrito ahí y no
 viaja por la API.
 """
+import base64
 import os
 import re
 import time
@@ -32,6 +33,12 @@ import requests
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "http://localhost:8000").rstrip("/")
 API = f"{BASE_URL}/api"
+
+#: Un PNG de un pixel, para los casos que mandan una solicitud de alimento: desde el punto 161
+#: del 27-08 las dos fotos son obligatorias. El servidor comprueba el tipo y el tamaño, no lo
+#: que se ve en ellas.
+_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
 
 _RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 FRONT = os.path.join(_RAIZ, "frontend", "src")
@@ -201,11 +208,17 @@ def test_63_lo_sugerido_llega_al_panel_pendiente_de_aprobar(cabeceras_cliente, c
     para no gastarle el cupo a la cuenta de pruebas ni dejar basura en el panel.
     """
     nombre = f"Alimento de prueba {uuid.uuid4().hex[:8]}"
+    # Las dos fotos y el enlace (o «No tiene web») son obligatorios desde el punto 161 del
+    # 27-08: sin ellos el servidor devuelve un 400 y no hay solicitud que revisar. Este caso
+    # va del camino cliente -> panel, así que se manda completa.
     alta = requests.post(
         f"{API}/calculator/suggest-food",
         headers=cabeceras_cliente,
         data={"nombre": nombre, "por_unidad": "false", "racion": "100",
-              "peso_tipo": "neto", "proteinas": "20", "hidratos": "5", "grasas": "3"},
+              "es_conserva": "false", "peso_tipo": "neto",
+              "proteinas": "20", "hidratos": "5", "grasas": "3", "sin_web": "true"},
+        files={"foto_frontal": ("frontal.png", _PNG, "image/png"),
+               "foto_reverso": ("reverso.png", _PNG, "image/png")},
         timeout=30,
     )
     if alta.status_code == 429:
@@ -238,14 +251,17 @@ def test_63_lo_sugerido_llega_al_panel_pendiente_de_aprobar(cabeceras_cliente, c
 def test_64_sin_protocolo_se_ensena_la_suplementacion_recomendada(cabeceras_cliente):
     """«Ensena la suplementacion recomendada, no una pantalla vacia».
 
-    CERRADO EL 18-08 con la orden de Jesús: «la suplementación tiene que salir siempre la
-    genérica hasta que le pongamos la suya». Antes este caso estaba en rojo a propósito:
-    `/supplements/current` devolvía `null`, la pantalla ponía «de momento no te hemos
-    puesto nada» y la única propuesta por perfil vivía en `/admin/supplements/suggest`,
-    que el cliente no puede pedir.
+    LA REGLA CAMBIÓ Y ESTE CASO SE HABÍA QUEDADO CON LA VIEJA. El 18-08 Jesús dijo «la
+    suplementación tiene que salir siempre la genérica hasta que le pongamos la suya», y
+    se compuso una general de cinco líneas dentro de `/supplements/current`, marcada con
+    `es_generica`. Un día después, en el doc del 19-08 (bloque 08), la vio y contestó:
+    «No es eso. Es mi guía entera».
 
-    Ahora la general viaja en la misma respuesta, marcada con `es_generica` para que
-    nadie la confunda con una pauta suya.
+    Así que la general se quitó de ahí y quien no tiene la suya ve LA GUÍA, que es otra
+    pantalla y otro endpoint (`/supplements/guia`). El caso 64 sigue siendo el mismo -- no
+    puede quedarse con la pantalla vacía -- pero se comprueba donde la respuesta vive
+    ahora; buscando `es_generica` este test daba rojo por medir una regla derogada, y un
+    rojo que nadie puede arreglar acaba tapando a uno de verdad.
     """
     r = requests.get(f"{API}/supplements/current", headers=cabeceras_cliente, timeout=30)
     if r.status_code == 403:
@@ -253,17 +269,23 @@ def test_64_sin_protocolo_se_ensena_la_suplementacion_recomendada(cabeceras_clie
     assert r.status_code == 200, r.text
     datos = r.json() or {}
 
-    if not datos.get("es_generica"):
-        assert datos.get("actual"), (
-            "sin protocolo propio la respuesta llega vacía: la pantalla vuelve a ser la de "
-            f"«Todavía no tienes suplementación». Respuesta: {datos!r}")
+    if datos.get("actual"):
         pytest.skip("la cuenta de pruebas tiene protocolo puesto: este caso es el del que no lo tiene")
 
-    assert datos.get("actual"), "se marca como genérica pero no trae ni una línea"
-    for item in datos["actual"]:
-        assert item.get("titulo"), "cada línea necesita su producto"
-        assert (item.get("cuanto") or item.get("cuando")), (
-            f"la general se enseña igual que la suya, con dosis y momento: {item!r}")
+    # Sin protocolo propio: `current` viene vacío A PROPÓSITO, y lo que no puede venir
+    # vacío es la guía, que es lo que la pantalla enseña en su lugar.
+    guia = requests.get(f"{API}/supplements/guia", headers=cabeceras_cliente, timeout=30)
+    assert guia.status_code == 200, (
+        f"sin protocolo propio no hay ni guía que enseñar: {guia.status_code} {guia.text[:200]}")
+    g = guia.json() or {}
+    lineas = [f for s in (g.get("secciones") or []) for f in (s.get("fichas") or [])]
+    assert lineas, (
+        "sin protocolo propio la pantalla se queda vacía: la guía no trae ni una ficha. "
+        f"Respuesta: {str(g)[:300]}")
+    for ficha in lineas:
+        assert ficha.get("nombre"), "cada línea de la guía necesita su producto"
+    assert any(f.get("cuanto") or f.get("cuando") for f in lineas), (
+        "la guía se lee como una pauta: alguna ficha tiene que decir cuánto o cuándo")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -313,10 +335,25 @@ def test_65_con_protocolo_puesto_sale_con_dosis_y_momento(cabeceras_cliente, cab
         assert primero.get("cuanto"), "el suplemento llega sin dosis"
         assert primero.get("cuando"), "el suplemento llega sin momento de toma"
     finally:
-        requests.delete(f"{API}/admin/supplements/version/{hoy}?client_id={client_id}",
-                        headers=cabeceras_admin, timeout=30)
-        # Si el cliente ya tenía algo puesto de antes, se comprueba que sigue ahí.
+        # LIMPIAR NO PUEDE LLEVARSE LO QUE HABÍA. Este caso guarda una versión con la fecha
+        # de HOY, y si el cliente ya tenía la suya con esa misma fecha, la pisa; borrar
+        # después «la versión de hoy» se llevaba las dos. Pasó de verdad el 27-08: dejó al
+        # cliente de pruebas sin protocolo y el propio assert de abajo fue quien lo cantó.
+        # Por eso ahora se REPONE lo que había en vez de borrar a ciegas.
         if previo and previo.get("actual"):
+            requests.post(
+                f"{API}/admin/supplements/save?client_id={client_id}",
+                headers=cabeceras_admin,
+                json={"actual": previo.get("actual") or [],
+                      "siguiente": previo.get("siguiente") or [],
+                      "actual_fecha": previo.get("actual_fecha") or hoy,
+                      "siguiente_fecha": previo.get("siguiente_fecha"),
+                      "nota": previo.get("nota")},
+                timeout=30,
+            )
             vuelta = requests.get(f"{API}/supplements/current", headers=cabeceras_cliente,
                                   timeout=30).json()
             assert vuelta and vuelta.get("actual"), "al limpiar se llevó por delante lo que había"
+        else:
+            requests.delete(f"{API}/admin/supplements/version/{hoy}?client_id={client_id}",
+                            headers=cabeceras_admin, timeout=30)
