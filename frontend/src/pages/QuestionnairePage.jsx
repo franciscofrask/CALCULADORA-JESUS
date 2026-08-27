@@ -2503,7 +2503,25 @@ const QuestionnairePage = () => {
             return o ? String(o.label).split(':')[0] : null;
         };
         const conAno = (v, ano) => (v == null || v === '') ? null : `${v} kg${ano ? ` (${ano})` : ''}`;
+        // La edad que sale de su fecha de nacimiento, que es lo que de verdad se repasa: una
+        // fecha suelta no dice nada y «0 años» canta a la primera.
+        const laEdad = (() => {
+            if (!answers.birthdate) return null;
+            const b = new Date(`${String(answers.birthdate).slice(0, 10)}T12:00:00`);
+            if (isNaN(b)) return null;
+            const h = new Date();
+            const cumplioYa = h.getMonth() > b.getMonth()
+                || (h.getMonth() === b.getMonth() && h.getDate() >= b.getDate());
+            const anos = h.getFullYear() - b.getFullYear() - (cumplioYa ? 0 : 1);
+            return `${anos} años`;
+        })();
         const REPASO = [
+            // LA FECHA DE NACIMIENTO, EN EL REPASO. No estaba, y por eso el que venía a
+            // corregir su edad se encontraba «Revisa tus datos» CON LA REJILLA VACÍA: ni una
+            // tarjeta, solo Atrás y Continuar (Francisco, 26-08). El repaso solo enseña los
+            // pasos que están en el recorrido, y en «completar» el recorrido puede ser una
+            // sola pantalla -- justo esta --, que no tenía tarjeta que enseñar.
+            ['contacto', 'Edad', laEdad],
             ['goal', 'Objetivo', answers.goal === 'volumen' ? 'Ganar masa muscular'
                 : answers.goal === 'definicion' ? 'Perder grasa' : null],
             ['weight', 'Peso', answers.weight ? `${answers.weight} kg` : null],

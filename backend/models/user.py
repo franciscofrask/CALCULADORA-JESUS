@@ -2,6 +2,7 @@
 Modelos Pydantic para usuarios y autenticación.
 """
 import math
+from datetime import datetime, timezone
 
 from pydantic import BaseModel, EmailStr, ConfigDict, Field, field_validator
 from typing import Optional, Dict, List, Any, Union
@@ -1465,6 +1466,36 @@ RANGOS_PERFIL = {
     "body_fat": (3, 60),     # %
 }
 
+
+def validar_fecha_de_nacimiento(v):
+    """La fecha de nacimiento, comprobada por la EDAD que produce.
+
+    LA EDAD TENIA RANGO Y LA FECHA NO, ASI QUE EL RANGO NO SERVIA DE NADA (26-08). `age`
+    esta acotada a 14-100 en `RANGOS_PERFIL`, pero de los tres sitios que escriben la ficha
+    dos guardan `birthdate` y DERIVAN la edad de ella (`_age_from_birthdate`). Como la fecha
+    no validaba nada, cualquier disparate entraba y la edad derivada se saltaba su propio
+    rango por la puerta de atras.
+
+    En produccion: una ficha con `birthdate` de hace tres semanas y `age: 0`. Y esa edad de 0
+    es la que hacia salir el aviso de «macros provisionales» que no habia forma de quitar.
+
+    Se valida aqui, en el modelo, que es la unica puerta por la que pasan las tres rutas.
+    """
+    if v in (None, ""):
+        return v
+    try:
+        b = datetime.strptime(str(v)[:10], "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        raise ValueError("La fecha de nacimiento tiene que ser una fecha (AAAA-MM-DD).")
+    hoy = datetime.now(timezone.utc).date()
+    edad = hoy.year - b.year - ((hoy.month, hoy.day) < (b.month, b.day))
+    minimo, maximo = RANGOS_PERFIL["age"]
+    if edad < minimo or edad > maximo:
+        raise ValueError(
+            f"Con esa fecha saldrian {edad} años. Revisala: tiene que estar entre "
+            f"{minimo} y {maximo}.")
+    return str(v)[:10]
+
 class ClientProfileUpdate(BaseModel):
     # Los dos correos: el cliente puede cambiar a cuál se le escribe desde Mi perfil. El de
     # acceso NO se toca por aquí -- es con el que entra y con el que cruzan los cobros.
@@ -1602,6 +1633,10 @@ class QuestionnaireSubmit(BaseModel):
     # los enteros heredados de Calma en este campo no tienen semántica verificable.
     training_weekdays: Optional[List[str]] = None
     birthdate: Optional[str] = None  # YYYY-MM-DD
+
+    # La edad se DERIVA de esta fecha, asi que el rango de `age` hay que defenderlo aqui:
+    # ver `validar_fecha_de_nacimiento`.
+    _v_birthdate = field_validator("birthdate")(validar_fecha_de_nacimiento)
     # CON RANGO, y por lo que costo verlo (18-08): sin el, una altura de 80 se GUARDABA en la
     # ficha y el error saltaba despues, al devolver el perfil ya escrito -- ese si valida --,
     # asi que el cliente veia «Revisa el campo height» con el dato malo ya dentro. Los topes
@@ -1674,6 +1709,8 @@ class Nivel1Submit(BaseModel):
     biotype: Optional[str] = None
     height: Optional[float] = None              # cm
     birthdate: Optional[str] = None             # YYYY-MM-DD
+    # Aqui tambien se deriva la edad: ver `validar_fecha_de_nacimiento`.
+    _v_birthdate = field_validator("birthdate")(validar_fecha_de_nacimiento)
     training_experience: Optional[str] = None
     peso_maximo: Optional[float] = None
     peso_minimo: Optional[float] = None
