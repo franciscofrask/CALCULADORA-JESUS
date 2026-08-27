@@ -665,8 +665,24 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
         de_macros = {"macros_training", "macros_rest", "macros_periworkout", "macros_source",
                      "macros_multiplicadores", "ajustes_macros", "questionnaire_completed",
                      "questionnaire_completed_at"}
+        # ...Y LO QUE ESTA PUESTO PERO NO PUEDE SER (26-08). «Solo lo que hoy esta vacio»
+        # dejaba fuera los valores IMPOSIBLES, que no estan vacios: una edad de 0, una
+        # estatura de 1 cm. Y esos son justo los que denuncia el aviso de «macros
+        # provisionales» de Mi perfil.
+        #
+        # De ahi salia un bucle que Francisco vivio en produccion: el aviso decia «revisa tu
+        # edad», el cliente entraba a completar, contestaba... y aqui se le tiraba la
+        # respuesta por no estar el campo vacio. Volvia al Inicio y el aviso seguia. Otra
+        # vez, y otra. La misma regla estaba repetida en la pantalla (`falta()`), asi que
+        # habia que abrirla en los dos lados: sin esto, el cuestionario pregunta y el
+        # servidor no guarda.
+        from core.datos_dudosos import datos_dudosos
+        imposibles = {d["campo"] for d in datos_dudosos(profile) if d["motivo"] == "imposible"}
+        # La edad no se escribe: se deriva de la fecha de nacimiento (`_age_from_birthdate`).
+        if "age" in imposibles:
+            imposibles.add("birthdate")
         update = {k: v for k, v in update.items()
-                  if k in de_macros or profile.get(k) in (None, "", [], {})}
+                  if k in de_macros or k in imposibles or profile.get(k) in (None, "", [], {})}
         # Si los días de la semana entran (estaban vacíos), el número va CON ellos aunque
         # la ficha trajera un 4 rellenado por defecto: contar 4 con 3 días marcados es
         # justo la incoherencia que separa `dias_guardados` de `dias_de_entreno`.

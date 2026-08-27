@@ -1242,10 +1242,18 @@ const QuestionnairePage = () => {
     // que se pida aunque el cuestionario ya esté hecho. Sin esto no hay forma de mirar el
     // alta una vez pasada, y es justo la que más textos tiene.
     const revision = verComo(user);
+    const pidioCompletar = new URLSearchParams(location.search).get('completar') === '1';
     // Retomar: Nivel 0 hecho en otra sesión pero Nivel 1 pendiente.
+    //
+    // EL QUE VIENE A COMPLETAR SUS DATOS NO ESTÁ RETOMANDO EL LARGO (26-08). La puerta del
+    // cuestionario largo -- «se abre el viernes a las 10:00» -- cuelga de aquí, y el
+    // comentario de esa puerta ya decía que «el completar-huecos pasa siempre»... pero la
+    // condición solo dejaba fuera al que venía a ajustar. Resultado: el aviso de macros
+    // provisionales te mandaba a arreglar tu edad y te encontrabas un «vuelve el viernes»,
+    // con el aviso todavía puesto. Es el mismo callejón que el de más abajo, por otra puerta.
     const retomandoNivel1 = revision
         ? revision === 'perfil'
-        : (!pidioAjustar && !!profile?.questionnaire_completed && !nivel0Enviado
+        : (!pidioAjustar && !pidioCompletar && !!profile?.questionnaire_completed && !nivel0Enviado
            && tieneCoach && !profile?.questionnaire_nivel1_completed);
 
     // Dos modos, como pide el doc del 29-07:
@@ -1306,15 +1314,49 @@ const QuestionnairePage = () => {
             k => profile[k] === undefined || profile[k] === null || profile[k] === '');
     }
     const faltaLaBase = loQueLeFaltabaRef.current || [];
+
+    /**
+     * LO QUE ESTÁ PUESTO PERO NO PUEDE SER (26-08). Y esto era un callejón sin salida.
+     *
+     * El aviso de «macros provisionales» sale de `datos_dudosos`, que marca dos cosas: lo
+     * que FALTA y lo que es IMPOSIBLE (edad 0, estatura de 1 cm, los datos que entraron por
+     * los scripts de importación sin pasar por la validación de la API). Pero el recorrido
+     * de «Completar mis datos» solo mira lo que falta: `falta()` pregunta cuando el campo
+     * está vacío, y un valor imposible NO está vacío.
+     *
+     * Resultado, en producción y con la cuenta de Francisco: el aviso dice «revisa tu edad»,
+     * pulsas «Completar mis datos», el cuestionario no encuentra nada que preguntar y salta
+     * directo a «y ya estaría, estos son tus macros iniciales»; entras, y el aviso sigue ahí.
+     * Otra vez, y otra. El aviso te mandaba a un sitio que no podía arreglar lo que denuncia.
+     *
+     * Son 3 clientes en el bucle y 10 con algún valor imposible. Ahora esos campos también
+     * abren su pantalla, con el valor malo delante para que se vea qué hay que corregir.
+     */
+    const loQueEstaMalRef = useRef(null);
+    if (profile && !loQueEstaMalRef.current) {
+        loQueEstaMalRef.current = (profile.datos_dudosos || [])
+            .filter(d => d.motivo === 'imposible')
+            .map(d => d.campo);
+    }
+    const estaMal = loQueEstaMalRef.current || [];
+
     const laBaseQueFalta = useMemo(() => {
-        if (!faltaLaBase.length) return [];
         const pantallas = [];
-        if (faltaLaBase.includes('goal')) pantallas.push(q('goal'), q('_confirm'));
-        if (faltaLaBase.includes('weight')) pantallas.push(q('weight'));
-        if (faltaLaBase.includes('body_fat')) pantallas.push(porTipo('bf'));
+        const hayQuePreguntar = (campo) => faltaLaBase.includes(campo) || estaMal.includes(campo);
+        if (hayQuePreguntar('goal')) pantallas.push(q('goal'), q('_confirm'));
+        if (hayQuePreguntar('weight')) pantallas.push(q('weight'));
+        if (hayQuePreguntar('body_fat')) pantallas.push(porTipo('bf'));
+        // Estos tres solo llegan por «imposible»: si faltaran, el básico ya los pide.
+        if (estaMal.includes('height')) pantallas.push(q('height'));
+        if (estaMal.includes('sex')) pantallas.push(q('sex'));
+        // La edad se corrige donde se pregunta, que es la fecha de nacimiento.
+        if (estaMal.includes('age')) {
+            pantallas.push({ type: 'contacto', title: 'Revisa tus datos',
+                             desc: 'Con tu fecha de nacimiento salen bien tus macros.' });
+        }
         return pantallas;
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [faltaLaBase.join(',')]);
+    }, [faltaLaBase.join(','), estaMal.join(',')]);
 
     const preguntasDeAjuste = [...laBaseQueFalta, ...STEPS_AJUSTE, ...elCierre];
 
@@ -1322,7 +1364,7 @@ const QuestionnairePage = () => {
     // dice por qué se le pregunta y terminando en sus macros nuevos, que es lo que gana.
     // Se calcula una vez con las respuestas ya sembradas del perfil: si se recalculara en
     // cada tecla, la pantalla en la que está escribiendo desaparecería al contestarla.
-    const pidioCompletar = new URLSearchParams(location.search).get('completar') === '1';
+    // (`pidioCompletar` se declara arriba, junto a `retomandoNivel1`, que también lo mira.)
 
     // LAS PANTALLAS DEL BÁSICO QUE ESTE CLIENTE NO HA CONTESTADO NUNCA. Se calcula una vez,
     // con las respuestas ya sembradas del perfil: si se recalculara en cada tecla, la
@@ -1343,8 +1385,14 @@ const QuestionnairePage = () => {
                     phone: profile.phone ?? user?.phone };
         // Sin las de la base: esas van por su cuenta, delante de todo, y preguntarle el
         // objetivo dos veces seguidas es lo que hace que cierre la pestaña.
+        //
+        // Por CLAVE y por TIPO. Las pantallas compuestas -- «Antes de empezar», que pide la
+        // fecha de nacimiento -- no tienen clave, así que mirando solo la clave se colaban
+        // dos veces desde que la base también las pone cuando la edad guardada es imposible.
         const yaVanDelante = new Set(laBaseQueFalta.map(p => p.key).filter(Boolean));
-        delBasicoRef.current = EL_BASICO.filter(p => falta(p, a) && !yaVanDelante.has(p.key));
+        const tiposDelante = new Set(laBaseQueFalta.filter(p => !p.key).map(p => p.type));
+        delBasicoRef.current = EL_BASICO.filter(
+            p => falta(p, a) && !yaVanDelante.has(p.key) && !(!p.key && tiposDelante.has(p.type)));
         return delBasicoRef.current;
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [profile, laBaseQueFalta]);
