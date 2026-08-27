@@ -282,7 +282,7 @@
   },
   {
    "tipo": "success",
-   "texto": "Enlace de pago copiado (…€). Pégaselo por WhatsApp.",
+   "texto": "Enlace de pago copiado (/leads/…/enlace-pago€). Pégaselo por WhatsApp.",
    "quien": "equipo",
    "donde": "AdminDashboard",
    "fichero": "frontend/src/pages/AdminDashboard.jsx"
@@ -583,7 +583,7 @@
   },
   {
    "tipo": "success",
-   "texto": "«…» quitada de la biblioteca",
+   "texto": "«/admin/routines/pdf-del-mes?sexo=…» quitada de la biblioteca",
    "quien": "equipo",
    "donde": "AdminRoutines",
    "fichero": "frontend/src/pages/AdminRoutinesPage.jsx"
@@ -786,7 +786,7 @@
   },
   {
    "tipo": "success",
-   "texto": "Menú enviado al chat de …",
+   "texto": "Menú enviado al chat de el cliente",
    "quien": "equipo",
    "donde": "ClientDetail",
    "fichero": "frontend/src/pages/ClientDetailPage.jsx"
@@ -835,7 +835,7 @@
   },
   {
    "tipo": "success",
-   "texto": "Le hemos puesto «…»",
+   "texto": "Le hemos puesto «/admin/routines/pdf/…»",
    "quien": "equipo",
    "donde": "ClientDetail",
    "fichero": "frontend/src/pages/ClientDetailPage.jsx"
@@ -1045,7 +1045,7 @@
   },
   {
    "tipo": "success",
-   "texto": "Foto subida…",
+   "texto": "Foto subida (…)",
    "quien": "equipo",
    "donde": "ClientDetail",
    "fichero": "frontend/src/pages/ClientDetailPage.jsx"
@@ -1290,7 +1290,7 @@
   },
   {
    "tipo": "success",
-   "texto": "… vaciada",
+   "texto": "La comida vaciada",
    "quien": "cliente",
    "donde": "Nutrition",
    "fichero": "frontend/src/pages/NutritionPage.jsx"
@@ -1374,7 +1374,7 @@
   },
   {
    "tipo": "warning",
-   "texto": "Aplicada \"…\" adaptada a tu día de …, pero ….",
+   "texto": "Aplicada \"…\" adaptada a tu día de …, pero una comida se queda corta de macros / Intra / Post comidas se quedan cortas de macros.",
    "quien": "cliente",
    "donde": "Nutrition",
    "fichero": "frontend/src/pages/NutritionPage.jsx"
@@ -1388,7 +1388,7 @@
   },
   {
    "tipo": "warning",
-   "texto": "Aplicada \"…\", pero ….",
+   "texto": "Aplicada \"…\", pero una comida se queda corta de macros / Intra / Post comidas se quedan cortas de macros.",
    "quien": "cliente",
    "donde": "Nutrition",
    "fichero": "frontend/src/pages/NutritionPage.jsx"
@@ -1437,21 +1437,21 @@
   },
   {
    "tipo": "warning",
-   "texto": "Comida cuadrada. …",
+   "texto": "Comida cuadrada. Un alimento ya no está / … alimentos ya no están en el catálogo y se quitó.",
    "quien": "cliente",
    "donde": "Nutrition",
    "fichero": "frontend/src/pages/NutritionPage.jsx"
   },
   {
    "tipo": "warning",
-   "texto": "No se puede cuadrar sin quitar nada: ….… No se ha quitado ninguno.…",
+   "texto": "No se puede cuadrar sin quitar nada: …. Para cuadrarlo tendrías que quitar o bajar …, que pone … g de …. / Para cuadrarlo te falta añadir algo con …. No se ha quitado ninguno. Cantidades redondeadas para pesarlas fácil: los macros pueden variar unos gramos.",
    "quien": "cliente",
    "donde": "Nutrition",
    "fichero": "frontend/src/pages/NutritionPage.jsx"
   },
   {
    "tipo": "success",
-   "texto": "Comida cuadrada a tus macros.…",
+   "texto": "Comida cuadrada a tus macros. Cantidades redondeadas para pesarlas fácil: los macros pueden variar unos gramos.",
    "quien": "cliente",
    "donde": "Nutrition",
    "fichero": "frontend/src/pages/NutritionPage.jsx"
@@ -2063,7 +2063,7 @@
   },
   {
    "modo": "confirm",
-   "titulo": "¿Quitar …?",
+   "titulo": "¿Quitar este alimento?",
    "detalle": "Bajar de su cantidad mínima lo saca de la comida. Los demás ingredientes se quedan como están.",
    "boton": "Quitar",
    "peligro": true,
@@ -2073,7 +2073,7 @@
   },
   {
    "modo": "confirm",
-   "titulo": "¿Quitar …?",
+   "titulo": "¿Quitar este alimento?",
    "detalle": "Sale de esta comida. Los demás ingredientes se quedan como están.",
    "boton": "Quitar",
    "peligro": true,
@@ -2083,7 +2083,7 @@
   },
   {
    "modo": "confirm",
-   "titulo": "¿Vaciar …?",
+   "titulo": "¿Vaciar La comida?",
    "detalle": "",
    "boton": "Vaciar",
    "peligro": true,
@@ -2093,7 +2093,7 @@
   },
   {
    "modo": "confirm",
-   "titulo": "¿Borrar \"…\"?",
+   "titulo": "¿Borrar \"esta favorita\"?",
    "detalle": "La favorita se borra para siempre. Los días que montaste con ella no se tocan.",
    "boton": "Borrar",
    "peligro": true,
@@ -2103,7 +2103,7 @@
   },
   {
    "modo": "confirm",
-   "titulo": "¿Borrar \"…\"?",
+   "titulo": "¿Borrar \"esta comida\"?",
    "detalle": "Se borra para siempre. Los días donde ya la usaste no se tocan.",
    "boton": "Borrar",
    "peligro": true,
@@ -3227,7 +3227,7 @@
    "fichero": "backend/routes/leads.py"
   },
   {
-   "texto": "Ya existe un lead con ese email (…, estado: …)",
+   "texto": "Ya existe un lead con ese email (sin nombre, estado: …)",
    "quien": "equipo",
    "fichero": "backend/routes/leads.py"
   },
