@@ -20,6 +20,7 @@
  * espera ver (su histórico entero, no solo lo subido en la app nueva).
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import VisorDeFoto from './ui/VisorDeFoto';
 import { Camera } from 'lucide-react';
 import { construirComparativa, TITULO_ETIQUETA } from '../lib/comparativaFotos';
 import { MEDIDAS, valorAnterior } from '../lib/medidas';
@@ -48,9 +49,15 @@ const _pesoCercano = (pesos, fecha) => {
 };
 
 /** Una foto del cliente, descargada con su sesión. La ref de las de Calma lleva una
- *  barra (calma/carpeta/fichero), así que se codifica tramo a tramo. */
-const FotoDelCliente = ({ api, foto }) => {
+ *  barra (calma/carpeta/fichero), así que se codifica tramo a tramo.
+ *
+ *  SE TOCA Y SE VE ENTERA (Francisco, 26-08). El hueco es de 3/4 con `object-cover`, o sea
+ *  que la foto va recortada: en un teléfono la cabeza y los pies se quedan fuera, y estas
+ *  fotos están justo para comparar dos meses. El visor la enseña completa y con su fecha,
+ *  que es el dato que hay que tener delante mientras se mira. */
+const FotoDelCliente = ({ api, foto, pie }) => {
     const [url, setUrl] = useState(null);
+    const [ampliada, setAmpliada] = useState(false);
     const ref = foto.ref || foto.id;
     useEffect(() => {
         let vivo = true;
@@ -61,10 +68,21 @@ const FotoDelCliente = ({ api, foto }) => {
         return () => { vivo = false; };
     }, [api, ref]);
 
+    if (!url) return <div className="aspect-[3/4] rounded-xl overflow-hidden bg-muted" />;
+
     return (
-        <div className="aspect-[3/4] rounded-xl overflow-hidden bg-muted">
-            {url && <img src={url} alt="" className="w-full h-full object-cover" />}
-        </div>
+        <>
+            <button type="button" onClick={() => setAmpliada(true)}
+                aria-label={pie ? `Ver la foto de ${pie} en grande` : 'Ver la foto en grande'}
+                data-testid="foto-comparativa"
+                className="aspect-[3/4] w-full rounded-xl overflow-hidden bg-muted block active:opacity-80 transition-opacity">
+                <img src={url} alt="" className="w-full h-full object-cover" />
+            </button>
+            {ampliada && (
+                <VisorDeFoto url={url} alt={pie ? `Tu foto de ${pie}` : 'Tu foto'} pie={pie}
+                    alCerrar={() => setAmpliada(false)} />
+            )}
+        </>
     );
 };
 
@@ -170,7 +188,7 @@ const ComparativaCliente = ({ api, reports, faseDesde }) => {
                 <div className="grid grid-cols-3 gap-2">
                     {[...sesiones].sort((a, b) => b.fecha.localeCompare(a.fecha)).map(s => s.fotos.map(f => (
                         <div key={f.id}>
-                            <FotoDelCliente api={api} foto={f} />
+                            <FotoDelCliente api={api} foto={f} pie={_fecha(s.fecha)} />
                             <p className="text-[10px] text-muted-foreground text-center mt-0.5">{_fecha(s.fecha)}</p>
                         </div>
                     )))}
@@ -187,7 +205,7 @@ const ComparativaCliente = ({ api, reports, faseDesde }) => {
                         const esLaDeHoy = i === aLaVista.length - 1;
                         return (
                             <div key={c.fecha} className="space-y-1">
-                                {c.fotos[0] && <FotoDelCliente api={api} foto={c.fotos[0]} />}
+                                {c.fotos[0] && <FotoDelCliente api={api} foto={c.fotos[0]} pie={_fecha(c.fecha)} />}
                                 <p className="text-[10px] font-bold uppercase tracking-wider text-brand leading-tight">
                                     {c.etiquetas.map(e => TITULO_ETIQUETA[e] || e).join(' · ')}
                                 </p>

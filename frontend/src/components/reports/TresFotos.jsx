@@ -17,6 +17,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Camera, Loader2, Check } from 'lucide-react';
 import { mensajeDeError } from '../../lib/mensajeDeError';
+import VisorDeFoto from '../ui/VisorDeFoto';
 
 const POSES = [
     { key: 'frente', label: 'De frente', ayuda: 'Brazos relajados a los lados, de pie y recto. Sin meter tripa.' },
@@ -28,6 +29,8 @@ const POSES = [
 // que su propia lista (la rejilla de fotos de progreso) no se quede desfasada.
 const TresFotos = ({ api, token, esMensual = true, onSubida }) => {
     const [fotos, setFotos] = useState([]);
+    // La del mes pasado que se esta mirando en grande, o null.
+    const [ampliada, setAmpliada] = useState(null);
     const [subiendo, setSubiendo] = useState(null);
     const [urls, setUrls] = useState({});
 
@@ -130,18 +133,30 @@ const TresFotos = ({ api, token, esMensual = true, onSubida }) => {
 
                             <p className="text-[10px] text-foreground/40 mt-1.5 leading-snug">{ayuda}</p>
 
-                            {/* La del mes pasado, para colocarse igual */}
+                            {/* La del mes pasado, para colocarse igual. Se toca y se ve en
+                                grande (Francisco, 26-08): a un tercio del ancho del teléfono
+                                no se distingue la postura, que es justo para lo que está. */}
                             {url && (
                                 <div className="mt-2">
                                     <p className="text-[9px] text-foreground/30 uppercase tracking-wider mb-1">Mes pasado</p>
-                                    <img src={url} alt={`${label}, mes pasado`}
-                                        className="w-full rounded-lg opacity-60" />
+                                    <button type="button" onClick={() => setAmpliada({ url, label })}
+                                        aria-label={`Ver en grande tu foto ${label.toLowerCase()} del mes pasado`}
+                                        data-testid={`foto-mes-pasado-${key}`}
+                                        className="w-full block active:opacity-100 transition-opacity">
+                                        <img src={url} alt={`${label}, mes pasado`}
+                                            className="w-full rounded-lg opacity-60" />
+                                    </button>
                                 </div>
                             )}
                         </div>
                     );
                 })}
             </div>
+
+            {ampliada && (
+                <VisorDeFoto url={ampliada.url} alt={`${ampliada.label}, mes pasado`}
+                    pie={`${ampliada.label} · mes pasado`} alCerrar={() => setAmpliada(null)} />
+            )}
         </div>
     );
 };

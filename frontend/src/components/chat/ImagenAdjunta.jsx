@@ -15,6 +15,7 @@ import { Image as ImageIcon, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { mensajeDeError } from '../../lib/mensajeDeError';
+import VisorDeFoto from '../ui/VisorDeFoto';
 
 export const TIPOS_ACEPTADOS = 'image/jpeg,image/png,image/webp,image/heic,image/heif';
 const MAX_BYTES = 4 * 1024 * 1024;
@@ -28,6 +29,7 @@ const MAX_BYTES = 4 * 1024 * 1024;
 export const ImagenDelMensaje = ({ api, adjunto, propio }) => {
     const [url, setUrl] = useState(null);
     const [roto, setRoto] = useState(false);
+    const [ampliada, setAmpliada] = useState(false);
 
     useEffect(() => {
         let vivo = true;
@@ -62,12 +64,21 @@ export const ImagenDelMensaje = ({ api, adjunto, propio }) => {
         );
     }
     return (
-        // Se abre a tamaño completo en otra pestaña: dentro de la burbuja no se lee una
-        // etiqueta de suplemento ni un número de báscula.
-        <a href={url} target="_blank" rel="noreferrer" data-testid="adjunto-imagen">
-            <img src={url} alt={adjunto.filename || 'Imagen adjunta'}
-                className="max-w-[240px] max-h-64 rounded-lg object-cover" />
-        </a>
+        // Se abre a tamaño completo AQUÍ: dentro de la burbuja no se lee una etiqueta de
+        // suplemento ni un número de báscula. Antes se abría en otra pestaña, y en el móvil
+        // eso te saca de la app -- y de la conversación -- para ver una foto (Francisco,
+        // 26-08). El visor la enseña encima y se cierra con el gesto de atrás.
+        <>
+            <button type="button" onClick={() => setAmpliada(true)} data-testid="adjunto-imagen"
+                aria-label="Ver la imagen en grande" className="block active:opacity-80 transition-opacity">
+                <img src={url} alt={adjunto.filename || 'Imagen adjunta'}
+                    className="max-w-[240px] max-h-64 rounded-lg object-cover" />
+            </button>
+            {ampliada && (
+                <VisorDeFoto url={url} alt={adjunto.filename || 'Imagen adjunta'}
+                    pie={adjunto.filename || null} alCerrar={() => setAmpliada(false)} />
+            )}
+        </>
     );
 };
 
