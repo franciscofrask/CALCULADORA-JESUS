@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -6,10 +7,15 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 import { toast } from 'sonner';
-import { Layers, Pencil, RotateCcw, Check, X, FlaskConical, Info } from 'lucide-react';
+import { Layers, Pencil, RotateCcw, FlaskConical, Info, SlidersHorizontal } from 'lucide-react';
 import { queIncluyeElPlan, ACOMPANAMIENTO_OPTS, FRECUENCIA_CONTACTO_OPTS as FRECUENCIA_OPTS, etiquetaAcompanamiento, etiquetaFrecuencia, etiquetaCalculadora } from '../lib/planAccess';
 import { mensajeDeError } from '../lib/mensajeDeError';
 import HelpTooltip from '../components/HelpTooltip';
+// El punto de encendido y la lista de pantallas se comparten con «Ajustes» desde que los
+// interruptores globales se mudaron allí (punto 64). Aquí quedan porque «Mi modo pruebas»
+// enciende las MISMAS pantallas, pero solo para tu cuenta.
+import Dot from '../components/PuntoEncendido';
+import { PANTALLAS_APP } from '../lib/pantallasDeLaApp';
 
 // Los tres valores del fallo 10 del 19-08, tolerando el booleano viejo de un override.
 const etiquetaSuplementacion = (v) => {
@@ -43,12 +49,6 @@ const RUTINA_OPTS = [
 const REPORTE_OPTS = ['quincenal', 'mensual', 'semanal'];
 const CICLO_OPTS = ['mensual', 'trimestral', 'bimestral', 'semestral', 'unico', 'variable'];
 
-const Dot = ({ on }) => (
-    <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full ${on ? 'bg-green-500/20 text-green-500' : 'bg-white/10 text-white/30'}`}>
-        {on ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
-    </span>
-);
-
 const HabRow = ({ label, value }) => (
     <div className="flex items-center justify-between text-xs py-0.5">
         <span className="text-white/50">{label}</span>
@@ -56,142 +56,9 @@ const HabRow = ({ label, value }) => (
     </div>
 );
 
-// Los interruptores de las pantallas nuevas (doc 16-08) y la frase del día. Viven en
-// db.app_settings y se tocan aquí para poder apagar una pantalla SIN desplegar.
-const PANTALLAS_APP = [
-    { clave: 'frase_del_dia', label: 'La frase del día en Inicio', ayuda: 'Muestra una frase del día en la portada de Inicio del cliente.' },
-    { clave: 't1_inicio_nuevo', label: 'Inicio nuevo (Lo que toca hoy)', ayuda: 'La portada nueva del cliente: «Lo que toca hoy» (macros, suplementos, entreno) y «Pendiente».' },
-    { clave: 't2_suplementos', label: 'Suplementos del cliente', ayuda: 'La pantalla de suplementos del cliente.' },
-    { clave: 't3_entreno', label: 'Entreno (rutina y registro)', ayuda: 'Hace visible al cliente la rutina y el registro de sus entrenos.' },
-    { clave: 't4_cierre_nuevo', label: 'Cierre del día nuevo', ayuda: 'El nuevo cierre del día del cliente («¿cómo fue hoy?»).' },
-    { clave: 't5_diario', label: 'El Diario', ayuda: 'El Diario, dentro de Seguimiento.' },
-    { clave: 't6_evolucion', label: 'Evolución completa del cliente', ayuda: 'La Evolución completa del cliente: medidas y fotos.' },
-    { clave: 't10_avisos_nuevos', label: 'Los avisos nuevos', ayuda: 'Los avisos nuevos del cliente (la campanita).' },
-    // P59 del doc 23-08. OJO: encenderlo manda CORREOS DE VERDAD a todos los clientes
-    // con reporte pendiente, entren o no en la app. Nace apagado por eso.
-    { clave: 'correos_avisos', label: 'Los avisos del reporte, por correo', ayuda: 'Manda por correo los avisos del reporte (se abre, último día, no nos llegó) y del fin de ciclo, sin esperar a que el cliente entre en la app. Un aviso, un correo: nunca se repite.' },
-];
-
-const PantallasDeLaApp = () => {
-    const { api } = useAuth();
-    const [ajustes, setAjustes] = useState(null);
-    const [frase, setFrase] = useState('');
-    const [fechaFrase, setFechaFrase] = useState('');
-    const [guardandoFrase, setGuardandoFrase] = useState(false);
-
-    useEffect(() => {
-        api.get('/admin/settings')
-            .then((res) => setAjustes(res.data || null))
-            .catch(() => toast.error('No se pudieron cargar los ajustes de la app'));
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al entrar
-    }, []);
-
-    const alternar = async (clave) => {
-        const nuevo = !ajustes?.pantallas?.[clave];
-        try {
-            const res = await api.put('/admin/settings', { pantallas: { [clave]: nuevo } });
-            setAjustes(res.data);
-        } catch (e) {
-            toast.error('No se pudo guardar el cambio');
-        }
-    };
-
-    const guardarFrase = async () => {
-        if (!frase.trim()) return;
-        setGuardandoFrase(true);
-        try {
-            const res = await api.put('/admin/settings', {
-                frase_del_dia: { texto: frase.trim(), ...(fechaFrase ? { fecha: fechaFrase } : {}) },
-            });
-            setAjustes(res.data);
-            setFrase('');
-            setFechaFrase('');
-            toast.success(fechaFrase ? 'Frase programada' : 'Frase del día guardada');
-        } catch (e) {
-            toast.error('No se pudo guardar la frase');
-        } finally {
-            setGuardandoFrase(false);
-        }
-    };
-
-    if (!ajustes) return null;
-
-    return (
-        <Card className="bg-[#111] border-[#2a2a2a]">
-            <CardContent className="p-4 space-y-4">
-                <div>
-                    <h2 className="text-base font-bold text-white">Pantallas de la app</h2>
-                    <p className="text-xs text-white/50">Apagar aquí quita la pantalla a todos los clientes al momento, sin desplegar.</p>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                    {PANTALLAS_APP.map(({ clave, label }) => {
-                        const on = !!ajustes.pantallas?.[clave];
-                        return (
-                            <button
-                                key={clave}
-                                type="button"
-                                onClick={() => alternar(clave)}
-                                className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-xs transition-colors ${on ? 'border-green-500/40 bg-green-500/10 text-white' : 'border-[#333] bg-black/30 text-white/60'}`}
-                            >
-                                <span>{label}</span>
-                                <Dot on={on} />
-                            </button>
-                        );
-                    })}
-                </div>
-                <div className="space-y-1">
-                    <Label className="text-xs text-white/60">
-                        Frase del día
-                        {ajustes.frase_del_dia?.texto ? (
-                            <span className="ml-2 text-white/40 normal-case">ahora: «{ajustes.frase_del_dia.texto}» ({ajustes.frase_del_dia.fecha})</span>
-                        ) : (
-                            <span className="ml-2 text-white/40">todavía no hay ninguna</span>
-                        )}
-                    </Label>
-                    <div className="flex gap-2">
-                        <Input
-                            value={frase}
-                            onChange={(e) => setFrase(e.target.value)}
-                            placeholder="El único secreto que tiene esto es no dejarlo."
-                            className="bg-black/30 border-[#333] text-white text-sm"
-                        />
-                        {/* PROGRAMABLE CON UNA SEMANA (doc 19-08): sin fecha entra hoy;
-                            con fecha se queda en la cola y sale su día sola. */}
-                        <Input
-                            type="date"
-                            value={fechaFrase}
-                            onChange={(e) => setFechaFrase(e.target.value)}
-                            min={new Date().toLocaleDateString('en-CA')}
-                            max={new Date(Date.now() + 7 * 864e5).toLocaleDateString('en-CA')}
-                            className="bg-black/30 border-[#333] text-white text-sm w-40 shrink-0"
-                        />
-                        <Button onClick={guardarFrase} disabled={guardandoFrase || !frase.trim()} className="bg-[#FF671F] hover:bg-[#e55b1a] text-white">
-                            {fechaFrase ? 'Programar' : 'Guardar'}
-                        </Button>
-                    </div>
-                    {/* LA PROMESA DE ESTA LÍNEA HAY QUE CUMPLIRLA (punto 103 del 25-08):
-                        se leyó como un contrato y el Inicio no la cumplía. Si se cambia
-                        el orden de mando de la frase, se cambia también aquí. */}
-                    <p className="text-[11px] text-white/40">
-                        {ajustes.frases_en_rotacion > 0
-                            ? `Hay ${ajustes.frases_en_rotacion} frases rotando, una por día, sin agotarse. Lo que pongas aquí manda solo el día que le toque.`
-                            : 'Si un día no hay frase nueva, el cliente sigue viendo la última.'}
-                        {' '}Con fecha, la frase se programa (hasta una semana) y entra sola su día.
-                    </p>
-                    {(ajustes.frases_programadas || []).length > 0 && (
-                        <div className="space-y-0.5">
-                            {ajustes.frases_programadas.map((f) => (
-                                <p key={f.fecha} className="text-[11px] text-white/50">
-                                    {f.fecha} · «{f.texto}»
-                                </p>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            </CardContent>
-        </Card>
-    );
-};
+// LOS INTERRUPTORES GLOBALES Y LA FRASE DEL DÍA SE MUDARON A «AJUSTES» (punto 64). No son
+// planes, y aquí vivían escondidos al final del catálogo. La lista de pantallas está ahora
+// en lib/pantallasDeLaApp, compartida, para que Ajustes y «Mi modo pruebas» no discrepen.
 
 // MI MODO PRUEBAS (solo cuentas marcadas `es_pruebas`): los MISMOS interruptores, pero
 // que valen SOLO para esta cuenta. El backend guarda las anulaciones en el usuario y las
@@ -618,7 +485,17 @@ const AdminPlansPage = () => {
 
             {user?.es_pruebas && <MiModoPruebas />}
 
-            <PantallasDeLaApp />
+            {/* EL RASTRO DE LA MUDANZA. Los interruptores llevaban meses aquí abajo: quien
+                los busque donde estaban tiene que encontrar la puerta, no un hueco. */}
+            <Link to="/admin/ajustes"
+                className="flex items-center gap-3 rounded-xl border border-[#2a2a2a] bg-[#111] px-4 py-3 hover:border-[#FF671F]/40 transition-colors"
+                data-testid="planes-a-ajustes">
+                <SlidersHorizontal className="w-4 h-4 text-[#FF671F] shrink-0" />
+                <span className="text-xs text-white/70">
+                    <span className="text-white/90 font-semibold">Las pantallas de la app y la frase del día están ahora en «Ajustes».</span>
+                    {' '}Aquí solo se editan los planes.
+                </span>
+            </Link>
 
             {loading ? (
                 <div className="flex justify-center py-16"><div className="animate-spin w-7 h-7 border-2 border-[#FF671F] border-t-transparent rounded-full" /></div>

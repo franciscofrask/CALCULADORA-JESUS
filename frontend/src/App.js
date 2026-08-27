@@ -36,6 +36,7 @@ import RevisionPage from "./pages/RevisionPage";
 import FoodSearchPage from "./pages/FoodSearchPage";
 import AdminFoodSuggestionsPage from "./pages/AdminFoodSuggestionsPage";
 import AdminPlansPage from "./pages/AdminPlansPage";
+import AdminAjustesPage from "./pages/AdminAjustesPage";
 import AdminTareasPage from "./pages/AdminTareasPage";
 import AdminPanelesPage from "./pages/AdminPanelesPage";
 import QuestionnairePage from "./pages/QuestionnairePage";
@@ -321,6 +322,14 @@ function AppRoutes() {
                 <Route path="planes" element={
                     <ProtectedRoute allowedRoles={['admin']}>
                         <AdminPlansPage />
+                    </ProtectedRoute>
+                } />
+                {/* Los ajustes globales (punto 64): las pantallas encendidas para todos y la
+                    frase del día. Vivían dentro de Planes, que es otra cosa. Mismo candado:
+                    apagar una pantalla a todos los clientes no es cosa de un entrenador. */}
+                <Route path="ajustes" element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                        <AdminAjustesPage />
                     </ProtectedRoute>
                 } />
                 <Route path="clients" element={<AdminClientsList />} />

@@ -20,7 +20,7 @@ import {
     MessageCircle, LogOut, Search, Bell,
     ChevronRight, DollarSign, FileText,
     AlertTriangle, UserCheck, UserMinus, UserPlus, Utensils, Apple, Layers,
-    Menu, X, Phone, Receipt, ClipboardList, CalendarClock, Gauge
+    Menu, X, Phone, Receipt, ClipboardList, CalendarClock, Gauge, SlidersHorizontal
 } from 'lucide-react';
 import { mensajeDeError } from '../lib/mensajeDeError';
 
@@ -1256,11 +1256,16 @@ const AdminClientsList = () => {
                     {/* YA NO SALEN EN GRIS EN MEDIO DE LA TABLA: están en «Fuera», con los
                         caducados. La línea se queda para que el total siga cuadrando a la
                         vista, pero ahora dice dónde encontrarlos en vez de dónde estorban. */}
+                    {/* UNA FRASE ENTERA, NO MEDIA (punto 62). Empezaba por «Y», colgando de la
+                        línea de arriba: pero es otro párrafo, en otro color y en otro tamaño,
+                        así que se leía como si faltara el principio. Cada línea tiene que
+                        entenderse sola, que es como se leen. */}
                     {sinTerminar > 0 && (
-                        <p className="text-white/30 text-xs mt-0.5">
-                            Y {sinTerminar} {sinTerminar === 1 ? 'registro' : 'registros'} sin
-                            terminar: entraron y no eligieron plan, así que no cuentan como clientes.
-                            Están en «Fuera».
+                        <p className="text-white/30 text-xs mt-0.5" data-testid="registros-sin-terminar">
+                            Hay {sinTerminar} {sinTerminar === 1 ? 'registro' : 'registros'} más sin
+                            terminar: {sinTerminar === 1 ? 'entró' : 'entraron'} y no{' '}
+                            {sinTerminar === 1 ? 'eligió' : 'eligieron'} plan, así que no {sinTerminar === 1 ? 'cuenta' : 'cuentan'} como
+                            {sinTerminar === 1 ? ' cliente' : ' clientes'}. {sinTerminar === 1 ? 'Está' : 'Están'} en «Fuera».
                         </p>
                     )}
                     {/* EL SALTO DE 83 A 10 SE EXPLICA (punto 61). La pestaña «Sin entrenador»
@@ -1679,6 +1684,9 @@ const AdminLayout = () => {
         // Los cuatro paneles del doc 19-08: el entrenador entra y ve solo el suyo.
         { path: '/admin/paneles', icon: Gauge, label: 'Paneles' },
         { path: '/admin/planes', icon: Layers, label: 'Planes', adminOnly: true },
+        // Los interruptores de la app (punto 64): estaban al final de Planes, donde nadie
+        // los encontraba. Solo admin, que apagan pantallas a TODOS los clientes.
+        { path: '/admin/ajustes', icon: SlidersHorizontal, label: 'Ajustes', adminOnly: true },
         { path: '/admin/usuarios', icon: UserCheck, label: 'Usuarios', adminOnly: true },
         { path: '/admin/pagos', icon: Receipt, label: 'Cobros', adminOnly: true },
         { path: '/admin/leads', icon: UserPlus, label: 'Leads' },
