@@ -1700,8 +1700,15 @@ const ClientLayout = () => {
     //
     // La ruta /dashboard/checkins sigue viva: lo que desaparece es la entrada del menú, no
     // la pantalla, y a ella se entra desde Seguimiento.
+    // EL ASISTENTE, ESCONDIDO PARA TODOS (Francisco, 26-08). Detrás de un interruptor del
+    // panel que nace APAGADO: sin fila en `pantallas`, `pantalla()` devuelve el valor por
+    // defecto, así que basta con esto para que deje de verse hoy mismo. Se enciende desde
+    // el panel el día que se quiera, sin volver a desplegar. La pantalla sigue existiendo
+    // (`ChatbotPage`) y el backend intacto: lo que se quita es la puerta.
+    const asistenteVisible = pantalla('t7_asistente');
     const navItems = NAV_ITEMS
         .filter(i => (!i.cap || can(i.cap)) && i.path !== '/dashboard/checkins')
+        .filter(i => i.path !== '/dashboard/chatbot' || asistenteVisible)
         .map(i => i.path === '/dashboard/reports'
             ? { ...i, icon: TrendingUp, label: 'Seguimiento' }
             : i)

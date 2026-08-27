@@ -37,7 +37,7 @@ const UPGRADE_PLAN_UI = false;
 
 const ProfilePage = () => {
     const navigate = useNavigate();
-    const { user, profile, logout, api, refreshUser, refreshProfile, myPlan, planUnpaid, can, planCatalog } = useAuth();
+    const { user, profile, logout, api, refreshUser, refreshProfile, myPlan, planUnpaid, can, planCatalog, pantalla } = useAuth();
     const { startTour, available: recorridoDisponible } = useOnboarding();
     const [editing, setEditing] = useState(false);
     const [verIncluye, setVerIncluye] = useState(false);
@@ -605,7 +605,9 @@ const ProfilePage = () => {
                     <CardContent className="p-0">
                         {[
                             { icon: SlidersHorizontal, title: 'Mis macros', sub: 'Tus números y por qué son esos', path: '/dashboard/macro-calculator' },
-                            { icon: Bot, title: 'Asistente IA', sub: 'Monta la comida hablando', path: '/dashboard/chatbot' },
+                            // El asistente solo si su interruptor está encendido, y nace
+                            // apagado (Francisco, 26-08). Ver ClientDashboard.
+                            pantalla('t7_asistente') && { icon: Bot, title: 'Asistente IA', sub: 'Monta la comida hablando', path: '/dashboard/chatbot' },
                             { icon: Search, title: 'Alimentos', sub: 'Buscador del catálogo', path: '/dashboard/foods' },
                             can('suplementacion') && { icon: Pill, title: 'Suplementos', sub: 'Tu protocolo', path: '/dashboard/supplements' },
                             // Aquí había una fila de «Check-ins». Se va: desde el 10-08 la

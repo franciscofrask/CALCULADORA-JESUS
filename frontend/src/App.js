@@ -78,6 +78,17 @@ const CapabilityRoute = ({ cap, children }) => {
     return children;
 };
 
+// Lo mismo, pero con un interruptor del panel en vez de una capacidad del plan. Quitar la
+// entrada del menú esconde la puerta, no la pantalla: quien tenga la dirección guardada
+// entra igual. Con esto, mientras el interruptor esté apagado, la dirección devuelve al
+// inicio (Francisco, 26-08, para el asistente).
+const PantallaRoute = ({ nombre, children }) => {
+    const { pantalla, loading } = useAuth();
+    if (loading) return null;
+    if (!pantalla(nombre)) return <Navigate to="/dashboard" replace />;
+    return children;
+};
+
 // A dónde va una dirección que no existe. Al login SOLO si no hay sesión; si el usuario ya
 // está dentro se le deja en su panel, que es lo que esperaría de un enlace que no lleva a
 // ninguna parte. Mientras se comprueba la sesión no se redirige a nada: hacerlo antes de
@@ -246,7 +257,11 @@ function AppRoutes() {
                 <Route path="reports" element={<CapabilityRoute cap="cierre_dia"><ReportsPage /></CapabilityRoute>} />
                 <Route path="messages" element={<MessagesPage />} />
                 <Route path="profile" element={<ProfilePage />} />
-                <Route path="chatbot" element={<ChatbotPage />} />
+                {/* El asistente, apagado para todos hasta nuevo aviso (Francisco, 26-08).
+                    El interruptor `t7_asistente` nace sin fila en `pantallas`, así que da
+                    false y la pantalla no se alcanza ni por el menú ni por la dirección.
+                    Ni la página ni el backend se tocan: se enciende desde el panel. */}
+                <Route path="chatbot" element={<PantallaRoute nombre="t7_asistente"><ChatbotPage /></PantallaRoute>} />
                 <Route path="supplements" element={<CapabilityRoute cap="suplementacion"><SupplementsPage /></CapabilityRoute>} />
                 {/* El cierre del día, con su llave propia: CAP.CIERRE_DIA aquí (ver
                     lib/planAccess.js) y la feature `cierre_dia` de `derive_features` en el
