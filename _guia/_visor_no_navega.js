@@ -7,15 +7,15 @@
  * Uso:  node _guia/_visor_no_navega.js [ancho]
  */
 const { chromium } = require('playwright');
-const APP = 'http://localhost:3000';
-const API = 'http://127.0.0.1:8000';
+const APP = process.env.DESTINO || 'http://localhost:3000';
+const API = process.env.DESTINO || 'http://127.0.0.1:8000';
 
 (async () => {
     const ancho = Number(process.argv[2]) || 390;
     const nav = await chromium.launch();
     const ctx = await nav.newContext({ viewport: { width: ancho, height: 800 }, deviceScaleFactor: 1 });
     const page = await ctx.newPage();
-    const r = await page.request.post(`${API}/api/auth/login`, { data: { email: 'qa.b10.hombre@test.com', password: 'demo123' } });
+    const r = await page.request.post(`${API}/api/auth/login`, { data: { email: process.env.CUENTA || 'qa.b10.hombre@test.com', password: process.env.CLAVE || 'demo123' } });
     const j = await r.json();
     await page.goto(APP, { waitUntil: 'domcontentloaded' });
     await page.evaluate((t) => { localStorage.clear(); localStorage.setItem('token', t); }, j.access_token || j.token);
