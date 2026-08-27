@@ -23,6 +23,10 @@ class SupplementCatalogItem(BaseModel):
     objetivo: str = "ambos"                         # "volumen" | "definicion" | "ambos"
     orden: int = 0
     activo: bool = True
+    # CON QUE COMIDA SALE EN EL INICIO (punto 174 del 27-08). Vacio = que lo deduzca del
+    # `cuando`; ver core/comida_del_suplemento. Valores: "" | primera | ultima | C1..C4 |
+    # ninguna. Se elige UNA vez aqui y vale para todos los clientes.
+    comida: str = ""
 
 
 # ── Protocolo asignado por cliente ──────────────────────────────────────
@@ -35,6 +39,14 @@ class ProtocolItem(BaseModel):
     cuando: str = ""
     cuanto: str = ""
     observaciones: Optional[str] = None
+    # Lo mismo que en la ficha del catalogo, pero para ESTE cliente: si a uno le toca en otra
+    # comida, se le cambia aqui sin mover la ficha de los demas. Vacio = manda la ficha, y si
+    # la ficha tampoco dice nada, el `cuando`.
+    comida: str = ""
+    # DONDE SALE, YA RESUELTO. Lo calcula el servidor al servir el protocolo (no se guarda):
+    # una lista de huecos, «primera» y «ultima» en simbolico porque el numero de comidas del
+    # dia lo sabe la pantalla y no el protocolo. Lista vacia = no sale en ninguna comida.
+    en_comidas: List[str] = []
 
 
 class VersionProtocolo(BaseModel):

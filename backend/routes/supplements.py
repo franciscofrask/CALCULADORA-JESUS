@@ -115,11 +115,58 @@ async def get_current_protocol(ctx=Depends(require_access("suplementacion"))):
         "client_id": profile["id"], "actual": [], "siguiente": [], "versiones": [],
     }
 
+    # Las dos cosas que se resuelven AL SERVIR y no se guardan: con qué comida sale cada uno
+    # (punto 174) y con qué nombre lo ve el cliente (el vídeo del 27-08). Ninguna se escribe en
+    # la base porque las dos salen de datos que el coach puede cambiar mañana, y una copia
+    # guardada se quedaría vieja sin que nadie lo vea.
+    await _colocar_en_las_comidas(resuelto)
+    _con_el_nombre_del_cliente(resuelto)
+
     # SIN PROTOCOLO PROPIO YA NO SE COMPONE NADA (doc 19-08, bloque 08). La general de
     # cinco líneas -- base + intra por sexo -- era el apaño del 18-08, y la respuesta de
     # Jesús fue clara: «No es eso. Es mi guía entera». Quien no tiene la suya ve LA GUÍA
     # (GET /supplements/guia), que es otra pantalla, no una pauta que marcar en Inicio.
     return SupplementProtocolResponse(**resuelto)
+
+
+async def _colocar_en_las_comidas(resuelto: dict) -> None:
+    """Rellena `en_comidas` de cada línea del protocolo, in place.
+
+    La ficha del catálogo es donde el coach lo elige una vez para todos, así que hay que
+    traérsela: las líneas del protocolo son una copia del día en que se pautó y pueden ser
+    de antes de que existiera el campo. Se piden TODAS de una vez -- un protocolo son cinco o
+    seis suplementos, pero esto lo llama el Inicio en cada carga.
+    """
+    from core.comida_del_suplemento import comidas_del_suplemento
+
+    lineas = [it for clave in ("actual", "siguiente") for it in (resuelto.get(clave) or [])]
+    if not lineas:
+        return
+    ids = {it.get("catalog_id") for it in lineas if it.get("catalog_id")}
+    fichas = {}
+    if ids:
+        async for f in db.supplement_catalog.find({"id": {"$in": list(ids)}}, {"_id": 0}):
+            fichas[f.get("id")] = f
+    for it in lineas:
+        it["en_comidas"] = comidas_del_suplemento(it, fichas.get(it.get("catalog_id")))
+
+
+def _con_el_nombre_del_cliente(resuelto: dict) -> None:
+    """Deja en `titulo` el nombre que tiene que ver el cliente, in place.
+
+    «Él solamente ve Aceite de krill. No tiene que ver Aceite de krill, tres perlas» (Jesús,
+    vídeo del 27-08). Lo que hay guardado es SU chuleta -- «Omega 3 hombre», «Fat burner
+    hardcore mes 3» -- y le sirve para saber qué versión le puso a quién, así que en el panel
+    se queda: eso lo lee `/admin/clients/{id}`, no esto.
+
+    Aquí, y solo aquí, se corta. Son 328 de las 528 líneas vivas y las ven 97 de los 100
+    clientes con protocolo. Qué se corta y por qué: core/nombre_del_suplemento.
+    """
+    from core.nombre_del_suplemento import nombre_para_el_cliente
+
+    for clave in ("actual", "siguiente"):
+        for it in (resuelto.get(clave) or []):
+            it["titulo"] = nombre_para_el_cliente(it.get("titulo"))
 
 
 @router.get("/guia")
@@ -133,7 +180,8 @@ async def guia_de_suplementacion(user=Depends(get_current_user)):
       - los demás → sin promesa, y al final la oferta de la revisión de los 87 €.
         El botón va al mismo checkout que la oferta del final del alta.
     """
-    from core.guia_suplementacion import SECCIONES, DESCUENTO, partir_ficha
+    from core.guia_suplementacion import (SECCIONES, DESCUENTO, partir_ficha,
+                                          TEXTO_DE_LA_GUIA)
     from core.plan_access import tiene_entrenador_detras
 
     profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
@@ -184,10 +232,16 @@ async def guia_de_suplementacion(user=Depends(get_current_user)):
         "secciones": [{**s, "suplementos": por_seccion[s["clave"]]} for s in SECCIONES],
         "sin_seccion": sin_seccion,
         "descuento": DESCUENTO,
-        # El texto de entrada es de Jesús y viene de la web; hasta traerlo, nada (no se
-        # inventa). La pantalla solo lo pinta si existe.
-        "texto_entrada": ((await db.app_state.find_one({"clave": "guia_suplementacion"}, {"_id": 0}))
-                          or {}).get("texto_entrada"),
+        # El texto de entrada, con las tres líneas del punto 182 y ninguna más. Ver
+        # `TEXTO_DE_LA_GUIA`: el de la base sigue guardado pero ya no manda.
+        "texto_entrada": TEXTO_DE_LA_GUIA,
+        # LOS TRES ESTADOS DE LA PANTALLA (punto 179 del 27-08). Los dos datos ya se
+        # calculaban aquí para decidir el remate; ahora viajan tal cual, porque de ellos sale
+        # hasta el TÍTULO («Mis suplementos» o «Suplementación», punto 180) y no solo un
+        # cartel al final. Sacarlo de si la petición del protocolo dio 200 o 403 funcionaba de
+        # casualidad, y una pantalla entera no puede colgar de un código de error.
+        "con_plan": va_con_plan,
+        "con_protocolo": con_protocolo,
         "aviso_plan_personalizado": va_con_plan and not con_protocolo,
         "oferta_87": not va_con_plan,
     }
@@ -285,6 +339,19 @@ async def save_protocol(client_id: str, data: SupplementProtocolSave, user=Depen
     quien = user.get("name", user.get("email", "coach"))
     ahora = datetime.now(timezone.utc).isoformat()
 
+    def _guardable(item) -> dict:
+        """La línea tal y como se guarda, SIN `en_comidas`.
+
+        `en_comidas` es un calculado: lo pone el servidor al servir el protocolo y viaja a la
+        pantalla, así que vuelve en el guardado. Si se dejara escrito, la base tendría el sitio
+        del suplemento en dos versiones -- la guardada y la que sale de la regla -- y el día
+        que cambie la ficha o el «¿Cuándo?» una de las dos se quedaría vieja sin que nadie lo
+        vea. Se guarda de dónde sale (`comida` y `cuando`) y no lo que sale.
+        """
+        d = item.model_dump()
+        d.pop("en_comidas", None)
+        return d
+
     def _poner(fecha: str, items, nota):
         """Deja `items` como el protocolo que aplica desde `fecha`, pisando lo que hubiera
         ese dia. Las demas fechas del historico no se tocan."""
@@ -301,11 +368,11 @@ async def save_protocol(client_id: str, data: SupplementProtocolSave, user=Depen
     # nueva es una decision, y para eso esta la fecha.
     vig = vigente_en(versiones)
     fecha_actual = (data.actual_fecha or (vig or {}).get("fecha") or _hoy())[:10]
-    _poner(fecha_actual, [i.model_dump() for i in data.actual], data.nota)
+    _poner(fecha_actual, [_guardable(i) for i in data.actual], data.nota)
 
     # El bloque "siguiente" es simplemente una version con fecha futura.
     if data.siguiente_fecha:
-        _poner(data.siguiente_fecha, [i.model_dump() for i in data.siguiente], data.nota)
+        _poner(data.siguiente_fecha, [_guardable(i) for i in data.siguiente], data.nota)
 
     doc = {"client_id": client_id, "versiones": versiones, "updated_at": ahora}
     await db.supplement_protocols.update_one(

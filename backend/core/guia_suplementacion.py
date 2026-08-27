@@ -16,13 +16,17 @@ inventar textos de Jesús) y las fichas sin sección salen en un solo listado.
 # Las ocho, en el orden del doc. `subfiltros` solo en Salud. Las explicaciones son las de
 # la web, LITERALES (traidas el 20-08 con la sesion de Francisco); solo se les quita el
 # «Nombre:» del principio porque la pantalla ya pone el nombre encima.
+#: ALIMENTOS VA ANTES QUE BASICOS (punto 186 del 27-08). «Lo primero es comida -- porque en
+#: realidad son eso, alimentos -- y solo despues empiezan los suplementos de verdad. Eso baja
+#: el liston: el que llega con miedo a los botes ve primero lo que ya se come.»
+#: Las frases de cada una NO se tocan (punto 189).
 SECCIONES = [
-    {"clave": "basicos", "nombre": "Básicos", "orden": 1,
-     "explicacion": "Los que sí o sí te recomendaría (aunque ninguno es obligatorio, "
-                    "estos son los primeros que cogería)."},
-    {"clave": "alimentos", "nombre": "Alimentos", "orden": 2,
+    {"clave": "alimentos", "nombre": "Alimentos", "orden": 1,
      "explicacion": "Porque en realidad son eso, alimentos. De hecho, en la calculadora "
                     "aparecen clasificados como tal."},
+    {"clave": "basicos", "nombre": "Básicos", "orden": 2,
+     "explicacion": "Los que sí o sí te recomendaría (aunque ninguno es obligatorio, "
+                    "estos son los primeros que cogería)."},
     {"clave": "rendimiento", "nombre": "Rendimiento", "orden": 3,
      "explicacion": "Para mejorar la calidad de los entrenamientos. Después de los "
                     "básicos, son los siguientes que recomiendo."},
@@ -40,6 +44,30 @@ SECCIONES = [
     {"clave": "descanso", "nombre": "Descanso", "orden": 7,
      "explicacion": "Los que mejoran la calidad de tu sueño y tu recuperación."},
 ]
+
+#: EL TEXTO DE ENTRADA DE LA GUIA (punto 182 del 27-08), sus tres lineas y ninguna mas.
+#:
+#: Hasta hoy se servia el que hay guardado en `app_state.guia_suplementacion`, importado de su
+#: web, y llevaba DOS PARRAFOS QUE EL PUNTO 182 TIRA: el que vende el Catalogo Premium dentro
+#: de lo que el cliente ya ha pagado, y el «*IMPORTANTE» del descuento (que ya se filtraba en
+#: la pantalla, porque va justo debajo en su propio bloque). Ademas reescribio las tres que se
+#: quedan, asi que no vale con recortar: el texto bueno es este.
+#:
+#: El de la base NO se toca -- sigue ahi, por si algun dia se quiere volver a el --, solo deja
+#: de mandar.
+TEXTO_DE_LA_GUIA = (
+    "Estos son los suplementos que yo más recomiendo con pautas exactas de uso.\n"
+    "Están organizados por categorías según su función.\n"
+    "En condiciones normales, te recomiendo empezar por los básicos."
+)
+
+#: Y EL DEL QUE ESTA ESPERANDO SU PAUTA (punto 183). Va arriba del todo, en modo aviso.
+#: Sin el «empieza por los basicos»: «si se lo vas a decir tu, no tiene sentido mandarle a
+#: empezar por su cuenta. La guia ahi es para mirar, no para empezar.»
+AVISO_ESPERANDO = "Te lo estamos preparando. Te avisamos en cuanto esté."
+TEXTO_MIENTRAS_ESPERA = (
+    "Mientras tanto, aquí tienes todo lo que uso y recomiendo, con pautas exactas de uso."
+)
 
 # «GALLEGOVIP de FullGas, 20 %, activo mientras dure la suscripción.»
 DESCUENTO = {

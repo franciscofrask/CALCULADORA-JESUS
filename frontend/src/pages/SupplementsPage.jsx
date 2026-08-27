@@ -52,7 +52,7 @@ const SupplementCard = ({ item }) => {
                     {item.enlaces.map((url, i) => (
                         <a key={i} href={url} target="_blank" rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 text-xs text-brand hover:underline font-semibold">
-                            <Link2 className="w-3 h-3" /> Dónde encontrarlo {item.enlaces.length > 1 ? i + 1 : ''}
+                            <Link2 className="w-3 h-3" /> Comprar con descuento {item.enlaces.length > 1 ? i + 1 : ''}
                         </a>
                     ))}
                 </div>
@@ -70,9 +70,48 @@ const SupplementCard = ({ item }) => {
  * («¿Cuándo?» / «¿Cuánto?»), que es cómo se rellena en el panel, no cómo se lee: lo que
  * el cliente necesita saber de un vistazo es qué se toma y cuándo, en una frase.
  */
-const LineaSuplemento = ({ item }) => {
+/**
+ * EN QUÉ COMIDA SALE, CON SU NÚMERO (punto 184): «COMIDA 3», igual que en Inicio.
+ *
+ * `en_comidas` lo resuelve el servidor (`core/comida_del_suplemento`, punto 174) y viene en
+ * SIMBÓLICO -- «primera», «última» -- porque quien sabe cuántas comidas hay es la pantalla que
+ * tiene el día delante. Aquí no hay día, así que se usa el número de comidas que el cliente
+ * tiene configurado (`GET /user/diet-config`), que es de donde sale también el reparto del
+ * Inicio: si come cuatro veces, su cena es la Comida 4.
+ *
+ * Sin ese dato se dice «Primera comida» / «Última comida», que es verdad siempre: más vale
+ * decirlo con palabras que dar un número que puede no ser el suyo.
+ */
+const dondeSale = (item, numComidas) => (item.en_comidas || [])
+    .map((h) => {
+        if (h === 'primera') return numComidas ? 'Comida 1' : 'Primera comida';
+        if (h === 'ultima') return numComidas ? `Comida ${numComidas}` : 'Última comida';
+        return `Comida ${String(h).replace('C', '')}`;
+    })
+    // Sin repetir: en un cliente de una sola comida, «desayuno y cena» son la misma.
+    .filter((t, i, todas) => todas.indexOf(t) === i)
+    .join(' y ');
+
+/**
+ * UN SUPLEMENTO SUYO, EN CUATRO LÍNEAS (punto 184 del 27-08):
+ *
+ *     Creatina
+ *     COMIDA 3                       ← naranja, debajo del nombre
+ *     Dosis — 5 g
+ *     Cuándo — Todos los días, entrenes o no
+ *     Comprar con descuento ↗
+ *
+ * LA COMIDA VA DESTACADA porque es lo que le hace falta a diario: «el cuándo y la dosis los
+ * lee una vez y se los sabe; en qué comida va es lo que mira todos los días. Así abre la
+ * pantalla y ve las tres comidas de un golpe, sin leer una línea». Y en el mismo naranja que
+ * en Inicio, porque es el mismo dato.
+ *
+ * DOSIS Y CUÁNDO, SIN INTERROGACIÓN: «Dosis es lo que pone en los botes», y si una es etiqueta
+ * la otra también. En ese orden, igual que la frase de arriba («dosis y cuándo tomarlo»).
+ */
+const LineaSuplemento = ({ item, numComidas }) => {
     const [imgError, setImgError] = useState(false);
-    const pauta = [item.cuanto, item.cuando].map((t) => (t || '').trim()).filter(Boolean).join(' · ');
+    const comida = dondeSale(item, numComidas);
     return (
         <div className="surface p-4 flex items-start gap-4" data-testid="supplement-card">
             {/* Del tamaño al que se ven en Calma, no el sello de 48 px de antes: el
@@ -84,14 +123,33 @@ const LineaSuplemento = ({ item }) => {
             </div>
             <div className="min-w-0 flex-1">
                 <p className="font-bold text-foreground text-sm">{item.titulo}</p>
-                {pauta && <p className="text-muted-foreground text-sm">{pauta}</p>}
+                {/* `text-brand` (#FF671F) y NO `text-brand-orange` (#FFA500): el punto 184 pide
+                    «el mismo dato y el mismo color que verá en Inicio», y en Inicio el
+                    «+ Creatina» va en el naranja de la casa. El otro es el amarillo que él
+                    mismo señaló en el punto 158 -- «ese amarillo no es de la casa». */}
+                {comida && (
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-brand mt-0.5"
+                        data-testid="suplemento-comida">
+                        {comida}
+                    </p>
+                )}
+                {item.cuanto && (
+                    <p className="text-muted-foreground text-sm mt-1">
+                        <span className="font-semibold text-foreground">Dosis </span>{item.cuanto}
+                    </p>
+                )}
+                {item.cuando && (
+                    <p className="text-muted-foreground text-sm">
+                        <span className="font-semibold text-foreground">Cuándo </span>{item.cuando}
+                    </p>
+                )}
                 {item.observaciones && <p className="text-muted-foreground text-xs italic mt-1">{item.observaciones}</p>}
                 {item.enlaces?.length > 0 && (
                     <div className="flex flex-wrap gap-3 mt-1.5">
                         {item.enlaces.map((url, i) => (
                             <a key={i} href={url} target="_blank" rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 text-xs text-brand hover:underline font-semibold">
-                                <Link2 className="w-3 h-3" /> Dónde encontrarlo {item.enlaces.length > 1 ? i + 1 : ''}
+                                <Link2 className="w-3 h-3" /> Comprar con descuento {item.enlaces.length > 1 ? i + 1 : ''}
                             </a>
                         ))}
                     </div>
@@ -119,12 +177,12 @@ const FichaDeLaGuia = ({ ficha }) => {
                 {ficha.que_es && <p className="text-muted-foreground text-sm mt-0.5">{ficha.que_es}</p>}
                 {ficha.cuando && (
                     <p className="text-sm text-muted-foreground mt-1">
-                        <span className="font-semibold text-foreground">¿Cuándo? </span>{ficha.cuando}
+                        <span className="font-semibold text-foreground">Cuándo </span>{ficha.cuando}
                     </p>
                 )}
                 {ficha.cuanto && (
                     <p className="text-sm text-muted-foreground">
-                        <span className="font-semibold text-foreground">¿Cuánto? </span>{ficha.cuanto}
+                        <span className="font-semibold text-foreground">Dosis </span>{ficha.cuanto}
                     </p>
                 )}
                 {ficha.notas && <p className="text-muted-foreground text-xs italic mt-1">{ficha.notas}</p>}
@@ -133,7 +191,7 @@ const FichaDeLaGuia = ({ ficha }) => {
                         {ficha.enlaces.map((e, i) => (
                             <a key={i} href={e.url || e} target="_blank" rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 text-xs text-brand hover:underline font-semibold">
-                                <Link2 className="w-3 h-3" /> Dónde encontrarlo
+                                <Link2 className="w-3 h-3" /> Comprar con descuento
                             </a>
                         ))}
                     </div>
@@ -224,13 +282,17 @@ const GuiaDeSuplementacion = ({ api, guia, conDescuento = true }) => {
     const [pidiendo, setPidiendo] = useState(false);
 
     if (!guia) return null;
-    const secciones = (guia.secciones || []).filter(s => s.suplementos.length > 0);
-    const sinSeccion = guia.sin_seccion || [];
-    // Las fichas que la web aún no encaja en ninguna categoría entran como una más, al
-    // final, para que se pueda llegar a ellas igual.
-    const entradas = sinSeccion.length > 0
-        ? [...secciones, { clave: '_resto', nombre: 'El resto de la guía', suplementos: sinSeccion }]
-        : secciones;
+    // SIETE CATEGORÍAS Y NINGÚN CAJÓN DE SASTRE (punto 187 del 27-08). Aquí había una entrada
+    // más, «El resto de la guía», con las fichas que no encajaban en ninguna. Sus palabras:
+    // «es una categoría que no dice qué tiene dentro, y no debería existir. Si hay alguno que
+    // no encaja en ninguna, el problema es que falta una categoría, no que haga falta un cajón
+    // de sastre».
+    //
+    // Antes de quitarlo se contó: eran DOS fichas de 28, y se recolocaron -- la citrulina a
+    // Rendimiento y la crema RELIEF EFFECT a Descanso (`_colocar_huerfanos_guia_2708.py`).
+    // Si algún día vuelve a entrar una sin categoría, NO se le inventa un sitio: se queda
+    // fuera de la guía y hay que ponerle la suya, que es lo que dice el punto.
+    const entradas = (guia.secciones || []).filter(s => s.suplementos.length > 0);
     const seccion = entradas.find(s => s.clave === abierta) || null;
 
     const pedirRevision = async () => {
@@ -247,13 +309,19 @@ const GuiaDeSuplementacion = ({ api, guia, conDescuento = true }) => {
 
     return (
         <section className="max-w-2xl" data-testid="guia-suplementacion">
-            {/* El aviso de arriba: solo al del plan personalizado (o los 87 ya pagados)
-                que todavía no tiene el suyo. Habla en plural: es el equipo. */}
+            {/* EL AVISO DEL QUE ESTÁ ESPERANDO (punto 183 del 27-08). Decía «Esto es solo la
+                guía básica. En unos días recibirás tu plan de suplementación personalizado»,
+                que es de los dos párrafos que el punto 182 tira: promete un plazo que no
+                controlamos y llama «básica» a la guía entera de Jesús.
+                Ahora dice qué pasa y qué va a pasar, sin fecha. */}
             {guia.aviso_plan_personalizado && (
                 <div className="surface bg-brand/[0.06] border-brand/30 p-4 mb-5" data-testid="aviso-guia-basica">
                     <p className="text-sm text-foreground font-medium">
-                        Esto es solo la guía básica. En unos días recibirás tu plan de
-                        suplementación personalizado.
+                        Te lo estamos preparando. Te avisamos en cuanto esté.
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                        Mientras tanto, aquí tienes todo lo que uso y recomiendo, con pautas
+                        exactas de uso.
                     </p>
                 </div>
             )}
@@ -337,6 +405,8 @@ const SupplementsPage = () => {
     const nuevo = pantalla('t2_suplementos', true);
     const [protocol, setProtocol] = useState(null);
     const [guia, setGuia] = useState(null);
+    // Cuantas comidas tiene puesto, para decir «Comida 4» y no «ultima comida» (punto 184).
+    const [numComidas, setNumComidas] = useState(null);
     const [loading, setLoading] = useState(true);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -351,6 +421,11 @@ const SupplementsPage = () => {
         }
         // La guía la ven todos, tenga o no protocolo; si falla, la pantalla sigue con lo
         // que haya.
+        // El numero de comidas del cliente: si falla, la comida se dice con palabras.
+        try {
+            const c = await api.get('/user/diet-config');
+            setNumComidas(c.data?.num_comidas || null);
+        } catch { /* se queda en palabras */ }
         try {
             const g = await api.get('/supplements/guia');
             setGuia(g.data);
@@ -376,15 +451,33 @@ const SupplementsPage = () => {
     const esGenerica = !!protocol?.es_generica;
     const hayGuia = (guia?.secciones || []).some(s => s.suplementos.length > 0) || (guia?.sin_seccion || []).length > 0;
 
+    /**
+     * LOS TRES ESTADOS DE ESTA PANTALLA (puntos 179 y 180 del 27-08).
+     *
+     *   Con plan y con protocolo   →  «Mis suplementos». Sólo lo suyo. LA GUÍA NO SALE.
+     *   Con plan, sin protocolo    →  «Mis suplementos», el aviso de que se lo estás
+     *                                 preparando, y la guía debajo para que tenga algo.
+     *   Sin plan personalizado     →  «Suplementación»: la guía, y nada más.
+     *
+     * Hasta hoy eran dos y ninguno de los tres: quien ya tenía su pauta veía ADEMÁS la guía
+     * entera debajo, y los dos casos se llamaban «Tu suplementación», que es lo que denuncia
+     * el 180 -- «en uno de los dos es mentira». El «mis» es lo que dice que son suyos.
+     *
+     * Y de qué estado se trata lo dice el SERVIDOR (`con_plan`), no el código de error de la
+     * petición del protocolo: antes se distinguía porque `/supplements/current` devuelve 403 a
+     * quien no tiene el plan, y eso funcionaba de casualidad.
+     */
+    const conPlan = !!guia?.con_plan;
+
     if (!tieneActual && !tieneSiguiente && !protocol?.nota && hayGuia) {
-        // SIN PAUTA PROPIA: la pantalla ES la guía (doc 19-08, bloque 08), y se llama
-        // «Tu suplementación» IGUAL que la del protocolo (Jesús, 21-08). El texto de
-        // entrada es el que dictó, tal cual, y debajo van directamente las categorías.
         return <Wrap>
             <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground mb-2">
-                Tu suplementación
+                {conPlan ? 'Mis suplementos' : 'Suplementación'}
             </h1>
-            <TextoDeEntrada texto={guia?.texto_entrada} />
+            {/* Con plan, el aviso manda y el texto de la guía no se repite: lo dice el propio
+                aviso («mientras tanto, aquí tienes todo lo que uso y recomiendo»), y sin el
+                «empieza por los básicos», que es lo que pide el punto 183. */}
+            {!conPlan && <TextoDeEntrada texto={guia?.texto_entrada} />}
             <GuiaDeSuplementacion api={api} guia={guia} />
         </Wrap>;
     }
@@ -430,13 +523,17 @@ const SupplementsPage = () => {
 
     return (
         <Wrap>
+            {/* «MIS SUPLEMENTOS», CON EL MIS (punto 180): son suyos. La guía se llama
+                «Suplementación», sin el mis, porque es la guía y no la suya. Hoy se llamaban
+                las dos igual y en una de las dos era mentira. */}
             <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground mb-2">
-                {nuevo ? 'Tu suplementación' : 'Suplementación'}
+                {nuevo ? 'Mis suplementos' : 'Suplementación'}
             </h1>
             {/* EL SUBTÍTULO ES SUYO, NO UN DESCARGO. Lo que había avisaba de que esto es
                 «orientativo» y que «pueden ser necesarios otros suplementos», que es lo que
                 se le dice a quien mira un catálogo general. Esto no es un catálogo: es lo
-                que le ha pautado a él. */}
+                que le ha pautado a él. Y dice en una línea qué hay dentro, con las mismas
+                palabras que las filas de cada suplemento (punto 181). */}
             <p className="text-muted-foreground text-sm mb-5 max-w-2xl">
                 {esGenerica
                     ? 'Todavía no te he pautado la tuya. Mientras tanto, esta es la que recomiendo de base: en cuanto te ponga la tuya, la ves aquí.'
@@ -466,7 +563,7 @@ const SupplementsPage = () => {
                         </h2>
                     )}
                     <div className={nuevo ? 'space-y-3 max-w-2xl' : 'grid md:grid-cols-2 gap-3'}>
-                        {protocol.actual.map((it, i) => <Tarjeta key={i} item={it} />)}
+                        {protocol.actual.map((it, i) => <Tarjeta key={i} item={it} numComidas={numComidas} />)}
                     </div>
                 </section>
             )}
@@ -482,7 +579,7 @@ const SupplementsPage = () => {
                         )}
                     </div>
                     <div className={nuevo ? 'space-y-3 max-w-2xl' : 'grid md:grid-cols-2 gap-3'}>
-                        {protocol.siguiente.map((it, i) => <Tarjeta key={i} item={it} />)}
+                        {protocol.siguiente.map((it, i) => <Tarjeta key={i} item={it} numComidas={numComidas} />)}
                     </div>
                 </section>
             )}
@@ -491,18 +588,12 @@ const SupplementsPage = () => {
                 vivía dentro de la guía y quien miraba su pauta no lo veía. */}
             <div className="max-w-2xl mt-8"><Descuento /></div>
 
-            {/* Y DEBAJO, LA GUÍA: la ven todos (doc 19-08), también quien ya tiene su
-                pauta. Con su rótulo, para que nadie confunda la guía con lo suyo. El
-                descuento ya está arriba, junto a la pauta: aquí apagado. */}
-            {hayGuia && (
-                <section className="mt-10">
-                    <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-1">La guía de suplementación</h2>
-                    <p className="text-muted-foreground text-sm mb-4 max-w-2xl">
-                        Los suplementos que más utilizo y recomiendo, por si quieres consultarla.
-                    </p>
-                    <GuiaDeSuplementacion api={api} guia={guia} conDescuento={false} />
-                </section>
-            )}
+            {/* AQUÍ IBA LA GUÍA ENTERA, Y SE VA (punto 179 del 27-08): «con plan y con
+                protocolo puesto → Mis suplementos: SÓLO LO SUYO. La guía no sale».
+                El doc del 19-08 decía «la ven todos», y por eso estaba; pero el que ya tiene
+                su pauta no viene aquí a leer un catálogo, viene a mirar qué le toca hoy, y
+                debajo de tres líneas suyas había veintiocho fichas que no son suyas.
+                Quien no tiene pauta sí la sigue viendo: es el segundo estado, arriba. */}
         </Wrap>
     );
 };

@@ -494,11 +494,24 @@ class FoodSuggestion(BaseModel):
     nombre: str
     por_unidad: bool = False          # False = valores por 100 g; True = por unidad
     racion: float = 100.0             # gramos de la ración (100 si por 100 g; peso de la unidad si por_unidad)
-    peso_tipo: str = "neto"           # "neto" | "escurrido" (informativo; el admin lo revisa a mano)
+    # SI VIENE EN LATA O EN CONSERVA (punto 165 del 27-08). Antes se preguntaba el tipo de
+    # peso a todo el mundo, sin preguntar antes si el alimento es una conserva: a quien
+    # sugiere un yogur se le pedía elegir entre «peso neto» y «peso escurrido», que de un
+    # yogur no significa nada. Ahora primero se pregunta si es lata, y sólo entonces se
+    # pregunta por el peso.
+    es_conserva: bool = False
+    # "neto" | "escurrido". Sólo tiene sentido con `es_conserva`; en el resto se queda en
+    # "neto" y el admin no tiene que leerlo.
+    peso_tipo: str = "neto"
     proteinas: float = 0.0
     hidratos: float = 0.0
     grasas: float = 0.0
     url: Optional[str] = None         # enlace a la fuente de los datos nutricionales
+    # UN GENÉRICO NO TIENE WEB (punto 166). El enlace es obligatorio porque además de
+    # verificar los datos es el que alimenta el botón «Ver web ↗» de la ficha del alimento
+    # (son el mismo dato en dos sitios), pero si alguien pide carne de potro no hay enlace
+    # que pegar: sin esta salida se queda atascado y no manda la solicitud.
+    sin_web: bool = False
 
 class FoodSuggestionUpdate(BaseModel):
     """Campos que el admin puede editar de una sugerencia durante la revisión."""

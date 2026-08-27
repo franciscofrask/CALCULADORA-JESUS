@@ -2,14 +2,15 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, CheckSquare, ChevronRight, Circle, Square, Zap } from 'lucide-react';
 import { leer as leerLocal, escribir as escribirLocal } from '../../lib/almacenLocal';
 import { num0, num1 } from '../../lib/numeros';
-import { leerMacro } from '../../lib/estadoDelMacro';
+import { leerMacro, claseDelMacro, fondoDelMacro, llevaPunto } from '../../lib/estadoDelMacro';
+import { suplementosPorComida } from '../../lib/suplementosDelDia';
 import ExtrasDelDia from '../nutrition/ExtrasDelDia';
 
 /**
  * «TU DIETA HOY» (doc de Jesús del 21-08, tarea 4.2; repintado con el del 23-08 y cerrado
  * con el artifact del 25-08, puntos 75 a 101): el deslizador de cuatro posiciones sobre los
  * tres números por macro -- el nombre con su punto encima, el número en blanco, la palabra
- * del estado debajo y la barra -- y, debajo, «Marca lo que ya te has comido» con las hechas
+ * del estado debajo y la barra -- y, debajo, «Marca lo que te vayas comiendo» con las hechas
  * contraídas y una fila por toma, el intra y el post incluidos.
  *
  *  - Macros  · el objetivo del día CON el perientreno dentro. Es el mismo número que la
@@ -81,12 +82,14 @@ const montadoDe = (comida) => (comida?.alimentos || []).reduce((acc, a) => {
     return { P: acc.P + (m.P || 0), H: acc.H + (m.H || 0), G: acc.G + (m.G || 0) };
 }, { P: 0, H: 0, G: 0 });
 
-// SIN LETRAS Y REDONDOS (punto 98 del 25-08). Hasta hoy: «61P · 30,2H · 19,6G». Queda
-// «61 · 30 · 20»: el orden es siempre el mismo y ya está escrito arriba, en los rótulos de
-// los tres números, así que la P, la H y la G solo añaden ruido. Y el decimal en una lista
-// que se lee de un vistazo tampoco decide nada.
+// REDONDOS Y CON LETRA (punto 173 del 27-08). El 25-08 (punto 98) se quitaron las letras
+// porque el orden ya está escrito arriba, en los rótulos de los tres números. Mirando la
+// app, Jesús lo revierte: «en el resto de la app llevan letra; aquí no, y es la misma
+// pantalla». Manda la coherencia, así que «32P · 19H · 6G».
+// Lo que NO vuelve es el decimal: «61 · 30,2 · 19,6» en una lista que se lee de un vistazo
+// no decide nada, y eso el punto 173 no lo toca.
 const lineaMacros = (m, sinGrasa = false) => [
-    num0(m.P || 0), num0(m.H || 0), ...(sinGrasa ? [] : [num0(m.G || 0)]),
+    `${num0(m.P || 0)}P`, `${num0(m.H || 0)}H`, ...(sinGrasa ? [] : [`${num0(m.G || 0)}G`]),
 ].join(' · ');
 
 const nombreComida = (k, unica) => (unica ? 'Comida única' : `Comida ${k.slice(1)}`);
@@ -94,7 +97,7 @@ const nombreComida = (k, unica) => (unica ? 'Comida única' : `Comida ${k.slice(
 // El intra y el post, en el orden en que se toman: uno detrás del otro (punto 97).
 const ORDEN_PERI = ['Intra', 'Post'];
 
-const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) => {
+const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, suplementos }) => {
     const [vista, setVista] = useState('macros');
     // Las comidas ya marcadas se CONTRAEN («2 hechas · ocultas — Ver», punto 1 del doc
     // del 23-08): la lista enseña solo lo que queda por comer, y el «Ver» las despliega.
@@ -214,6 +217,11 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
         : (reparto?.comidas ? Object.keys(reparto.comidas).length : 4);
     const esUnica = numComidas === 1;
     const claves = ['C1', 'C2', 'C3', 'C4'].slice(0, Math.max(1, Math.min(4, numComidas)));
+
+    // Los suplementos que le tocan con cada comida (punto 174). Ver `suplementosPorComida`.
+    const supPorComida = useMemo(() => suplementosPorComida(suplementos, claves),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [suplementos, claves.join(',')]);
 
     const montadoPorComida = useMemo(() => Object.fromEntries(
         claves.map((k) => [k, montadoDe(comidasGuardadas[k])])),
@@ -401,17 +409,20 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
                                                 hace falta leyenda que aprenderse. */}
                                             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-center gap-1">
                                                 {NOMBRE[k]}
-                                                {lectura.color && (
+                                                {llevaPunto(lectura.color) && (
                                                     <span data-testid={`punto-${vista}-${k}`}
-                                                        className={`w-1.5 h-1.5 rounded-full ${lectura.color === 'ok' ? 'bg-ok' : 'bg-pasado'}`} />
+                                                        className={`w-1.5 h-1.5 rounded-full ${fondoDelMacro(lectura.color)}`} />
                                                 )}
                                             </p>
-                                            <p className="numero-grande font-data leading-none text-[34px] sm:text-[40px] mt-1.5 text-foreground">
+                                            {/* 44 px, arriba y abajo (punto 172 del 27-08).
+                                                Estaban a 34 en el móvil y 40 en el ordenador,
+                                                y es en el móvil donde dice que se nota. El
+                                                peso lo pone `.numero-grande`. */}
+                                            <p className="numero-grande font-data leading-none text-[44px] mt-1.5 text-foreground">
                                                 {impreso == null ? '·' : impreso}
                                             </p>
                                             <p data-testid={`palabra-${vista}-${k}`}
-                                                className={`text-xs mt-1 ${lectura.color === 'ok' ? 'text-ok font-medium'
-                                                    : lectura.color === 'pasado' ? 'text-pasado font-medium' : 'text-muted-foreground'}`}>
+                                                className={`text-xs mt-1 ${claseDelMacro(lectura.color)}`}>
                                                 {lectura.palabra}
                                             </p>
                                             {/* La barra, en las cuatro menos en Macros: allí no
@@ -419,7 +430,7 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
                                             {lectura.barra && (
                                                 <div className="h-1 rounded-full bg-muted mt-1.5 overflow-hidden">
                                                     <div data-testid={`barra-${vista}-${k}`}
-                                                        className={`h-full rounded-full ${lectura.barra.color === 'ok' ? 'bg-ok' : 'bg-pasado'}`}
+                                                        className={`h-full rounded-full ${fondoDelMacro(lectura.barra.color)}`}
                                                         style={{ width: `${lectura.barra.largo}%` }} />
                                                 </div>
                                             )}
@@ -492,7 +503,11 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
             </section>
 
             <section className="space-y-3" data-testid="marca-comidas">
-                <p className="caption">Marca lo que ya te has comido</p>
+                {/* SOBRE LA MARCHA, NO POR LA NOCHE (punto 171 del 27-08). Ponía «Marca lo
+                    que ya te has comido», que mira al pasado, y dentro de la pestaña Llevas
+                    ya pone «Marca abajo lo que vayas comiendo». Eran las dos mitades de la
+                    misma pantalla diciendo cosas distintas. Manda la de dentro. */}
+                <p className="caption">Marca lo que te vayas comiendo</p>
 
                 {/* Las hechas, contraídas en una fila: la lista queda para lo que falta
                     por comer. El «Ver» las despliega (y ahí se pueden desmarcar). */}
@@ -534,8 +549,13 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
                         // en dos para meter la casilla de marcar (punto 96), el borde se
                         // quedó dentro del trozo que se pulsa y dejó de verse. Es lo único
                         // que distingue de un vistazo el intra y el post de las comidas.
+                        // LA TARJETA YA NO ES LA FILA: dentro van la fila (casilla, nombre,
+                        // macros y flecha) y, debajo, la línea del suplemento, que lleva a otro
+                        // sitio y necesita ser su propio botón (punto 190). Por eso el `flex`
+                        // baja un nivel y aquí queda sólo la caja.
                         <div key={k} data-testid={`comida-hoy-${k}`}
-                            className={`surface p-3.5 sm:p-4 flex items-center gap-3 transition-opacity ${esPeri ? 'border-l-4 border-l-brand' : ''} ${marcada ? 'opacity-55' : ''}`}>
+                            className={`surface p-3.5 sm:p-4 transition-opacity ${esPeri ? 'border-l-4 border-l-brand' : ''} ${marcada ? 'opacity-55' : ''}`}>
+                            <div className="flex items-center gap-3">
                             {/* La casilla. Persistencia: ver el comentario de cabecera. */}
                             <button onClick={() => marcar(k)} role="checkbox" aria-checked={marcada}
                                 aria-label={`${nombre}: ${marcada ? 'ya marcado' : 'marcar como tomado'}`}
@@ -564,6 +584,28 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate }) 
                                 </div>
                                 <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-brand transition-colors flex-shrink-0" />
                             </button>
+                            </div>
+
+                            {/* «+ Creatina» DEBAJO DE LOS MACROS (punto 174), Y SE PUEDE TOCAR
+                                (punto 190 del 27-08). «Desde Inicio no se llega a Suplementos,
+                                y es donde el cliente está cada día. Con el + Creatina debajo de
+                                la comida 3 ya hay por dónde: tocando ahí.»
+
+                                Por eso sale FUERA del botón de la fila y no dentro: la fila
+                                lleva a Nutrición y esto lleva a Suplementos, y un botón dentro
+                                de otro botón ni es HTML válido ni deja elegir destino.
+                                El margen de la izquierda lo alinea con el texto de arriba, por
+                                debajo de la casilla de marcar.
+
+                                Sólo el nombre; la dosis vive en su pantalla. Y el intra y el
+                                post no entran nunca: ver `suplementosPorComida`. */}
+                            {!esPeri && (supPorComida[k] || []).length > 0 && (
+                                <button onClick={() => navigate('/dashboard/supplements')}
+                                    data-testid={`suplementos-${k}`}
+                                    className="mt-1 ml-9 text-sm text-brand text-left hover:underline underline-offset-2">
+                                    + {supPorComida[k].join(' · ')}
+                                </button>
+                            )}
                         </div>
                     );
                 })}

@@ -21,7 +21,25 @@ const SEXOS = ['ambos', 'hombre', 'mujer'];
 const CATEGORIAS = ['base', 'intra', 'rendimiento', 'quemador', 'salud', 'sueno', 'otro'];
 const OBJETIVOS = ['ambos', 'volumen', 'definicion'];
 
-const EMPTY = { titulo: '', imagen: '', enlaces: [], cuando: '', cuanto: '', observaciones: '', sexo: 'ambos', categoria: 'base', objetivo: 'ambos', orden: 0, activo: true };
+// CON QUÉ COMIDA SALE EN EL INICIO (punto 174 del 27-08). El cliente ve «+ Creatina» debajo
+// de los macros de su comida, y para eso hay que saber de qué comida hablamos.
+//
+// Vacío es lo normal: la app lo saca del «¿Cuándo?» -- «con el desayuno» es la primera,
+// «desayuno y cena» son las dos --, y si el texto no dice ninguna comida, no sale en
+// ninguna. Esto es para corregir lo que salga torcido, no para rellenarlo entero.
+//
+// «La primera» y «la última» y no «Comida 1» y «Comida 4» porque el cliente puede tener de
+// una a cuatro comidas: la cena es la 3 en unos y la 4 en otros. Los números fijos están para
+// quien de verdad quiera una en concreto.
+const COMIDAS = [
+    ['', 'Automático (según el «¿Cuándo?»)'],
+    ['primera', 'La primera comida del día'],
+    ['ultima', 'La última comida del día'],
+    ['C1', 'Comida 1'], ['C2', 'Comida 2'], ['C3', 'Comida 3'], ['C4', 'Comida 4'],
+    ['ninguna', 'En ninguna comida'],
+];
+
+const EMPTY = { titulo: '', imagen: '', enlaces: [], cuando: '', cuanto: '', observaciones: '', sexo: 'ambos', categoria: 'base', objetivo: 'ambos', orden: 0, activo: true, comida: '' };
 
 const SupplementsCatalogPage = () => {
     const { api } = useAuth();
@@ -115,6 +133,18 @@ const SupplementsCatalogPage = () => {
                         </div>
                         <div><Label className="text-white/60 text-xs">¿Cuándo? (timing)</Label><Input value={form.cuando} onChange={e => setForm(f => ({ ...f, cuando: e.target.value }))} className="bg-[#0A0A0A] border-[#333] text-white" /></div>
                         <div><Label className="text-white/60 text-xs">¿Cuánto? (dosis)</Label><Input value={form.cuanto} onChange={e => setForm(f => ({ ...f, cuanto: e.target.value }))} className="bg-[#0A0A0A] border-[#333] text-white" /></div>
+                        <div>
+                            <Label className="text-white/60 text-xs">¿Con qué comida sale en su Inicio?</Label>
+                            <select value={form.comida || ''} onChange={e => setForm(f => ({ ...f, comida: e.target.value }))}
+                                data-testid="catalogo-comida"
+                                className="w-full bg-[#0A0A0A] border border-[#333] text-white text-sm rounded-lg px-2 py-2">
+                                {COMIDAS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
+                            </select>
+                            <p className="text-white/30 text-[11px] mt-1">
+                                Déjalo en automático salvo que salga donde no toca. El intra y el post nunca
+                                llevan suplemento debajo: ellos ya son el suplemento.
+                            </p>
+                        </div>
                         <div><Label className="text-white/60 text-xs">Observaciones</Label><Textarea value={form.observaciones || ''} onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))} className="bg-[#0A0A0A] border-[#333] text-white" rows={2} /></div>
                         <div><Label className="text-white/60 text-xs">Imagen (URL)</Label><Input value={form.imagen || ''} onChange={e => setForm(f => ({ ...f, imagen: e.target.value }))} className="bg-[#0A0A0A] border-[#333] text-white" /></div>
                         <div><Label className="text-white/60 text-xs">Enlaces (uno por línea)</Label><Textarea value={(form.enlaces || []).join('\n')} onChange={e => setForm(f => ({ ...f, enlaces: e.target.value.split('\n') }))} className="bg-[#0A0A0A] border-[#333] text-white" rows={2} /></div>
