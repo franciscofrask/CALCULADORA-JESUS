@@ -1,0 +1,3705 @@
+{
+ "toasts": [
+  {
+   "tipo": "error",
+   "texto": "Faltan el quién o el qué.",
+   "quien": "cliente",
+   "donde": "AsignarTarea",
+   "fichero": "frontend/src/components/AsignarTarea.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "La imagen pesa … MB y el máximo son 4 MB.",
+   "quien": "cliente",
+   "donde": "ImagenAdjunta",
+   "fichero": "frontend/src/components/chat/ImagenAdjunta.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Feedback guardado",
+   "quien": "cliente",
+   "donde": "CoachCheckins",
+   "fichero": "frontend/src/components/CoachCheckins.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error guardando feedback",
+   "quien": "cliente",
+   "donde": "CoachCheckins",
+   "fichero": "frontend/src/components/CoachCheckins.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Ponle un nombre a la rutina",
+   "quien": "cliente",
+   "donde": "EditorDeRutina",
+   "fichero": "frontend/src/components/EditorDeRutina.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Añade al menos un ejercicio",
+   "quien": "cliente",
+   "donde": "EditorDeRutina",
+   "fichero": "frontend/src/components/EditorDeRutina.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Hay un ejercicio sin nombre",
+   "quien": "cliente",
+   "donde": "EditorDeRutina",
+   "fichero": "frontend/src/components/EditorDeRutina.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Hay un ejercicio sin series",
+   "quien": "cliente",
+   "donde": "EditorDeRutina",
+   "fichero": "frontend/src/components/EditorDeRutina.jsx"
+  },
+  {
+   "tipo": "info",
+   "texto": "✅ Proteínas cubiertas. Elige el acompañamiento.",
+   "quien": "cliente",
+   "donde": "BuildMealModal",
+   "fichero": "frontend/src/components/nutrition/BuildMealModal.jsx"
+  },
+  {
+   "tipo": "info",
+   "texto": "✨ ¡Macros cubiertos! Últimos toques.",
+   "quien": "cliente",
+   "donde": "BuildMealModal",
+   "fichero": "frontend/src/components/nutrition/BuildMealModal.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error cargando alimentos",
+   "quien": "cliente",
+   "donde": "BuildMealModal",
+   "fichero": "frontend/src/components/nutrition/BuildMealModal.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido buscar ahora mismo. Inténtalo otra vez.",
+   "quien": "cliente",
+   "donde": "BuildMealModal",
+   "fichero": "frontend/src/components/nutrition/BuildMealModal.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "… ya está en esta comida - ajusta su cantidad directamente.",
+   "quien": "cliente",
+   "donde": "BuildMealModal",
+   "fichero": "frontend/src/components/nutrition/BuildMealModal.jsx"
+  },
+  {
+   "tipo": "warning",
+   "texto": "… entra, pero esta comida se pasa. Baja la cantidad si quieres cuadrarla.",
+   "quien": "cliente",
+   "donde": "BuildMealModal",
+   "fichero": "frontend/src/components/nutrition/BuildMealModal.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error al añadir alimento",
+   "quien": "cliente",
+   "donde": "BuildMealModal",
+   "fichero": "frontend/src/components/nutrition/BuildMealModal.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "✅ Comida guardada (… …)",
+   "quien": "cliente",
+   "donde": "BuildMealModal",
+   "fichero": "frontend/src/components/nutrition/BuildMealModal.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No se pudo apuntar el extra. Prueba otra vez.",
+   "quien": "cliente",
+   "donde": "ExtrasDelDia",
+   "fichero": "frontend/src/components/nutrition/ExtrasDelDia.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No se pudo quitar el extra. Prueba otra vez.",
+   "quien": "cliente",
+   "donde": "ExtrasDelDia",
+   "fichero": "frontend/src/components/nutrition/ExtrasDelDia.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Ya tienes una comida favorita que se llama \"…\". Ponle otro nombre.",
+   "quien": "cliente",
+   "donde": "FavoritasDeComida",
+   "fichero": "frontend/src/components/nutrition/FavoritasDeComida.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Ya tienes una favorita que se llama \"…\". Ponle otro nombre para distinguirlas.",
+   "quien": "cliente",
+   "donde": "FavoritesModal",
+   "fichero": "frontend/src/components/nutrition/FavoritesModal.jsx"
+  },
+  {
+   "tipo": "info",
+   "texto": "Las grasas de buena calidad van siempre: el método las necesita en todas las comidas.",
+   "quien": "cliente",
+   "donde": "PreferencesSetup",
+   "fichero": "frontend/src/components/nutrition/PreferencesSetup.jsx"
+  },
+  {
+   "tipo": "info",
+   "texto": "Lo hemos quitado de \"Evitar\": no puede gustarte y evitarse a la vez.",
+   "quien": "cliente",
+   "donde": "PreferencesSetup",
+   "fichero": "frontend/src/components/nutrition/PreferencesSetup.jsx"
+  },
+  {
+   "tipo": "info",
+   "texto": "Las grasas de buena calidad no se pueden evitar: el método las necesita.",
+   "quien": "cliente",
+   "donde": "PreferencesSetup",
+   "fichero": "frontend/src/components/nutrition/PreferencesSetup.jsx"
+  },
+  {
+   "tipo": "info",
+   "texto": "Lo hemos quitado de \"Me gusta\": no puede gustarte y evitarse a la vez.",
+   "quien": "cliente",
+   "donde": "PreferencesSetup",
+   "fichero": "frontend/src/components/nutrition/PreferencesSetup.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "\"…\" ya está en la lista",
+   "quien": "cliente",
+   "donde": "PreferencesSetup",
+   "fichero": "frontend/src/components/nutrition/PreferencesSetup.jsx"
+  },
+  {
+   "tipo": "warning",
+   "texto": "\"…\" no coincide con ningún alimento del catálogo: guardada, pero hoy no bloquea nada.",
+   "quien": "cliente",
+   "donde": "PreferencesSetup",
+   "fichero": "frontend/src/components/nutrition/PreferencesSetup.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Selecciona al menos 3 categorías en \"Me gusta\"",
+   "quien": "cliente",
+   "donde": "PreferencesSetup",
+   "fichero": "frontend/src/components/nutrition/PreferencesSetup.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Preferencias guardadas",
+   "quien": "cliente",
+   "donde": "PreferencesSetup",
+   "fichero": "frontend/src/components/nutrition/PreferencesSetup.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error guardando preferencias",
+   "quien": "cliente",
+   "donde": "PreferencesSetup",
+   "fichero": "frontend/src/components/nutrition/PreferencesSetup.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Indica el nombre del alimento",
+   "quien": "cliente",
+   "donde": "SuggestFoodModal",
+   "fichero": "frontend/src/components/nutrition/SuggestFoodModal.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Indica el peso de la unidad en gramos",
+   "quien": "cliente",
+   "donde": "SuggestFoodModal",
+   "fichero": "frontend/src/components/nutrition/SuggestFoodModal.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Sugerencia enviada. El equipo la revisará pronto.",
+   "quien": "cliente",
+   "donde": "SuggestFoodModal",
+   "fichero": "frontend/src/components/nutrition/SuggestFoodModal.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido preparar tu reporte. Inténtalo en un momento.",
+   "quien": "cliente",
+   "donde": "FormularioReporte",
+   "fichero": "frontend/src/components/reports/FormularioReporte.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "El peso es obligatorio",
+   "quien": "cliente",
+   "donde": "FormularioReporte",
+   "fichero": "frontend/src/components/reports/FormularioReporte.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Foto subida",
+   "quien": "cliente",
+   "donde": "TresFotos",
+   "fichero": "frontend/src/components/reports/TresFotos.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Medidas guardadas",
+   "quien": "cliente",
+   "donde": "TusFotosYMetricas",
+   "fichero": "frontend/src/components/TusFotosYMetricas.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Porcentaje actualizado",
+   "quien": "cliente",
+   "donde": "TusFotosYMetricas",
+   "fichero": "frontend/src/components/TusFotosYMetricas.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Tu sesión ha expirado. Vuelve a iniciar sesión.",
+   "quien": "cliente",
+   "donde": "frontend/src/context/AuthContext.jsx",
+   "fichero": "frontend/src/context/AuthContext.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "… queda como contactado",
+   "quien": "equipo",
+   "donde": "AdminDashboard",
+   "fichero": "frontend/src/pages/AdminDashboard.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No se pudo marcar la llamada",
+   "quien": "equipo",
+   "donde": "AdminDashboard",
+   "fichero": "frontend/src/pages/AdminDashboard.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Enlace de pago copiado (…€). Pégaselo por WhatsApp.",
+   "quien": "equipo",
+   "donde": "AdminDashboard",
+   "fichero": "frontend/src/pages/AdminDashboard.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Enlace de pago creado",
+   "quien": "equipo",
+   "donde": "AdminDashboard",
+   "fichero": "frontend/src/pages/AdminDashboard.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No se pudo cerrar el aviso",
+   "quien": "equipo",
+   "donde": "AdminDashboard",
+   "fichero": "frontend/src/pages/AdminDashboard.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Revisión marcada como revisada",
+   "quien": "equipo",
+   "donde": "AdminDashboard",
+   "fichero": "frontend/src/pages/AdminDashboard.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No se pudo marcar la revisión",
+   "quien": "equipo",
+   "donde": "AdminDashboard",
+   "fichero": "frontend/src/pages/AdminDashboard.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No se pudo actualizar el reporte",
+   "quien": "equipo",
+   "donde": "AdminDashboard",
+   "fichero": "frontend/src/pages/AdminDashboard.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No se han podido marcar como leídos",
+   "quien": "equipo",
+   "donde": "AdminDashboard",
+   "fichero": "frontend/src/pages/AdminDashboard.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error al cargar dashboard",
+   "quien": "equipo",
+   "donde": "AdminDashboard",
+   "fichero": "frontend/src/pages/AdminDashboard.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Cliente asignado",
+   "quien": "equipo",
+   "donde": "AdminDashboard",
+   "fichero": "frontend/src/pages/AdminDashboard.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error al cargar clientes",
+   "quien": "equipo",
+   "donde": "AdminDashboard",
+   "fichero": "frontend/src/pages/AdminDashboard.jsx"
+  },
+  {
+   "tipo": "info",
+   "texto": "… se registró pero no completó el alta (no eligió plan). Aún no tiene ficha.",
+   "quien": "equipo",
+   "donde": "AdminDashboard",
+   "fichero": "frontend/src/pages/AdminDashboard.jsx"
+  },
+  {
+   "tipo": "info",
+   "texto": "Lead nuevo recibido · … sin gestionar",
+   "quien": "equipo",
+   "donde": "AdminDashboard",
+   "fichero": "frontend/src/pages/AdminDashboard.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Sesión cerrada",
+   "quien": "equipo",
+   "donde": "AdminDashboard",
+   "fichero": "frontend/src/pages/AdminDashboard.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error cargando las sugerencias",
+   "quien": "equipo",
+   "donde": "AdminFoodSuggestions",
+   "fichero": "frontend/src/pages/AdminFoodSuggestionsPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Sugerencia actualizada",
+   "quien": "equipo",
+   "donde": "AdminFoodSuggestions",
+   "fichero": "frontend/src/pages/AdminFoodSuggestionsPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Ponle una categoría antes de aprobarlo: de ella depende qué macros le cuentan al cliente.",
+   "quien": "equipo",
+   "donde": "AdminFoodSuggestions",
+   "fichero": "frontend/src/pages/AdminFoodSuggestionsPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Alimento aprobado y añadido a la calculadora",
+   "quien": "equipo",
+   "donde": "AdminFoodSuggestions",
+   "fichero": "frontend/src/pages/AdminFoodSuggestionsPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Sugerencia rechazada",
+   "quien": "equipo",
+   "donde": "AdminFoodSuggestions",
+   "fichero": "frontend/src/pages/AdminFoodSuggestionsPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Sugerencia eliminada",
+   "quien": "equipo",
+   "donde": "AdminFoodSuggestions",
+   "fichero": "frontend/src/pages/AdminFoodSuggestionsPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Alimento añadido a la calculadora",
+   "quien": "equipo",
+   "donde": "AdminFoodSuggestions",
+   "fichero": "frontend/src/pages/AdminFoodSuggestionsPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "El menú tiene que llevar al menos un alimento con su cantidad",
+   "quien": "equipo",
+   "donde": "AdminMenus",
+   "fichero": "frontend/src/pages/AdminMenusPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Menú actualizado",
+   "quien": "equipo",
+   "donde": "AdminMenus",
+   "fichero": "frontend/src/pages/AdminMenusPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Menú borrado",
+   "quien": "equipo",
+   "donde": "AdminMenus",
+   "fichero": "frontend/src/pages/AdminMenusPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error al cargar los menús",
+   "quien": "equipo",
+   "donde": "AdminMenus",
+   "fichero": "frontend/src/pages/AdminMenusPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "El nombre es obligatorio",
+   "quien": "equipo",
+   "donde": "AdminMenus",
+   "fichero": "frontend/src/pages/AdminMenusPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Añade al menos un alimento",
+   "quien": "equipo",
+   "donde": "AdminMenus",
+   "fichero": "frontend/src/pages/AdminMenusPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "La proporción de … no vale: va de 0 a 1 (1 = ese",
+   "quien": "equipo",
+   "donde": "AdminMenus",
+   "fichero": "frontend/src/pages/AdminMenusPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error al borrar",
+   "quien": "equipo",
+   "donde": "AdminMenus",
+   "fichero": "frontend/src/pages/AdminMenusPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error al enviar el mensaje",
+   "quien": "equipo",
+   "donde": "AdminMessages",
+   "fichero": "frontend/src/pages/AdminMessagesPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Lista guardada",
+   "quien": "equipo",
+   "donde": "AdminPaneles",
+   "fichero": "frontend/src/pages/AdminPanelesPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No se pudieron cargar los ajustes de la app",
+   "quien": "equipo",
+   "donde": "AdminPlans",
+   "fichero": "frontend/src/pages/AdminPlansPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No se pudo guardar el cambio",
+   "quien": "equipo",
+   "donde": "AdminPlans",
+   "fichero": "frontend/src/pages/AdminPlansPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No se pudo guardar la frase",
+   "quien": "equipo",
+   "donde": "AdminPlans",
+   "fichero": "frontend/src/pages/AdminPlansPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Tu cuenta está en modo de prueba",
+   "quien": "equipo",
+   "donde": "AdminPlans",
+   "fichero": "frontend/src/pages/AdminPlansPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No se pudo aplicar el escenario",
+   "quien": "equipo",
+   "donde": "AdminPlans",
+   "fichero": "frontend/src/pages/AdminPlansPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Tu cuenta vuelve a la normalidad",
+   "quien": "equipo",
+   "donde": "AdminPlans",
+   "fichero": "frontend/src/pages/AdminPlansPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No se pudo restaurar",
+   "quien": "equipo",
+   "donde": "AdminPlans",
+   "fichero": "frontend/src/pages/AdminPlansPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Vuelves a ver lo mismo que todos",
+   "quien": "equipo",
+   "donde": "AdminPlans",
+   "fichero": "frontend/src/pages/AdminPlansPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No se pudo reiniciar",
+   "quien": "equipo",
+   "donde": "AdminPlans",
+   "fichero": "frontend/src/pages/AdminPlansPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No se pudo cargar el catálogo de planes",
+   "quien": "equipo",
+   "donde": "AdminPlans",
+   "fichero": "frontend/src/pages/AdminPlansPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Plan actualizado",
+   "quien": "equipo",
+   "donde": "AdminPlans",
+   "fichero": "frontend/src/pages/AdminPlansPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Plan restaurado a los valores por defecto",
+   "quien": "equipo",
+   "donde": "AdminPlans",
+   "fichero": "frontend/src/pages/AdminPlansPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido cargar las rutinas guardadas.",
+   "quien": "equipo",
+   "donde": "AdminRoutines",
+   "fichero": "frontend/src/pages/AdminRoutinesPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "«…» quitada de la biblioteca",
+   "quien": "equipo",
+   "donde": "AdminRoutines",
+   "fichero": "frontend/src/pages/AdminRoutinesPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido borrarla. Inténtalo de nuevo.",
+   "quien": "equipo",
+   "donde": "AdminRoutines",
+   "fichero": "frontend/src/pages/AdminRoutinesPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido marcarla. Inténtalo de nuevo.",
+   "quien": "equipo",
+   "donde": "AdminRoutines",
+   "fichero": "frontend/src/pages/AdminRoutinesPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido agrupar a los clientes. Inténtalo de nuevo.",
+   "quien": "equipo",
+   "donde": "AdminRoutines",
+   "fichero": "frontend/src/pages/AdminRoutinesPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido asignar las rutinas. Inténtalo de nuevo.",
+   "quien": "equipo",
+   "donde": "AdminRoutines",
+   "fichero": "frontend/src/pages/AdminRoutinesPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No se pudo abrir el PDF.",
+   "quien": "equipo",
+   "donde": "AdminRoutines",
+   "fichero": "frontend/src/pages/AdminRoutinesPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido cargar las rutinas. Inténtalo de nuevo.",
+   "quien": "equipo",
+   "donde": "AdminRoutines",
+   "fichero": "frontend/src/pages/AdminRoutinesPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Tarea borrada",
+   "quien": "equipo",
+   "donde": "AdminTareas",
+   "fichero": "frontend/src/pages/AdminTareasPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error cargando la actividad",
+   "quien": "equipo",
+   "donde": "AdminUsers",
+   "fichero": "frontend/src/pages/AdminUsersPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error al cargar usuarios",
+   "quien": "equipo",
+   "donde": "AdminUsers",
+   "fichero": "frontend/src/pages/AdminUsersPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Usuario actualizado",
+   "quien": "equipo",
+   "donde": "AdminUsers",
+   "fichero": "frontend/src/pages/AdminUsersPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Usuario dado de baja",
+   "quien": "equipo",
+   "donde": "AdminUsers",
+   "fichero": "frontend/src/pages/AdminUsersPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Usuario reactivado",
+   "quien": "equipo",
+   "donde": "AdminUsers",
+   "fichero": "frontend/src/pages/AdminUsersPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No se pudo reactivar",
+   "quien": "equipo",
+   "donde": "AdminUsers",
+   "fichero": "frontend/src/pages/AdminUsersPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Contraseña copiada",
+   "quien": "equipo",
+   "donde": "AdminUsers",
+   "fichero": "frontend/src/pages/AdminUsersPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No se pudo copiar",
+   "quien": "equipo",
+   "donde": "AdminUsers",
+   "fichero": "frontend/src/pages/AdminUsersPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "¡Cuenta creada! Bienvenido a 12EN12",
+   "quien": "cliente",
+   "donde": "Auth",
+   "fichero": "frontend/src/pages/AuthPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "¡Bienvenido, …!",
+   "quien": "cliente",
+   "donde": "Auth",
+   "fichero": "frontend/src/pages/AuthPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido apuntarlo. Inténtalo en un momento.",
+   "quien": "cliente",
+   "donde": "CheckIns",
+   "fichero": "frontend/src/pages/CheckInsPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Anotado. Mañana seguimos.",
+   "quien": "cliente",
+   "donde": "CheckIns",
+   "fichero": "frontend/src/pages/CheckInsPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido guardar tu día. Inténtalo en un momento.",
+   "quien": "cliente",
+   "donde": "CheckIns",
+   "fichero": "frontend/src/pages/CheckInsPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error al cargar check-ins",
+   "quien": "cliente",
+   "donde": "CheckIns",
+   "fichero": "frontend/src/pages/CheckInsPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Dinos cómo vas de energía y de hambre",
+   "quien": "cliente",
+   "donde": "CheckIns",
+   "fichero": "frontend/src/pages/CheckInsPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Check-in diario enviado",
+   "quien": "cliente",
+   "donde": "CheckIns",
+   "fichero": "frontend/src/pages/CheckInsPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error al enviar check-in",
+   "quien": "cliente",
+   "donde": "CheckIns",
+   "fichero": "frontend/src/pages/CheckInsPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No se pudo guardar. Inténtalo en un momento.",
+   "quien": "cliente",
+   "donde": "ClientDashboard",
+   "fichero": "frontend/src/pages/ClientDashboard.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido abrir tu rutina. Inténtalo en un momento.",
+   "quien": "cliente",
+   "donde": "ClientDashboard",
+   "fichero": "frontend/src/pages/ClientDashboard.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Menú copiado al portapapeles",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Este cliente no tiene usuario de chat",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Menú enviado al chat de …",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No se pudo enviar el menú",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Indica los tres macros objetivo",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error buscando menús",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Rutina en PDF subida",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Reparto y semanas guardados",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No se pudo abrir el PDF",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Le hemos puesto «…»",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No se pudo cargar la dieta de esa fecha",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error al cargar datos del cliente",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "El asistente no devolvió una propuesta válida",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Propuesta cargada: el razonamiento va en el criterio interno. Escribe el feedback del cliente",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Evaluación guardada",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Entrada eliminada",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No se pudo eliminar la entrada",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Rol actualizado",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Completa proteína, hidratos y grasa de entrenamiento y descanso",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "El feedback para el cliente es obligatorio",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Macros actualizados",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "El motivo es obligatorio",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Entrada del historial actualizada",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error actualizando estructura de dieta",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error actualizando la farmacología",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Rutina generada con IA",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error al generar rutina",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Rutina guardada",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error al guardar rutina",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Propuesta lista: revísala al lado del protocolo",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error al sugerir",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Entrenamiento actualizado",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No se pudo guardar",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Suplementación guardada",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error al guardar suplementación",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Versión borrada",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Clave copiada",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Pon su peso (25-300 kg)",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Reporte guardado",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Foto subida…",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido crear el informe de este reporte",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Informe publicado",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido publicar el informe",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error guardando el feedback",
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido cargar tu entreno de hoy. Inténtalo en un momento.",
+   "quien": "cliente",
+   "donde": "Entreno",
+   "fichero": "frontend/src/pages/EntrenoPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Dinos si lo has completado.",
+   "quien": "cliente",
+   "donde": "Entreno",
+   "fichero": "frontend/src/pages/EntrenoPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Entreno guardado.",
+   "quien": "cliente",
+   "donde": "Entreno",
+   "fichero": "frontend/src/pages/EntrenoPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido guardar tu entreno. Inténtalo en un momento.",
+   "quien": "cliente",
+   "donde": "Entreno",
+   "fichero": "frontend/src/pages/EntrenoPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error cargando leads",
+   "quien": "equipo",
+   "donde": "Leads",
+   "fichero": "frontend/src/pages/LeadsPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error cargando métricas",
+   "quien": "equipo",
+   "donde": "Leads",
+   "fichero": "frontend/src/pages/LeadsPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error borrando la nota",
+   "quien": "equipo",
+   "donde": "Leads",
+   "fichero": "frontend/src/pages/LeadsPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Nombre es obligatorio",
+   "quien": "equipo",
+   "donde": "Leads",
+   "fichero": "frontend/src/pages/LeadsPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Lead creado",
+   "quien": "equipo",
+   "donde": "Leads",
+   "fichero": "frontend/src/pages/LeadsPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error actualizando estado",
+   "quien": "equipo",
+   "donde": "Leads",
+   "fichero": "frontend/src/pages/LeadsPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Lead descartado",
+   "quien": "equipo",
+   "donde": "Leads",
+   "fichero": "frontend/src/pages/LeadsPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error guardando notas",
+   "quien": "equipo",
+   "donde": "Leads",
+   "fichero": "frontend/src/pages/LeadsPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Mensaje copiado, listo para pegar en WhatsApp",
+   "quien": "equipo",
+   "donde": "Leads",
+   "fichero": "frontend/src/pages/LeadsPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Lead eliminado",
+   "quien": "equipo",
+   "donde": "Leads",
+   "fichero": "frontend/src/pages/LeadsPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error eliminando",
+   "quien": "equipo",
+   "donde": "Leads",
+   "fichero": "frontend/src/pages/LeadsPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Completa proteínas, hidratos y grasas (entreno y descanso)",
+   "quien": "cliente",
+   "donde": "MacroCalculatorClient",
+   "fichero": "frontend/src/pages/MacroCalculatorClientPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Elige una fecha de aplicación",
+   "quien": "cliente",
+   "donde": "MacroCalculatorClient",
+   "fichero": "frontend/src/pages/MacroCalculatorClientPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Macros guardados desde …",
+   "quien": "cliente",
+   "donde": "MacroCalculatorClient",
+   "fichero": "frontend/src/pages/MacroCalculatorClientPage.jsx"
+  },
+  {
+   "tipo": "info",
+   "texto": "Tu dieta reportada no cuadra con lo recomendado: se ha avisado a tu entrenador para que lo revise.",
+   "quien": "cliente",
+   "donde": "MacroCalculatorClient",
+   "fichero": "frontend/src/pages/MacroCalculatorClientPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Peso inválido (30-200 kg)",
+   "quien": "cliente",
+   "donde": "MacroCalculatorClient",
+   "fichero": "frontend/src/pages/MacroCalculatorClientPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "% graso inválido (5-60%)",
+   "quien": "cliente",
+   "donde": "MacroCalculatorClient",
+   "fichero": "frontend/src/pages/MacroCalculatorClientPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Valores cargados en el editor - elige fecha y guarda",
+   "quien": "cliente",
+   "donde": "MacroCalculatorClient",
+   "fichero": "frontend/src/pages/MacroCalculatorClientPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error al enviar mensaje",
+   "quien": "cliente",
+   "donde": "Messages",
+   "fichero": "frontend/src/pages/MessagesPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Dinos cuánto pesas",
+   "quien": "cliente",
+   "donde": "MiCuerpo",
+   "fichero": "frontend/src/pages/MiCuerpoPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido cargar tu semana. Inténtalo en un momento.",
+   "quien": "cliente",
+   "donde": "MiSemana",
+   "fichero": "frontend/src/pages/MiSemanaPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "PDF descargado",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido generar el PDF. Inténtalo de nuevo.",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Seguimos sin conexión. Tu día está guardado en este dispositivo",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "info",
+   "texto": "Sin conexion con el servidor: hemos recuperado tu día de la copia local",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "… fuera de la comida",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "… vaciada",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hay alimentos en esa comida",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Esa comida está vacía",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Copiada … del …, cuadrada a tu objetivo",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Dieta guardada",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error guardando dieta",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Selecciona una fecha",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hay dieta guardada para hoy",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido copiar la dieta. Inténtalo de nuevo.",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Guardada · Ya es una de tus dietas",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error guardando favorita",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "warning",
+   "texto": "Aplicada \"…\" adaptada a tu día de …. El intra/post se ha quitado porque hoy no hay periworkout.",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "warning",
+   "texto": "Aplicada \"…\" adaptada a tu día de …, pero ….",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Aplicada \"…\" adaptada a tu día de …",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "warning",
+   "texto": "Aplicada \"…\", pero ….",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Aplicada \"…\" y ajustada a tus macros",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "info",
+   "texto": "El peri ha quedado vacío: añádelo con \"Sugiéreme un menú\".",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error al aplicar la favorita",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Ese día ya no está guardado",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido repetir ese día. Inténtalo de nuevo.",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No se pudo cuadrar la comida",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "warning",
+   "texto": "Comida cuadrada. …",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "warning",
+   "texto": "No se puede cuadrar sin quitar nada: ….… No se ha quitado ninguno.…",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Comida cuadrada a tus macros.…",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Favorita borrada",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido borrar la favorita. Inténtalo de nuevo.",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Guardada · \"…\" ya es una de tus comidas",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido guardar la comida. Inténtalo de nuevo.",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "\"…\" puesta tal cual",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "\"…\" puesta con las cantidades guardadas",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "\"…\" puesta y cuadrada a esta comida",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "warning",
+   "texto": "\"…\" puesta, pero no cuadra aquí: ….",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Comida borrada de favoritas",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Macros volcados en … - las demás comidas quedan bloqueadas",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "info",
+   "texto": "Volcado deshecho: cada comida vuelve a su objetivo.",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido recuadrar el día. Inténtalo de nuevo.",
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "¡Pago confirmado! Tu plan está activo",
+   "quien": "cliente",
+   "donde": "Onboarding",
+   "fichero": "frontend/src/pages/OnboardingPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No pudimos confirmar el pago. Si te cobraron, recarga en unos segundos.",
+   "quien": "cliente",
+   "donde": "Onboarding",
+   "fichero": "frontend/src/pages/OnboardingPage.jsx"
+  },
+  {
+   "tipo": "info",
+   "texto": "Checkout cancelado. Puedes elegir un plan cuando quieras.",
+   "quien": "cliente",
+   "donde": "Onboarding",
+   "fichero": "frontend/src/pages/OnboardingPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Selecciona un plan para continuar",
+   "quien": "cliente",
+   "donde": "Onboarding",
+   "fichero": "frontend/src/pages/OnboardingPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Necesitamos tu nombre para llamarte",
+   "quien": "equipo",
+   "donde": "Planes",
+   "fichero": "frontend/src/pages/PlanesPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Necesitamos un teléfono válido",
+   "quien": "equipo",
+   "donde": "Planes",
+   "fichero": "frontend/src/pages/PlanesPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido cargar los planes",
+   "quien": "equipo",
+   "donde": "Planes",
+   "fichero": "frontend/src/pages/PlanesPage.jsx"
+  },
+  {
+   "tipo": "info",
+   "texto": "Pago cancelado. Puedes elegir un plan cuando quieras.",
+   "quien": "equipo",
+   "donde": "Planes",
+   "fichero": "frontend/src/pages/PlanesPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido abrir el pago",
+   "quien": "equipo",
+   "donde": "Planes",
+   "fichero": "frontend/src/pages/PlanesPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "El nombre no puede estar vacío",
+   "quien": "cliente",
+   "donde": "Profile",
+   "fichero": "frontend/src/pages/ProfilePage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Ese email de contacto no parece un email",
+   "quien": "cliente",
+   "donde": "Profile",
+   "fichero": "frontend/src/pages/ProfilePage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Perfil actualizado",
+   "quien": "cliente",
+   "donde": "Profile",
+   "fichero": "frontend/src/pages/ProfilePage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "La nueva contraseña debe tener al menos 8 caracteres",
+   "quien": "cliente",
+   "donde": "Profile",
+   "fichero": "frontend/src/pages/ProfilePage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Las contraseñas nuevas no coinciden",
+   "quien": "cliente",
+   "donde": "Profile",
+   "fichero": "frontend/src/pages/ProfilePage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Contraseña cambiada",
+   "quien": "cliente",
+   "donde": "Profile",
+   "fichero": "frontend/src/pages/ProfilePage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No se ha podido guardar. Inténtalo otra vez.",
+   "quien": "cliente",
+   "donde": "Profile",
+   "fichero": "frontend/src/pages/ProfilePage.jsx"
+  },
+  {
+   "tipo": "info",
+   "texto": "Funcionalidad próximamente",
+   "quien": "cliente",
+   "donde": "Profile",
+   "fichero": "frontend/src/pages/ProfilePage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "«…» ya está en la lista",
+   "quien": "cliente",
+   "donde": "Questionnaire",
+   "fichero": "frontend/src/pages/QuestionnairePage.jsx"
+  },
+  {
+   "tipo": "warning",
+   "texto": "«…» no coincide con ningún alimento del catálogo: guardada, pero hoy no bloquea nada.",
+   "quien": "cliente",
+   "donde": "Questionnaire",
+   "fichero": "frontend/src/pages/QuestionnairePage.jsx"
+  },
+  {
+   "tipo": "info",
+   "texto": "Seguimos donde lo dejaste",
+   "quien": "cliente",
+   "donde": "Questionnaire",
+   "fichero": "frontend/src/pages/QuestionnairePage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "La foto pesa demasiado (máximo 8 MB)",
+   "quien": "cliente",
+   "donde": "Questionnaire",
+   "fichero": "frontend/src/pages/QuestionnairePage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Perfecto, seguimos con tu plan.",
+   "quien": "cliente",
+   "donde": "Questionnaire",
+   "fichero": "frontend/src/pages/QuestionnairePage.jsx"
+  },
+  {
+   "tipo": "info",
+   "texto": "Lo tenemos apuntado. Te escribimos para cerrarlo.",
+   "quien": "cliente",
+   "donde": "Questionnaire",
+   "fichero": "frontend/src/pages/QuestionnairePage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "¡Perfil completo! El equipo ya tiene toda la información.",
+   "quien": "cliente",
+   "donde": "Questionnaire",
+   "fichero": "frontend/src/pages/QuestionnairePage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No se pudieron guardar las medidas. Puedes añadirlas después en Seguimiento.",
+   "quien": "cliente",
+   "donde": "Questionnaire",
+   "fichero": "frontend/src/pages/QuestionnairePage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido cargar el test",
+   "quien": "cliente",
+   "donde": "QuizVenta",
+   "fichero": "frontend/src/pages/QuizVentaPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido calcular tu resultado",
+   "quien": "cliente",
+   "donde": "QuizVenta",
+   "fichero": "frontend/src/pages/QuizVentaPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido enviarlo. Inténtalo en un momento.",
+   "quien": "cliente",
+   "donde": "Recuperar",
+   "fichero": "frontend/src/pages/RecuperarPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Las dos contraseñas no coinciden",
+   "quien": "cliente",
+   "donde": "Recuperar",
+   "fichero": "frontend/src/pages/RecuperarPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "La contraseña debe tener al menos 8 caracteres",
+   "quien": "cliente",
+   "donde": "Recuperar",
+   "fichero": "frontend/src/pages/RecuperarPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido cargar tu ciclo",
+   "quien": "cliente",
+   "donde": "Renovacion",
+   "fichero": "frontend/src/pages/RenovacionPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido confirmar el pago. Si te han cobrado, recarga en unos segundos.",
+   "quien": "cliente",
+   "donde": "Renovacion",
+   "fichero": "frontend/src/pages/RenovacionPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Perfecto, seguimos. No tienes que hacer nada más.",
+   "quien": "cliente",
+   "donde": "Renovacion",
+   "fichero": "frontend/src/pages/RenovacionPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Te llamamos para verlo contigo. Dinos por aquí cuándo te viene bien.",
+   "quien": "cliente",
+   "donde": "Renovacion",
+   "fichero": "frontend/src/pages/RenovacionPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido crear tu informe",
+   "quien": "cliente",
+   "donde": "Reports",
+   "fichero": "frontend/src/pages/ReportsPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Pago hecho. Tu rutina ya es tuya.",
+   "quien": "cliente",
+   "donde": "Routine",
+   "fichero": "frontend/src/pages/RoutinePage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Entreno marcado.",
+   "quien": "cliente",
+   "donde": "Routine",
+   "fichero": "frontend/src/pages/RoutinePage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido marcar tu entreno. Inténtalo en un momento.",
+   "quien": "cliente",
+   "donde": "Routine",
+   "fichero": "frontend/src/pages/RoutinePage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Apuntado.",
+   "quien": "cliente",
+   "donde": "Routine",
+   "fichero": "frontend/src/pages/RoutinePage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "… pasa al ….",
+   "quien": "cliente",
+   "donde": "Routine",
+   "fichero": "frontend/src/pages/RoutinePage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "No hemos podido apuntar la recuperación. Inténtalo en un momento.",
+   "quien": "cliente",
+   "donde": "Routine",
+   "fichero": "frontend/src/pages/RoutinePage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error al cargar catálogo",
+   "quien": "equipo",
+   "donde": "SupplementsCatalog",
+   "fichero": "frontend/src/pages/SupplementsCatalogPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "El título es obligatorio",
+   "quien": "equipo",
+   "donde": "SupplementsCatalog",
+   "fichero": "frontend/src/pages/SupplementsCatalogPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Guardado",
+   "quien": "equipo",
+   "donde": "SupplementsCatalog",
+   "fichero": "frontend/src/pages/SupplementsCatalogPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error al guardar",
+   "quien": "equipo",
+   "donde": "SupplementsCatalog",
+   "fichero": "frontend/src/pages/SupplementsCatalogPage.jsx"
+  },
+  {
+   "tipo": "success",
+   "texto": "Desactivado",
+   "quien": "equipo",
+   "donde": "SupplementsCatalog",
+   "fichero": "frontend/src/pages/SupplementsCatalogPage.jsx"
+  },
+  {
+   "tipo": "error",
+   "texto": "Error",
+   "quien": "equipo",
+   "donde": "SupplementsCatalog",
+   "fichero": "frontend/src/pages/SupplementsCatalogPage.jsx"
+  }
+ ],
+ "dialogos": [
+  {
+   "modo": "confirm",
+   "titulo": "¿Seguro?",
+   "detalle": "",
+   "boton": "Sí, quitarla",
+   "peligro": true,
+   "quien": "cliente",
+   "donde": "PreferencesSetup",
+   "fichero": "frontend/src/components/nutrition/PreferencesSetup.jsx"
+  },
+  {
+   "modo": "confirm",
+   "titulo": "Tienes cambios sin guardar",
+   "detalle": "Si cierras ahora, tus preferencias se quedan como estaban.",
+   "boton": "Cerrar sin guardar",
+   "peligro": true,
+   "quien": "cliente",
+   "donde": "PreferencesSetup",
+   "fichero": "frontend/src/components/nutrition/PreferencesSetup.jsx"
+  },
+  {
+   "modo": "confirm",
+   "titulo": "Confírmame el peso",
+   "detalle": "",
+   "boton": "Sí, es correcto",
+   "peligro": false,
+   "quien": "cliente",
+   "donde": "FormularioReporte",
+   "fichero": "frontend/src/components/reports/FormularioReporte.jsx"
+  },
+  {
+   "modo": "confirm",
+   "titulo": "¿Borrar el menú?",
+   "detalle": "",
+   "boton": "Aceptar",
+   "peligro": true,
+   "quien": "cliente",
+   "donde": "confirm",
+   "fichero": "frontend/src/components/ui/confirm.jsx"
+  },
+  {
+   "modo": "prompt",
+   "titulo": "Motivo del rechazo",
+   "detalle": "",
+   "boton": "",
+   "peligro": false,
+   "quien": "cliente",
+   "donde": "confirm",
+   "fichero": "frontend/src/components/ui/confirm.jsx"
+  },
+  {
+   "modo": "prompt",
+   "titulo": "Rechazar la sugerencia",
+   "detalle": "Puedes explicar por qué, para que el cliente lo entienda.",
+   "boton": "Rechazar",
+   "peligro": true,
+   "quien": "equipo",
+   "donde": "AdminFoodSuggestions",
+   "fichero": "frontend/src/pages/AdminFoodSuggestionsPage.jsx"
+  },
+  {
+   "modo": "confirm",
+   "titulo": "¿Eliminar esta sugerencia?",
+   "detalle": "Se borra junto con sus fotos y no se puede deshacer.",
+   "boton": "Eliminar",
+   "peligro": true,
+   "quien": "equipo",
+   "donde": "AdminFoodSuggestions",
+   "fichero": "frontend/src/pages/AdminFoodSuggestionsPage.jsx"
+  },
+  {
+   "modo": "confirm",
+   "titulo": "¿Borrar este menú de la biblioteca?",
+   "detalle": "…. Deja de proponerse a los clientes.",
+   "boton": "Borrar",
+   "peligro": true,
+   "quien": "equipo",
+   "donde": "AdminMenus",
+   "fichero": "frontend/src/pages/AdminMenusPage.jsx"
+  },
+  {
+   "modo": "confirm",
+   "titulo": "Las proporciones no suman 1",
+   "detalle": "",
+   "boton": "Guardar igual",
+   "peligro": false,
+   "quien": "equipo",
+   "donde": "AdminMenus",
+   "fichero": "frontend/src/pages/AdminMenusPage.jsx"
+  },
+  {
+   "modo": "confirm",
+   "titulo": "¿Borrar el menú \"…\"?",
+   "detalle": "Desaparece del listado y deja de proponerse a los clientes.",
+   "boton": "Borrar",
+   "peligro": true,
+   "quien": "equipo",
+   "donde": "AdminMenus",
+   "fichero": "frontend/src/pages/AdminMenusPage.jsx"
+  },
+  {
+   "modo": "confirm",
+   "titulo": "¿Borrar esta tarea?",
+   "detalle": "Desaparece de la lista de quien la tenía. Si ya se hizo, márcala hecha en vez de borrarla.",
+   "boton": "Borrar",
+   "peligro": true,
+   "quien": "equipo",
+   "donde": "AdminTareas",
+   "fichero": "frontend/src/pages/AdminTareasPage.jsx"
+  },
+  {
+   "modo": "confirm",
+   "titulo": "¿Dar de baja a …?",
+   "detalle": "No podrá entrar, pero los datos se conservan y se puede reactivar cuando quieras.",
+   "boton": "Dar de baja",
+   "peligro": true,
+   "quien": "equipo",
+   "donde": "AdminUsers",
+   "fichero": "frontend/src/pages/AdminUsersPage.jsx"
+  },
+  {
+   "modo": "confirm",
+   "titulo": "¿Generar una contraseña nueva para …?",
+   "detalle": "La actual dejará de funcionar. Verás la nueva una sola vez para pasársela.",
+   "boton": "Generar",
+   "peligro": false,
+   "quien": "equipo",
+   "donde": "AdminUsers",
+   "fichero": "frontend/src/pages/AdminUsersPage.jsx"
+  },
+  {
+   "modo": "confirm",
+   "titulo": "¿Eliminar esta entrada del historial?",
+   "detalle": "Se borra el registro de ese cambio. No afecta a los macros que el cliente tiene ahora.",
+   "boton": "Eliminar",
+   "peligro": true,
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "modo": "confirm",
+   "titulo": "¿Restablecer la contraseña?",
+   "detalle": "Se genera una clave temporal nueva y se te enseña aquí para que se la pases tú.",
+   "boton": "Restablecer",
+   "peligro": true,
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "modo": "confirm",
+   "titulo": "¿Dar de baja a este usuario?",
+   "detalle": "No podrá entrar, pero los datos se conservan y se puede reactivar cuando quieras.",
+   "boton": "Dar de baja",
+   "peligro": true,
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "modo": "confirm",
+   "titulo": "Ese peso da un salto grande",
+   "detalle": "… Si es un dedazo, corrígelo: de este peso salen",
+   "boton": "Es correcto",
+   "peligro": false,
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "modo": "confirm",
+   "titulo": "¿Guardar la suplementación?",
+   "detalle": "",
+   "boton": "Aceptar",
+   "peligro": false,
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "modo": "confirm",
+   "titulo": "¿Borrar el protocolo del …?",
+   "detalle": "Se borra ese registro del histórico. El resto de versiones se queda.",
+   "boton": "Borrar",
+   "peligro": false,
+   "quien": "equipo",
+   "donde": "ClientDetail",
+   "fichero": "frontend/src/pages/ClientDetailPage.jsx"
+  },
+  {
+   "modo": "confirm",
+   "titulo": "¿Quitar …?",
+   "detalle": "Bajar de su cantidad mínima lo saca de la comida. Los demás ingredientes se quedan como están.",
+   "boton": "Quitar",
+   "peligro": true,
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "modo": "confirm",
+   "titulo": "¿Quitar …?",
+   "detalle": "Sale de esta comida. Los demás ingredientes se quedan como están.",
+   "boton": "Quitar",
+   "peligro": true,
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "modo": "confirm",
+   "titulo": "¿Vaciar …?",
+   "detalle": "",
+   "boton": "Vaciar",
+   "peligro": true,
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "modo": "confirm",
+   "titulo": "¿Borrar \"…\"?",
+   "detalle": "La favorita se borra para siempre. Los días que montaste con ella no se tocan.",
+   "boton": "Borrar",
+   "peligro": true,
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "modo": "confirm",
+   "titulo": "¿Borrar \"…\"?",
+   "detalle": "Se borra para siempre. Los días donde ya la usaste no se tocan.",
+   "boton": "Borrar",
+   "peligro": true,
+   "quien": "cliente",
+   "donde": "Nutrition",
+   "fichero": "frontend/src/pages/NutritionPage.jsx"
+  },
+  {
+   "modo": "confirm",
+   "titulo": "¿Desactivar \"…\"?",
+   "detalle": "Deja de estar disponible para asignarlo a clientes. Se puede volver a activar.",
+   "boton": "Desactivar",
+   "peligro": true,
+   "quien": "equipo",
+   "donde": "SupplementsCatalog",
+   "fichero": "frontend/src/pages/SupplementsCatalogPage.jsx"
+  }
+ ],
+ "avisos": [
+  {
+   "titulo": "Estos son tus macros provisionales.",
+   "mensaje": "Unas preguntas más y recibirás los definitivos.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Mañana empiezas",
+   "mensaje": "Tu rutina ya está cargada.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Tu próximo ajuste es el …",
+   "mensaje": "",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Tu rutina acaba el …",
+   "mensaje": "Renuévala y sigues sin parar.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Tu ciclo acaba en una semana",
+   "mensaje": "Mira lo que has cambiado.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Te falta terminar tu perfil",
+   "mensaje": "Sin tus fotos y tus medidas no podemos ponerte los macros buenos ni crearte la rutina.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Nos falta lo tuyo para poder empezar",
+   "mensaje": "Son unas preguntas, tus fotos y tus medidas. Con eso ya trabajamos.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "¿Te preparamos la rutina del mes?",
+   "mensaje": "Nos dijiste que te lo preguntáramos esta semana. Escríbenos y te la dejamos lista.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Lo de tu rutina del mes",
+   "mensaje": "Quedamos en hablarlo esta semana. Dinos algo y te la preparamos.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Han pasado cuatro semanas",
+   "mensaje": "Buen momento para repetir ….",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Toca ponerse al día",
+   "mensaje": "Hace cuatro semanas de ….",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Sin fotos no podemos comparar",
+   "mensaje": "Te lleva un minuto y es lo que de verdad enseña lo que ha cambiado.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Te faltan las fotos del reporte",
+   "mensaje": "La báscula no lo cuenta todo.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Hace tiempo que no te ajustamos",
+   "mensaje": "Cierra unos días seguidos y le echamos un ojo.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Llevas 5 días sin apuntar nada",
+   "mensaje": "Con dos toques al día nos vale.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Te hemos perdido la pista",
+   "mensaje": "Cinco días sin cerrar. ¿Todo bien?",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "¿Todo bien?",
+   "mensaje": "Tu plan sigue aquí. Retomamos cuando quieras.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Cuando quieras volver, aquí está",
+   "mensaje": "Sin prisa.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Configura lo que comes",
+   "mensaje": "Marca lo que te gusta y lo que no, y te lo ponemos más fácil.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Dinos qué te gusta comer",
+   "mensaje": "Son 2 minutos y la calculadora te sugerirá mejor.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "¿Volvemos?",
+   "mensaje": "Llevas un mes por tu cuenta. Si quieres que te llevemos otra vez, aquí estamos.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Un mes ya por tu cuenta",
+   "mensaje": "Cuando quieras retomar un plan con seguimiento, dínoslo.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Mañana empiezas",
+   "mensaje": "Tu rutina y tus macros ya están cargados.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Mañana arrancamos",
+   "mensaje": "Lo tienes todo dentro. Nos vemos en doce semanas.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Tu reporte quincenal está abierto",
+   "mensaje": "Unas breves preguntas para ajustar tus macros si hace falta. Hasta mañana a las 20:00.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Toca quincenal",
+   "mensaje": "Cuatro preguntas. Tienes hasta mañana a las 20:00.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Cuéntanos estas dos semanas",
+   "mensaje": "Es rápido, y con eso decidimos si te tocamos algo.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Último día para tu quincenal",
+   "mensaje": "Se cierra hoy a las 20:00.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Hoy cierra tu quincenal",
+   "mensaje": "A las 20:00. Sin él no sabemos cómo has ido estas dos semanas.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Tu reporte semanal está abierto",
+   "mensaje": "Unas breves preguntas para ajustar tu semana que viene. Tienes hasta mañana a las 10:00.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Toca semanal",
+   "mensaje": "Cuatro preguntas. Tienes hasta mañana a las 10:00.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Cuéntanos esta semana",
+   "mensaje": "Es rápido, y con eso decidimos si te tocamos algo.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Última hora para tu semanal",
+   "mensaje": "Se cierra hoy a las 10:00.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Hoy cierra tu semanal",
+   "mensaje": "A las 10:00. Sin él no sabemos cómo has ido esta semana.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Tu reporte mensual está abierto",
+   "mensaje": "Tus fotos, tus medidas y unas preguntas. Hasta el lunes a las 18:00.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Toca reporte mensual",
+   "mensaje": "Este es el importante. Tienes hasta el lunes a las 18:00.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Es el momento de las fotos",
+   "mensaje": "Tu reporte mensual está abierto hasta el lunes a las 18:00.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Último día para tu reporte mensual",
+   "mensaje": "Se cierra mañana a las 18:00 y sin él no podemos ajustarte.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Mañana cierra tu mensual",
+   "mensaje": "A las 18:00. Es el que marca lo que viene después.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "No nos llegó tu reporte",
+   "mensaje": "Sin él no podemos ajustarte. Dinos si lo mandas esta semana o te lo aplazamos.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Se te pasó el reporte",
+   "mensaje": "No pasa nada: dinos si lo haces esta semana y te lo volvemos a abrir.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Tu ciclo acaba en una semana",
+   "mensaje": "Mira lo que has cambiado. Si renuevas ya, seguimos sin cortes: el ciclo nuevo empieza donde acaba este.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Queda una semana",
+   "mensaje": "Compara tu primera foto con la de ahora, y deja renovado lo que viene: no pierdes ni un día de los pagados.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Tu ciclo ha terminado",
+   "mensaje": "Renueva tu plan y sigues sin parar.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Se acabaron tus 12 semanas",
+   "mensaje": "Cuando quieras seguimos: tienes la renovación dentro.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Te hemos mandado el correo de novedades",
+   "mensaje": "Échale un ojo al correo: va lo de esta semana.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "El correo del viernes ya está fuera",
+   "mensaje": "Mira tu bandeja: novedades de esta semana.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Hoy toca pesarte y mañana también.",
+   "mensaje": "Hacemos la media y ese será tu peso semanal, lo que debes registrar semana a semana.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Recuerda pesarte hoy también.",
+   "mensaje": "",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Ayer te tocaba pesarte y no registraste el dato.",
+   "mensaje": "Hazlo hoy y mañana, no te olvides.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Cierra tu día",
+   "mensaje": "Dos toques y listo.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "¿Cómo fuiste hoy?",
+   "mensaje": "Un minuto y lo tenemos.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Te falta cerrar el día",
+   "mensaje": "Lo que no apuntas, no lo vemos.",
+   "quien": "cliente",
+   "fichero": "backend/core/avisos_cliente.py"
+  },
+  {
+   "titulo": "Seguir igual",
+   "mensaje": "",
+   "quien": "cliente",
+   "fichero": "backend/core/renovacion.py"
+  },
+  {
+   "titulo": "Cambiar a",
+   "mensaje": "",
+   "quien": "cliente",
+   "fichero": "backend/core/renovacion.py"
+  },
+  {
+   "titulo": "Dejarlo por ahora",
+   "mensaje": "",
+   "quien": "cliente",
+   "fichero": "backend/core/renovacion.py"
+  },
+  {
+   "titulo": "Este mes no te toco nada",
+   "mensaje": "Vas bien con lo que tienes. Seguimos igual.",
+   "quien": "cliente",
+   "fichero": "backend/routes/notifications.py"
+  },
+  {
+   "titulo": "Ya tienes tus macros nuevos",
+   "mensaje": "",
+   "quien": "cliente",
+   "fichero": "backend/routes/notifications.py"
+  },
+  {
+   "titulo": "Te he cambiado la suplementación",
+   "mensaje": "Míralo antes de comprar nada.",
+   "quien": "cliente",
+   "fichero": "backend/routes/notifications.py"
+  },
+  {
+   "titulo": "Tienes suplementación nueva",
+   "mensaje": "Míralo antes de comprar nada.",
+   "quien": "cliente",
+   "fichero": "backend/routes/notifications.py"
+  },
+  {
+   "titulo": "Ya tienes tu rutina",
+   "mensaje": "La de este mes. Empiezas el lunes.",
+   "quien": "cliente",
+   "fichero": "backend/routes/notifications.py"
+  },
+  {
+   "titulo": "Tienes ajustes nuevos",
+   "mensaje": "Los he hecho con tu reporte.",
+   "quien": "cliente",
+   "fichero": "backend/routes/notifications.py"
+  },
+  {
+   "titulo": "Tu informe está listo",
+   "mensaje": "Con mi feedback y tus macros nuevos.",
+   "quien": "cliente",
+   "fichero": "backend/routes/notifications.py"
+  },
+  {
+   "titulo": "Ya tienes tu informe",
+   "mensaje": "Te cuento lo que veo en tus datos de este mes.",
+   "quien": "cliente",
+   "fichero": "backend/routes/notifications.py"
+  },
+  {
+   "titulo": "Te lo he aplazado 7 días",
+   "mensaje": "Tu reporte se vuelve a abrir el viernes que viene. Sigue registrando como siempre.",
+   "quien": "cliente",
+   "fichero": "backend/routes/notifications.py"
+  }
+ ],
+ "correos": [],
+ "errores": [
+  {
+   "texto": "Foto no encontrada",
+   "quien": "cliente",
+   "fichero": "backend/core/fotos.py"
+  },
+  {
+   "texto": "Esa foto no es tuya.",
+   "quien": "cliente",
+   "fichero": "backend/core/fotos.py"
+  },
+  {
+   "texto": "No se ha podido cargar la foto.",
+   "quien": "cliente",
+   "fichero": "backend/core/fotos.py"
+  },
+  {
+   "texto": "Perfil no encontrado",
+   "quien": "cliente",
+   "fichero": "backend/core/plan_access.py"
+  },
+  {
+   "texto": "Tu suscripción no está activa. Regulariza el pago para acceder a esta función.",
+   "quien": "cliente",
+   "fichero": "backend/core/plan_access.py"
+  },
+  {
+   "texto": "Tu plan no incluye esta función. Cambia de plan para activarla.",
+   "quien": "cliente",
+   "fichero": "backend/core/plan_access.py"
+  },
+  {
+   "texto": "Demasiados intentos. Espera unos minutos y vuelve a probar.",
+   "quien": "cliente",
+   "fichero": "backend/core/rate_limit.py"
+  },
+  {
+   "texto": "Token expirado",
+   "quien": "cliente",
+   "fichero": "backend/core/security.py"
+  },
+  {
+   "texto": "Token inválido",
+   "quien": "cliente",
+   "fichero": "backend/core/security.py"
+  },
+  {
+   "texto": "Usuario no encontrado",
+   "quien": "cliente",
+   "fichero": "backend/core/security.py"
+  },
+  {
+   "texto": "Cuenta desactivada",
+   "quien": "cliente",
+   "fichero": "backend/core/security.py"
+  },
+  {
+   "texto": "Acceso denegado",
+   "quien": "cliente",
+   "fichero": "backend/core/security.py"
+  },
+  {
+   "texto": "Cliente no encontrado",
+   "quien": "cliente",
+   "fichero": "backend/core/security.py"
+  },
+  {
+   "texto": "Solo se puede actuar como un cliente",
+   "quien": "cliente",
+   "fichero": "backend/core/security.py"
+  },
+  {
+   "texto": "Solo los administradores pueden acceder a esta sección",
+   "quien": "cliente",
+   "fichero": "backend/core/security.py"
+  },
+  {
+   "texto": "Esto solo puede borrarlo el administrador",
+   "quien": "cliente",
+   "fichero": "backend/core/security.py"
+  },
+  {
+   "texto": "No tienes acceso a este cliente",
+   "quien": "cliente",
+   "fichero": "backend/core/security.py"
+  },
+  {
+   "texto": "… está bloqueada: el proyecto está configurado solo para Stripe test mode.",
+   "quien": "cliente",
+   "fichero": "backend/core/stripe_billing.py"
+  },
+  {
+   "texto": "Plan no válido",
+   "quien": "cliente",
+   "fichero": "backend/core/stripe_billing.py"
+  },
+  {
+   "texto": "El plan … no está disponible para compra en este momento.",
+   "quien": "cliente",
+   "fichero": "backend/core/stripe_billing.py"
+  },
+  {
+   "texto": "Tienes un cobro de tu plan que no llegó a entrar, y hasta",
+   "quien": "cliente",
+   "fichero": "backend/core/stripe_billing.py"
+  },
+  {
+   "texto": "Tu plan sigue con el cobro automático de antes, así que este cambio",
+   "quien": "cliente",
+   "fichero": "backend/core/stripe_billing.py"
+  },
+  {
+   "texto": "Revisión no encontrada",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "No hemos podido generar la sugerencia, vuelve a intentarlo en un momento.",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "Sin dieta en esa fecha",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "Los macros no se guardan por aquí: usa la pestaña de Macros",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "Este cliente ya tiene coach; solo su coach actual puede cambiarlo",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "Solo puedes asignarte a ti mismo clientes sin coach",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "Entrenador no válido",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "El ciclo tiene que ser un número de semanas entre 1 y 52",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "La semana de entrada tiene que estar entre 1 y 52",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "El calendario tiene que ser un objeto",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "El patrón tiene que ser una lista de semanas con los tipos de reporte de la app",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "No hay nada que cambiar",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "Falta la fecha",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "El % graso tiene que ser un número",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "Un % graso fuera de 3-60 no es un dato, es un error",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "La fecha del peso tiene que ser AAAA-MM-DD",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "Entrada de historial no encontrada",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "Faltan campos: peso, sexo, porcentaje_graso, objetivo",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "Ese email ya está en uso",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "Rol inválido. Usa: …",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "El plan '…' no es asignable como membresía",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "No puedes darte de baja a ti mismo",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "Sugerencia no encontrada",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "Esta sugerencia ya está aprobada",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "Ponle una categoría antes de aprobarlo: de ella depende qué macros le",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "El nombre es obligatorio",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "Ponle una categoría: de ella depende qué macros le cuentan al cliente.",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "Alimento no encontrado",
+   "quien": "equipo",
+   "fichero": "backend/routes/admin.py"
+  },
+  {
+   "texto": "Email ya registrado",
+   "quien": "cliente",
+   "fichero": "backend/routes/auth.py"
+  },
+  {
+   "texto": "Credenciales inválidas",
+   "quien": "cliente",
+   "fichero": "backend/routes/auth.py"
+  },
+  {
+   "texto": "Cuenta desactivada. Contacta con tu entrenador.",
+   "quien": "cliente",
+   "fichero": "backend/routes/auth.py"
+  },
+  {
+   "texto": "Cuerpo inválido",
+   "quien": "cliente",
+   "fichero": "backend/routes/auth.py"
+  },
+  {
+   "texto": "El teléfono debe ser texto.",
+   "quien": "cliente",
+   "fichero": "backend/routes/auth.py"
+  },
+  {
+   "texto": "Las contraseñas deben ser texto.",
+   "quien": "cliente",
+   "fichero": "backend/routes/auth.py"
+  },
+  {
+   "texto": "La nueva contraseña debe tener al menos 8 caracteres",
+   "quien": "cliente",
+   "fichero": "backend/routes/auth.py"
+  },
+  {
+   "texto": "La contraseña actual no es correcta",
+   "quien": "cliente",
+   "fichero": "backend/routes/auth.py"
+  },
+  {
+   "texto": "La contraseña debe tener al menos 8 caracteres",
+   "quien": "cliente",
+   "fichero": "backend/routes/auth.py"
+  },
+  {
+   "texto": "Este enlace ya no vale. Pide otro.",
+   "quien": "cliente",
+   "fichero": "backend/routes/auth.py"
+  },
+  {
+   "texto": "Este enlace ha caducado. Pide otro.",
+   "quien": "cliente",
+   "fichero": "backend/routes/auth.py"
+  },
+  {
+   "texto": "Este plan ya no está disponible para nuevas contrataciones.",
+   "quien": "cliente",
+   "fichero": "backend/routes/billing.py"
+  },
+  {
+   "texto": "No sabemos tu precio de renovación. Escríbenos y te lo dejamos listo.",
+   "quien": "cliente",
+   "fichero": "backend/routes/billing.py"
+  },
+  {
+   "texto": "Este plan se contrata por llamada: agenda la tuya y te mandamos el enlace de pago.",
+   "quien": "cliente",
+   "fichero": "backend/routes/billing.py"
+  },
+  {
+   "texto": "Este plan no se puede pagar ahora mismo: su precio está mal",
+   "quien": "cliente",
+   "fichero": "backend/routes/billing.py"
+  },
+  {
+   "texto": "No hemos podido abrir el pago. Inténtalo en un momento.",
+   "quien": "cliente",
+   "fichero": "backend/routes/billing.py"
+  },
+  {
+   "texto": "Dinos el motivo, aunque sea «otra cosa».",
+   "quien": "cliente",
+   "fichero": "backend/routes/billing.py"
+  },
+  {
+   "texto": "Esa salida no existe.",
+   "quien": "cliente",
+   "fichero": "backend/routes/billing.py"
+  },
+  {
+   "texto": "Tu plan ya incluye entrenador: tus macros los revisa él.",
+   "quien": "cliente",
+   "fichero": "backend/routes/billing.py"
+  },
+  {
+   "texto": "Ya tienes una revisión pendiente de que la vea tu entrenador.",
+   "quien": "cliente",
+   "fichero": "backend/routes/billing.py"
+  },
+  {
+   "texto": "Tu plan ya incluye entrenador: tus macros los ajusta él.",
+   "quien": "cliente",
+   "fichero": "backend/routes/billing.py"
+  },
+  {
+   "texto": "Ya tienes un ajuste a medida pagado y pendiente de que lo preparemos.",
+   "quien": "cliente",
+   "fichero": "backend/routes/billing.py"
+  },
+  {
+   "texto": "Dinos si la quieres básica o avanzada.",
+   "quien": "cliente",
+   "fichero": "backend/routes/billing.py"
+  },
+  {
+   "texto": "Tu plan ya incluye la rutina: no tienes que comprarla.",
+   "quien": "cliente",
+   "fichero": "backend/routes/billing.py"
+  },
+  {
+   "texto": "Ya tienes una rutina activa.",
+   "quien": "cliente",
+   "fichero": "backend/routes/billing.py"
+  },
+  {
+   "texto": "Ya nos pediste tu rutina y estamos con ella. Te llega en unos días.",
+   "quien": "cliente",
+   "fichero": "backend/routes/billing.py"
+  },
+  {
+   "texto": "La rutina de este mes todavía no está lista. En cuanto la tengamos",
+   "quien": "cliente",
+   "fichero": "backend/routes/billing.py"
+  },
+  {
+   "texto": "session_id es requerido",
+   "quien": "cliente",
+   "fichero": "backend/routes/billing.py"
+  },
+  {
+   "texto": "No se pudo verificar el pago. Inténtalo de nuevo en unos minutos.",
+   "quien": "cliente",
+   "fichero": "backend/routes/billing.py"
+  },
+  {
+   "texto": "La sesión no pertenece a este usuario",
+   "quien": "cliente",
+   "fichero": "backend/routes/billing.py"
+  },
+  {
+   "texto": "Este cliente todavía no tiene un customer de Stripe sincronizado.",
+   "quien": "cliente",
+   "fichero": "backend/routes/billing.py"
+  },
+  {
+   "texto": "Webhook no disponible",
+   "quien": "cliente",
+   "fichero": "backend/routes/billing.py"
+  },
+  {
+   "texto": "Falta Stripe-Signature",
+   "quien": "cliente",
+   "fichero": "backend/routes/billing.py"
+  },
+  {
+   "texto": "Payload de webhook inválido",
+   "quien": "cliente",
+   "fichero": "backend/routes/billing.py"
+  },
+  {
+   "texto": "Firma de webhook inválida",
+   "quien": "cliente",
+   "fichero": "backend/routes/billing.py"
+  },
+  {
+   "texto": "No se encontró ningún customer en Stripe para este email.",
+   "quien": "cliente",
+   "fichero": "backend/routes/billing.py"
+  },
+  {
+   "texto": "Alerta no encontrada",
+   "quien": "cliente",
+   "fichero": "backend/routes/billing.py"
+  },
+  {
+   "texto": "Perfil de cliente no encontrado",
+   "quien": "cliente",
+   "fichero": "backend/routes/calculator.py"
+  },
+  {
+   "texto": "No tienes macros asignados",
+   "quien": "cliente",
+   "fichero": "backend/routes/calculator.py"
+  },
+  {
+   "texto": "Falta la lista de categorías marcadas.",
+   "quien": "cliente",
+   "fichero": "backend/routes/calculator.py"
+  },
+  {
+   "texto": "Formato de imagen no admitido (…). Usa JPEG, PNG, WebP o HEIC.",
+   "quien": "cliente",
+   "fichero": "backend/routes/calculator.py"
+  },
+  {
+   "texto": "La foto pesa … KB; el máximo permitido es … MB.",
+   "quien": "cliente",
+   "fichero": "backend/routes/calculator.py"
+  },
+  {
+   "texto": "Solo puedes sugerir … alimentos por semana. Vuelve a intentarlo la próxima semana.",
+   "quien": "cliente",
+   "fichero": "backend/routes/calculator.py"
+  },
+  {
+   "texto": "Sin permiso para ver esta foto",
+   "quien": "cliente",
+   "fichero": "backend/routes/calculator.py"
+  },
+  {
+   "texto": "No hay macros objetivo para esta comida",
+   "quien": "cliente",
+   "fichero": "backend/routes/calculator.py"
+  },
+  {
+   "texto": "No hay alimentos que cuadrar.",
+   "quien": "cliente",
+   "fichero": "backend/routes/calculator.py"
+  },
+  {
+   "texto": "No se pudo cuadrar: algún alimento ya no está en el catálogo.",
+   "quien": "cliente",
+   "fichero": "backend/routes/calculator.py"
+  },
+  {
+   "texto": "Menú no encontrado",
+   "quien": "cliente",
+   "fichero": "backend/routes/calculator.py"
+  },
+  {
+   "texto": "No se pudo montar el menú (algún alimento ya no existe)",
+   "quien": "cliente",
+   "fichero": "backend/routes/calculator.py"
+  },
+  {
+   "texto": "mealKey o tipo_comida inválido",
+   "quien": "cliente",
+   "fichero": "backend/routes/calculator.py"
+  },
+  {
+   "texto": "Esta sesión de chat no te pertenece.",
+   "quien": "cliente",
+   "fichero": "backend/routes/chatbot.py"
+  },
+  {
+   "texto": "session_id requerido",
+   "quien": "cliente",
+   "fichero": "backend/routes/chatbot.py"
+  },
+  {
+   "texto": "No hay dieta configurada. Configura el día y añade alimentos antes de volcar.",
+   "quien": "cliente",
+   "fichero": "backend/routes/chatbot.py"
+  },
+  {
+   "texto": "Fecha inválida. Usa el formato YYYY-MM-DD.",
+   "quien": "cliente",
+   "fichero": "backend/routes/chatbot.py"
+  },
+  {
+   "texto": "No hay dieta configurada para exportar. Primero configura tu día y añade alimentos.",
+   "quien": "cliente",
+   "fichero": "backend/routes/chatbot.py"
+  },
+  {
+   "texto": "No hay ningún usuario con ese correo",
+   "quien": "cliente",
+   "fichero": "backend/routes/chatbot.py"
+  },
+  {
+   "texto": "La fecha va como 2026-08-17",
+   "quien": "cliente",
+   "fichero": "backend/routes/chatbot.py"
+  },
+  {
+   "texto": "Tipo invalido. Usa uno de: …",
+   "quien": "cliente",
+   "fichero": "backend/routes/checkins.py"
+  },
+  {
+   "texto": "Tipo invalido",
+   "quien": "cliente",
+   "fichero": "backend/routes/checkins.py"
+  },
+  {
+   "texto": "Check-in no encontrado",
+   "quien": "cliente",
+   "fichero": "backend/routes/checkins.py"
+  },
+  {
+   "texto": "Tipo de archivo no permitido: …. Sube JPEG, PNG, WebP o HEIC.",
+   "quien": "cliente",
+   "fichero": "backend/routes/checkins.py"
+  },
+  {
+   "texto": "El archivo está vacío.",
+   "quien": "cliente",
+   "fichero": "backend/routes/checkins.py"
+  },
+  {
+   "texto": "No se encontró el perfil de cliente.",
+   "quien": "cliente",
+   "fichero": "backend/routes/checkins.py"
+  },
+  {
+   "texto": "Esta foto viene de tu etapa anterior y no se puede borrar desde aquí.",
+   "quien": "cliente",
+   "fichero": "backend/routes/checkins.py"
+  },
+  {
+   "texto": "Esta es tu foto inicial y no se puede borrar: es contra la que se comparan las demás.",
+   "quien": "cliente",
+   "fichero": "backend/routes/checkins.py"
+  },
+  {
+   "texto": "Tu diario todavía no está disponible.",
+   "quien": "cliente",
+   "fichero": "backend/routes/diary.py"
+  },
+  {
+   "texto": "Nombre requerido",
+   "quien": "cliente",
+   "fichero": "backend/routes/diets.py"
+  },
+  {
+   "texto": "Falta saber de qué comida es",
+   "quien": "cliente",
+   "fichero": "backend/routes/diets.py"
+  },
+  {
+   "texto": "Esta comida está vacía. Ponle algo antes de guardarla.",
+   "quien": "cliente",
+   "fichero": "backend/routes/diets.py"
+  },
+  {
+   "texto": "Este día está vacío. Monta al menos una comida antes de guardarlo.",
+   "quien": "cliente",
+   "fichero": "backend/routes/diets.py"
+  },
+  {
+   "texto": "Favorita no encontrada",
+   "quien": "cliente",
+   "fichero": "backend/routes/diets.py"
+  },
+  {
+   "texto": "Año o mes fuera de rango.",
+   "quien": "cliente",
+   "fichero": "backend/routes/diets.py"
+  },
+  {
+   "texto": "distribution_targets debe ser un objeto.",
+   "quien": "cliente",
+   "fichero": "backend/routes/diets.py"
+  },
+  {
+   "texto": "Dime qué comida marco (C1 a C9, Intra o Post).",
+   "quien": "cliente",
+   "fichero": "backend/routes/diets.py"
+  },
+  {
+   "texto": "Eso es muy largo para un extra. Resúmelo en una línea.",
+   "quien": "cliente",
+   "fichero": "backend/routes/diets.py"
+  },
+  {
+   "texto": "Escribe qué te has comido.",
+   "quien": "cliente",
+   "fichero": "backend/routes/diets.py"
+  },
+  {
+   "texto": "Ese alimento no está en el catálogo.",
+   "quien": "cliente",
+   "fichero": "backend/routes/diets.py"
+  },
+  {
+   "texto": "Dime cuánto ha sido, en gramos o en unidades.",
+   "quien": "cliente",
+   "fichero": "backend/routes/diets.py"
+  },
+  {
+   "texto": "Esa cantidad no puede ser. Revísala.",
+   "quien": "cliente",
+   "fichero": "backend/routes/diets.py"
+  },
+  {
+   "texto": "Ese extra ya no está apuntado.",
+   "quien": "cliente",
+   "fichero": "backend/routes/diets.py"
+  },
+  {
+   "texto": "La fecha de inicio va antes que la de fin.",
+   "quien": "cliente",
+   "fichero": "backend/routes/diets.py"
+  },
+  {
+   "texto": "Ese periodo es demasiado largo. Pide como mucho un año de una vez.",
+   "quien": "cliente",
+   "fichero": "backend/routes/diets.py"
+  },
+  {
+   "texto": "No hay dieta guardada para la fecha origen",
+   "quien": "cliente",
+   "fichero": "backend/routes/diets.py"
+  },
+  {
+   "texto": "Faltan parámetros",
+   "quien": "cliente",
+   "fichero": "backend/routes/diets.py"
+  },
+  {
+   "texto": "Dieta origen no encontrada",
+   "quien": "cliente",
+   "fichero": "backend/routes/diets.py"
+  },
+  {
+   "texto": "Comida origen no encontrada",
+   "quien": "cliente",
+   "fichero": "backend/routes/diets.py"
+  },
+  {
+   "texto": "Dieta no encontrada",
+   "quien": "cliente",
+   "fichero": "backend/routes/diets.py"
+  },
+  {
+   "texto": "No hay dieta guardada para este día",
+   "quien": "cliente",
+   "fichero": "backend/routes/diets.py"
+  },
+  {
+   "texto": "La dieta está vacía",
+   "quien": "cliente",
+   "fichero": "backend/routes/diets.py"
+  },
+  {
+   "texto": "Escribe un correo para que podamos avisarte",
+   "quien": "equipo",
+   "fichero": "backend/routes/leads.py"
+  },
+  {
+   "texto": "Nombre es obligatorio",
+   "quien": "equipo",
+   "fichero": "backend/routes/leads.py"
+  },
+  {
+   "texto": "Ese email ya es un cliente de la app",
+   "quien": "equipo",
+   "fichero": "backend/routes/leads.py"
+  },
+  {
+   "texto": "Ya existe un lead con ese email (…, estado: …)",
+   "quien": "equipo",
+   "fichero": "backend/routes/leads.py"
+  },
+  {
+   "texto": "Lead no encontrado",
+   "quien": "equipo",
+   "fichero": "backend/routes/leads.py"
+  },
+  {
+   "texto": "Ese plan ya no se contrata.",
+   "quien": "equipo",
+   "fichero": "backend/routes/leads.py"
+  },
+  {
+   "texto": "Ese plan no tiene precio para cobrar.",
+   "quien": "equipo",
+   "fichero": "backend/routes/leads.py"
+  },
+  {
+   "texto": "Estado no válido. Usa: …",
+   "quien": "equipo",
+   "fichero": "backend/routes/leads.py"
+  },
+  {
+   "texto": "Motivo no válido. Usa: …",
+   "quien": "equipo",
+   "fichero": "backend/routes/leads.py"
+  },
+  {
+   "texto": "El responsable debe ser un miembro del equipo",
+   "quien": "equipo",
+   "fichero": "backend/routes/leads.py"
+  },
+  {
+   "texto": "La nota no puede estar vacía",
+   "quien": "equipo",
+   "fichero": "backend/routes/leads.py"
+  },
+  {
+   "texto": "Este lead ya fue convertido",
+   "quien": "equipo",
+   "fichero": "backend/routes/leads.py"
+  },
+  {
+   "texto": "El lead necesita email para convertirse en cliente",
+   "quien": "equipo",
+   "fichero": "backend/routes/leads.py"
+  },
+  {
+   "texto": "Ya existe un usuario con email …",
+   "quien": "equipo",
+   "fichero": "backend/routes/leads.py"
+  },
+  {
+   "texto": "Dime con qué plan entra. Se puede contratar: …",
+   "quien": "equipo",
+   "fichero": "backend/routes/leads.py"
+  },
+  {
+   "texto": "'…' ya no se contrata. Un alta nueva entra con uno de estos:",
+   "quien": "equipo",
+   "fichero": "backend/routes/leads.py"
+  },
+  {
+   "texto": "El webhook de GHL no está configurado (falta GHL_WEBHOOK_SECRET).",
+   "quien": "equipo",
+   "fichero": "backend/routes/leads.py"
+  },
+  {
+   "texto": "Webhook secret inválido",
+   "quien": "equipo",
+   "fichero": "backend/routes/leads.py"
+  },
+  {
+   "texto": "No hay ningún admin para recibir el mensaje",
+   "quien": "cliente",
+   "fichero": "backend/routes/messages.py"
+  },
+  {
+   "texto": "Solo se pueden adjuntar imágenes (JPEG, PNG, WebP o HEIC).",
+   "quien": "cliente",
+   "fichero": "backend/routes/messages.py"
+  },
+  {
+   "texto": "La imagen pesa … KB y el máximo son",
+   "quien": "cliente",
+   "fichero": "backend/routes/messages.py"
+  },
+  {
+   "texto": "No encontramos esa imagen.",
+   "quien": "cliente",
+   "fichero": "backend/routes/messages.py"
+  },
+  {
+   "texto": "Esta imagen no es de una conversación tuya.",
+   "quien": "cliente",
+   "fichero": "backend/routes/messages.py"
+  },
+  {
+   "texto": "Esa imagen ya no está disponible. Vuelve a adjuntarla.",
+   "quien": "cliente",
+   "fichero": "backend/routes/messages.py"
+  },
+  {
+   "texto": "El importe tiene que ser un número o null",
+   "quien": "equipo",
+   "fichero": "backend/routes/paneles.py"
+  },
+  {
+   "texto": "El importe tiene que estar entre 0 y 10000",
+   "quien": "equipo",
+   "fichero": "backend/routes/paneles.py"
+  },
+  {
+   "texto": "Ese entrenador no existe",
+   "quien": "equipo",
+   "fichero": "backend/routes/paneles.py"
+  },
+  {
+   "texto": "hechas y total tienen que ser enteros de 0 en adelante",
+   "quien": "equipo",
+   "fichero": "backend/routes/paneles.py"
+  },
+  {
+   "texto": "hechas no puede ser mayor que total",
+   "quien": "equipo",
+   "fichero": "backend/routes/paneles.py"
+  },
+  {
+   "texto": "Respuestas inválidas",
+   "quien": "cliente",
+   "fichero": "backend/routes/plans.py"
+  },
+  {
+   "texto": "Necesitamos un correo válido",
+   "quien": "cliente",
+   "fichero": "backend/routes/plans.py"
+  },
+  {
+   "texto": "Necesitamos tu nombre para llamarte",
+   "quien": "cliente",
+   "fichero": "backend/routes/plans.py"
+  },
+  {
+   "texto": "Necesitamos un teléfono válido",
+   "quien": "cliente",
+   "fichero": "backend/routes/plans.py"
+  },
+  {
+   "texto": "Plan no encontrado",
+   "quien": "cliente",
+   "fichero": "backend/routes/plans.py"
+  },
+  {
+   "texto": "Nada que editar. Campos válidos: …",
+   "quien": "cliente",
+   "fichero": "backend/routes/plans.py"
+  },
+  {
+   "texto": "Ese interruptor es solo para los planes que ya no se venden.",
+   "quien": "cliente",
+   "fichero": "backend/routes/plans.py"
+  },
+  {
+   "texto": "Tu plan no incluye reportes de seguimiento.",
+   "quien": "cliente",
+   "fichero": "backend/routes/reports.py"
+  },
+  {
+   "texto": "Esta semana no toca reporte. Te avisaremos cuando abra la ventana.",
+   "quien": "cliente",
+   "fichero": "backend/routes/reports.py"
+  },
+  {
+   "texto": "Todavía no toca: se abre el …",
+   "quien": "cliente",
+   "fichero": "backend/routes/reports.py"
+  },
+  {
+   "texto": "La ventana de esta semana ya se cerró. Espera a la semana que viene.",
+   "quien": "cliente",
+   "fichero": "backend/routes/reports.py"
+  },
+  {
+   "texto": "Para mandar el reporte del mes te faltan ….",
+   "quien": "cliente",
+   "fichero": "backend/routes/reports.py"
+  },
+  {
+   "texto": "Esta semana no te toca reporte, así que no hay nada que aplazar.",
+   "quien": "cliente",
+   "fichero": "backend/routes/reports.py"
+  },
+  {
+   "texto": "Reporte no encontrado",
+   "quien": "cliente",
+   "fichero": "backend/routes/reports.py"
+  },
+  {
+   "texto": "Este informe no es tuyo",
+   "quien": "cliente",
+   "fichero": "backend/routes/reports.py"
+  },
+  {
+   "texto": "client_id, tipo y due_date son requeridos",
+   "quien": "cliente",
+   "fichero": "backend/routes/report_cadence.py"
+  },
+  {
+   "texto": "Dime a qué grupos, o «todos»",
+   "quien": "cliente",
+   "fichero": "backend/routes/routines.py"
+  },
+  {
+   "texto": "Ponle un nombre a la rutina",
+   "quien": "cliente",
+   "fichero": "backend/routes/routines.py"
+  },
+  {
+   "texto": "Esta rutina no tiene ningún día con ejercicios. Añade al menos uno.",
+   "quien": "cliente",
+   "fichero": "backend/routes/routines.py"
+  },
+  {
+   "texto": "Esa rutina ya no está",
+   "quien": "cliente",
+   "fichero": "backend/routes/routines.py"
+  },
+  {
+   "texto": "Falta el cliente",
+   "quien": "cliente",
+   "fichero": "backend/routes/routines.py"
+  },
+  {
+   "texto": "La rutina tiene que ser un PDF.",
+   "quien": "cliente",
+   "fichero": "backend/routes/routines.py"
+  },
+  {
+   "texto": "El PDF pesa demasiado; el máximo es … MB.",
+   "quien": "cliente",
+   "fichero": "backend/routes/routines.py"
+  },
+  {
+   "texto": "No has elegido a nadie.",
+   "quien": "cliente",
+   "fichero": "backend/routes/routines.py"
+  },
+  {
+   "texto": "Son demasiados de una vez; el máximo es ….",
+   "quien": "cliente",
+   "fichero": "backend/routes/routines.py"
+  },
+  {
+   "texto": "Este cliente no tiene ningún PDF subido.",
+   "quien": "cliente",
+   "fichero": "backend/routes/routines.py"
+  },
+  {
+   "texto": "No hay ninguna rutina en PDF subida.",
+   "quien": "cliente",
+   "fichero": "backend/routes/routines.py"
+  },
+  {
+   "texto": "Esa fecha no vale.",
+   "quien": "cliente",
+   "fichero": "backend/routes/routines.py"
+  },
+  {
+   "texto": "Solo se puede tocar un día de esta semana.",
+   "quien": "cliente",
+   "fichero": "backend/routes/routines.py"
+  },
+  {
+   "texto": "El registro de entrenos todavía no está disponible.",
+   "quien": "cliente",
+   "fichero": "backend/routes/routines.py"
+  },
+  {
+   "texto": "Ese día todavía no ha llegado.",
+   "quien": "cliente",
+   "fichero": "backend/routes/routines.py"
+  },
+  {
+   "texto": "Todavía no sabemos tu semana de entreno.",
+   "quien": "cliente",
+   "fichero": "backend/routes/routines.py"
+  },
+  {
+   "texto": "Ese entreno no se ha perdido todavía.",
+   "quien": "cliente",
+   "fichero": "backend/routes/routines.py"
+  },
+  {
+   "texto": "Ese día no tocaba entreno.",
+   "quien": "cliente",
+   "fichero": "backend/routes/routines.py"
+  },
+  {
+   "texto": "El día para recuperarlo tiene que estar por llegar.",
+   "quien": "cliente",
+   "fichero": "backend/routes/routines.py"
+  },
+  {
+   "texto": "Ese día ya tiene su entreno: elige un día de descanso.",
+   "quien": "cliente",
+   "fichero": "backend/routes/routines.py"
+  },
+  {
+   "texto": "Ese día ya está registrado.",
+   "quien": "cliente",
+   "fichero": "backend/routes/routines.py"
+  },
+  {
+   "texto": "Esta cuenta no tiene modo pruebas.",
+   "quien": "cliente",
+   "fichero": "backend/routes/settings.py"
+  },
+  {
+   "texto": "Tu cuenta no tiene ficha de cliente.",
+   "quien": "cliente",
+   "fichero": "backend/routes/settings.py"
+  },
+  {
+   "texto": "Escenario no reconocido.",
+   "quien": "cliente",
+   "fichero": "backend/routes/settings.py"
+  },
+  {
+   "texto": "La fecha de la frase no se entiende.",
+   "quien": "cliente",
+   "fichero": "backend/routes/settings.py"
+  },
+  {
+   "texto": "La frase se puede programar de hoy a una semana vista, no más allá.",
+   "quien": "cliente",
+   "fichero": "backend/routes/settings.py"
+  },
+  {
+   "texto": "Suplemento no encontrado",
+   "quien": "cliente",
+   "fichero": "backend/routes/supplements.py"
+  },
+  {
+   "texto": "Este cliente no tiene protocolo",
+   "quien": "cliente",
+   "fichero": "backend/routes/supplements.py"
+  },
+  {
+   "texto": "Faltan el quién o el qué de la tarea.",
+   "quien": "equipo",
+   "fichero": "backend/routes/tareas.py"
+  },
+  {
+   "texto": "Esa persona no está en el equipo.",
+   "quien": "equipo",
+   "fichero": "backend/routes/tareas.py"
+  },
+  {
+   "texto": "No se creó ninguna tarea.",
+   "quien": "equipo",
+   "fichero": "backend/routes/tareas.py"
+  },
+  {
+   "texto": "Esa tarea no existe.",
+   "quien": "equipo",
+   "fichero": "backend/routes/tareas.py"
+  },
+  {
+   "texto": "Las automáticas no se borran: márcala hecha y no vuelve.",
+   "quien": "equipo",
+   "fichero": "backend/routes/tareas.py"
+  },
+  {
+   "texto": "Solo quien la creó puede borrarla.",
+   "quien": "equipo",
+   "fichero": "backend/routes/tareas.py"
+  },
+  {
+   "texto": "El alta de plan se realiza mediante el checkout de pago.",
+   "quien": "cliente",
+   "fichero": "backend/routes/users.py"
+  },
+  {
+   "texto": "No llegó ninguna medida válida.",
+   "quien": "cliente",
+   "fichero": "backend/routes/users.py"
+  },
+  {
+   "texto": "Ese porcentaje no se entiende.",
+   "quien": "cliente",
+   "fichero": "backend/routes/users.py"
+  },
+  {
+   "texto": "Ese porcentaje no parece real.",
+   "quien": "cliente",
+   "fichero": "backend/routes/users.py"
+  },
+  {
+   "texto": "Acción desconocida.",
+   "quien": "cliente",
+   "fichero": "backend/routes/users.py"
+  },
+  {
+   "texto": "Perfil no encontrado. Selecciona un plan primero.",
+   "quien": "cliente",
+   "fichero": "backend/routes/users.py"
+  },
+  {
+   "texto": "El cuestionario ya fue completado.",
+   "quien": "cliente",
+   "fichero": "backend/routes/users.py"
+  },
+  {
+   "texto": "Necesitamos tu peso",
+   "quien": "cliente",
+   "fichero": "backend/routes/users.py"
+  },
+  {
+   "texto": "Necesitamos tu % de grasa: hace más de 12 semanas de la última vez.",
+   "quien": "cliente",
+   "fichero": "backend/routes/users.py"
+  },
+  {
+   "texto": "Faltan tu peso o tu % de grasa",
+   "quien": "cliente",
+   "fichero": "backend/routes/users.py"
+  },
+  {
+   "texto": "El texto es demasiado largo",
+   "quien": "cliente",
+   "fichero": "backend/routes/users.py"
+  },
+  {
+   "texto": "Cuéntanos tu dieta, elige un día o sube una foto",
+   "quien": "cliente",
+   "fichero": "backend/routes/users.py"
+  },
+  {
+   "texto": "No hemos reconocido ningún alimento. Prueba a escribirlo con cantidades.",
+   "quien": "cliente",
+   "fichero": "backend/routes/users.py"
+  },
+  {
+   "texto": "Faltan las respuestas",
+   "quien": "cliente",
+   "fichero": "backend/routes/users.py"
+  },
+  {
+   "texto": "Nos falta … para poder calcular. Vuelve a entrar al cuestionario",
+   "quien": "cliente",
+   "fichero": "backend/routes/users.py"
+  },
+  {
+   "texto": "Antes de calcular tus macros falta que nos digas ….",
+   "quien": "cliente",
+   "fichero": "backend/routes/users.py"
+  },
+  {
+   "texto": "No hemos podido calcular tus macros. Revisa tu peso, tu sexo y tu porcentaje graso.",
+   "quien": "cliente",
+   "fichero": "backend/routes/users.py"
+  },
+  {
+   "texto": "Las preferencias deben ser listas.",
+   "quien": "cliente",
+   "fichero": "backend/routes/users.py"
+  },
+  {
+   "texto": "Debes seleccionar al menos 3 categorías",
+   "quien": "cliente",
+   "fichero": "backend/routes/users.py"
+  }
+ ]
+}

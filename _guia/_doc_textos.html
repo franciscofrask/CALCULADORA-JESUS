@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<title>12EN12 · Todo lo que la app le dice al cliente</title>
+<style>
+  @page { size: A4; margin: 15mm 13mm 13mm 13mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         font-size: 9.4pt; line-height: 1.4; color: #1a1a1a; margin: 0; }
+  h1 { font-size: 19pt; margin: 0 0 2mm; letter-spacing: -.4px; }
+  .sub { color: #666; font-size: 9.4pt; margin: 0 0 6mm; }
+  h2 { font-size: 12.5pt; margin: 8mm 0 2mm; padding-bottom: 1.2mm;
+       border-bottom: 2px solid #FF671F; page-break-after: avoid; }
+  h2 .cuenta { font-size: 9pt; }
+  h3 { font-size: 10pt; margin: 4mm 0 1mm; page-break-after: avoid; color: #222; }
+  p { margin: 0 0 2mm; }
+  .intro { color: #555; margin-bottom: 3mm; }
+  /* Las tablas largas SI se parten entre paginas: si no, un bloque de 60 filas
+     salta entero y deja media pagina en blanco. Lo que no se parte es la fila. */
+  .pantalla { margin: 0 0 3.5mm; }
+  tr, li { page-break-inside: avoid; }
+  .subtipo { font-size: 8.4pt; text-transform: uppercase; letter-spacing: .4px;
+             color: #999; margin: 1.5mm 0 0.8mm; font-weight: 600; }
+  .cuenta { display: inline-block; background: #eee; color: #666; border-radius: 8px;
+            padding: 0 1.6mm; font-size: 7.6pt; font-weight: 700; vertical-align: 1px; }
+  ul.frases { margin: 0 0 1.5mm; padding-left: 4.5mm; }
+  ul.frases li { margin-bottom: 0.7mm; }
+  table { width: 100%; border-collapse: collapse; margin: 1mm 0 3mm; font-size: 8.8pt; }
+  th, td { text-align: left; padding: 1.2mm 1.6mm; border-bottom: 1px solid #e8e8e8;
+           vertical-align: top; }
+  th { background: #f7f7f7; font-weight: 600; font-size: 8.2pt; }
+  .txt { font-weight: 600; }
+  .don, .boton { color: #888; font-size: 8.2pt; }
+  .vacio { color: #bbb; }
+  .peligro { color: #d33; font-weight: 700; }
+  .caja { background: #fdf5f0; border: 1px solid #f3d9c8; border-radius: 3px;
+          padding: 2.5mm 3.5mm; margin: 3mm 0; page-break-inside: avoid; }
+  .caja h3 { margin-top: 0; }
+  .pie { margin-top: 6mm; padding-top: 2.5mm; border-top: 1px solid #ddd;
+         color: #777; font-size: 8pt; }
+  .salto { page-break-before: always; }
+</style></head><body>
+
+<h1>Todo lo que la app le dice al cliente</h1>
+<p class="sub">Los textos de avisos, mensajes y preguntas, sacados del código el 26 de agosto de 2026.</p>
+
+<div class="caja">
+  <h3>Cómo está ordenado</h3>
+  <p class="intro">La app habla de cuatro maneras, y cada una está en su apartado:</p>
+  <ul class="frases">
+    <li><b>Los avisos</b> (65): llegan a la campana sin que estés mirando.</li>
+    <li><b>Las preguntas</b> (10): paran y esperan un sí o un no.</li>
+    <li><b>Los mensajes</b> (140): salen, dicen lo que ha pasado y se van solos.</li>
+    <li><b>Los errores</b> (180): lo que sale cuando algo no se puede hacer.</li>
+  </ul>
+  <p class="intro">Al final va lo del <b>panel del equipo</b>, que no lo ve ningún cliente.
+     Los <span class="peligro">▲</span> son las preguntas antes de borrar algo. Los «…» son
+     huecos que la app rellena: un nombre, una fecha, un número.</p>
+</div>
+
+<h2>1 · Los avisos <span class="cuenta">65</span></h2>
+<p class="intro">Lo que la app le manda por su cuenta. Los de su calendario van siempre; los
+   demás solo cuando sus datos lo justifican, y como mucho uno por semana. Cada aviso tiene
+   dos o tres redacciones que rotan: el mismo mensaje repetido doce semanas deja de leerse.</p>
+
+        <div class="pantalla"><h3>Los que salen solos, de su calendario y de sus datos <span class="cuenta">53</span></h3>
+        <table><tr><th style="width:38%">Título</th><th>Cuerpo</th></tr>
+        <tr><td class="txt">Estos son tus macros provisionales.</td><td>Unas preguntas más y recibirás los definitivos.</td></tr><tr><td class="txt">Mañana empiezas</td><td>Tu rutina ya está cargada.</td></tr><tr><td class="txt">Tu próximo ajuste es el …</td><td><span class="vacio">—</span></td></tr><tr><td class="txt">Tu rutina acaba el …</td><td>Renuévala y sigues sin parar.</td></tr><tr><td class="txt">Tu ciclo acaba en una semana</td><td>Mira lo que has cambiado.</td></tr><tr><td class="txt">Te falta terminar tu perfil</td><td>Sin tus fotos y tus medidas no podemos ponerte los macros buenos ni crearte la rutina.</td></tr><tr><td class="txt">Nos falta lo tuyo para poder empezar</td><td>Son unas preguntas, tus fotos y tus medidas. Con eso ya trabajamos.</td></tr><tr><td class="txt">¿Te preparamos la rutina del mes?</td><td>Nos dijiste que te lo preguntáramos esta semana. Escríbenos y te la dejamos lista.</td></tr><tr><td class="txt">Lo de tu rutina del mes</td><td>Quedamos en hablarlo esta semana. Dinos algo y te la preparamos.</td></tr><tr><td class="txt">Han pasado cuatro semanas</td><td>Buen momento para repetir ….</td></tr><tr><td class="txt">Toca ponerse al día</td><td>Hace cuatro semanas de ….</td></tr><tr><td class="txt">Sin fotos no podemos comparar</td><td>Te lleva un minuto y es lo que de verdad enseña lo que ha cambiado.</td></tr><tr><td class="txt">Te faltan las fotos del reporte</td><td>La báscula no lo cuenta todo.</td></tr><tr><td class="txt">Hace tiempo que no te ajustamos</td><td>Cierra unos días seguidos y le echamos un ojo.</td></tr><tr><td class="txt">Llevas 5 días sin apuntar nada</td><td>Con dos toques al día nos vale.</td></tr><tr><td class="txt">Te hemos perdido la pista</td><td>Cinco días sin cerrar. ¿Todo bien?</td></tr><tr><td class="txt">¿Todo bien?</td><td>Tu plan sigue aquí. Retomamos cuando quieras.</td></tr><tr><td class="txt">Cuando quieras volver, aquí está</td><td>Sin prisa.</td></tr><tr><td class="txt">Configura lo que comes</td><td>Marca lo que te gusta y lo que no, y te lo ponemos más fácil.</td></tr><tr><td class="txt">Dinos qué te gusta comer</td><td>Son 2 minutos y la calculadora te sugerirá mejor.</td></tr><tr><td class="txt">¿Volvemos?</td><td>Llevas un mes por tu cuenta. Si quieres que te llevemos otra vez, aquí estamos.</td></tr><tr><td class="txt">Un mes ya por tu cuenta</td><td>Cuando quieras retomar un plan con seguimiento, dínoslo.</td></tr><tr><td class="txt">Mañana empiezas</td><td>Tu rutina y tus macros ya están cargados.</td></tr><tr><td class="txt">Mañana arrancamos</td><td>Lo tienes todo dentro. Nos vemos en doce semanas.</td></tr><tr><td class="txt">Tu reporte quincenal está abierto</td><td>Unas breves preguntas para ajustar tus macros si hace falta. Hasta mañana a las 20:00.</td></tr><tr><td class="txt">Toca quincenal</td><td>Cuatro preguntas. Tienes hasta mañana a las 20:00.</td></tr><tr><td class="txt">Cuéntanos estas dos semanas</td><td>Es rápido, y con eso decidimos si te tocamos algo.</td></tr><tr><td class="txt">Último día para tu quincenal</td><td>Se cierra hoy a las 20:00.</td></tr><tr><td class="txt">Hoy cierra tu quincenal</td><td>A las 20:00. Sin él no sabemos cómo has ido estas dos semanas.</td></tr><tr><td class="txt">Tu reporte semanal está abierto</td><td>Unas breves preguntas para ajustar tu semana que viene. Tienes hasta mañana a las 10:00.</td></tr><tr><td class="txt">Toca semanal</td><td>Cuatro preguntas. Tienes hasta mañana a las 10:00.</td></tr><tr><td class="txt">Cuéntanos esta semana</td><td>Es rápido, y con eso decidimos si te tocamos algo.</td></tr><tr><td class="txt">Última hora para tu semanal</td><td>Se cierra hoy a las 10:00.</td></tr><tr><td class="txt">Hoy cierra tu semanal</td><td>A las 10:00. Sin él no sabemos cómo has ido esta semana.</td></tr><tr><td class="txt">Tu reporte mensual está abierto</td><td>Tus fotos, tus medidas y unas preguntas. Hasta el lunes a las 18:00.</td></tr><tr><td class="txt">Toca reporte mensual</td><td>Este es el importante. Tienes hasta el lunes a las 18:00.</td></tr><tr><td class="txt">Es el momento de las fotos</td><td>Tu reporte mensual está abierto hasta el lunes a las 18:00.</td></tr><tr><td class="txt">Último día para tu reporte mensual</td><td>Se cierra mañana a las 18:00 y sin él no podemos ajustarte.</td></tr><tr><td class="txt">Mañana cierra tu mensual</td><td>A las 18:00. Es el que marca lo que viene después.</td></tr><tr><td class="txt">No nos llegó tu reporte</td><td>Sin él no podemos ajustarte. Dinos si lo mandas esta semana o te lo aplazamos.</td></tr><tr><td class="txt">Se te pasó el reporte</td><td>No pasa nada: dinos si lo haces esta semana y te lo volvemos a abrir.</td></tr><tr><td class="txt">Tu ciclo acaba en una semana</td><td>Mira lo que has cambiado. Si renuevas ya, seguimos sin cortes: el ciclo nuevo empieza donde acaba este.</td></tr><tr><td class="txt">Queda una semana</td><td>Compara tu primera foto con la de ahora, y deja renovado lo que viene: no pierdes ni un día de los pagados.</td></tr><tr><td class="txt">Tu ciclo ha terminado</td><td>Renueva tu plan y sigues sin parar.</td></tr><tr><td class="txt">Se acabaron tus 12 semanas</td><td>Cuando quieras seguimos: tienes la renovación dentro.</td></tr><tr><td class="txt">Te hemos mandado el correo de novedades</td><td>Échale un ojo al correo: va lo de esta semana.</td></tr><tr><td class="txt">El correo del viernes ya está fuera</td><td>Mira tu bandeja: novedades de esta semana.</td></tr><tr><td class="txt">Hoy toca pesarte y mañana también.</td><td>Hacemos la media y ese será tu peso semanal, lo que debes registrar semana a semana.</td></tr><tr><td class="txt">Recuerda pesarte hoy también.</td><td><span class="vacio">—</span></td></tr><tr><td class="txt">Ayer te tocaba pesarte y no registraste el dato.</td><td>Hazlo hoy y mañana, no te olvides.</td></tr><tr><td class="txt">Cierra tu día</td><td>Dos toques y listo.</td></tr><tr><td class="txt">¿Cómo fuiste hoy?</td><td>Un minuto y lo tenemos.</td></tr><tr><td class="txt">Te falta cerrar el día</td><td>Lo que no apuntas, no lo vemos.</td></tr>
+        </table></div>
+        <div class="pantalla"><h3>Los del final del ciclo y la renovación <span class="cuenta">3</span></h3>
+        <table><tr><th style="width:38%">Título</th><th>Cuerpo</th></tr>
+        <tr><td class="txt">Seguir igual</td><td><span class="vacio">—</span></td></tr><tr><td class="txt">Cambiar a</td><td><span class="vacio">—</span></td></tr><tr><td class="txt">Dejarlo por ahora</td><td><span class="vacio">—</span></td></tr>
+        </table></div>
+        <div class="pantalla"><h3>Los que manda el equipo al hacer algo <span class="cuenta">9</span></h3>
+        <table><tr><th style="width:38%">Título</th><th>Cuerpo</th></tr>
+        <tr><td class="txt">Este mes no te toco nada</td><td>Vas bien con lo que tienes. Seguimos igual.</td></tr><tr><td class="txt">Ya tienes tus macros nuevos</td><td><span class="vacio">—</span></td></tr><tr><td class="txt">Te he cambiado la suplementación</td><td>Míralo antes de comprar nada.</td></tr><tr><td class="txt">Tienes suplementación nueva</td><td>Míralo antes de comprar nada.</td></tr><tr><td class="txt">Ya tienes tu rutina</td><td>La de este mes. Empiezas el lunes.</td></tr><tr><td class="txt">Tienes ajustes nuevos</td><td>Los he hecho con tu reporte.</td></tr><tr><td class="txt">Tu informe está listo</td><td>Con mi feedback y tus macros nuevos.</td></tr><tr><td class="txt">Ya tienes tu informe</td><td>Te cuento lo que veo en tus datos de este mes.</td></tr><tr><td class="txt">Te lo he aplazado 7 días</td><td>Tu reporte se vuelve a abrir el viernes que viene. Sigue registrando como siempre.</td></tr>
+        </table></div>
+
+<h2 class="salto">2 · Las preguntas <span class="cuenta">10</span></h2>
+<p class="intro">Lo que se le pregunta antes de hacer algo que no tiene vuelta atrás.</p>
+<table><tr><th style="width:31%">Pregunta</th><th>Lo que explica</th><th style="width:13%">Botón</th><th style="width:17%">Dónde</th></tr>
+        <tr>
+            <td class="txt"><span class="peligro">▲</span> ¿Seguro?</td>
+            <td><span class="vacio">—</span></td>
+            <td class="boton">Sí, quitarla</td>
+            <td class="don">Nutrición · preferencias</td></tr><tr>
+            <td class="txt"><span class="peligro">▲</span> Tienes cambios sin guardar</td>
+            <td>Si cierras ahora, tus preferencias se quedan como estaban.</td>
+            <td class="boton">Cerrar sin guardar</td>
+            <td class="don">Nutrición · preferencias</td></tr><tr>
+            <td class="txt">Confírmame el peso</td>
+            <td><span class="vacio">—</span></td>
+            <td class="boton">Sí, es correcto</td>
+            <td class="don">FormularioReporte</td></tr><tr>
+            <td class="txt"><span class="peligro">▲</span> ¿Borrar el menú?</td>
+            <td><span class="vacio">—</span></td>
+            <td class="boton">Aceptar</td>
+            <td class="don">confirm</td></tr><tr>
+            <td class="txt">Motivo del rechazo</td>
+            <td><span class="vacio">—</span></td>
+            <td class="boton"></td>
+            <td class="don">confirm</td></tr><tr>
+            <td class="txt"><span class="peligro">▲</span> ¿Quitar …?</td>
+            <td>Bajar de su cantidad mínima lo saca de la comida. Los demás ingredientes se quedan como están.</td>
+            <td class="boton">Quitar</td>
+            <td class="don">Nutrición</td></tr><tr>
+            <td class="txt"><span class="peligro">▲</span> ¿Quitar …?</td>
+            <td>Sale de esta comida. Los demás ingredientes se quedan como están.</td>
+            <td class="boton">Quitar</td>
+            <td class="don">Nutrición</td></tr><tr>
+            <td class="txt"><span class="peligro">▲</span> ¿Vaciar …?</td>
+            <td><span class="vacio">—</span></td>
+            <td class="boton">Vaciar</td>
+            <td class="don">Nutrición</td></tr><tr>
+            <td class="txt"><span class="peligro">▲</span> ¿Borrar "…"?</td>
+            <td>La favorita se borra para siempre. Los días que montaste con ella no se tocan.</td>
+            <td class="boton">Borrar</td>
+            <td class="don">Nutrición</td></tr><tr>
+            <td class="txt"><span class="peligro">▲</span> ¿Borrar "…"?</td>
+            <td>Se borra para siempre. Los días donde ya la usaste no se tocan.</td>
+            <td class="boton">Borrar</td>
+            <td class="don">Nutrición</td></tr></table>
+
+<h2>3 · Los mensajes <span class="cuenta">140</span></h2>
+<p class="intro">Por pantalla, y dentro por lo que son: una confirmación de que algo salió
+   bien, un error, un aviso de cuidado o una explicación.</p>
+<div class="pantalla"><h3>Nutrición <span class="cuenta">41</span></h3>
+            <p class="subtipo">Confirmación <span class="cuenta">16</span></p>
+            <ul class="frases"><li>PDF descargado</li><li>… fuera de la comida</li><li>… vaciada</li><li>Copiada … del …, cuadrada a tu objetivo</li><li>Dieta guardada</li><li>Guardada · Ya es una de tus dietas</li><li>Aplicada "…" adaptada a tu día de …</li><li>Aplicada "…" y ajustada a tus macros</li><li>Comida cuadrada a tus macros.…</li><li>Favorita borrada</li><li>Guardada · "…" ya es una de tus comidas</li><li>"…" puesta tal cual</li><li>"…" puesta con las cantidades guardadas</li><li>"…" puesta y cuadrada a esta comida</li><li>Comida borrada de favoritas</li><li>Macros volcados en … - las demás comidas quedan bloqueadas</li></ul>
+            <p class="subtipo">Error <span class="cuenta">16</span></p>
+            <ul class="frases"><li>No hemos podido generar el PDF. Inténtalo de nuevo.</li><li>Seguimos sin conexión. Tu día está guardado en este dispositivo</li><li>No hay alimentos en esa comida</li><li>Esa comida está vacía</li><li>Error guardando dieta</li><li>Selecciona una fecha</li><li>No hay dieta guardada para hoy</li><li>No hemos podido copiar la dieta. Inténtalo de nuevo.</li><li>Error guardando favorita</li><li>Error al aplicar la favorita</li><li>Ese día ya no está guardado</li><li>No hemos podido repetir ese día. Inténtalo de nuevo.</li><li>No se pudo cuadrar la comida</li><li>No hemos podido borrar la favorita. Inténtalo de nuevo.</li><li>No hemos podido guardar la comida. Inténtalo de nuevo.</li><li>No hemos podido recuadrar el día. Inténtalo de nuevo.</li></ul>
+            <p class="subtipo">Información <span class="cuenta">3</span></p>
+            <ul class="frases"><li>Sin conexion con el servidor: hemos recuperado tu día de la copia local</li><li>El peri ha quedado vacío: añádelo con "Sugiéreme un menú".</li><li>Volcado deshecho: cada comida vuelve a su objetivo.</li></ul>
+            <p class="subtipo">Aviso <span class="cuenta">6</span></p>
+            <ul class="frases"><li>Aplicada "…" adaptada a tu día de …. El intra/post se ha quitado porque hoy no hay periworkout.</li><li>Aplicada "…" adaptada a tu día de …, pero ….</li><li>Aplicada "…", pero ….</li><li>Comida cuadrada. …</li><li>No se puede cuadrar sin quitar nada: ….… No se ha quitado ninguno.…</li><li>"…" puesta, pero no cuadra aquí: ….</li></ul></div><div class="pantalla"><h3>Nutrición · preferencias <span class="cuenta">9</span></h3>
+            <p class="subtipo">Información <span class="cuenta">4</span></p>
+            <ul class="frases"><li>Las grasas de buena calidad van siempre: el método las necesita en todas las comidas.</li><li>Lo hemos quitado de "Evitar": no puede gustarte y evitarse a la vez.</li><li>Las grasas de buena calidad no se pueden evitar: el método las necesita.</li><li>Lo hemos quitado de "Me gusta": no puede gustarte y evitarse a la vez.</li></ul>
+            <p class="subtipo">Error <span class="cuenta">3</span></p>
+            <ul class="frases"><li>"…" ya está en la lista</li><li>Selecciona al menos 3 categorías en "Me gusta"</li><li>Error guardando preferencias</li></ul>
+            <p class="subtipo">Aviso <span class="cuenta">1</span></p>
+            <ul class="frases"><li>"…" no coincide con ningún alimento del catálogo: guardada, pero hoy no bloquea nada.</li></ul>
+            <p class="subtipo">Confirmación <span class="cuenta">1</span></p>
+            <ul class="frases"><li>Preferencias guardadas</li></ul></div><div class="pantalla"><h3>Nutrición · montar una comida <span class="cuenta">8</span></h3>
+            <p class="subtipo">Información <span class="cuenta">2</span></p>
+            <ul class="frases"><li>✅ Proteínas cubiertas. Elige el acompañamiento.</li><li>✨ ¡Macros cubiertos! Últimos toques.</li></ul>
+            <p class="subtipo">Error <span class="cuenta">4</span></p>
+            <ul class="frases"><li>Error cargando alimentos</li><li>No hemos podido buscar ahora mismo. Inténtalo otra vez.</li><li>… ya está en esta comida - ajusta su cantidad directamente.</li><li>Error al añadir alimento</li></ul>
+            <p class="subtipo">Aviso <span class="cuenta">1</span></p>
+            <ul class="frases"><li>… entra, pero esta comida se pasa. Baja la cantidad si quieres cuadrarla.</li></ul>
+            <p class="subtipo">Confirmación <span class="cuenta">1</span></p>
+            <ul class="frases"><li>✅ Comida guardada (… …)</li></ul></div><div class="pantalla"><h3>Mi perfil <span class="cuenta">8</span></h3>
+            <p class="subtipo">Error <span class="cuenta">5</span></p>
+            <ul class="frases"><li>El nombre no puede estar vacío</li><li>Ese email de contacto no parece un email</li><li>La nueva contraseña debe tener al menos 8 caracteres</li><li>Las contraseñas nuevas no coinciden</li><li>No se ha podido guardar. Inténtalo otra vez.</li></ul>
+            <p class="subtipo">Confirmación <span class="cuenta">2</span></p>
+            <ul class="frases"><li>Perfil actualizado</li><li>Contraseña cambiada</li></ul>
+            <p class="subtipo">Información <span class="cuenta">1</span></p>
+            <ul class="frases"><li>Funcionalidad próximamente</li></ul></div><div class="pantalla"><h3>El cuestionario <span class="cuenta">8</span></h3>
+            <p class="subtipo">Error <span class="cuenta">3</span></p>
+            <ul class="frases"><li>«…» ya está en la lista</li><li>La foto pesa demasiado (máximo 8 MB)</li><li>No se pudieron guardar las medidas. Puedes añadirlas después en Seguimiento.</li></ul>
+            <p class="subtipo">Aviso <span class="cuenta">1</span></p>
+            <ul class="frases"><li>«…» no coincide con ningún alimento del catálogo: guardada, pero hoy no bloquea nada.</li></ul>
+            <p class="subtipo">Información <span class="cuenta">2</span></p>
+            <ul class="frases"><li>Seguimos donde lo dejaste</li><li>Lo tenemos apuntado. Te escribimos para cerrarlo.</li></ul>
+            <p class="subtipo">Confirmación <span class="cuenta">2</span></p>
+            <ul class="frases"><li>Perfecto, seguimos con tu plan.</li><li>¡Perfil completo! El equipo ya tiene toda la información.</li></ul></div><div class="pantalla"><h3>Check-ins <span class="cuenta">7</span></h3>
+            <p class="subtipo">Error <span class="cuenta">5</span></p>
+            <ul class="frases"><li>No hemos podido apuntarlo. Inténtalo en un momento.</li><li>No hemos podido guardar tu día. Inténtalo en un momento.</li><li>Error al cargar check-ins</li><li>Dinos cómo vas de energía y de hambre</li><li>Error al enviar check-in</li></ul>
+            <p class="subtipo">Confirmación <span class="cuenta">2</span></p>
+            <ul class="frases"><li>Anotado. Mañana seguimos.</li><li>Check-in diario enviado</li></ul></div><div class="pantalla"><h3>Mis macros <span class="cuenta">7</span></h3>
+            <p class="subtipo">Error <span class="cuenta">4</span></p>
+            <ul class="frases"><li>Completa proteínas, hidratos y grasas (entreno y descanso)</li><li>Elige una fecha de aplicación</li><li>Peso inválido (30-200 kg)</li><li>% graso inválido (5-60%)</li></ul>
+            <p class="subtipo">Confirmación <span class="cuenta">2</span></p>
+            <ul class="frases"><li>Macros guardados desde …</li><li>Valores cargados en el editor - elige fecha y guarda</li></ul>
+            <p class="subtipo">Información <span class="cuenta">1</span></p>
+            <ul class="frases"><li>Tu dieta reportada no cuadra con lo recomendado: se ha avisado a tu entrenador para que lo revise.</li></ul></div><div class="pantalla"><h3>Mi rutina <span class="cuenta">6</span></h3>
+            <p class="subtipo">Confirmación <span class="cuenta">4</span></p>
+            <ul class="frases"><li>Pago hecho. Tu rutina ya es tuya.</li><li>Entreno marcado.</li><li>Apuntado.</li><li>… pasa al ….</li></ul>
+            <p class="subtipo">Error <span class="cuenta">2</span></p>
+            <ul class="frases"><li>No hemos podido marcar tu entreno. Inténtalo en un momento.</li><li>No hemos podido apuntar la recuperación. Inténtalo en un momento.</li></ul></div><div class="pantalla"><h3>Mi rutina · editar <span class="cuenta">4</span></h3>
+            <p class="subtipo">Error <span class="cuenta">4</span></p>
+            <ul class="frases"><li>Ponle un nombre a la rutina</li><li>Añade al menos un ejercicio</li><li>Hay un ejercicio sin nombre</li><li>Hay un ejercicio sin series</li></ul></div><div class="pantalla"><h3>Mi rutina · entrenar <span class="cuenta">4</span></h3>
+            <p class="subtipo">Error <span class="cuenta">3</span></p>
+            <ul class="frases"><li>No hemos podido cargar tu entreno de hoy. Inténtalo en un momento.</li><li>Dinos si lo has completado.</li><li>No hemos podido guardar tu entreno. Inténtalo en un momento.</li></ul>
+            <p class="subtipo">Confirmación <span class="cuenta">1</span></p>
+            <ul class="frases"><li>Entreno guardado.</li></ul></div><div class="pantalla"><h3>Onboarding <span class="cuenta">4</span></h3>
+            <p class="subtipo">Confirmación <span class="cuenta">1</span></p>
+            <ul class="frases"><li>¡Pago confirmado! Tu plan está activo</li></ul>
+            <p class="subtipo">Error <span class="cuenta">2</span></p>
+            <ul class="frases"><li>No pudimos confirmar el pago. Si te cobraron, recarga en unos segundos.</li><li>Selecciona un plan para continuar</li></ul>
+            <p class="subtipo">Información <span class="cuenta">1</span></p>
+            <ul class="frases"><li>Checkout cancelado. Puedes elegir un plan cuando quieras.</li></ul></div><div class="pantalla"><h3>Renovar <span class="cuenta">4</span></h3>
+            <p class="subtipo">Error <span class="cuenta">2</span></p>
+            <ul class="frases"><li>No hemos podido cargar tu ciclo</li><li>No hemos podido confirmar el pago. Si te han cobrado, recarga en unos segundos.</li></ul>
+            <p class="subtipo">Confirmación <span class="cuenta">2</span></p>
+            <ul class="frases"><li>Perfecto, seguimos. No tienes que hacer nada más.</li><li>Te llamamos para verlo contigo. Dinos por aquí cuándo te viene bien.</li></ul></div><div class="pantalla"><h3>SuggestFoodModal <span class="cuenta">3</span></h3>
+            <p class="subtipo">Error <span class="cuenta">2</span></p>
+            <ul class="frases"><li>Indica el nombre del alimento</li><li>Indica el peso de la unidad en gramos</li></ul>
+            <p class="subtipo">Confirmación <span class="cuenta">1</span></p>
+            <ul class="frases"><li>Sugerencia enviada. El equipo la revisará pronto.</li></ul></div><div class="pantalla"><h3>Recuperar <span class="cuenta">3</span></h3>
+            <p class="subtipo">Error <span class="cuenta">3</span></p>
+            <ul class="frases"><li>No hemos podido enviarlo. Inténtalo en un momento.</li><li>Las dos contraseñas no coinciden</li><li>La contraseña debe tener al menos 8 caracteres</li></ul></div><div class="pantalla"><h3>CoachCheckins <span class="cuenta">2</span></h3>
+            <p class="subtipo">Confirmación <span class="cuenta">1</span></p>
+            <ul class="frases"><li>Feedback guardado</li></ul>
+            <p class="subtipo">Error <span class="cuenta">1</span></p>
+            <ul class="frases"><li>Error guardando feedback</li></ul></div><div class="pantalla"><h3>ExtrasDelDia <span class="cuenta">2</span></h3>
+            <p class="subtipo">Error <span class="cuenta">2</span></p>
+            <ul class="frases"><li>No se pudo apuntar el extra. Prueba otra vez.</li><li>No se pudo quitar el extra. Prueba otra vez.</li></ul></div><div class="pantalla"><h3>FormularioReporte <span class="cuenta">2</span></h3>
+            <p class="subtipo">Error <span class="cuenta">2</span></p>
+            <ul class="frases"><li>No hemos podido preparar tu reporte. Inténtalo en un momento.</li><li>El peso es obligatorio</li></ul></div><div class="pantalla"><h3>Seguimiento · fotos y métricas <span class="cuenta">2</span></h3>
+            <p class="subtipo">Confirmación <span class="cuenta">2</span></p>
+            <ul class="frases"><li>Medidas guardadas</li><li>Porcentaje actualizado</li></ul></div><div class="pantalla"><h3>Entrar <span class="cuenta">2</span></h3>
+            <p class="subtipo">Confirmación <span class="cuenta">2</span></p>
+            <ul class="frases"><li>¡Cuenta creada! Bienvenido a 12EN12</li><li>¡Bienvenido, …!</li></ul></div><div class="pantalla"><h3>Inicio <span class="cuenta">2</span></h3>
+            <p class="subtipo">Error <span class="cuenta">2</span></p>
+            <ul class="frases"><li>No se pudo guardar. Inténtalo en un momento.</li><li>No hemos podido abrir tu rutina. Inténtalo en un momento.</li></ul></div><div class="pantalla"><h3>Quiz de venta <span class="cuenta">2</span></h3>
+            <p class="subtipo">Error <span class="cuenta">2</span></p>
+            <ul class="frases"><li>No hemos podido cargar el test</li><li>No hemos podido calcular tu resultado</li></ul></div><div class="pantalla"><h3>AsignarTarea <span class="cuenta">1</span></h3>
+            <p class="subtipo">Error <span class="cuenta">1</span></p>
+            <ul class="frases"><li>Faltan el quién o el qué.</li></ul></div><div class="pantalla"><h3>Chat · imágenes <span class="cuenta">1</span></h3>
+            <p class="subtipo">Error <span class="cuenta">1</span></p>
+            <ul class="frases"><li>La imagen pesa … MB y el máximo son 4 MB.</li></ul></div><div class="pantalla"><h3>FavoritasDeComida <span class="cuenta">1</span></h3>
+            <p class="subtipo">Error <span class="cuenta">1</span></p>
+            <ul class="frases"><li>Ya tienes una comida favorita que se llama "…". Ponle otro nombre.</li></ul></div><div class="pantalla"><h3>Nutrición · favoritas <span class="cuenta">1</span></h3>
+            <p class="subtipo">Error <span class="cuenta">1</span></p>
+            <ul class="frases"><li>Ya tienes una favorita que se llama "…". Ponle otro nombre para distinguirlas.</li></ul></div><div class="pantalla"><h3>Seguimiento · tus tres fotos <span class="cuenta">1</span></h3>
+            <p class="subtipo">Confirmación <span class="cuenta">1</span></p>
+            <ul class="frases"><li>Foto subida</li></ul></div><div class="pantalla"><h3>frontend/src/context/AuthContext.jsx <span class="cuenta">1</span></h3>
+            <p class="subtipo">Error <span class="cuenta">1</span></p>
+            <ul class="frases"><li>Tu sesión ha expirado. Vuelve a iniciar sesión.</li></ul></div><div class="pantalla"><h3>Chat <span class="cuenta">1</span></h3>
+            <p class="subtipo">Error <span class="cuenta">1</span></p>
+            <ul class="frases"><li>Error al enviar mensaje</li></ul></div><div class="pantalla"><h3>MiCuerpo <span class="cuenta">1</span></h3>
+            <p class="subtipo">Error <span class="cuenta">1</span></p>
+            <ul class="frases"><li>Dinos cuánto pesas</li></ul></div><div class="pantalla"><h3>MiSemana <span class="cuenta">1</span></h3>
+            <p class="subtipo">Error <span class="cuenta">1</span></p>
+            <ul class="frases"><li>No hemos podido cargar tu semana. Inténtalo en un momento.</li></ul></div><div class="pantalla"><h3>Seguimiento <span class="cuenta">1</span></h3>
+            <p class="subtipo">Error <span class="cuenta">1</span></p>
+            <ul class="frases"><li>No hemos podido crear tu informe</li></ul></div>
+
+<h2 class="salto">4 · Los errores <span class="cuenta">180</span></h2>
+<p class="intro">Lo que responde el servidor cuando algo no se puede hacer. La app los enseña
+   tal cual, así que se leen como cualquier otro mensaje.</p>
+
+        <div class="pantalla"><h3>Pagos y renovación <span class="cuenta">26</span></h3>
+        <ul class="frases"><li>Este plan ya no está disponible para nuevas contrataciones.</li><li>No sabemos tu precio de renovación. Escríbenos y te lo dejamos listo.</li><li>Este plan se contrata por llamada: agenda la tuya y te mandamos el enlace de pago.</li><li>Este plan no se puede pagar ahora mismo: su precio está mal</li><li>No hemos podido abrir el pago. Inténtalo en un momento.</li><li>Dinos el motivo, aunque sea «otra cosa».</li><li>Esa salida no existe.</li><li>Tu plan ya incluye entrenador: tus macros los revisa él.</li><li>Ya tienes una revisión pendiente de que la vea tu entrenador.</li><li>Tu plan ya incluye entrenador: tus macros los ajusta él.</li><li>Ya tienes un ajuste a medida pagado y pendiente de que lo preparemos.</li><li>Dinos si la quieres básica o avanzada.</li><li>Tu plan ya incluye la rutina: no tienes que comprarla.</li><li>Ya tienes una rutina activa.</li><li>Ya nos pediste tu rutina y estamos con ella. Te llega en unos días.</li><li>La rutina de este mes todavía no está lista. En cuanto la tengamos</li><li>session_id es requerido</li><li>No se pudo verificar el pago. Inténtalo de nuevo en unos minutos.</li><li>La sesión no pertenece a este usuario</li><li>Este cliente todavía no tiene un customer de Stripe sincronizado.</li><li>Webhook no disponible</li><li>Falta Stripe-Signature</li><li>Payload de webhook inválido</li><li>Firma de webhook inválida</li><li>No se encontró ningún customer en Stripe para este email.</li><li>Alerta no encontrada</li></ul></div>
+        <div class="pantalla"><h3>La dieta del día <span class="cuenta">23</span></h3>
+        <ul class="frases"><li>Nombre requerido</li><li>Falta saber de qué comida es</li><li>Esta comida está vacía. Ponle algo antes de guardarla.</li><li>Este día está vacío. Monta al menos una comida antes de guardarlo.</li><li>Favorita no encontrada</li><li>Año o mes fuera de rango.</li><li>distribution_targets debe ser un objeto.</li><li>Dime qué comida marco (C1 a C9, Intra o Post).</li><li>Eso es muy largo para un extra. Resúmelo en una línea.</li><li>Escribe qué te has comido.</li><li>Ese alimento no está en el catálogo.</li><li>Dime cuánto ha sido, en gramos o en unidades.</li><li>Esa cantidad no puede ser. Revísala.</li><li>Ese extra ya no está apuntado.</li><li>La fecha de inicio va antes que la de fin.</li><li>Ese periodo es demasiado largo. Pide como mucho un año de una vez.</li><li>No hay dieta guardada para la fecha origen</li><li>Faltan parámetros</li><li>Dieta origen no encontrada</li><li>Comida origen no encontrada</li><li>Dieta no encontrada</li><li>No hay dieta guardada para este día</li><li>La dieta está vacía</li></ul></div>
+        <div class="pantalla"><h3>Rutinas <span class="cuenta">21</span></h3>
+        <ul class="frases"><li>Dime a qué grupos, o «todos»</li><li>Ponle un nombre a la rutina</li><li>Esta rutina no tiene ningún día con ejercicios. Añade al menos uno.</li><li>Esa rutina ya no está</li><li>Falta el cliente</li><li>La rutina tiene que ser un PDF.</li><li>El PDF pesa demasiado; el máximo es … MB.</li><li>No has elegido a nadie.</li><li>Son demasiados de una vez; el máximo es ….</li><li>Este cliente no tiene ningún PDF subido.</li><li>No hay ninguna rutina en PDF subida.</li><li>Esa fecha no vale.</li><li>Solo se puede tocar un día de esta semana.</li><li>El registro de entrenos todavía no está disponible.</li><li>Ese día todavía no ha llegado.</li><li>Todavía no sabemos tu semana de entreno.</li><li>Ese entreno no se ha perdido todavía.</li><li>Ese día no tocaba entreno.</li><li>El día para recuperarlo tiene que estar por llegar.</li><li>Ese día ya tiene su entreno: elige un día de descanso.</li><li>Ese día ya está registrado.</li></ul></div>
+        <div class="pantalla"><h3>La cuenta y la ficha <span class="cuenta">19</span></h3>
+        <ul class="frases"><li>El alta de plan se realiza mediante el checkout de pago.</li><li>No llegó ninguna medida válida.</li><li>Ese porcentaje no se entiende.</li><li>Ese porcentaje no parece real.</li><li>Acción desconocida.</li><li>Perfil no encontrado. Selecciona un plan primero.</li><li>El cuestionario ya fue completado.</li><li>Necesitamos tu peso</li><li>Necesitamos tu % de grasa: hace más de 12 semanas de la última vez.</li><li>Faltan tu peso o tu % de grasa</li><li>El texto es demasiado largo</li><li>Cuéntanos tu dieta, elige un día o sube una foto</li><li>No hemos reconocido ningún alimento. Prueba a escribirlo con cantidades.</li><li>Faltan las respuestas</li><li>Nos falta … para poder calcular. Vuelve a entrar al cuestionario</li><li>Antes de calcular tus macros falta que nos digas ….</li><li>No hemos podido calcular tus macros. Revisa tu peso, tu sexo y tu porcentaje graso.</li><li>Las preferencias deben ser listas.</li><li>Debes seleccionar al menos 3 categorías</li></ul></div>
+        <div class="pantalla"><h3>La calculadora y los alimentos <span class="cuenta">13</span></h3>
+        <ul class="frases"><li>Perfil de cliente no encontrado</li><li>No tienes macros asignados</li><li>Falta la lista de categorías marcadas.</li><li>Formato de imagen no admitido (…). Usa JPEG, PNG, WebP o HEIC.</li><li>La foto pesa … KB; el máximo permitido es … MB.</li><li>Solo puedes sugerir … alimentos por semana. Vuelve a intentarlo la próxima semana.</li><li>Sin permiso para ver esta foto</li><li>No hay macros objetivo para esta comida</li><li>No hay alimentos que cuadrar.</li><li>No se pudo cuadrar: algún alimento ya no está en el catálogo.</li><li>Menú no encontrado</li><li>No se pudo montar el menú (algún alimento ya no existe)</li><li>mealKey o tipo_comida inválido</li></ul></div>
+        <div class="pantalla"><h3>Entrar y la contraseña <span class="cuenta">11</span></h3>
+        <ul class="frases"><li>Email ya registrado</li><li>Credenciales inválidas</li><li>Cuenta desactivada. Contacta con tu entrenador.</li><li>Cuerpo inválido</li><li>El teléfono debe ser texto.</li><li>Las contraseñas deben ser texto.</li><li>La nueva contraseña debe tener al menos 8 caracteres</li><li>La contraseña actual no es correcta</li><li>La contraseña debe tener al menos 8 caracteres</li><li>Este enlace ya no vale. Pide otro.</li><li>Este enlace ha caducado. Pide otro.</li></ul></div>
+        <div class="pantalla"><h3>backend/core/security.py <span class="cuenta">10</span></h3>
+        <ul class="frases"><li>Token expirado</li><li>Token inválido</li><li>Usuario no encontrado</li><li>Cuenta desactivada</li><li>Acceso denegado</li><li>Cliente no encontrado</li><li>Solo se puede actuar como un cliente</li><li>Solo los administradores pueden acceder a esta sección</li><li>Esto solo puede borrarlo el administrador</li><li>No tienes acceso a este cliente</li></ul></div>
+        <div class="pantalla"><h3>Check-ins <span class="cuenta">8</span></h3>
+        <ul class="frases"><li>Tipo invalido. Usa uno de: …</li><li>Tipo invalido</li><li>Check-in no encontrado</li><li>Tipo de archivo no permitido: …. Sube JPEG, PNG, WebP o HEIC.</li><li>El archivo está vacío.</li><li>No se encontró el perfil de cliente.</li><li>Esta foto viene de tu etapa anterior y no se puede borrar desde aquí.</li><li>Esta es tu foto inicial y no se puede borrar: es contra la que se comparan las demás.</li></ul></div>
+        <div class="pantalla"><h3>Reportes y fotos <span class="cuenta">8</span></h3>
+        <ul class="frases"><li>Tu plan no incluye reportes de seguimiento.</li><li>Esta semana no toca reporte. Te avisaremos cuando abra la ventana.</li><li>Todavía no toca: se abre el …</li><li>La ventana de esta semana ya se cerró. Espera a la semana que viene.</li><li>Para mandar el reporte del mes te faltan ….</li><li>Esta semana no te toca reporte, así que no hay nada que aplazar.</li><li>Reporte no encontrado</li><li>Este informe no es tuyo</li></ul></div>
+        <div class="pantalla"><h3>El asistente <span class="cuenta">7</span></h3>
+        <ul class="frases"><li>Esta sesión de chat no te pertenece.</li><li>session_id requerido</li><li>No hay dieta configurada. Configura el día y añade alimentos antes de volcar.</li><li>Fecha inválida. Usa el formato YYYY-MM-DD.</li><li>No hay dieta configurada para exportar. Primero configura tu día y añade alimentos.</li><li>No hay ningún usuario con ese correo</li><li>La fecha va como 2026-08-17</li></ul></div>
+        <div class="pantalla"><h3>Planes <span class="cuenta">7</span></h3>
+        <ul class="frases"><li>Respuestas inválidas</li><li>Necesitamos un correo válido</li><li>Necesitamos tu nombre para llamarte</li><li>Necesitamos un teléfono válido</li><li>Plan no encontrado</li><li>Nada que editar. Campos válidos: …</li><li>Ese interruptor es solo para los planes que ya no se venden.</li></ul></div>
+        <div class="pantalla"><h3>El chat <span class="cuenta">6</span></h3>
+        <ul class="frases"><li>No hay ningún admin para recibir el mensaje</li><li>Solo se pueden adjuntar imágenes (JPEG, PNG, WebP o HEIC).</li><li>La imagen pesa … KB y el máximo son</li><li>No encontramos esa imagen.</li><li>Esta imagen no es de una conversación tuya.</li><li>Esa imagen ya no está disponible. Vuelve a adjuntarla.</li></ul></div>
+        <div class="pantalla"><h3>backend/core/stripe_billing.py <span class="cuenta">5</span></h3>
+        <ul class="frases"><li>… está bloqueada: el proyecto está configurado solo para Stripe test mode.</li><li>Plan no válido</li><li>El plan … no está disponible para compra en este momento.</li><li>Tienes un cobro de tu plan que no llegó a entrar, y hasta</li><li>Tu plan sigue con el cobro automático de antes, así que este cambio</li></ul></div>
+        <div class="pantalla"><h3>Ajustes <span class="cuenta">5</span></h3>
+        <ul class="frases"><li>Esta cuenta no tiene modo pruebas.</li><li>Tu cuenta no tiene ficha de cliente.</li><li>Escenario no reconocido.</li><li>La fecha de la frase no se entiende.</li><li>La frase se puede programar de hoy a una semana vista, no más allá.</li></ul></div>
+        <div class="pantalla"><h3>backend/core/fotos.py <span class="cuenta">3</span></h3>
+        <ul class="frases"><li>Foto no encontrada</li><li>Esa foto no es tuya.</li><li>No se ha podido cargar la foto.</li></ul></div>
+        <div class="pantalla"><h3>backend/core/plan_access.py <span class="cuenta">3</span></h3>
+        <ul class="frases"><li>Perfil no encontrado</li><li>Tu suscripción no está activa. Regulariza el pago para acceder a esta función.</li><li>Tu plan no incluye esta función. Cambia de plan para activarla.</li></ul></div>
+        <div class="pantalla"><h3>Suplementos <span class="cuenta">2</span></h3>
+        <ul class="frases"><li>Suplemento no encontrado</li><li>Este cliente no tiene protocolo</li></ul></div>
+        <div class="pantalla"><h3>backend/core/rate_limit.py <span class="cuenta">1</span></h3>
+        <ul class="frases"><li>Demasiados intentos. Espera unos minutos y vuelve a probar.</li></ul></div>
+        <div class="pantalla"><h3>El diario <span class="cuenta">1</span></h3>
+        <ul class="frases"><li>Tu diario todavía no está disponible.</li></ul></div>
+        <div class="pantalla"><h3>Cadencia de reportes <span class="cuenta">1</span></h3>
+        <ul class="frases"><li>client_id, tipo y due_date son requeridos</li></ul></div>
+
+<h2 class="salto">5 · El panel del equipo <span class="cuenta">199</span></h2>
+<p class="intro">Esto no lo ve ningún cliente: es lo que leen Jesús y los entrenadores.</p>
+
+<h3>Las preguntas <span class="cuenta">15</span></h3>
+<table><tr><th style="width:31%">Pregunta</th><th>Lo que explica</th><th style="width:13%">Botón</th><th style="width:17%">Dónde</th></tr>
+        <tr>
+            <td class="txt"><span class="peligro">▲</span> Rechazar la sugerencia</td>
+            <td>Puedes explicar por qué, para que el cliente lo entienda.</td>
+            <td class="boton">Rechazar</td>
+            <td class="don">AdminFoodSuggestions</td></tr><tr>
+            <td class="txt"><span class="peligro">▲</span> ¿Eliminar esta sugerencia?</td>
+            <td>Se borra junto con sus fotos y no se puede deshacer.</td>
+            <td class="boton">Eliminar</td>
+            <td class="don">AdminFoodSuggestions</td></tr><tr>
+            <td class="txt"><span class="peligro">▲</span> ¿Borrar este menú de la biblioteca?</td>
+            <td>…. Deja de proponerse a los clientes.</td>
+            <td class="boton">Borrar</td>
+            <td class="don">AdminMenus</td></tr><tr>
+            <td class="txt">Las proporciones no suman 1</td>
+            <td><span class="vacio">—</span></td>
+            <td class="boton">Guardar igual</td>
+            <td class="don">AdminMenus</td></tr><tr>
+            <td class="txt"><span class="peligro">▲</span> ¿Borrar el menú "…"?</td>
+            <td>Desaparece del listado y deja de proponerse a los clientes.</td>
+            <td class="boton">Borrar</td>
+            <td class="don">AdminMenus</td></tr><tr>
+            <td class="txt"><span class="peligro">▲</span> ¿Borrar esta tarea?</td>
+            <td>Desaparece de la lista de quien la tenía. Si ya se hizo, márcala hecha en vez de borrarla.</td>
+            <td class="boton">Borrar</td>
+            <td class="don">AdminTareas</td></tr><tr>
+            <td class="txt"><span class="peligro">▲</span> ¿Dar de baja a …?</td>
+            <td>No podrá entrar, pero los datos se conservan y se puede reactivar cuando quieras.</td>
+            <td class="boton">Dar de baja</td>
+            <td class="don">AdminUsers</td></tr><tr>
+            <td class="txt">¿Generar una contraseña nueva para …?</td>
+            <td>La actual dejará de funcionar. Verás la nueva una sola vez para pasársela.</td>
+            <td class="boton">Generar</td>
+            <td class="don">AdminUsers</td></tr><tr>
+            <td class="txt"><span class="peligro">▲</span> ¿Eliminar esta entrada del historial?</td>
+            <td>Se borra el registro de ese cambio. No afecta a los macros que el cliente tiene ahora.</td>
+            <td class="boton">Eliminar</td>
+            <td class="don">ClientDetail</td></tr><tr>
+            <td class="txt"><span class="peligro">▲</span> ¿Restablecer la contraseña?</td>
+            <td>Se genera una clave temporal nueva y se te enseña aquí para que se la pases tú.</td>
+            <td class="boton">Restablecer</td>
+            <td class="don">ClientDetail</td></tr><tr>
+            <td class="txt"><span class="peligro">▲</span> ¿Dar de baja a este usuario?</td>
+            <td>No podrá entrar, pero los datos se conservan y se puede reactivar cuando quieras.</td>
+            <td class="boton">Dar de baja</td>
+            <td class="don">ClientDetail</td></tr><tr>
+            <td class="txt">Ese peso da un salto grande</td>
+            <td>… Si es un dedazo, corrígelo: de este peso salen</td>
+            <td class="boton">Es correcto</td>
+            <td class="don">ClientDetail</td></tr><tr>
+            <td class="txt">¿Guardar la suplementación?</td>
+            <td><span class="vacio">—</span></td>
+            <td class="boton">Aceptar</td>
+            <td class="don">ClientDetail</td></tr><tr>
+            <td class="txt">¿Borrar el protocolo del …?</td>
+            <td>Se borra ese registro del histórico. El resto de versiones se queda.</td>
+            <td class="boton">Borrar</td>
+            <td class="don">ClientDetail</td></tr><tr>
+            <td class="txt"><span class="peligro">▲</span> ¿Desactivar "…"?</td>
+            <td>Deja de estar disponible para asignarlo a clientes. Se puede volver a activar.</td>
+            <td class="boton">Desactivar</td>
+            <td class="don">SupplementsCatalog</td></tr></table>
+
+<h3>Los mensajes <span class="cuenta">127</span></h3>
+<div class="pantalla"><h3>ClientDetail <span class="cuenta">44</span></h3>
+            <p class="subtipo">Confirmación <span class="cuenta">21</span></p>
+            <ul class="frases"><li>Menú copiado al portapapeles</li><li>Menú enviado al chat de …</li><li>Rutina en PDF subida</li><li>Reparto y semanas guardados</li><li>Le hemos puesto «…»</li><li>Propuesta cargada: el razonamiento va en el criterio interno. Escribe el feedback del cliente</li><li>Evaluación guardada</li><li>Entrada eliminada</li><li>Rol actualizado</li><li>Macros actualizados</li><li>Entrada del historial actualizada</li><li>Rutina generada con IA</li><li>Rutina guardada</li><li>Propuesta lista: revísala al lado del protocolo</li><li>Entrenamiento actualizado</li><li>Suplementación guardada</li><li>Versión borrada</li><li>Clave copiada</li><li>Reporte guardado</li><li>Foto subida…</li><li>Informe publicado</li></ul>
+            <p class="subtipo">Error <span class="cuenta">23</span></p>
+            <ul class="frases"><li>Este cliente no tiene usuario de chat</li><li>No se pudo enviar el menú</li><li>Indica los tres macros objetivo</li><li>Error buscando menús</li><li>No se pudo abrir el PDF</li><li>No se pudo cargar la dieta de esa fecha</li><li>Error al cargar datos del cliente</li><li>El asistente no devolvió una propuesta válida</li><li>No se pudo eliminar la entrada</li><li>Completa proteína, hidratos y grasa de entrenamiento y descanso</li><li>El feedback para el cliente es obligatorio</li><li>El motivo es obligatorio</li><li>Error actualizando estructura de dieta</li><li>Error actualizando la farmacología</li><li>Error al generar rutina</li><li>Error al guardar rutina</li><li>Error al sugerir</li><li>No se pudo guardar</li><li>Error al guardar suplementación</li><li>Pon su peso (25-300 kg)</li><li>No hemos podido crear el informe de este reporte</li><li>No hemos podido publicar el informe</li><li>Error guardando el feedback</li></ul></div><div class="pantalla"><h3>AdminDashboard <span class="cuenta">15</span></h3>
+            <p class="subtipo">Confirmación <span class="cuenta">6</span></p>
+            <ul class="frases"><li>… queda como contactado</li><li>Enlace de pago copiado (…€). Pégaselo por WhatsApp.</li><li>Enlace de pago creado</li><li>Revisión marcada como revisada</li><li>Cliente asignado</li><li>Sesión cerrada</li></ul>
+            <p class="subtipo">Error <span class="cuenta">7</span></p>
+            <ul class="frases"><li>No se pudo marcar la llamada</li><li>No se pudo cerrar el aviso</li><li>No se pudo marcar la revisión</li><li>No se pudo actualizar el reporte</li><li>No se han podido marcar como leídos</li><li>Error al cargar dashboard</li><li>Error al cargar clientes</li></ul>
+            <p class="subtipo">Información <span class="cuenta">2</span></p>
+            <ul class="frases"><li>… se registró pero no completó el alta (no eligió plan). Aún no tiene ficha.</li><li>Lead nuevo recibido · … sin gestionar</li></ul></div><div class="pantalla"><h3>AdminPlans <span class="cuenta">12</span></h3>
+            <p class="subtipo">Error <span class="cuenta">7</span></p>
+            <ul class="frases"><li>No se pudieron cargar los ajustes de la app</li><li>No se pudo guardar el cambio</li><li>No se pudo guardar la frase</li><li>No se pudo aplicar el escenario</li><li>No se pudo restaurar</li><li>No se pudo reiniciar</li><li>No se pudo cargar el catálogo de planes</li></ul>
+            <p class="subtipo">Confirmación <span class="cuenta">5</span></p>
+            <ul class="frases"><li>Tu cuenta está en modo de prueba</li><li>Tu cuenta vuelve a la normalidad</li><li>Vuelves a ver lo mismo que todos</li><li>Plan actualizado</li><li>Plan restaurado a los valores por defecto</li></ul></div><div class="pantalla"><h3>Leads <span class="cuenta">11</span></h3>
+            <p class="subtipo">Error <span class="cuenta">7</span></p>
+            <ul class="frases"><li>Error cargando leads</li><li>Error cargando métricas</li><li>Error borrando la nota</li><li>Nombre es obligatorio</li><li>Error actualizando estado</li><li>Error guardando notas</li><li>Error eliminando</li></ul>
+            <p class="subtipo">Confirmación <span class="cuenta">4</span></p>
+            <ul class="frases"><li>Lead creado</li><li>Lead descartado</li><li>Mensaje copiado, listo para pegar en WhatsApp</li><li>Lead eliminado</li></ul></div><div class="pantalla"><h3>AdminMenus <span class="cuenta">8</span></h3>
+            <p class="subtipo">Error <span class="cuenta">6</span></p>
+            <ul class="frases"><li>El menú tiene que llevar al menos un alimento con su cantidad</li><li>Error al cargar los menús</li><li>El nombre es obligatorio</li><li>Añade al menos un alimento</li><li>La proporción de … no vale: va de 0 a 1 (1 = ese</li><li>Error al borrar</li></ul>
+            <p class="subtipo">Confirmación <span class="cuenta">2</span></p>
+            <ul class="frases"><li>Menú actualizado</li><li>Menú borrado</li></ul></div><div class="pantalla"><h3>AdminRoutines <span class="cuenta">8</span></h3>
+            <p class="subtipo">Error <span class="cuenta">7</span></p>
+            <ul class="frases"><li>No hemos podido cargar las rutinas guardadas.</li><li>No hemos podido borrarla. Inténtalo de nuevo.</li><li>No hemos podido marcarla. Inténtalo de nuevo.</li><li>No hemos podido agrupar a los clientes. Inténtalo de nuevo.</li><li>No hemos podido asignar las rutinas. Inténtalo de nuevo.</li><li>No se pudo abrir el PDF.</li><li>No hemos podido cargar las rutinas. Inténtalo de nuevo.</li></ul>
+            <p class="subtipo">Confirmación <span class="cuenta">1</span></p>
+            <ul class="frases"><li>«…» quitada de la biblioteca</li></ul></div><div class="pantalla"><h3>AdminUsers <span class="cuenta">8</span></h3>
+            <p class="subtipo">Error <span class="cuenta">4</span></p>
+            <ul class="frases"><li>Error cargando la actividad</li><li>Error al cargar usuarios</li><li>No se pudo reactivar</li><li>No se pudo copiar</li></ul>
+            <p class="subtipo">Confirmación <span class="cuenta">4</span></p>
+            <ul class="frases"><li>Usuario actualizado</li><li>Usuario dado de baja</li><li>Usuario reactivado</li><li>Contraseña copiada</li></ul></div><div class="pantalla"><h3>AdminFoodSuggestions <span class="cuenta">7</span></h3>
+            <p class="subtipo">Error <span class="cuenta">2</span></p>
+            <ul class="frases"><li>Error cargando las sugerencias</li><li>Ponle una categoría antes de aprobarlo: de ella depende qué macros le cuentan al cliente.</li></ul>
+            <p class="subtipo">Confirmación <span class="cuenta">5</span></p>
+            <ul class="frases"><li>Sugerencia actualizada</li><li>Alimento aprobado y añadido a la calculadora</li><li>Sugerencia rechazada</li><li>Sugerencia eliminada</li><li>Alimento añadido a la calculadora</li></ul></div><div class="pantalla"><h3>SupplementsCatalog <span class="cuenta">6</span></h3>
+            <p class="subtipo">Error <span class="cuenta">4</span></p>
+            <ul class="frases"><li>Error al cargar catálogo</li><li>El título es obligatorio</li><li>Error al guardar</li><li>Error</li></ul>
+            <p class="subtipo">Confirmación <span class="cuenta">2</span></p>
+            <ul class="frases"><li>Guardado</li><li>Desactivado</li></ul></div><div class="pantalla"><h3>Planes <span class="cuenta">5</span></h3>
+            <p class="subtipo">Error <span class="cuenta">4</span></p>
+            <ul class="frases"><li>Necesitamos tu nombre para llamarte</li><li>Necesitamos un teléfono válido</li><li>No hemos podido cargar los planes</li><li>No hemos podido abrir el pago</li></ul>
+            <p class="subtipo">Información <span class="cuenta">1</span></p>
+            <ul class="frases"><li>Pago cancelado. Puedes elegir un plan cuando quieras.</li></ul></div><div class="pantalla"><h3>AdminMessages <span class="cuenta">1</span></h3>
+            <p class="subtipo">Error <span class="cuenta">1</span></p>
+            <ul class="frases"><li>Error al enviar el mensaje</li></ul></div><div class="pantalla"><h3>AdminPaneles <span class="cuenta">1</span></h3>
+            <p class="subtipo">Confirmación <span class="cuenta">1</span></p>
+            <ul class="frases"><li>Lista guardada</li></ul></div><div class="pantalla"><h3>AdminTareas <span class="cuenta">1</span></h3>
+            <p class="subtipo">Confirmación <span class="cuenta">1</span></p>
+            <ul class="frases"><li>Tarea borrada</li></ul></div>
+
+<h3>Los errores <span class="cuenta">57</span></h3>
+
+        <div class="pantalla"><h3>admin <span class="cuenta">28</span></h3>
+        <ul class="frases"><li>Revisión no encontrada</li><li>No hemos podido generar la sugerencia, vuelve a intentarlo en un momento.</li><li>Sin dieta en esa fecha</li><li>Los macros no se guardan por aquí: usa la pestaña de Macros</li><li>Este cliente ya tiene coach; solo su coach actual puede cambiarlo</li><li>Solo puedes asignarte a ti mismo clientes sin coach</li><li>Entrenador no válido</li><li>El ciclo tiene que ser un número de semanas entre 1 y 52</li><li>La semana de entrada tiene que estar entre 1 y 52</li><li>El calendario tiene que ser un objeto</li><li>El patrón tiene que ser una lista de semanas con los tipos de reporte de la app</li><li>No hay nada que cambiar</li><li>Falta la fecha</li><li>El % graso tiene que ser un número</li><li>Un % graso fuera de 3-60 no es un dato, es un error</li><li>La fecha del peso tiene que ser AAAA-MM-DD</li><li>Entrada de historial no encontrada</li><li>Faltan campos: peso, sexo, porcentaje_graso, objetivo</li><li>Ese email ya está en uso</li><li>Rol inválido. Usa: …</li><li>El plan '…' no es asignable como membresía</li><li>No puedes darte de baja a ti mismo</li><li>Sugerencia no encontrada</li><li>Esta sugerencia ya está aprobada</li><li>Ponle una categoría antes de aprobarlo: de ella depende qué macros le</li><li>El nombre es obligatorio</li><li>Ponle una categoría: de ella depende qué macros le cuentan al cliente.</li><li>Alimento no encontrado</li></ul></div>
+        <div class="pantalla"><h3>leads <span class="cuenta">18</span></h3>
+        <ul class="frases"><li>Escribe un correo para que podamos avisarte</li><li>Nombre es obligatorio</li><li>Ese email ya es un cliente de la app</li><li>Ya existe un lead con ese email (…, estado: …)</li><li>Lead no encontrado</li><li>Ese plan ya no se contrata.</li><li>Ese plan no tiene precio para cobrar.</li><li>Estado no válido. Usa: …</li><li>Motivo no válido. Usa: …</li><li>El responsable debe ser un miembro del equipo</li><li>La nota no puede estar vacía</li><li>Este lead ya fue convertido</li><li>El lead necesita email para convertirse en cliente</li><li>Ya existe un usuario con email …</li><li>Dime con qué plan entra. Se puede contratar: …</li><li>'…' ya no se contrata. Un alta nueva entra con uno de estos:</li><li>El webhook de GHL no está configurado (falta GHL_WEBHOOK_SECRET).</li><li>Webhook secret inválido</li></ul></div>
+        <div class="pantalla"><h3>tareas <span class="cuenta">6</span></h3>
+        <ul class="frases"><li>Faltan el quién o el qué de la tarea.</li><li>Esa persona no está en el equipo.</li><li>No se creó ninguna tarea.</li><li>Esa tarea no existe.</li><li>Las automáticas no se borran: márcala hecha y no vuelve.</li><li>Solo quien la creó puede borrarla.</li></ul></div>
+        <div class="pantalla"><h3>paneles <span class="cuenta">5</span></h3>
+        <ul class="frases"><li>El importe tiene que ser un número o null</li><li>El importe tiene que estar entre 0 y 10000</li><li>Ese entrenador no existe</li><li>hechas y total tienen que ser enteros de 0 en adelante</li><li>hechas no puede ser mayor que total</li></ul></div>
+
+<div class="pie">
+  12EN12 · 594 textos ·
+  generado el 26 de agosto de 2026 desde el código (<code>_guia/_recoger_textos.js</code>)
+</div>
+</body></html>
