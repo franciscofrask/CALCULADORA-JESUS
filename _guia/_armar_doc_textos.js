@@ -11,7 +11,10 @@ const RAIZ = path.resolve(__dirname, '..');
 const d = JSON.parse(fs.readFileSync(path.join(RAIZ, '_guia/_textos_app.json'), 'utf8'));
 
 const esc = (s) => String(s || '')
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    // Los huecos que rellena la app se pintan aparte: leyendo una lista de cien frases,
+    // saber de un vistazo que es texto fijo y que es un dato es la mitad del trabajo.
+    .replace(/\[([^\]]+)\]/g, '<span class="dato">[$1]</span>');
 
 // Los nombres de fichero, dichos como se llaman las pantallas en la app.
 const NOMBRES = {
@@ -145,6 +148,8 @@ const html = `<!doctype html>
   .txt { font-weight: 600; }
   .don, .boton { color: #888; font-size: 8.2pt; }
   .vacio { color: #bbb; }
+  /* Los huecos que rellena la app, en gris: se distinguen del texto fijo sin leerlos. */
+  .dato { color: #b06030; font-weight: 600; }
   .peligro { color: #d33; font-weight: 700; }
   .caja { background: #fdf5f0; border: 1px solid #f3d9c8; border-radius: 3px;
           padding: 2.5mm 3.5mm; margin: 3mm 0; page-break-inside: avoid; }
@@ -167,8 +172,13 @@ const html = `<!doctype html>
     <li><b>Los errores</b> (${n('errores', 'cliente')}): lo que sale cuando algo no se puede hacer.</li>
   </ul>
   <p class="intro">Al final va lo del <b>panel del equipo</b>, que no lo ve ningún cliente.
-     Los <span class="peligro">▲</span> son las preguntas antes de borrar algo. Los «…» son
-     huecos que la app rellena: un nombre, una fecha, un número.</p>
+     Los <span class="peligro">▲</span> son las preguntas antes de borrar algo.</p>
+  <p class="intro"><b>Lo que va entre corchetes no falta: lo rellena la app.</b>
+     «<span class="dato">[el alimento]</span> fuera de la comida» sale como «Pechuga de
+     pollo fuera de la comida»; «Copiada <span class="dato">[la comida]</span> del
+     <span class="dato">[la fecha]</span>» sale con el nombre y el día de verdad. Y una
+     barra entre dos trozos son las <b>dos redacciones</b> del mismo mensaje: «Un alimento
+     ya no está <span class="dato">/</span> … alimentos ya no están».</p>
 </div>
 
 <h2>1 · Los avisos <span class="cuenta">${n('avisos')}</span></h2>

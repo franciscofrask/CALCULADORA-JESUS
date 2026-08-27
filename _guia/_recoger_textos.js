@@ -104,7 +104,43 @@ const cadenaDesde = (src, i) => {
 // Dentro de un hueco hay de todo: frases que se leen y claves que no («quitar_o_bajar»,
 // «anadir», los valores con los que el codigo compara). Se quedan las frases: una clave no
 // lleva espacios y va en minusculas con guiones bajos.
-const esFrase = (s) => s.trim().length > 2 && !/^[a-z0-9_.]+$/.test(s.trim());
+// Y tampoco son texto las RUTAS: `${r.data.importe_eur}` hacia buscar `const r = await
+// api.get('/leads/…/enlace-pago')` y la ruta acababa impresa en el documento como si fuera
+// una frase («Enlace de pago copiado (/leads/…/enlace-pago€)»).
+const esRuta = (s) => /^[/.]|^https?:|\?[a-z_]+=/.test(s.trim());
+const esFrase = (s) => s.trim().length > 2
+    && !/^[a-z0-9_.]+$/.test(s.trim())
+    && !esRuta(s);
+
+/**
+ * QUE DATO VA EN ESTE HUECO, dicho en castellano.
+ *
+ * Un «…» a secas no dice nada: leyendo «Copiada … del …» no se sabe si falta texto o si son
+ * datos (Francisco, 27-08). Son datos, y el codigo ya dice cuales -- `food.nombre`,
+ * `formatDate(fecha)` --, asi que el documento puede decirlo: «Copiada [la comida] del [la
+ * fecha]». De mas concreto a mas general, que la primera pista que casa es la que manda.
+ */
+const PISTAS = [
+    [/etiquetaDia|tipoDia|esEntreno/i, 'entreno o descanso'],
+    [/fav\.?name|favorita/i, 'la favorita'],
+    [/food\.?nombre|alimento\.?nombre|\balimento\b/i, 'el alimento'],
+    [/mealInfo|meal.*name|\bcomida\b/i, 'la comida'],
+    [/formatDate|fecha|\bdia\b|fmtFecha/i, 'la fecha'],
+    [/plan\.?(name|nombre)|\bplan\b/i, 'el plan'],
+    [/cliente|client\.?name|user\.?name/i, 'el cliente'],
+    [/precio|importe|€|eur/i, 'el importe'],
+    [/semana/i, 'la semana'],
+    [/\bmacro|proteina|hidratos|grasa/i, 'el macro'],
+    [/num1|num0|Math\.|cantidad|gramos|\bg\b|\bkg\b|peso/i, 'la cantidad'],
+    [/\bkw\b|palabra|keyword/i, 'lo que has escrito'],
+    [/\bnombre\b|\bname\b|\btitulo\b/i, 'el nombre'],
+    [/length|count|total|\bn[A-Z]/, 'el número'],
+];
+const queDato = (dentro) => {
+    const d = dentro.trim();
+    for (const [re, nombre] of PISTAS) if (re.test(d)) return `[${nombre}]`;
+    return '[…]';
+};
 
 const literalesDe = (dentro) => {
     const m = dentro.match(/(['"`])((?:\\.|(?!\1)[^\\])*)\1/g) || [];
@@ -134,11 +170,17 @@ const legible = (t, src = '', interno = false) => {
             if (!puesto.length && /^\s*[A-Za-z_$][\w$.]*\s*$/.test(dentro) && src) {
                 const nombre = dentro.trim().split('.')[0];
                 const def = new RegExp(`(?:const|let|var)\\s+${nombre}\\s*=([\\s\\S]{0,400}?);\\s*\\n`).exec(src);
-                if (def) puesto = literalesDe(def[1]);
+                // Si lo que vale es una llamada al servidor y no un texto, no se toca:
+                // de ahi salian rutas de la API impresas como si fueran frases.
+                // Si lo que vale es una llamada al servidor y no un texto, no se toca: de
+                // ahi salian rutas de la API impresas como si fueran frases.
+                if (def && !/await|api\.|fetch\(|axios/.test(def[1])) puesto = literalesDe(def[1]);
             }
             // Lo sacado puede traer SUS PROPIOS huecos («${nEx} alimentos ya no están»), asi
             // que se vuelve a pasar por aqui. Sin esto quedaban nombres de variable impresos.
-            r += puesto.length ? puesto.map((x) => legible(x, src, true)).join(' / ') : '…';
+            r += puesto.length
+                ? puesto.map((x) => legible(x, src, true)).join(' / ')
+                : queDato(dentro);
             if (nivel > 0) break;   // el hueco no cierra: lo que sigue es codigo cortado
             i = j - 1;
             continue;

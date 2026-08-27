@@ -9,7 +9,7 @@
   },
   {
    "tipo": "error",
-   "texto": "La imagen pesa … MB y el máximo son 4 MB.",
+   "texto": "La imagen pesa [la cantidad] MB y el máximo son 4 MB.",
    "quien": "cliente",
    "donde": "ImagenAdjunta",
    "fichero": "frontend/src/components/chat/ImagenAdjunta.jsx"
@@ -86,14 +86,14 @@
   },
   {
    "tipo": "error",
-   "texto": "… ya está en esta comida - ajusta su cantidad directamente.",
+   "texto": "[el alimento] ya está en esta comida - ajusta su cantidad directamente.",
    "quien": "cliente",
    "donde": "BuildMealModal",
    "fichero": "frontend/src/components/nutrition/BuildMealModal.jsx"
   },
   {
    "tipo": "warning",
-   "texto": "… entra, pero esta comida se pasa. Baja la cantidad si quieres cuadrarla.",
+   "texto": "[el alimento] entra, pero esta comida se pasa. Baja la cantidad si quieres cuadrarla.",
    "quien": "cliente",
    "donde": "BuildMealModal",
    "fichero": "frontend/src/components/nutrition/BuildMealModal.jsx"
@@ -107,7 +107,7 @@
   },
   {
    "tipo": "success",
-   "texto": "✅ Comida guardada (… …)",
+   "texto": "✅ Comida guardada ([el número] [el alimento])",
    "quien": "cliente",
    "donde": "BuildMealModal",
    "fichero": "frontend/src/components/nutrition/BuildMealModal.jsx"
@@ -128,14 +128,14 @@
   },
   {
    "tipo": "error",
-   "texto": "Ya tienes una comida favorita que se llama \"…\". Ponle otro nombre.",
+   "texto": "Ya tienes una comida favorita que se llama \"[…]\". Ponle otro nombre.",
    "quien": "cliente",
    "donde": "FavoritasDeComida",
    "fichero": "frontend/src/components/nutrition/FavoritasDeComida.jsx"
   },
   {
    "tipo": "error",
-   "texto": "Ya tienes una favorita que se llama \"…\". Ponle otro nombre para distinguirlas.",
+   "texto": "Ya tienes una favorita que se llama \"[…]\". Ponle otro nombre para distinguirlas.",
    "quien": "cliente",
    "donde": "FavoritesModal",
    "fichero": "frontend/src/components/nutrition/FavoritesModal.jsx"
@@ -170,14 +170,14 @@
   },
   {
    "tipo": "error",
-   "texto": "\"…\" ya está en la lista",
+   "texto": "\"[lo que has escrito]\" ya está en la lista",
    "quien": "cliente",
    "donde": "PreferencesSetup",
    "fichero": "frontend/src/components/nutrition/PreferencesSetup.jsx"
   },
   {
    "tipo": "warning",
-   "texto": "\"…\" no coincide con ningún alimento del catálogo: guardada, pero hoy no bloquea nada.",
+   "texto": "\"[lo que has escrito]\" no coincide con ningún alimento del catálogo: guardada, pero hoy no bloquea nada.",
    "quien": "cliente",
    "donde": "PreferencesSetup",
    "fichero": "frontend/src/components/nutrition/PreferencesSetup.jsx"
@@ -268,7 +268,7 @@
   },
   {
    "tipo": "success",
-   "texto": "… queda como contactado",
+   "texto": "[el nombre] queda como contactado",
    "quien": "equipo",
    "donde": "AdminDashboard",
    "fichero": "frontend/src/pages/AdminDashboard.jsx"
@@ -282,7 +282,7 @@
   },
   {
    "tipo": "success",
-   "texto": "Enlace de pago copiado (/leads/…/enlace-pago€). Pégaselo por WhatsApp.",
+   "texto": "Enlace de pago copiado ([el importe]€). Pégaselo por WhatsApp.",
    "quien": "equipo",
    "donde": "AdminDashboard",
    "fichero": "frontend/src/pages/AdminDashboard.jsx"
@@ -352,14 +352,14 @@
   },
   {
    "tipo": "info",
-   "texto": "… se registró pero no completó el alta (no eligió plan). Aún no tiene ficha.",
+   "texto": "[el nombre] se registró pero no completó el alta (no eligió plan). Aún no tiene ficha.",
    "quien": "equipo",
    "donde": "AdminDashboard",
    "fichero": "frontend/src/pages/AdminDashboard.jsx"
   },
   {
    "tipo": "info",
-   "texto": "Lead nuevo recibido · … sin gestionar",
+   "texto": "Lead nuevo recibido · [el número] sin gestionar",
    "quien": "equipo",
    "donde": "AdminDashboard",
    "fichero": "frontend/src/pages/AdminDashboard.jsx"
@@ -464,7 +464,7 @@
   },
   {
    "tipo": "error",
-   "texto": "La proporción de … no vale: va de 0 a 1 (1 = ese",
+   "texto": "La proporción de […] no vale: va de 0 a 1 (1 = ese",
    "quien": "equipo",
    "donde": "AdminMenus",
    "fichero": "frontend/src/pages/AdminMenusPage.jsx"
@@ -583,7 +583,7 @@
   },
   {
    "tipo": "success",
-   "texto": "«/admin/routines/pdf-del-mes?sexo=…» quitada de la biblioteca",
+   "texto": "«[el nombre]» quitada de la biblioteca",
    "quien": "equipo",
    "donde": "AdminRoutines",
    "fichero": "frontend/src/pages/AdminRoutinesPage.jsx"
@@ -702,7 +702,7 @@
   },
   {
    "tipo": "success",
-   "texto": "¡Bienvenido, …!",
+   "texto": "¡Bienvenido, [el cliente]!",
    "quien": "cliente",
    "donde": "Auth",
    "fichero": "frontend/src/pages/AuthPage.jsx"
@@ -835,7 +835,7 @@
   },
   {
    "tipo": "success",
-   "texto": "Le hemos puesto «/admin/routines/pdf/…»",
+   "texto": "Le hemos puesto «[el nombre]»",
    "quien": "equipo",
    "donde": "ClientDetail",
    "fichero": "frontend/src/pages/ClientDetailPage.jsx"
@@ -1045,7 +1045,7 @@
   },
   {
    "tipo": "success",
-   "texto": "Foto subida (…)",
+   "texto": "Foto subida ([…])",
    "quien": "equipo",
    "donde": "ClientDetail",
    "fichero": "frontend/src/pages/ClientDetailPage.jsx"
@@ -1199,7 +1199,7 @@
   },
   {
    "tipo": "success",
-   "texto": "Macros guardados desde …",
+   "texto": "Macros guardados desde […]",
    "quien": "cliente",
    "donde": "MacroCalculatorClient",
    "fichero": "frontend/src/pages/MacroCalculatorClientPage.jsx"
@@ -1283,7 +1283,7 @@
   },
   {
    "tipo": "success",
-   "texto": "… fuera de la comida",
+   "texto": "[el alimento] fuera de la comida",
    "quien": "cliente",
    "donde": "Nutrition",
    "fichero": "frontend/src/pages/NutritionPage.jsx"
@@ -1311,7 +1311,7 @@
   },
   {
    "tipo": "success",
-   "texto": "Copiada … del …, cuadrada a tu objetivo",
+   "texto": "Copiada [la comida] del [la fecha], cuadrada a tu objetivo",
    "quien": "cliente",
    "donde": "Nutrition",
    "fichero": "frontend/src/pages/NutritionPage.jsx"
@@ -1367,35 +1367,35 @@
   },
   {
    "tipo": "warning",
-   "texto": "Aplicada \"…\" adaptada a tu día de …. El intra/post se ha quitado porque hoy no hay periworkout.",
+   "texto": "Aplicada \"[la favorita]\" adaptada a tu día de [entreno o descanso]. El intra/post se ha quitado porque hoy no hay periworkout.",
    "quien": "cliente",
    "donde": "Nutrition",
    "fichero": "frontend/src/pages/NutritionPage.jsx"
   },
   {
    "tipo": "warning",
-   "texto": "Aplicada \"…\" adaptada a tu día de …, pero una comida se queda corta de macros / Intra / Post comidas se quedan cortas de macros.",
+   "texto": "Aplicada \"[la favorita]\" adaptada a tu día de [entreno o descanso], pero una comida se queda corta de macros / Intra / Post comidas se quedan cortas de macros.",
    "quien": "cliente",
    "donde": "Nutrition",
    "fichero": "frontend/src/pages/NutritionPage.jsx"
   },
   {
    "tipo": "success",
-   "texto": "Aplicada \"…\" adaptada a tu día de …",
+   "texto": "Aplicada \"[la favorita]\" adaptada a tu día de [entreno o descanso]",
    "quien": "cliente",
    "donde": "Nutrition",
    "fichero": "frontend/src/pages/NutritionPage.jsx"
   },
   {
    "tipo": "warning",
-   "texto": "Aplicada \"…\", pero una comida se queda corta de macros / Intra / Post comidas se quedan cortas de macros.",
+   "texto": "Aplicada \"[la favorita]\", pero una comida se queda corta de macros / Intra / Post comidas se quedan cortas de macros.",
    "quien": "cliente",
    "donde": "Nutrition",
    "fichero": "frontend/src/pages/NutritionPage.jsx"
   },
   {
    "tipo": "success",
-   "texto": "Aplicada \"…\" y ajustada a tus macros",
+   "texto": "Aplicada \"[la favorita]\" y ajustada a tus macros",
    "quien": "cliente",
    "donde": "Nutrition",
    "fichero": "frontend/src/pages/NutritionPage.jsx"
@@ -1437,14 +1437,14 @@
   },
   {
    "tipo": "warning",
-   "texto": "Comida cuadrada. Un alimento ya no está / … alimentos ya no están en el catálogo y se quitó.",
+   "texto": "Comida cuadrada. Un alimento ya no está / [el número] alimentos ya no están en el catálogo y se quitó.",
    "quien": "cliente",
    "donde": "Nutrition",
    "fichero": "frontend/src/pages/NutritionPage.jsx"
   },
   {
    "tipo": "warning",
-   "texto": "No se puede cuadrar sin quitar nada: …. Para cuadrarlo tendrías que quitar o bajar …, que pone … g de …. / Para cuadrarlo te falta añadir algo con …. No se ha quitado ninguno. Cantidades redondeadas para pesarlas fácil: los macros pueden variar unos gramos.",
+   "texto": "No se puede cuadrar sin quitar nada: […]. Para cuadrarlo tendrías que quitar o bajar [el alimento], que pone [la cantidad] g de [el macro]. / Para cuadrarlo te falta añadir algo con [el macro]. No se ha quitado ninguno. Cantidades redondeadas para pesarlas fácil: los macros pueden variar unos gramos.",
    "quien": "cliente",
    "donde": "Nutrition",
    "fichero": "frontend/src/pages/NutritionPage.jsx"
@@ -1472,7 +1472,7 @@
   },
   {
    "tipo": "success",
-   "texto": "Guardada · \"…\" ya es una de tus comidas",
+   "texto": "Guardada · \"[el nombre]\" ya es una de tus comidas",
    "quien": "cliente",
    "donde": "Nutrition",
    "fichero": "frontend/src/pages/NutritionPage.jsx"
@@ -1486,28 +1486,28 @@
   },
   {
    "tipo": "success",
-   "texto": "\"…\" puesta tal cual",
+   "texto": "\"[la favorita]\" puesta tal cual",
    "quien": "cliente",
    "donde": "Nutrition",
    "fichero": "frontend/src/pages/NutritionPage.jsx"
   },
   {
    "tipo": "success",
-   "texto": "\"…\" puesta con las cantidades guardadas",
+   "texto": "\"[la favorita]\" puesta con las cantidades guardadas",
    "quien": "cliente",
    "donde": "Nutrition",
    "fichero": "frontend/src/pages/NutritionPage.jsx"
   },
   {
    "tipo": "success",
-   "texto": "\"…\" puesta y cuadrada a esta comida",
+   "texto": "\"[la favorita]\" puesta y cuadrada a esta comida",
    "quien": "cliente",
    "donde": "Nutrition",
    "fichero": "frontend/src/pages/NutritionPage.jsx"
   },
   {
    "tipo": "warning",
-   "texto": "\"…\" puesta, pero no cuadra aquí: ….",
+   "texto": "\"[la favorita]\" puesta, pero no cuadra aquí: […].",
    "quien": "cliente",
    "donde": "Nutrition",
    "fichero": "frontend/src/pages/NutritionPage.jsx"
@@ -1521,7 +1521,7 @@
   },
   {
    "tipo": "success",
-   "texto": "Macros volcados en … - las demás comidas quedan bloqueadas",
+   "texto": "Macros volcados en [la comida] - las demás comidas quedan bloqueadas",
    "quien": "cliente",
    "donde": "Nutrition",
    "fichero": "frontend/src/pages/NutritionPage.jsx"
@@ -1661,14 +1661,14 @@
   },
   {
    "tipo": "error",
-   "texto": "«…» ya está en la lista",
+   "texto": "«[lo que has escrito]» ya está en la lista",
    "quien": "cliente",
    "donde": "Questionnaire",
    "fichero": "frontend/src/pages/QuestionnairePage.jsx"
   },
   {
    "tipo": "warning",
-   "texto": "«…» no coincide con ningún alimento del catálogo: guardada, pero hoy no bloquea nada.",
+   "texto": "«[lo que has escrito]» no coincide con ningún alimento del catálogo: guardada, pero hoy no bloquea nada.",
    "quien": "cliente",
    "donde": "Questionnaire",
    "fichero": "frontend/src/pages/QuestionnairePage.jsx"
@@ -1815,7 +1815,7 @@
   },
   {
    "tipo": "success",
-   "texto": "… pasa al ….",
+   "texto": "[…] pasa al [la fecha].",
    "quien": "cliente",
    "donde": "Routine",
    "fichero": "frontend/src/pages/RoutinePage.jsx"
@@ -1944,7 +1944,7 @@
   {
    "modo": "confirm",
    "titulo": "¿Borrar este menú de la biblioteca?",
-   "detalle": "…. Deja de proponerse a los clientes.",
+   "detalle": "[el nombre]. Deja de proponerse a los clientes.",
    "boton": "Borrar",
    "peligro": true,
    "quien": "equipo",
@@ -1963,7 +1963,7 @@
   },
   {
    "modo": "confirm",
-   "titulo": "¿Borrar el menú \"…\"?",
+   "titulo": "¿Borrar el menú \"[el nombre]\"?",
    "detalle": "Desaparece del listado y deja de proponerse a los clientes.",
    "boton": "Borrar",
    "peligro": true,
@@ -1983,7 +1983,7 @@
   },
   {
    "modo": "confirm",
-   "titulo": "¿Dar de baja a …?",
+   "titulo": "¿Dar de baja a [el nombre]?",
    "detalle": "No podrá entrar, pero los datos se conservan y se puede reactivar cuando quieras.",
    "boton": "Dar de baja",
    "peligro": true,
@@ -1993,7 +1993,7 @@
   },
   {
    "modo": "confirm",
-   "titulo": "¿Generar una contraseña nueva para …?",
+   "titulo": "¿Generar una contraseña nueva para [el nombre]?",
    "detalle": "La actual dejará de funcionar. Verás la nueva una sola vez para pasársela.",
    "boton": "Generar",
    "peligro": false,
@@ -2034,7 +2034,7 @@
   {
    "modo": "confirm",
    "titulo": "Ese peso da un salto grande",
-   "detalle": "… Si es un dedazo, corrígelo: de este peso salen",
+   "detalle": "[…] Si es un dedazo, corrígelo: de este peso salen",
    "boton": "Es correcto",
    "peligro": false,
    "quien": "equipo",
@@ -2053,7 +2053,7 @@
   },
   {
    "modo": "confirm",
-   "titulo": "¿Borrar el protocolo del …?",
+   "titulo": "¿Borrar el protocolo del [la fecha]?",
    "detalle": "Se borra ese registro del histórico. El resto de versiones se queda.",
    "boton": "Borrar",
    "peligro": false,
@@ -2113,7 +2113,7 @@
   },
   {
    "modo": "confirm",
-   "titulo": "¿Desactivar \"…\"?",
+   "titulo": "¿Desactivar \"[el nombre]\"?",
    "detalle": "Deja de estar disponible para asignarlo a clientes. Se puede volver a activar.",
    "boton": "Desactivar",
    "peligro": true,
@@ -2136,13 +2136,13 @@
    "fichero": "backend/core/avisos_cliente.py"
   },
   {
-   "titulo": "Tu próximo ajuste es el …",
+   "titulo": "Tu próximo ajuste es el […]",
    "mensaje": "",
    "quien": "cliente",
    "fichero": "backend/core/avisos_cliente.py"
   },
   {
-   "titulo": "Tu rutina acaba el …",
+   "titulo": "Tu rutina acaba el […]",
    "mensaje": "Renuévala y sigues sin parar.",
    "quien": "cliente",
    "fichero": "backend/core/avisos_cliente.py"
@@ -2179,13 +2179,13 @@
   },
   {
    "titulo": "Han pasado cuatro semanas",
-   "mensaje": "Buen momento para repetir ….",
+   "mensaje": "Buen momento para repetir […].",
    "quien": "cliente",
    "fichero": "backend/core/avisos_cliente.py"
   },
   {
    "titulo": "Toca ponerse al día",
-   "mensaje": "Hace cuatro semanas de ….",
+   "mensaje": "Hace cuatro semanas de […].",
    "quien": "cliente",
    "fichero": "backend/core/avisos_cliente.py"
   },
@@ -2602,7 +2602,7 @@
    "fichero": "backend/core/security.py"
   },
   {
-   "texto": "… está bloqueada: el proyecto está configurado solo para Stripe test mode.",
+   "texto": "[…] está bloqueada: el proyecto está configurado solo para Stripe test mode.",
    "quien": "cliente",
    "fichero": "backend/core/stripe_billing.py"
   },
@@ -2612,7 +2612,7 @@
    "fichero": "backend/core/stripe_billing.py"
   },
   {
-   "texto": "El plan … no está disponible para compra en este momento.",
+   "texto": "El plan [el nombre] no está disponible para compra en este momento.",
    "quien": "cliente",
    "fichero": "backend/core/stripe_billing.py"
   },
@@ -2722,12 +2722,12 @@
    "fichero": "backend/routes/admin.py"
   },
   {
-   "texto": "Rol inválido. Usa: …",
+   "texto": "Rol inválido. Usa: […]",
    "quien": "equipo",
    "fichero": "backend/routes/admin.py"
   },
   {
-   "texto": "El plan '…' no es asignable como membresía",
+   "texto": "El plan '[el nombre]' no es asignable como membresía",
    "quien": "equipo",
    "fichero": "backend/routes/admin.py"
   },
@@ -2967,17 +2967,17 @@
    "fichero": "backend/routes/calculator.py"
   },
   {
-   "texto": "Formato de imagen no admitido (…). Usa JPEG, PNG, WebP o HEIC.",
+   "texto": "Formato de imagen no admitido ([…]). Usa JPEG, PNG, WebP o HEIC.",
    "quien": "cliente",
    "fichero": "backend/routes/calculator.py"
   },
   {
-   "texto": "La foto pesa … KB; el máximo permitido es … MB.",
+   "texto": "La foto pesa […] KB; el máximo permitido es […] MB.",
    "quien": "cliente",
    "fichero": "backend/routes/calculator.py"
   },
   {
-   "texto": "Solo puedes sugerir … alimentos por semana. Vuelve a intentarlo la próxima semana.",
+   "texto": "Solo puedes sugerir […] alimentos por semana. Vuelve a intentarlo la próxima semana.",
    "quien": "cliente",
    "fichero": "backend/routes/calculator.py"
   },
@@ -3052,7 +3052,7 @@
    "fichero": "backend/routes/chatbot.py"
   },
   {
-   "texto": "Tipo invalido. Usa uno de: …",
+   "texto": "Tipo invalido. Usa uno de: […]",
    "quien": "cliente",
    "fichero": "backend/routes/checkins.py"
   },
@@ -3067,7 +3067,7 @@
    "fichero": "backend/routes/checkins.py"
   },
   {
-   "texto": "Tipo de archivo no permitido: …. Sube JPEG, PNG, WebP o HEIC.",
+   "texto": "Tipo de archivo no permitido: […]. Sube JPEG, PNG, WebP o HEIC.",
    "quien": "cliente",
    "fichero": "backend/routes/checkins.py"
   },
@@ -3227,7 +3227,7 @@
    "fichero": "backend/routes/leads.py"
   },
   {
-   "texto": "Ya existe un lead con ese email (sin nombre, estado: …)",
+   "texto": "Ya existe un lead con ese email (sin nombre, estado: […])",
    "quien": "equipo",
    "fichero": "backend/routes/leads.py"
   },
@@ -3247,12 +3247,12 @@
    "fichero": "backend/routes/leads.py"
   },
   {
-   "texto": "Estado no válido. Usa: …",
+   "texto": "Estado no válido. Usa: […]",
    "quien": "equipo",
    "fichero": "backend/routes/leads.py"
   },
   {
-   "texto": "Motivo no válido. Usa: …",
+   "texto": "Motivo no válido. Usa: […]",
    "quien": "equipo",
    "fichero": "backend/routes/leads.py"
   },
@@ -3277,17 +3277,17 @@
    "fichero": "backend/routes/leads.py"
   },
   {
-   "texto": "Ya existe un usuario con email …",
+   "texto": "Ya existe un usuario con email […]",
    "quien": "equipo",
    "fichero": "backend/routes/leads.py"
   },
   {
-   "texto": "Dime con qué plan entra. Se puede contratar: …",
+   "texto": "Dime con qué plan entra. Se puede contratar: […]",
    "quien": "equipo",
    "fichero": "backend/routes/leads.py"
   },
   {
-   "texto": "'…' ya no se contrata. Un alta nueva entra con uno de estos:",
+   "texto": "'[el nombre]' ya no se contrata. Un alta nueva entra con uno de estos:",
    "quien": "equipo",
    "fichero": "backend/routes/leads.py"
   },
@@ -3312,7 +3312,7 @@
    "fichero": "backend/routes/messages.py"
   },
   {
-   "texto": "La imagen pesa … KB y el máximo son",
+   "texto": "La imagen pesa […] KB y el máximo son",
    "quien": "cliente",
    "fichero": "backend/routes/messages.py"
   },
@@ -3382,7 +3382,7 @@
    "fichero": "backend/routes/plans.py"
   },
   {
-   "texto": "Nada que editar. Campos válidos: …",
+   "texto": "Nada que editar. Campos válidos: […]",
    "quien": "cliente",
    "fichero": "backend/routes/plans.py"
   },
@@ -3402,7 +3402,7 @@
    "fichero": "backend/routes/reports.py"
   },
   {
-   "texto": "Todavía no toca: se abre el …",
+   "texto": "Todavía no toca: se abre el [la fecha]",
    "quien": "cliente",
    "fichero": "backend/routes/reports.py"
   },
@@ -3412,7 +3412,7 @@
    "fichero": "backend/routes/reports.py"
   },
   {
-   "texto": "Para mandar el reporte del mes te faltan ….",
+   "texto": "Para mandar el reporte del mes te faltan […].",
    "quien": "cliente",
    "fichero": "backend/routes/reports.py"
   },
@@ -3467,7 +3467,7 @@
    "fichero": "backend/routes/routines.py"
   },
   {
-   "texto": "El PDF pesa demasiado; el máximo es … MB.",
+   "texto": "El PDF pesa demasiado; el máximo es […] MB.",
    "quien": "cliente",
    "fichero": "backend/routes/routines.py"
   },
@@ -3477,7 +3477,7 @@
    "fichero": "backend/routes/routines.py"
   },
   {
-   "texto": "Son demasiados de una vez; el máximo es ….",
+   "texto": "Son demasiados de una vez; el máximo es [el cliente].",
    "quien": "cliente",
    "fichero": "backend/routes/routines.py"
   },
@@ -3677,12 +3677,12 @@
    "fichero": "backend/routes/users.py"
   },
   {
-   "texto": "Nos falta … para poder calcular. Vuelve a entrar al cuestionario",
+   "texto": "Nos falta […] para poder calcular. Vuelve a entrar al cuestionario",
    "quien": "cliente",
    "fichero": "backend/routes/users.py"
   },
   {
-   "texto": "Antes de calcular tus macros falta que nos digas ….",
+   "texto": "Antes de calcular tus macros falta que nos digas […].",
    "quien": "cliente",
    "fichero": "backend/routes/users.py"
   },
