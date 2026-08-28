@@ -170,11 +170,12 @@ ul.check li b{color:var(--tinta)}
       Las partes 1 a 5 y los puntos 179 al 197 quedaron cerrados los días 26 y 27.
       Lo que sigue es <b>lo que quedaba abierto el 28</b>: se cerró de uno en uno, y cada punto
       entra aquí con su diagnóstico, su arreglo y la comprobación hecha en la app de verdad, en el
-      teléfono y en el ordenador. <b>Los diez están cerrados.</b> Falta llevarlos a producción.</p>
+      teléfono y en el ordenador. <b>Los diez están cerrados</b>, y con ellos el primero de los que
+      quedaban de la parte 1, el <b>49</b>. Falta llevarlos a producción.</p>
   </header>
 
   <div class="marcador">
-    <div><p class="c ok" id="n-cerrados">10</p><p class="l">Cerrados</p></div>
+    <div><p class="c ok" id="n-cerrados">11</p><p class="l">Cerrados</p></div>
     <div><p class="c nada">5</p><p class="l">Sin trabajo</p></div>
     <div><p class="c espera">1</p><p class="l">Datos, no código</p></div>
     <div><p class="c acc">6</p><p class="l">Rojos de antes</p></div>
@@ -205,6 +206,93 @@ ul.check li b{color:var(--tinta)}
     </tbody>
   </table>
   </div>
+
+  <h2>De la parte 1 · el punto 49</h2>
+  <p class="h2s">El primero de los que quedaban del documento del 24 de agosto.</p>
+
+  <article class="punto">
+    <div class="pcab">
+      <p class="num">49</p>
+      <div class="ptit">
+        <h3>Cuatro pantallas daban cuatro números del mismo día</h3>
+        <p>Nutrición · Inicio · Mis macros · Mi semana · parte 1</p>
+      </div>
+    </div>
+    <div class="pcuerpo">
+
+      <div class="bloque">
+        <p class="k">Lo que decía el documento</p>
+        <p class="cita">«Inicio 250·210·60, Mis macros 210·160·60, Mi semana 172·162·61 y
+          Nutrición "Te faltan 40 de 250". Unas suman el perientreno y otras no, y ninguna lo
+          dice.»</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">Lo medido hoy, con el mismo día en las cuatro</p>
+        <p>Se montó un día con las cuatro comidas y con intra y post, y se leyó pantalla por
+          pantalla. <b>Tres de las cuatro ya cuadraban.</b> La que no, Mi semana:</p>
+        <div class="scroll">
+        <table class="mapa" style="margin-top:6px">
+          <thead><tr><th>Pantalla</th><th>P</th><th>H</th><th>G</th><th>Qué número es</th></tr></thead>
+          <tbody>
+            <tr><td class="q">Nutrición</td><td>118</td><td>288</td><td>34</td><td>lo creado, con peri</td></tr>
+            <tr><td class="q">Inicio · Dieta</td><td>118</td><td>288</td><td>34</td><td>igual</td></tr>
+            <tr><td class="q">Inicio · Macros</td><td>235</td><td>290</td><td>60</td><td>el objetivo, con peri</td></tr>
+            <tr><td class="q">Mis macros</td><td>190</td><td>240</td><td>60</td><td>el objetivo sin peri, y el peri en su línea</td></tr>
+            <tr><td class="q"><b>Mi semana</b></td><td><b>94</b></td><td><b>216</b></td><td>34</td><td>lo creado, <b>sin peri</b></td></tr>
+          </tbody>
+        </table>
+        </div>
+        <div class="datos">
+          <div><p class="v" style="color:var(--acc)">72</p><p class="n">gramos de hidratos de diferencia</p></div>
+          <div><p class="v" style="color:var(--acc)">24</p><p class="n">gramos de proteína</p></div>
+          <div><p class="v" style="color:var(--ok)">3 de 4</p><p class="n">pantallas que ya cuadraban</p></div>
+        </div>
+      </div>
+
+      <div class="bloque">
+        <p class="k">Qué se cambió</p>
+        <p><b>Mi semana cuenta el día como lo cuentan las demás.</b> Usaba la cuenta que deja el
+          intra y el post fuera de los tres macros; ahora los suma en la proteína y en los
+          hidratos, y los deja fuera de la grasa, que en el método el peri no gasta.</p>
+        <p>No hizo falta decidir nada: <b>el criterio ya estaba cerrado en tu punto 88</b>, «en
+          Dieta, Llevas y Falta el perientreno ya va contado como una comida más». Esa fila es de
+          esas.</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">Y una que salió al mirar la captura</p>
+        <p>Con el número arreglado, en el teléfono la fila se leía <em>«Creada · 118 …»</em>: los
+          tres números se cortaban. Se midió la fila entera: <b>354 px, de los que el rótulo «Ver
+          día» se lleva 86 y el cuadrito del día 63</b>, así que a los números les quedaban 52 px
+          para los 108 que ocupan.</p>
+        <p><b>No lo causó este arreglo</b> (con los números de antes también se cortaban: 97 px en
+          el mismo hueco de 52), pero dejarlo así era entregar el dato donde no se ve. Ahora, si
+          no caben, bajan enteros a la línea de abajo. No se quita ningún rótulo y no se pierde
+          nada.</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">Cómo quedó comprobado</p>
+        <ul class="check">
+          <li>Las tres pantallas dicen ahora <b>118 · 288 · 34</b> del mismo día, a
+            <b>390 px y a 1280 px</b>.</li>
+          <li>Los tres números <b>se leen enteros</b> en el teléfono: 108 px en un hueco de 108.</li>
+          <li>Prueba nueva que <b>reproduce el fallo</b>: se le devolvió la línea vieja al
+            servidor y se puso roja («97,2 contra 97,2 de las comidas solas»); con el arreglo,
+            verde.</li>
+          <li>Las cinco baterías del área: <b>90 en verde</b>.</li>
+        </ul>
+        <p class="ficheros">
+          <b>backend/routes/diets.py</b> · la fila de Mi semana cuenta el peri<br>
+          <b>frontend/src/pages/MiSemanaPage.jsx</b> · los números no se cortan<br>
+          <b>backend/tests/test_mi_semana.py</b> · test_la_fila_cuenta_el_peri_como_nutricion<br>
+          <b>_guia/_p49_cuatro_numeros_2808.js</b> · el mismo día leído en las cuatro pantallas
+        </p>
+      </div>
+
+    </div>
+  </article>
 
   <h2>Lo cerrado</h2>
   <p class="h2s">Cada ficha lleva lo que pasaba, la causa medida, lo que se cambió y cómo se comprobó.

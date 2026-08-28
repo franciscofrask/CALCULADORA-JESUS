@@ -158,10 +158,38 @@ class TestMiSemana:
         m = lunes["macros"]
         assert set(m) == {"P", "H", "G"}
         if semana_montada["alimento_id"] != "no-existe":
-            # Cuatro comidas de pollo tienen que sumar proteína; el peri va aparte y
-            # los macros son los del motor de conteo (calibrar_dia), no una clave leída
-            # a mano, así que basta con que el total sea de verdad mayor que cero.
+            # Cuatro comidas de pollo tienen que sumar proteína; los macros son los del
+            # motor de conteo (calibrar_dia), no una clave leída a mano, así que basta
+            # con que el total sea de verdad mayor que cero.
             assert m["P"] > 0
+
+    def test_la_fila_cuenta_el_peri_como_nutricion(self, semana_montada, cabeceras_cliente):
+        """PUNTO 49 DEL 24-08: «cuatro pantallas dan cuatro números del mismo día».
+
+        Esta fila dejaba el intra y el post FUERA de los tres macros, y Nutrición e Inicio
+        los cuentan dentro de la proteína y los hidratos (fuera de la grasa, que en el
+        método el peri no gasta). Medido el 28-08 con el mismo día: 118 P · 288 H arriba y
+        94 P · 216 H aquí, 72 gramos de hidratos de diferencia en dos pantallas que se leen
+        seguidas.
+
+        El lunes de esta semana tiene C1..C4 llenas Y el Post lleno, así que sirve para
+        comprobarlo: su proteína tiene que ser MAYOR que la de las comidas solas, y su
+        grasa exactamente la misma.
+        """
+        if semana_montada["alimento_id"] == "no-existe":
+            pytest.skip("sin catálogo no hay macros que comparar")
+        lunes = next(d for d in _semana(cabeceras_cliente, FECHAS[0])["dias"]
+                     if d["fecha"] == FECHAS[0])
+        r = requests.get(f"{API}/diets/{FECHAS[0]}", headers=cabeceras_cliente, timeout=20)
+        assert r.status_code == 200, r.text
+        # `servido_comidas` es la cuenta SIN el peri: la de Inicio antes de sumárselo.
+        solo_comidas = r.json().get("servido_comidas") or {}
+        assert solo_comidas, "el día no devolvió servido_comidas"
+        assert lunes["macros"]["P"] > solo_comidas["P"], (
+            "la fila de Mi semana no está contando el post en la proteína: "
+            f"{lunes['macros']['P']} contra {solo_comidas['P']} de las comidas solas")
+        assert round(lunes["macros"]["G"], 1) == round(solo_comidas["G"], 1), (
+            "la grasa del peri no cuenta en el método y aquí se ha colado")
 
     def test_el_resumen_cuadra_con_los_dias(self, semana_montada, cabeceras_cliente):
         data = _semana(cabeceras_cliente, FECHAS[0])

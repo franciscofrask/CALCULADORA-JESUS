@@ -664,9 +664,21 @@ async def get_semana(inicio: Optional[str] = None, hoy_cliente: Optional[str] = 
             estado = "empezada"
             empezadas += 1
 
+        # MI SEMANA CUENTA EL DÍA COMO LO CUENTAN LAS DEMÁS PANTALLAS (punto 49 del 24-08:
+        # «cuatro pantallas dan cuatro números del mismo día; unas suman el perientreno y
+        # otras no, y ninguna lo dice»).
+        #
+        # Aquí se usaba `_servido_de_las_comidas`, que deja el intra y el post FUERA de los
+        # tres macros. Nutrición e Inicio los cuentan dentro de la proteína y los hidratos
+        # (fuera de la grasa, que en el método el peri no gasta), y por eso el mismo día
+        # medido el 28-08 salía a 118 P · 288 H en Nutrición y a 94 P · 216 H aquí: 72 g de
+        # hidratos de diferencia en una fila que se lee al lado de la otra.
+        #
+        # El criterio ya estaba decidido en el punto 88: fuera de la pestaña Macros «el
+        # perientreno ya va contado como una comida más». Esta fila es de esas.
         macros = {"P": 0.0, "H": 0.0, "G": 0.0}
         if diet and con_alimentos:
-            macros = await _servido_de_las_comidas(diet, fichas=catalogo)
+            macros = _total_como_arriba(await _servido_por_comida(diet, fichas=catalogo))
 
         hecho = logs.get(fecha) if registra_entrenos else None
         if tipo == "entrenamiento":

@@ -171,11 +171,19 @@ const LineaDieta = ({ dia }) => {
             {dia.estado === 'montada' && (
                 /* «creada» delante y sin `truncate` en ella: a 390 px la línea se cortaba
                    justo ahí y el día se quedaba en «99 · 82 · 32 · ...» (recorrido móvil
-                   del 23-08). Los números sí pueden encogerse; la palabra no. */
-                <span className="font-data text-foreground flex items-baseline gap-1 min-w-0">
+                   del 23-08).
+
+                   Y LOS NÚMEROS TAMPOCO SE CORTAN (28-08). Llevaban `truncate`, y en el
+                   teléfono no caben: medida la fila, son 354 px de los que el rótulo «Ver
+                   día» se lleva 86 y el cuadrito del día 63, así que a los tres números les
+                   quedaban 52 px para los 108 que ocupan. Resultado en pantalla: «Creada ·
+                   118 …», que es justo el dato por el que se entra a mirar. Ahora, cuando no
+                   caben, bajan enteros a la línea de abajo: la fila crece unos píxeles en el
+                   móvil y no se pierde nada. */
+                <span className="font-data text-foreground flex items-baseline gap-1 flex-wrap min-w-0">
                     <span className="text-emerald-400 font-semibold flex-shrink-0">Creada</span>
                     <span className="text-muted-foreground">·</span>
-                    <span className="truncate">
+                    <span className="whitespace-nowrap">
                         <span className="text-orange-400 font-semibold">{Math.round(m.P || 0)}</span>
                         <span className="text-muted-foreground"> · </span>
                         <span className="text-blue-400 font-semibold">{Math.round(m.H || 0)}</span>
