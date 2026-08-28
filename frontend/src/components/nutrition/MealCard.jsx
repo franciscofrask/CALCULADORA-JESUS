@@ -7,7 +7,7 @@ import { TOPE_GRAMOS } from '../../lib/cantidades';
 import ContadorFamilia from './ContadorFamilia';
 import MenuDeLaPantalla from './MenuDeLaPantalla';
 import {
-    ChevronDown, ChevronUp, Plus, Trash2, Minus, Zap, Wrench, RefreshCw, ArrowUp, ArrowUpDown, Lock, Download, Star
+    ChevronDown, ChevronUp, ChevronRight, Plus, Trash2, Minus, Zap, Wrench, RefreshCw, ArrowUp, ArrowUpDown, Lock, Download, Star
 } from 'lucide-react';
 
 const MACRO = { P: '#FF671F', H: '#2196F3', G: '#FFA500' };
@@ -57,33 +57,66 @@ const estadoDeLaComida = (status, target, served, cuantosAlimentos, esPeri = fal
     // que la pantalla decía «Comida cuadrada. Pulsa Guardar» sobre un «5 / 9». El margen
     // proporcional es el mismo criterio con el que `getMealStatus` decide el estado, así
     // que la palabra y el color no pueden contradecirlo. Ver lib/exceso.
-    const desvios = claves.map((k) => ({ k, d: (served[k] || 0) - (target[k] || 0) }));
-    const fuera = desvios.filter((x) => Math.abs(x.d) >= margenDe(target[x.k]));
+    // LA MISMA RESTA QUE DENTRO DE LA COMIDA (punto 200 del 28-08). Dentro, el objetivo se
+    // enseña al medio gramo y lo servido a la décima, y lo que falta se cuenta contra ESOS
+    // (regla del 17-08: «quien escriba una diferencia al lado de dos cifras redondeadas
+    // tiene que restar esas»). Aquí se restaban los valores exactos, así que el mismo dato
+    // salía como «faltan 7,6» fuera y «faltan 7,8» dentro. Se cuenta igual en los dos
+    // sitios, con el mismo margen, o la lista y la comida se contradicen.
+    const meta = (k) => alMedio(target[k] || 0);
+    const desvios = claves.map((k) => ({ k, d: alDecima(served[k] || 0) - meta(k) }));
+    const fuera = desvios.filter((x) => Math.abs(x.d) >= margenDe(meta(x.k)));
 
     // POR CUÁNTO Y DE QUÉ, no solo que te pasas (Jesús, 13-08): «la app enseña los dos
     // números pero no la diferencia; el cliente tiene que restar».
-    if (status === 'sobra') {
+    //
+    // Y SE CANTAN LOS DOS, LO QUE SOBRA Y LO QUE FALTA (punto 198 del 28-08). Aquí había un
+    // `if` por estado: si la comida se pasaba, se decía sólo lo que sobraba y lo que faltaba
+    // se perdía. Comprobado en la Comida 4 del 27: fuera ponía «sobran 7 de hidratos» y
+    // dentro había además «faltan 5 de grasa». «Si el cliente lee la lista y quita hidratos,
+    // cuadra los hidratos y sigue faltándole grasa sin que nadie se lo haya dicho.»
+    //
+    // El que SOBRA manda y va primero, con su punto y en naranja, porque es un error ya
+    // cometido: hay comida de más en el plato. El que falta va detrás, sin punto y sin color,
+    // porque no es un error, es trabajo por hacer.
+    //
+    // CADA UNO EN SU LÍNEA, y dentro de cada uno los macros con comas. Es la maqueta tal
+    // cual («ocupa una línea más, y sólo en las comidas que tengan dos cosas») con la
+    // corrección del 28 por la mañana encima: la que se queda en UNA línea es la
+    // enumeración de varios macros del mismo tipo -- «faltan 11 de proteína, 13 de hidratos
+    // y 8 de grasa» --, no la mezcla de los dos tipos.
+    //
+    // Y CON SU DECIMAL, EL MISMO NÚMERO QUE DENTRO (punto 200 del 28-08). Esto redondeaba a
+    // entero (`num0`) y dentro de la comida no, así que el mismo dato salía como 7 fuera y
+    // 6,5 dentro: «parece que están hablando de cosas distintas». Manda el de dentro, que es
+    // el exacto. El punto 115 quitó decimales, pero era a los OBJETIVOS («53 · 10 · 15»), no
+    // al estado; y el 122 dice que el número de arriba no se toca nunca.
+    if (status === 'sobra' || status === 'falta') {
         const sobran = fuera.filter((x) => x.d > 0 && seExcede(x.k, served[x.k], target[x.k]));
-        return {
-            texto: sobran.length
-                ? `sobran ${enumerar(sobran.map((x) => `${num0(x.d)} de ${NOMBRE_MACRO[x.k]}`))}`
-                : 'sobran',
-            color: 'pasado',
-        };
-    }
-    // «FALTAN 11 DE PROTEÍNA» VA EN BLANCO, NO EN NARANJA (punto 196 del 27-08, que remite al
-    // 82). Es la regla de color de la app entera, la del punto 76: verde si ese macro ya está
-    // resuelto, naranja si te has PASADO, y sin color mientras vas por debajo. Ir corto no es
-    // un error, es que todavía no has terminado -- y el naranja aquí se gastaba en la mitad de
-    // las comidas de cualquier día a medio montar.
-    if (status === 'falta') {
+        // «FALTAN 11 DE PROTEÍNA» VA EN BLANCO, NO EN NARANJA (punto 196 del 27-08, que remite
+        // al 82). Es la regla de color de la app entera, la del punto 76: verde si ese macro ya
+        // está resuelto, naranja si te has PASADO, y sin color mientras vas por debajo. Ir corto
+        // no es un error, es que todavía no has terminado.
         const faltan = fuera.filter((x) => x.d < 0);
-        return {
-            texto: faltan.length
-                ? `faltan ${enumerar(faltan.map((x) => `${num0(-x.d)} de ${NOMBRE_MACRO[x.k]}`))}`
-                : 'faltan',
-            color: null,
-        };
+        const partes = [];
+        if (sobran.length) {
+            partes.push({
+                texto: `sobran ${enumerar(sobran.map((x) => `${num1(x.d)} de ${NOMBRE_MACRO[x.k]}`))}`,
+                color: 'pasado',
+            });
+        }
+        if (faltan.length) {
+            partes.push({
+                texto: `faltan ${enumerar(faltan.map((x) => `${num1(-x.d)} de ${NOMBRE_MACRO[x.k]}`))}`,
+                color: null,
+            });
+        }
+        // Sin desvíos que nombrar (pasa cuando lo que se pasa no llega a «excederse»): se
+        // dice la palabra a secas, como antes.
+        if (!partes.length) {
+            partes.push(status === 'sobra' ? { texto: 'sobran', color: 'pasado' } : { texto: 'faltan', color: null });
+        }
+        return { partes, texto: partes.map((p) => p.texto).join('\n'), color: partes[0].color };
     }
     // Cuadrada. Si clava, se dice y ya; si baila dentro del margen, se dice cuánto, con las
     // palabras de la parte 2: «válido +2».
@@ -109,7 +142,9 @@ const estadoDeLaComida = (status, target, served, cuantosAlimentos, esPeri = fal
  * `null` es «vas por debajo» -- blanco, la regla de color del punto 76 -- y `apagado` es «aquí
  * no hay nada»: la comida sin crear y la bloqueada.
  */
-const PuntoDeEstado = ({ color }) => (color === 'ok' || color === 'pasado' ? (
+const llevaPuntoDeEstado = (color) => color === 'ok' || color === 'pasado';
+
+const PuntoDeEstado = ({ color }) => (llevaPuntoDeEstado(color) ? (
     <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${color === 'ok' ? 'bg-ok' : 'bg-pasado'}`} />
 ) : null);
 
@@ -409,7 +444,7 @@ const MealCard = ({
     mealKey, mealInfo, mealsData, expandedMeals, setExpandedMeals,
     // Los suplementos que le tocan con esta comida (maqueta de la parte 6). Solo los
     // nombres: la dosis vive en su pantalla. El intra y el post no traen nunca.
-    suplementos,
+    suplementos, irASuplementos = null,
     getMealTarget, calculateMealMacros, getMealStatus,
     loadMenuOptions, setBuildMealModal, openRepeatModal,
     removeFood, moveFoodUp, updateFoodQuantity, updateFoodQuantityDirect,
@@ -610,22 +645,25 @@ const MealCard = ({
                             había que abrirlas para saberlo. Su estado se calcula igual, sólo
                             con P y H, porque en el método la grasa del peri no cuenta
                             (`estadoDeLaComida` ya lo hace con `esPeri`). */}
+                        {/* LOS DOS TROZOS, CADA UNO CON SU COLOR (punto 198). El estado puede
+                            llevar lo que sobra Y lo que falta, y no son lo mismo: el primero va
+                            con su punto y en el naranja del que se pasa, el segundo detrás y en
+                            blanco. En el teléfono, si no caben en la línea, el segundo cae solo
+                            a la de abajo (`flex-wrap`). */}
                         {!isExpanded && (
-                            <span className={`text-xs font-bold flex items-start gap-1.5 sm:text-right ${claseDelEstado(estado.color)}`}
+                            <span className="text-xs font-bold flex flex-col items-start gap-0.5 sm:items-end sm:text-right"
                                 data-testid={`estado-comida-${mealKey}`}>
-                                <span className="mt-1"><PuntoDeEstado color={estado.color} /></span>
-                                {estado.texto}
+                                {(estado.partes || [estado]).map((p, i) => (
+                                    <span key={i} className={`flex items-start gap-1.5 ${claseDelEstado(p.color)}`}>
+                                        {llevaPuntoDeEstado(p.color) && (
+                                            <span className="mt-1"><PuntoDeEstado color={p.color} /></span>
+                                        )}
+                                        {p.texto}
+                                    </span>
+                                ))}
                             </span>
                         )}
                     </div>
-                    {/* «+ CREATINA», DEBAJO DE LOS MACROS DE SU COMIDA (maqueta de la parte 6).
-                        El mismo dato que en Inicio y con la misma regla (lib/suplementosDelDia):
-                        sólo el nombre, y el intra y el post no llevan ninguno. */}
-                    {!isPeri && (suplementos || []).length > 0 && (
-                        <p className="text-xs text-brand mt-1" data-testid={`suplementos-comida-${mealKey}`}>
-                            + {suplementos.join(' · ')}
-                        </p>
-                    )}
                 </div>
             </div>
 
@@ -656,6 +694,31 @@ const MealCard = ({
                 <button className="w-full text-left p-3.5 sm:p-4 pb-1.5 flex items-center justify-between gap-3"
                     onClick={() => setExpandedMeals(prev => ({ ...prev, [mealKey]: !isExpanded }))}>
                     {HeaderInner}
+                </button>
+            )}
+
+            {/* «+ CREATINA», DEBAJO DE LOS MACROS DE SU COMIDA (maqueta de la parte 6, y el
+                punto 190: desde aquí se llega a Suplementos, que es lo que faltaba).
+                El mismo dato que en Inicio y con la misma regla (lib/suplementosDelDia):
+                sólo el nombre, y el intra y el post no llevan ninguno.
+
+                EN GRIS Y CON SU FLECHA, NO EN EL NARANJA DE LA MARCA (punto 202 del 28-08).
+                El naranja era correcto por la regla -- es el color de lo que se toca -- pero
+                lo gastaba en lo que menos corre: «lo primero que ves es la creatina, que no
+                tiene ninguna prisa; sobran 6,5 de hidratos sí». La tarjeta entera ya se
+                pulsa sin ser naranja, así que la › basta para decir que lleva a otro sitio,
+                que es el riesgo que el punto 203 dejaba escrito.
+
+                Y VA FUERA DEL BOTÓN DE LA COMIDA, igual que en Inicio: la tarjeta abre la
+                comida y esto lleva a Suplementos. Un botón dentro de otro ni es HTML válido
+                ni deja elegir destino. El margen de la izquierda lo alinea con el nombre,
+                por debajo del cuadrito. */}
+            {!isPeri && (suplementos || []).length > 0 && (
+                <button type="button" onClick={() => irASuplementos && irASuplementos()}
+                    data-testid={`suplementos-comida-${mealKey}`}
+                    className={`${denso ? 'px-3 sm:px-3.5' : 'px-3.5 sm:px-4'} ${forceExpanded ? '-mt-1 pb-2' : 'pb-1'} flex items-center gap-1 text-xs text-muted-foreground text-left hover:text-foreground transition-colors`}>
+                    <span className={denso ? 'ml-12' : 'ml-[3.75rem]'}>+ {suplementos.join(' · ')}</span>
+                    <ChevronRight className="w-3.5 h-3.5 flex-shrink-0" />
                 </button>
             )}
             {/* Aquí iba OTRA VEZ el objetivo, solo para el teléfono y a 17 px. Ahora está en

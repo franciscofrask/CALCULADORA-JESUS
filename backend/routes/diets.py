@@ -3,7 +3,7 @@ Rutas de dietas: CRUD, calendario, copiar.
 """
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Optional
 import calendar
 import logging
@@ -324,31 +324,84 @@ async def delete_favorite(fav_id: str, user = Depends(get_current_user)):
 
 
 @router.get("/recent")
-async def get_recent_diets(limit: int = 14, para: Optional[str] = None, user = Depends(get_current_user)):
+async def get_recent_diets(limit: int = 14, para: Optional[str] = None,
+                           hoy_cliente: Optional[str] = None,
+                           user = Depends(get_current_user)):
     """Lista los últimos días con dieta guardada.
 
     `para` es el día para el que se quiere repetir (el que el cliente tiene abierto, con
     su reloj): las comidas se juzgan contra los macros vigentes de ESE día (caso 27 de
     los 85; punto 14 del doc del 23-08). Sin `para`, el día de España.
+
+    DE HOY HACIA ATRÁS, NUNCA HACIA DELANTE (punto 210 del 28-08). Esto ordenaba por
+    fecha descendente y cortaba a 14 sin techo ninguno, así que lo primero que salía era
+    lo más lejano EN EL FUTURO. En la cuenta de Jesús eso son 145 días con fecha por
+    delante de hoy -- 40 de 2027 y uno de 2030, casi todos de la migración de Calma --, y
+    la lista entera se iba en ellos: «bajé la lista entera y no hay ni un día de 2026».
+    Repetir es mirar atrás: la lista empieza por el último día montado y sigue hacia el
+    pasado.
+
+    EL TECHO ES HOY, NO EL DÍA ABIERTO. Son dos fechas distintas y no valía reusar `para`:
+    quien está arreglando el lunes tiene que poder repetir el miércoles que ya montó -- son
+    justo los días que Jesús echaba en falta, «el 26, el 27 y el 28» --, pero no el sábado
+    que todavía no ha vivido. `hoy_cliente` es el día de SU reloj (la regla de los relojes:
+    el día vivido es el del navegador); sin él, el día de España.
     """
+    # El techo de la lista: hoy. `dia_del_cliente` valida contra el día de España y no deja
+    # que un reloj roto (o una trampa) abra la puerta a días del año que viene.
+    techo = dia_del_cliente(hoy_cliente)
+
+    # EL DÍA DESTINO ES EL QUE ESTÁ ABIERTO, AUNQUE SEA DE LA SEMANA PASADA (punto 212). Esto
+    # pasaba `para` por `dia_del_cliente`, que lo recorta a un día del de España porque su
+    # trabajo es validar el RELOJ del cliente, no una fecha cualquiera. Resultado: quien
+    # abría el lunes 24 veía las etiquetas calculadas contra los macros del jueves 28. Aquí
+    # `para` no es «qué día dice que vive», es «qué día estoy montando», y ese sí puede estar
+    # lejos. Se valida el formato y que no sea del futuro, y ya.
+    fecha_para = techo
+    if para:
+        try:
+            d = date.fromisoformat(str(para)[:10])
+            if d.isoformat() <= techo:
+                fecha_para = d.isoformat()
+        except (ValueError, TypeError):
+            pass
+
+    # LOS DÍAS VACÍOS NO CUENTAN (punto 210: «empezando por el último día montado»). Un día
+    # guardado sin un solo alimento no se puede repetir, pero ocupaba sitio en los 14: en la
+    # cuenta de prueba, tres de los cinco últimos están así. Antes daba igual porque los
+    # catorce se los llevaban los días del futuro; con el techo puesto, ya no. Se piden de
+    # más y se cortan a `limit` DESPUÉS de descartar los vacíos, que es lo que cuesta poco:
+    # el trabajo caro (normalizar cantidades y calibrar) solo lo pagan los que se sirven.
     cursor = db.diets.find(
-        {"user_id": user["id"]},
+        {"user_id": user["id"], "fecha": {"$lte": techo}},
         {"_id": 0, "fecha": 1, "tipo_dia": 1, "num_comidas": 1, "momento_entreno": 1,
          "opcion_peri": 1, "comidas": 1, "distribution_targets": 1}
-    ).sort("fecha", -1).limit(limit)
+    ).sort("fecha", -1).limit(max(limit, 1) * 4)
 
-    diets = await cursor.to_list(length=limit)
+    crudos = await cursor.to_list(length=max(limit, 1) * 4)
+    diets = [d for d in crudos
+             if any((m or {}).get("alimentos") for m in (d.get("comidas") or {}).values())]
+
+    # EL CATÁLOGO DE TODOS ESOS DÍAS, DE UNA VEZ. Hacen falta las fichas enteras (no la
+    # proyección corta): con ellas se pasan las cantidades a gramos y se calibra. Antes se
+    # pedía una consulta por día; ahora es una para toda la lista.
+    ids = set()
+    for d in diets:
+        ids |= _ids_de(d)
+    catalogo = {}
+    if ids:
+        async for f in db.foods.find({"id": {"$in": list(ids)}}, {"_id": 0}):
+            catalogo[f["id"]] = f
 
     # Las cantidades, a gramos tambien aqui (punto 4.5). Por esta lista entra «Repetir de otro
     # dia»: si un dia migrado se sirviera con el conteo de piezas en el campo de gramos, la
     # copia se llevaria un huevo de 1 g al dia de hoy y lo dejaria guardado asi. El fallo se
     # arregla al leer, y leer es tambien esto.
     for diet in diets:
-        await _normalizar_cantidades(diet)
+        _normalizar_con_catalogo(diet, catalogo)
 
     # El objetivo de cada comida PARA EL DÍA DESTINO, una vez por configuración distinta
     # (dos días guardados con 4 comidas y entreno comparten reparto: no se calcula dos veces).
-    fecha_para = dia_del_cliente(para) if para else hoy_madrid().isoformat()
     repartos_por_config: dict = {}
 
     async def _objetivo_para(diet: dict):
@@ -362,8 +415,26 @@ async def get_recent_diets(limit: int = 14, para: Optional[str] = None, user = D
                 if reparto else None)
         return repartos_por_config[clave]
 
+    # EL DÍA QUE SE ESTÁ MONTANDO, para la etiqueta del punto 212: su tipo (entreno o
+    # descanso) y sus tres macros totales. El reparto se pide con la configuración de ESE
+    # día, no con la del día guardado que se mira: la pregunta es si lo de aquel cabe en
+    # lo de hoy.
+    destino = await db.diets.find_one(
+        {"user_id": user["id"], "fecha": fecha_para},
+        {"_id": 0, "tipo_dia": 1, "num_comidas": 1, "momento_entreno": 1, "opcion_peri": 1})
+    tipo_destino = (destino or {}).get("tipo_dia") or "entrenamiento"
+    reparto_destino = await _reparto_del_dia(fecha_para, destino, user)
+    resumen = (reparto_destino or {}).get("resumen") or {}
+    # Los mismos tres números que la cabecera: P y H con el peri dentro, la grasa sin él.
+    objetivo_dia = ({"P": resumen.get("P_total"), "H": resumen.get("H_total"),
+                     "G": resumen.get("G_total")} if resumen else None)
+
     result = []
     for diet in diets:
+        # Ya hay bastantes: se para. Los días se descartan de uno en uno más abajo (los que
+        # no suman nada), así que el corte no se puede hacer antes de mirarlos.
+        if len(result) >= limit:
+            break
         # SOLO SE OFRECE LO QUE SE PUEDE CUADRAR (caso 27): una Comida 2 que son 20 g de
         # pollo no puede llegar a los hidratos de hoy ni escalando, asi que no se ofrece
         # para repetir. El criterio es de fuentes, no de gramos: si ningun alimento de la
@@ -371,6 +442,13 @@ async def get_recent_diets(limit: int = 14, para: Optional[str] = None, user = D
         # camino al objetivo -- cuadrar (test 28) escala y completa cantidades, pero no
         # inventa alimentos que no estan.
         objetivo = await _objetivo_para(diet)
+        # LO QUE SUMA CADA COMIDA, CONTADO AQUÍ (punto 211 del 28-08). Esto leía el campo
+        # `macros_efectivos` de cada alimento guardado, y ese campo muchas veces no está: en
+        # la cuenta de Jesús, los 116 días que venían de Calma no lo tienen NI UNO, así que
+        # la lista entera salía a «0 P · 0 H · 0 G» -- incluso los que ponían «6 comidas» --
+        # y con ella se caía también el criterio de si el día se puede cuadrar. Ahora lo
+        # cuenta el motor de siempre (`calibracion_dia`), el mismo del día abierto y el chat.
+        servido_comidas = await _servido_por_comida(diet, fichas=catalogo)
         comidas_resumen = {}
         cuadrada = {}
         for key, meal_data in (diet.get("comidas") or {}).items():
@@ -379,8 +457,7 @@ async def get_recent_diets(limit: int = 14, para: Optional[str] = None, user = D
                 continue
             objetivo_k = (objetivo or {}).get(key)
             if objetivo_k:
-                servido = {m: sum(float((a.get("macros_efectivos") or {}).get(m) or 0)
-                                  for a in alimentos) for m in ("P", "H", "G")}
+                servido = servido_comidas.get(key) or {"P": 0.0, "H": 0.0, "G": 0.0}
                 sin_fuente = [m for m in ("P", "H", "G")
                               if float(objetivo_k.get(m) or 0) > 8 and servido[m] <= 0]
                 if sin_fuente:
@@ -392,11 +469,28 @@ async def get_recent_diets(limit: int = 14, para: Optional[str] = None, user = D
             if len(alimentos) > 3:
                 comidas_resumen[key] += f" +{len(alimentos)-3}"
 
+        # El total del día, contado como lo cuentan los tres números de arriba.
+        macros = _total_como_arriba(servido_comidas)
+
+        # UN DÍA SIN MACROS NO SE PUEDE ELEGIR (punto 211): «es la única información que
+        # sirve para decidir». Con el conteo bueno esto ya casi no pasa, pero un día montado
+        # solo con alimentos que no aportan nada seguiría saliendo a ceros, y una fila a
+        # «0 P · 0 H · 0 G» no le dice nada a nadie.
+        if round(macros["P"] + macros["H"] + macros["G"], 1) <= 0:
+            continue
+
         result.append({
             "fecha": diet.get("fecha"),
             "tipo_dia": diet.get("tipo_dia", "entrenamiento"),
             "num_comidas": diet.get("num_comidas", 4),
             "comidas_resumen": comidas_resumen,
+            # Lo que suma el día entero y lo que suma cada comida, ya calibrado: la lista de
+            # «Repetir un día» los pinta tal cual, sin volver a sumar por su cuenta.
+            "macros": macros,
+            "servido_comidas": servido_comidas,
+            # Y si vale tal cual para el día que se está montando, o por qué no (punto 212).
+            **_como_encaja(macros, objetivo_dia,
+                           diet.get("tipo_dia") or "entrenamiento", tipo_destino),
             # Si cada comida ya cuadra tal cual con los macros del día destino (±4 g).
             "cuadrada": cuadrada,
             "comidas": diet.get("comidas", {}),
@@ -1122,21 +1216,75 @@ async def get_diet(fecha: str, user = Depends(get_current_user)):
 # aparte y `objetivo_comidas` ya lo ha descontado.
 _PERI = ("Intra", "Post")
 
+# El margen del día: de 1 a 4 gramos, falte o sobre, es válido (punto 78 del 25-08).
+_MARGEN_DIA = 4
+_NOMBRE_MACRO = {"P": "P", "H": "H", "G": "G"}
 
-async def _servido_de_las_comidas(diet: dict, fichas: Optional[dict] = None) -> dict:
-    """Lo que suman las comidas regulares de este día, YA CALIBRADO.
 
-    POR QUÉ LO CUENTA EL SERVIDOR (punto 3 del documento del 17-08).
+def _total_como_arriba(por_comida: dict) -> dict:
+    """El total del día tal y como lo cuentan los tres números de la cabecera de Nutrición.
 
-    Inicio y Nutrición daban números distintos del mismo día. No era un redondeo: era que
-    cada una lo sacaba de un sitio. Nutrición pide la calibración progresiva al cargar y
-    pinta lo que le devuelve; Inicio sumaba el campo `macros_efectivos` tal y como estuviera
-    guardado en la dieta. Y ese campo no siempre está: medido en producción el 17-08, en el
-    día 2026-07-05 los diez alimentos guardados no lo tenían, así que Nutrición decía «Ya
-    está · de 180» de proteína y la misma jornada en Inicio habría salido «Te faltan 180».
+    Y esa cuenta es rara a propósito: la PROTEÍNA y los HIDRATOS incluyen el perientreno,
+    porque su presupuesto ya va dentro de `P_total` y `H_total`; la GRASA no, porque el
+    peri no gasta grasa del día. Es la regla de Calma.
 
-    Con esto el servidor lo cuenta una vez, con la misma función que usa el chat
-    (`calibracion_dia.calibrar_dia`), y las pantallas solo pintan. Una fuente, un número.
+    Importa que sea exactamente ésta y no la de `_servido_de_las_comidas` (que deja el peri
+    fuera de los tres): la fila de «Repetir un día» se lee justo debajo de esos tres números
+    y se compara con ellos a ojo. Contar distinto sería el descuadre del punto 178 -- «la
+    grasa dice 40 aquí y 41 en Nutrición» -- servido en bandeja.
+    """
+    total = {"P": 0.0, "H": 0.0, "G": 0.0}
+    for k, m in (por_comida or {}).items():
+        total["P"] += m["P"]
+        total["H"] += m["H"]
+        if k not in _PERI:
+            total["G"] += m["G"]
+    return {k: round(v, 1) for k, v in total.items()}
+
+
+def _como_encaja(macros: dict, objetivo: Optional[dict], tipo_dia: str, tipo_destino: str) -> dict:
+    """Si ese día vale tal cual para el día que se está montando, y si no, por qué no.
+
+    PUNTO 212 DEL 28-08. La etiqueta la llevaban todos: era `tipo_dia == tipo_de_hoy` y
+    nada más, así que decía ENCAJA el cien por cien de las filas. «Si lo lleva el cien por
+    cien, la etiqueta no dice nada.»
+
+    Ahora dice una de tres cosas:
+
+      - encaja       los tres macros caben en el margen del día (4 g)
+      - otro_dia     era de descanso y hoy toca entrenar, o al revés
+      - desvio       «+12 H»: por dónde se sale, y por cuánto
+
+    Y de los que se salen se canta el que MÁS ESTORBA, que es el que se pasa y no el que se
+    queda corto: lo que falta se completa añadiendo, lo que sobra hay que quitarlo. Solo si
+    no sobra nada se canta lo que falta.
+    """
+    if (tipo_dia or "entrenamiento") != (tipo_destino or "entrenamiento"):
+        return {"encaja": False, "motivo": "otro_dia"}
+    if not objetivo:
+        # Sin macros asignados no se puede saber, y una etiqueta inventada es peor que
+        # ninguna: la fila se queda sin ella.
+        return {"encaja": False, "motivo": None}
+
+    desvios = {m: round(float(macros.get(m) or 0) - float(objetivo.get(m) or 0), 1)
+               for m in ("P", "H", "G")}
+    if all(abs(v) <= _MARGEN_DIA for v in desvios.values()):
+        return {"encaja": True, "motivo": None}
+
+    fuera = {m: v for m, v in desvios.items() if abs(v) > _MARGEN_DIA}
+    sobran = {m: v for m, v in fuera.items() if v > 0}
+    cual = max(sobran or fuera, key=lambda m: abs((sobran or fuera)[m]))
+    return {"encaja": False, "motivo": "desvio",
+            "macro": _NOMBRE_MACRO[cual], "desvio": round(desvios[cual])}
+
+
+async def _servido_por_comida(diet: dict, fichas: Optional[dict] = None) -> dict:
+    """Lo que suma CADA comida de este día, YA CALIBRADO: `{"C1": {"P":.., "H":.., "G":..}}`.
+
+    Es la misma cuenta que `_servido_de_las_comidas` (que sale de aquí) pero sin sumarla:
+    hay pantallas que necesitan el detalle comida a comida. La lista de «Repetir un día»
+    decide con él si un día encaja con los macros de hoy y por cuánto se pasa (puntos 211
+    y 212 del 28-08), y antes lo sacaba del campo guardado, que muchas veces no está.
     """
     from calibracion_dia import calibrar_dia
 
@@ -1144,7 +1292,7 @@ async def _servido_de_las_comidas(diet: dict, fichas: Optional[dict] = None) -> 
     # Vacío por si acaso: sin alimentos no hay nada que calibrar y `calibrar_dia` no
     # tiene por qué recibir un día sin comidas.
     if not comidas:
-        return {"P": 0.0, "H": 0.0, "G": 0.0}
+        return {}
 
     # El orden importa: la calibración de una comida depende del acumulado de las
     # anteriores, así que se recorre en el orden cronológico del día.
@@ -1175,16 +1323,41 @@ async def _servido_de_las_comidas(diet: dict, fichas: Optional[dict] = None) -> 
     except Exception as e:                # noqa: BLE001 - el día se sirve igual
         logging.getLogger("uvicorn.error").warning(
             "no se pudo calibrar el día %s: %s", diet.get("fecha"), e)
-        return {"P": 0.0, "H": 0.0, "G": 0.0}
+        return {}
 
-    total = {"P": 0.0, "H": 0.0, "G": 0.0}
+    por_comida = {}
     for k in orden:
+        suma = {"P": 0.0, "H": 0.0, "G": 0.0}
+        for m in macros_dia.get(k, []):
+            suma["P"] += m.get("P", 0) or 0
+            suma["H"] += m.get("H", 0) or 0
+            suma["G"] += m.get("G", 0) or 0
+        por_comida[k] = {j: round(v, 1) for j, v in suma.items()}
+    return por_comida
+
+
+async def _servido_de_las_comidas(diet: dict, fichas: Optional[dict] = None) -> dict:
+    """Lo que suman las comidas regulares de este día, YA CALIBRADO.
+
+    POR QUÉ LO CUENTA EL SERVIDOR (punto 3 del documento del 17-08).
+
+    Inicio y Nutrición daban números distintos del mismo día. No era un redondeo: era que
+    cada una lo sacaba de un sitio. Nutrición pide la calibración progresiva al cargar y
+    pinta lo que le devuelve; Inicio sumaba el campo `macros_efectivos` tal y como estuviera
+    guardado en la dieta. Y ese campo no siempre está: medido en producción el 17-08, en el
+    día 2026-07-05 los diez alimentos guardados no lo tenían, así que Nutrición decía «Ya
+    está · de 180» de proteína y la misma jornada en Inicio habría salido «Te faltan 180».
+
+    Con esto el servidor lo cuenta una vez, con la misma función que usa el chat
+    (`calibracion_dia.calibrar_dia`), y las pantallas solo pintan. Una fuente, un número.
+    """
+    total = {"P": 0.0, "H": 0.0, "G": 0.0}
+    for k, m in (await _servido_por_comida(diet, fichas)).items():
         if k in _PERI:
             continue
-        for m in macros_dia.get(k, []):
-            total["P"] += m.get("P", 0) or 0
-            total["H"] += m.get("H", 0) or 0
-            total["G"] += m.get("G", 0) or 0
+        total["P"] += m["P"]
+        total["H"] += m["H"]
+        total["G"] += m["G"]
     return {k: round(v, 1) for k, v in total.items()}
 
 @router.post("/copy")

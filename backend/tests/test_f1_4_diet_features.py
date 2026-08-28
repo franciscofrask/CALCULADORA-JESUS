@@ -9,6 +9,21 @@ from datetime import datetime, timedelta
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL').rstrip('/')
 
+# UNA SOLA ENTRADA PARA LAS CLASES NUEVAS. Cada clase de este fichero entra por su cuenta,
+# que son diez accesos para leer la misma lista. El token se pide una vez y se reparte.
+_TOKEN = None
+
+
+def _cabeceras_cliente():
+    global _TOKEN
+    if _TOKEN is None:
+        r = requests.post(f"{BASE_URL}/api/auth/login",
+                          json={"email": "clientedemo@test.com", "password": "demo123"},
+                          timeout=30)
+        assert r.status_code == 200, f"Login failed: {r.text}"
+        _TOKEN = r.json()["access_token"]
+    return {"Authorization": f"Bearer {_TOKEN}", "Content-Type": "application/json"}
+
 
 class TestAuthentication:
     """Authentication tests for getting token"""
@@ -90,6 +105,189 @@ class TestDietsRecentEndpoint:
             print(f"✅ Diet entries have all required fields: {required_fields}")
         else:
             print("⚠️ No diets found to verify fields - need to create test data first")
+
+
+class TestRepetirMiraAtras:
+    """Punto 210 del 28-08: «Repetir un día» ofrecía días del año que viene.
+
+    La lista salía ordenada por fecha descendente y cortada a 14 SIN TECHO, así que lo
+    primero que veía el cliente eran los días con fecha más lejana en el FUTURO -- en la
+    cuenta de Jesús, 145 días por delante de hoy, 40 de ellos de 2027, casi todos de la
+    migración de Calma. «Bajé la lista entera y no hay ni un día de 2026.»
+
+    Repetir es mirar atrás: de hoy hacia el pasado, y empezando por el último día MONTADO
+    (un día guardado vacío no se puede repetir y no debe ocupar sitio).
+    """
+
+    @pytest.fixture(scope="class")
+    def headers(self):
+        return _cabeceras_cliente()
+
+    @staticmethod
+    def _pedir(headers, **params):
+        r = requests.get(f"{BASE_URL}/api/diets/recent", headers=headers, params=params, timeout=90)
+        assert r.status_code == 200, r.text
+        return r.json().get("diets") or []
+
+    def test_ni_un_dia_por_delante_de_hoy(self, headers):
+        hoy = datetime.now().strftime("%Y-%m-%d")
+        dias = self._pedir(headers, limit=14, para=hoy, hoy_cliente=hoy)
+        futuros = [d["fecha"] for d in dias if d["fecha"] > hoy]
+        assert not futuros, f"la lista ofrece días del futuro: {futuros}"
+
+    def test_tampoco_desde_un_dia_pasado(self, headers):
+        """El techo es HOY, no el día abierto: quien arregla el lunes puede repetir el
+        miércoles que ya montó, pero nunca un día que aún no ha vivido."""
+        hoy = datetime.now().strftime("%Y-%m-%d")
+        hace4 = (datetime.now() - timedelta(days=4)).strftime("%Y-%m-%d")
+        dias = self._pedir(headers, limit=14, para=hace4, hoy_cliente=hoy)
+        futuros = [d["fecha"] for d in dias if d["fecha"] > hoy]
+        assert not futuros, f"desde un día pasado sigue ofreciendo futuro: {futuros}"
+
+    def test_de_hoy_hacia_atras_y_sin_saltos(self, headers):
+        hoy = datetime.now().strftime("%Y-%m-%d")
+        fechas = [d["fecha"] for d in self._pedir(headers, limit=14, para=hoy, hoy_cliente=hoy)]
+        assert fechas == sorted(fechas, reverse=True), f"la lista no va hacia atrás: {fechas}"
+
+    def test_los_dias_vacios_no_ocupan_sitio(self, headers):
+        """«Empezando por el último día montado»: un día guardado sin un solo alimento no
+        se puede repetir, y antes se llevaba una de las catorce plazas."""
+        hoy = datetime.now().strftime("%Y-%m-%d")
+        dias = self._pedir(headers, limit=14, para=hoy, hoy_cliente=hoy)
+        vacios = [d["fecha"] for d in dias
+                  if not any((m or {}).get("alimentos") for m in (d.get("comidas") or {}).values())]
+        assert not vacios, f"la lista ofrece días sin nada montado: {vacios}"
+
+
+class TestLosDiasTraenSusMacros:
+    """Punto 211 del 28-08: todos los días a repetir decían «0 P · 0 H · 0 G».
+
+    «Incluso los que ponen 6 comidas. O esos días están vacíos, y entonces no deberían
+    ofrecerse, o los macros no se están leyendo.»
+
+    Eran las dos cosas. La lista sumaba el campo `macros_efectivos` de cada alimento
+    guardado, y ese campo muchas veces no está: en la cuenta de Jesús, los 116 días que
+    vinieron de Calma no lo tienen ni uno. Ahora los cuenta el servidor con el motor de
+    siempre (`calibracion_dia`), así que la fila enseña el MISMO número que se ve al abrir
+    ese día. Y un día que de verdad no suma nada no se ofrece: «es la única información
+    que sirve para decidir».
+    """
+
+    @pytest.fixture(scope="class")
+    def headers(self):
+        return _cabeceras_cliente()
+
+    @pytest.fixture(scope="class")
+    def dias(self, headers):
+        hoy = datetime.now().strftime("%Y-%m-%d")
+        r = requests.get(f"{BASE_URL}/api/diets/recent", headers=headers,
+                         params={"limit": 14, "para": hoy, "hoy_cliente": hoy}, timeout=90)
+        assert r.status_code == 200, r.text
+        return r.json().get("diets") or []
+
+    def test_cada_dia_trae_sus_macros(self, dias):
+        if not dias:
+            pytest.skip("la cuenta de prueba no tiene días montados")
+        sin = [d["fecha"] for d in dias if not isinstance(d.get("macros"), dict)]
+        assert not sin, f"días servidos sin macros: {sin}"
+
+    def test_ninguno_sale_a_cero(self, dias):
+        if not dias:
+            pytest.skip("la cuenta de prueba no tiene días montados")
+        ceros = [d["fecha"] for d in dias
+                 if sum(float((d.get("macros") or {}).get(m) or 0) for m in "PHG") <= 0]
+        assert not ceros, f"días ofrecidos a 0 P · 0 H · 0 G: {ceros}"
+
+    def test_el_mismo_numero_que_al_abrir_el_dia(self, headers, dias):
+        """Una fuente, un número: lo que dice la fila y lo que dice el día son lo mismo.
+
+        La cuenta se hace como la hacen los tres números de la cabecera de Nutrición, que
+        es con lo que el cliente compara la fila: la proteína y los hidratos INCLUYEN el
+        perientreno (su presupuesto va dentro de `P_total` y `H_total`) y la grasa no.
+        `servido_comidas` deja el peri fuera de los tres, así que aquí se le suma.
+        """
+        if not dias:
+            pytest.skip("la cuenta de prueba no tiene días montados")
+        for d in dias[:5]:
+            r = requests.get(f"{BASE_URL}/api/diets/{d['fecha']}", headers=headers, timeout=60)
+            assert r.status_code == 200, r.text
+            servido = r.json().get("servido_comidas") or {}
+            peri = (d.get("servido_comidas") or {})
+            esperado = {
+                "P": float(servido.get("P") or 0) + sum(float((peri.get(k) or {}).get("P") or 0) for k in ("Intra", "Post")),
+                "H": float(servido.get("H") or 0) + sum(float((peri.get(k) or {}).get("H") or 0) for k in ("Intra", "Post")),
+                "G": float(servido.get("G") or 0),
+            }
+            for m in "PHG":
+                a = round(float((d.get("macros") or {}).get(m) or 0))
+                b = round(esperado[m])
+                assert a == b, f"{d['fecha']} {m}: la lista dice {a} y el día {b}"
+
+
+class TestLaEtiquetaElige:
+    """Punto 212 del 28-08: la etiqueta ENCAJA la llevaban todos.
+
+    «Si lo lleva el cien por cien, la etiqueta no dice nada. Y encajar con 0 macros no se
+    puede saber. Que salga sólo en los que encajan, y que los que no digan por qué: +12 H,
+    o otro día si era de descanso y hoy toca entrenar.»
+
+    Estas pruebas van contra la regla, con los números de la maqueta del propio documento:
+    día de 175 P · 80 H · 50 G.
+    """
+
+    @staticmethod
+    def _regla(macros, objetivo, tipo, tipo_hoy):
+        import sys, os as _os
+        sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+        from routes.diets import _como_encaja
+        return _como_encaja(macros, objetivo, tipo, tipo_hoy)
+
+    OBJETIVO = {"P": 175, "H": 80, "G": 50}
+
+    def test_el_que_clava_encaja(self):
+        r = self._regla({"P": 176, "H": 80, "G": 50}, self.OBJETIVO, "entrenamiento", "entrenamiento")
+        assert r["encaja"] is True and r["motivo"] is None
+
+    def test_dentro_del_margen_tambien(self):
+        r = self._regla({"P": 174, "H": 79, "G": 51}, self.OBJETIVO, "entrenamiento", "entrenamiento")
+        assert r["encaja"] is True
+
+    def test_se_canta_lo_que_sobra_aunque_falte_mas(self):
+        """El caso de la maqueta: 158 · 92 · 47. Falta 17 de proteína y sobran 12 de
+        hidratos, y la etiqueta dice «+12 H»: lo que falta se completa añadiendo, lo que
+        sobra hay que quitarlo."""
+        r = self._regla({"P": 158, "H": 92, "G": 47}, self.OBJETIVO, "entrenamiento", "entrenamiento")
+        assert r["encaja"] is False
+        assert r["motivo"] == "desvio"
+        assert (r["macro"], r["desvio"]) == ("H", 12)
+
+    def test_si_no_sobra_nada_se_canta_lo_que_falta(self):
+        r = self._regla({"P": 120, "H": 78, "G": 49}, self.OBJETIVO, "entrenamiento", "entrenamiento")
+        assert r["motivo"] == "desvio"
+        assert (r["macro"], r["desvio"]) == ("P", -55)
+
+    def test_otro_tipo_de_dia_manda_sobre_los_numeros(self):
+        r = self._regla({"P": 175, "H": 80, "G": 50}, self.OBJETIVO, "descanso", "entrenamiento")
+        assert r["encaja"] is False and r["motivo"] == "otro_dia"
+
+    def test_sin_macros_no_se_inventa_etiqueta(self):
+        r = self._regla({"P": 175, "H": 80, "G": 50}, None, "entrenamiento", "entrenamiento")
+        assert r["encaja"] is False and r["motivo"] is None
+
+    def test_en_la_lista_de_verdad_no_lo_llevan_todos(self):
+        """Y contra la app: la etiqueta tiene que discriminar, que es para lo que está."""
+        cab = _cabeceras_cliente()
+        hoy = datetime.now().strftime("%Y-%m-%d")
+        r = requests.get(f"{BASE_URL}/api/diets/recent", headers=cab,
+                         params={"limit": 14, "para": hoy, "hoy_cliente": hoy}, timeout=90)
+        assert r.status_code == 200, r.text
+        dias = r.json().get("diets") or []
+        if len(dias) < 2:
+            pytest.skip("hacen falta al menos dos días para ver si discrimina")
+        assert not all(d.get("encaja") for d in dias), "ENCAJA lo lleva el cien por cien otra vez"
+        for d in dias:
+            if not d.get("encaja") and d.get("motivo") == "desvio":
+                assert d.get("macro") in ("P", "H", "G") and d.get("desvio") is not None
 
 
 class TestDietSaveAndLoad:

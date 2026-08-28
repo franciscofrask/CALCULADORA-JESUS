@@ -1,0 +1,688 @@
+<title>12EN12 · Informe del documento entero</title>
+<style>
+:root{
+  --papel:#FBF9F7; --papel2:#FFFFFF; --tinta:#1A1512; --tinta2:#57504A;
+  --tinta3:#8B827B; --linea:#E8E1DA; --linea2:#D6CCC2;
+  --acc:#FF5A2E; --acc-suave:rgba(255,90,46,.10);
+  --ok:#177E4B; --ok-suave:rgba(23,126,75,.10);
+  --espera:#8A6A18; --espera-suave:rgba(138,106,24,.10);
+  --nada:#7A736C; --nada-suave:rgba(122,115,108,.10);
+  --sombra:0 1px 2px rgba(26,21,18,.05), 0 8px 24px -12px rgba(26,21,18,.14);
+  --sans:"Segoe UI",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+  --mono:"Cascadia Mono",Consolas,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --papel:#131110; --papel2:#1C1917; --tinta:#F3EFEB; --tinta2:#B4AAA2;
+    --tinta3:#867C74; --linea:#2C2724; --linea2:#3A342F;
+    --acc:#FF7A52; --acc-suave:rgba(255,122,82,.13);
+    --ok:#4ECB84; --ok-suave:rgba(78,203,132,.13);
+    --espera:#D8B24A; --espera-suave:rgba(216,178,74,.13);
+    --nada:#8E857D; --nada-suave:rgba(142,133,125,.12);
+    --sombra:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --papel:#131110; --papel2:#1C1917; --tinta:#F3EFEB; --tinta2:#B4AAA2;
+  --tinta3:#867C74; --linea:#2C2724; --linea2:#3A342F;
+  --acc:#FF7A52; --acc-suave:rgba(255,122,82,.13);
+  --ok:#4ECB84; --ok-suave:rgba(78,203,132,.13);
+  --espera:#D8B24A; --espera-suave:rgba(216,178,74,.13);
+  --nada:#8E857D; --nada-suave:rgba(142,133,125,.12);
+  --sombra:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+}
+:root[data-theme="light"]{
+  --papel:#FBF9F7; --papel2:#FFFFFF; --tinta:#1A1512; --tinta2:#57504A;
+  --tinta3:#8B827B; --linea:#E8E1DA; --linea2:#D6CCC2;
+  --acc:#FF5A2E; --acc-suave:rgba(255,90,46,.10);
+  --ok:#177E4B; --ok-suave:rgba(23,126,75,.10);
+  --espera:#8A6A18; --espera-suave:rgba(138,106,24,.10);
+  --nada:#7A736C; --nada-suave:rgba(122,115,108,.10);
+  --sombra:0 1px 2px rgba(26,21,18,.05), 0 8px 24px -12px rgba(26,21,18,.14);
+}
+
+body{background:var(--papel);color:var(--tinta);font-family:var(--serif);
+  font-size:17px;line-height:1.62;-webkit-font-smoothing:antialiased}
+.hoja{max-width:860px;margin:0 auto;padding:0 22px 96px}
+h1,h2,h3,.et,.chip,.num,table,.pie{font-family:var(--sans)}
+
+/* ── Cabecera ─────────────────────────────────────────────── */
+.top{padding:56px 0 30px;border-bottom:2px solid var(--tinta);margin-bottom:34px}
+.et{font-size:11.5px;letter-spacing:.19em;text-transform:uppercase;
+  font-weight:700;color:var(--acc);margin:0 0 14px}
+h1{font-size:clamp(30px,6.4vw,46px);line-height:1.02;margin:0 0 14px;
+  font-weight:800;letter-spacing:-.021em;text-wrap:balance}
+h1 span{display:block;color:var(--tinta3);font-weight:600;font-size:.52em;
+  letter-spacing:-.005em;margin-top:12px}
+.entradilla{color:var(--tinta2);max-width:62ch;margin:0}
+.entradilla b{color:var(--tinta)}
+
+/* ── Marcador ─────────────────────────────────────────────── */
+.marcador{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));
+  gap:1px;background:var(--linea);border:1px solid var(--linea);
+  border-radius:12px;overflow:hidden;margin:0 0 40px}
+.marcador div{background:var(--papel2);padding:15px 16px}
+.marcador .c{font-size:30px;font-weight:800;letter-spacing:-.03em;line-height:1;
+  font-variant-numeric:tabular-nums;font-family:var(--sans)}
+.marcador .l{font-family:var(--sans);font-size:11px;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--tinta3);margin-top:7px;font-weight:600}
+.c.ok{color:var(--ok)} .c.acc{color:var(--acc)} .c.nada{color:var(--tinta3)}
+.c.espera{color:var(--espera)}
+
+/* ── Secciones ────────────────────────────────────────────── */
+h2{font-size:13px;letter-spacing:.15em;text-transform:uppercase;font-weight:800;
+  color:var(--tinta);margin:52px 0 4px;padding-bottom:9px;
+  border-bottom:1px solid var(--linea2)}
+.h2s{font-family:var(--serif);color:var(--tinta3);font-size:15px;margin:0 0 22px;
+  max-width:62ch}
+
+/* ── El mapa ──────────────────────────────────────────────── */
+.mapa{width:100%;border-collapse:collapse;font-size:14px}
+.mapa th{text-align:left;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--tinta3);font-weight:700;padding:0 10px 9px 0;border-bottom:1px solid var(--linea2)}
+.mapa td{padding:11px 10px 11px 0;border-bottom:1px solid var(--linea);
+  vertical-align:baseline;color:var(--tinta2)}
+.mapa td:first-child{font-variant-numeric:tabular-nums;font-weight:800;color:var(--tinta);
+  width:42px;font-size:15px}
+.mapa td.q{color:var(--tinta)}
+.mapa tr:last-child td{border-bottom:none}
+.chip{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.09em;
+  text-transform:uppercase;padding:3px 8px;border-radius:20px;white-space:nowrap}
+.chip.ok{background:var(--ok-suave);color:var(--ok)}
+.chip.acc{background:var(--acc-suave);color:var(--acc)}
+.chip.espera{background:var(--espera-suave);color:var(--espera)}
+.chip.nada{background:var(--nada-suave);color:var(--nada)}
+
+/* ── Fichas de punto ──────────────────────────────────────── */
+.punto{background:var(--papel2);border:1px solid var(--linea);border-radius:14px;
+  box-shadow:var(--sombra);margin:0 0 22px;overflow:hidden}
+.pcab{display:flex;gap:16px;align-items:flex-start;padding:20px 22px 16px;
+  border-bottom:1px solid var(--linea)}
+.num{font-size:34px;font-weight:800;line-height:.9;letter-spacing:-.04em;
+  font-variant-numeric:tabular-nums;color:var(--acc);flex-shrink:0;min-width:56px}
+.ptit{flex:1;min-width:0}
+.ptit h3{font-family:var(--sans);font-size:18px;font-weight:750;line-height:1.28;
+  margin:0 0 5px;letter-spacing:-.012em;color:var(--tinta);text-wrap:balance}
+.ptit p{margin:0;font-size:14px;color:var(--tinta3);font-family:var(--sans)}
+.pcuerpo{padding:6px 22px 20px}
+.bloque{padding:16px 0;border-bottom:1px solid var(--linea)}
+.bloque:last-child{border-bottom:none;padding-bottom:2px}
+.bloque > .k{font-family:var(--sans);font-size:10.5px;letter-spacing:.13em;
+  text-transform:uppercase;font-weight:750;color:var(--tinta3);margin:0 0 7px}
+.bloque p{margin:0 0 9px;font-size:15.5px;color:var(--tinta2)}
+.bloque p:last-child{margin-bottom:0}
+.bloque b{color:var(--tinta);font-weight:600}
+code{font-family:var(--mono);font-size:.855em;background:var(--nada-suave);
+  padding:1.5px 5px;border-radius:4px;color:var(--tinta)}
+.cita{font-style:italic;color:var(--tinta);border-left:2px solid var(--acc);
+  padding-left:14px;margin:0 0 9px}
+
+/* Los datos medidos */
+.datos{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;
+  background:var(--linea);border:1px solid var(--linea);border-radius:10px;
+  overflow:hidden;margin:12px 0 0}
+.datos div{background:var(--papel);padding:12px 13px}
+.datos .v{font-family:var(--sans);font-size:21px;font-weight:800;line-height:1;
+  font-variant-numeric:tabular-nums;letter-spacing:-.025em}
+.datos .n{font-family:var(--sans);font-size:11px;color:var(--tinta3);margin-top:6px;
+  line-height:1.35}
+
+/* La comprobación */
+ul.check{list-style:none;padding:0;margin:0;font-family:var(--sans);font-size:14.5px}
+ul.check li{padding:7px 0 7px 26px;position:relative;color:var(--tinta2)}
+ul.check li::before{content:"";position:absolute;left:2px;top:14px;width:9px;height:9px;
+  border-radius:50%;background:var(--ok)}
+ul.check li b{color:var(--tinta)}
+.ficheros{font-family:var(--mono);font-size:12.5px;color:var(--tinta3);
+  margin:14px 0 0;line-height:1.85;word-break:break-all}
+.ficheros b{color:var(--tinta2);font-weight:600}
+
+/* Avisos */
+.aviso{background:var(--espera-suave);border:1px solid var(--linea2);
+  border-left:3px solid var(--espera);border-radius:0 10px 10px 0;
+  padding:14px 16px;margin:30px 0}
+.aviso .k{font-family:var(--sans);font-size:11px;letter-spacing:.11em;
+  text-transform:uppercase;font-weight:750;color:var(--espera);margin:0 0 6px}
+.aviso p{margin:0 0 8px;font-size:15px;color:var(--tinta2)}
+.aviso p:last-child{margin-bottom:0}
+
+.pie{margin-top:64px;padding-top:22px;border-top:1px solid var(--linea2);
+  font-size:12.5px;color:var(--tinta3);display:flex;justify-content:space-between;
+  gap:16px;flex-wrap:wrap}
+
+.scroll{overflow-x:auto}
+@media (max-width:560px){
+  body{font-size:16px}
+  .pcab{padding:16px 16px 13px;gap:12px}
+  .pcuerpo{padding:4px 16px 16px}
+  .num{font-size:27px;min-width:42px}
+}
+</style>
+
+<div class="hoja">
+
+  <header class="top">
+    <p class="et">Para el equipo · todo · 28 de agosto</p>
+    <h1>El documento entero, punto a punto
+      <span>Lo que estaba mal, por qué estaba mal y qué quedó hecho</span></h1>
+    <p class="entradilla">Del documento de Jesús salen <b>siete partes y 178 puntos</b>, del 36 al 213.
+      Las partes 1 a 5 y los puntos 179 al 197 quedaron cerrados los días 26 y 27.
+      Lo que sigue es <b>lo que quedaba abierto el 28</b>: se cerró de uno en uno, y cada punto
+      entra aquí con su diagnóstico, su arreglo y la comprobación hecha en la app de verdad, en el
+      teléfono y en el ordenador. <b>Los diez están cerrados.</b> Falta llevarlos a producción.</p>
+  </header>
+
+  <div class="marcador">
+    <div><p class="c ok" id="n-cerrados">10</p><p class="l">Cerrados</p></div>
+    <div><p class="c nada">5</p><p class="l">Sin trabajo</p></div>
+    <div><p class="c espera">1</p><p class="l">Datos, no código</p></div>
+    <div><p class="c acc">6</p><p class="l">Rojos de antes</p></div>
+  </div>
+
+  <h2>El mapa</h2>
+  <p class="h2s">Los dieciséis puntos que quedaban vivos el 28, en el orden del documento.</p>
+  <div class="scroll">
+  <table class="mapa">
+    <thead><tr><th>Nº</th><th>Qué pide</th><th>Dónde</th><th>Estado</th></tr></thead>
+    <tbody>
+      <tr><td>213</td><td class="q">La frase de debajo de la lista se lee dos veces</td><td>Repetir un día</td><td><span class="chip ok">Cerrado</span></td></tr>
+      <tr><td>212</td><td class="q">ENCAJA sólo en el que encaja, y los demás dicen por qué</td><td>Repetir un día</td><td><span class="chip ok">Cerrado</span></td></tr>
+      <tr><td>211</td><td class="q">Todos los días dicen 0 P · 0 H · 0 G</td><td>Repetir un día</td><td><span class="chip ok">Cerrado</span></td></tr>
+      <tr><td>210</td><td class="q">Ofrece días del año que viene</td><td>Repetir un día</td><td><span class="chip ok">Cerrado</span></td></tr>
+      <tr><td>209</td><td class="q">Los tres caminos se quedan como están</td><td>Día sin dieta</td><td><span class="chip nada">Sin trabajo</span></td></tr>
+      <tr><td>208</td><td class="q">Las 66 favoritas llevan nombre de otras clientas</td><td>Día sin dieta</td><td><span class="chip espera">Limpieza</span></td></tr>
+      <tr><td>207</td><td class="q">El día, con su nombre entero en los dos sitios</td><td>Día sin dieta</td><td><span class="chip ok">Cerrado</span></td></tr>
+      <tr><td>206</td><td class="q">Los tres ceros, sin color</td><td>Día sin dieta</td><td><span class="chip ok">Cerrado</span></td></tr>
+      <tr><td>205</td><td class="q">«Guardado» no puede salir en un día vacío</td><td>Día sin dieta</td><td><span class="chip ok">Cerrado</span></td></tr>
+      <tr><td>204</td><td class="q">La tercera opción de color, descartada</td><td>Suplemento</td><td><span class="chip nada">Sin trabajo</span></td></tr>
+      <tr><td>203</td><td class="q">Por qué no gana el naranja</td><td>Suplemento</td><td><span class="chip nada">Sin trabajo</span></td></tr>
+      <tr><td>202</td><td class="q">«+ Creatina» va en gris, con su flecha</td><td>Suplemento</td><td><span class="chip ok">Cerrado</span></td></tr>
+      <tr><td>201</td><td class="q">Corrige el punto 116: el estado puede llevar dos líneas</td><td>Comida</td><td><span class="chip nada">Sin trabajo</span></td></tr>
+      <tr><td>200</td><td class="q">El mismo número fuera y dentro: 6,5</td><td>Comida</td><td><span class="chip ok">Cerrado</span></td></tr>
+      <tr><td>199</td><td class="q">La alternativa del contador, descartada</td><td>Comida</td><td><span class="chip nada">Sin trabajo</span></td></tr>
+      <tr><td>198</td><td class="q">Se cantan los dos: lo que sobra y lo que falta</td><td>Comida</td><td><span class="chip ok">Cerrado</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h2>Lo cerrado</h2>
+  <p class="h2s">Cada ficha lleva lo que pasaba, la causa medida, lo que se cambió y cómo se comprobó.
+    Todo se prueba en el navegador de verdad, en el teléfono (390 px) y en el ordenador (1280 px).</p>
+
+  <!-- ── 198 y 200 ──────────────────────────────────────────── -->
+  <article class="punto">
+    <div class="pcab">
+      <p class="num">198<br><span style="font-size:.62em">200</span></p>
+      <div class="ptit">
+        <h3>La comida que se pasa Y se queda corta sólo cantaba una cosa</h3>
+        <p>Nutrición · la lista de comidas · parte 6</p>
+      </div>
+    </div>
+    <div class="pcuerpo">
+
+      <div class="bloque">
+        <p class="k">Lo que decía el documento</p>
+        <p class="cita">«La lista nombra una y esconde la otra. Si el cliente lee la lista y quita
+          hidratos, cuadra los hidratos y sigue faltándole grasa sin que nadie se lo haya
+          dicho.»</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">La causa</p>
+        <p>Había un <code>if</code> por estado: si la comida se pasaba, se decía sólo lo que
+          sobraba, y <b>lo que faltaba se perdía por el camino</b>. Es lo que viste en la Comida 4
+          del 27: fuera ponía «sobran 7 de hidratos» y dentro había además «faltan 5 de grasa».</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">Qué se cambió · 198</p>
+        <p>Se dicen los dos. <b>El que sobra manda y va arriba</b>, con su punto y en naranja,
+          porque es un error ya cometido: hay comida de más en el plato. <b>El que falta va
+          debajo, sin punto y sin color</b>, porque no es un error, es trabajo por hacer.</p>
+        <p>Cada uno en su línea, y dentro de cada uno los macros con comas. Es tu maqueta con tu
+          corrección del 28 encima: la que se queda en una línea es la <b>enumeración de varios
+          macros del mismo tipo</b> («faltan 11 de proteína, 13 de hidratos y 8 de grasa»), no la
+          mezcla de los dos tipos, que es lo que el punto pedía apilado.</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">Qué se cambió · 200, y lo que había detrás</p>
+        <p>El número de fuera pasa a llevar su decimal, como el de dentro. Pero al cotejarlos
+          macro a macro salió que <b>no era sólo el redondeo</b>: dentro de la comida, lo que
+          falta se resta contra el objetivo <b>tal y como se enseña</b> (al medio gramo, la regla
+          del 17 de agosto), y fuera se restaba contra el valor exacto. El mismo dato decía
+          «faltan 7,6» en la lista y «faltan 7,8» dentro.</p>
+        <p>Ahora las dos cuentas son la misma, con el mismo margen. Comprobado en los tres
+          macros, no sólo en el que se pasaba.</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">Cómo quedó comprobado</p>
+        <ul class="check">
+          <li>Se montó a propósito el caso de la Comida 4 del 27: una comida que <b>se pasa de
+            hidratos y se queda corta de proteína y de grasa</b>.</li>
+          <li>En el teléfono la lista dice <b>«● sobran 16,2 de hidratos»</b> en naranja con su
+            punto y, debajo, <b>«faltan 7,8 de proteína y 12 de grasa»</b> en blanco y sin punto.
+            Dos líneas, sin separadores de más.</li>
+          <li>Cotejo macro a macro entre la lista y la comida abierta: <b>3 de 3</b>.</li>
+          <li>En el ordenador la tarjeta cerrada con su frase no existe (ahí el estado va como
+            punto y barras, y las palabras salen dentro de la comida): se comprobó por donde el
+            cliente lo ve, y los hidratos salen en naranja y la grasa sin color.</li>
+          <li>Las cinco baterías que tocan la comida: <b>141 en verde</b>.</li>
+        </ul>
+        <p class="ficheros">
+          <b>frontend/src/components/nutrition/MealCard.jsx</b> · estadoDeLaComida y su pintado<br>
+          <b>_guia/_comida_con_dos_cosas_2808.js</b> · el recorrido de los dos puntos
+        </p>
+      </div>
+
+    </div>
+  </article>
+
+  <!-- ── 202 ────────────────────────────────────────────────── -->
+  <article class="punto">
+    <div class="pcab">
+      <p class="num">202</p>
+      <div class="ptit">
+        <h3>El «+ Creatina» de debajo de la comida, en gris y con su flecha</h3>
+        <p>Nutrición e Inicio · parte 6</p>
+      </div>
+    </div>
+    <div class="pcuerpo">
+      <div class="bloque">
+        <p class="k">Lo que decía el documento</p>
+        <p class="cita">«El naranja de la marca es correcto por la regla, pero lo está gastando en
+          lo que menos corre. La creatina no tiene prisa; sobran 6,5 de hidratos sí. Y la tarjeta
+          de la comida ya se toca entera y no es naranja: no hace falta color para que algo se
+          pueda pulsar. Con la › al final basta para decir que lleva a otro sitio.»</p>
+      </div>
+      <div class="bloque">
+        <p class="k">Qué se cambió</p>
+        <p>El nombre del suplemento pasa a gris y le sale una <b>›</b> al final. El color queda
+          libre para lo que sí corre, que en esa misma lista es «sobran 6,5 de hidratos».</p>
+        <p><b>En las dos pantallas donde sale</b>, no en una: Inicio, que es donde lo puso el
+          punto 190, y Nutrición, que es donde lo puso la maqueta de la parte 6.</p>
+        <p><b>Y en Nutrición ahora también lleva a Suplementos.</b> Ahí era texto suelto, no un
+          enlace: se veía naranja pero no se podía pulsar, con lo que el 190 no se cumplía por ese
+          lado. Para poder serlo ha tenido que salir del botón de la comida, igual que en Inicio:
+          la tarjeta abre la comida y esto lleva a Suplementos, y un botón dentro de otro ni es
+          HTML válido ni deja elegir destino. Justo el riesgo que dejabas escrito en el 203, y por
+          eso lleva flecha.</p>
+      </div>
+      <div class="bloque">
+        <p class="k">Cómo quedó comprobado</p>
+        <ul class="check">
+          <li>En Nutrición y en Inicio, a <b>390 px y a 1280 px</b>: el texto sale en
+            <code>rgb(163,163,163)</code>, <b>nada de naranja</b>, y con su flecha.</li>
+          <li>Se toca y <b>abre Suplementos</b>, en los dos tamaños. En el ordenador, donde la
+            vista de siempre es lista y detalle, se abre antes la comida que lo lleva.</li>
+          <li>Las cuatro baterías que tocan estas dos pantallas: <b>55 en verde</b>.</li>
+        </ul>
+        <p class="ficheros">
+          <b>frontend/src/components/nutrition/MealCard.jsx</b> · fuera del botón, gris y enlace<br>
+          <b>frontend/src/components/inicio/TuDietaHoy.jsx</b> · gris y flecha<br>
+          <b>frontend/src/pages/NutritionPage.jsx</b> · el destino<br>
+          <b>_guia/_suplemento_comida_2808.js</b> · el recorrido en las dos pantallas
+        </p>
+      </div>
+    </div>
+  </article>
+
+  <!-- ── 205-207 ────────────────────────────────────────────── -->
+  <article class="punto">
+    <div class="pcab">
+      <p class="num">205</p>
+      <div class="ptit">
+        <h3>«Guardado» salía en un día en el que no había nada</h3>
+        <p>Nutrición · el día sin dieta · parte 6</p>
+      </div>
+    </div>
+    <div class="pcuerpo">
+      <div class="bloque">
+        <p class="k">Lo que decía el documento</p>
+        <p class="cita">«Un día en el que no has puesto nada te saluda diciendo que está guardado.
+          Es la primera línea que lee, y es mentira. Que aparezca sólo cuando hay algo que
+          guardar. Mientras el día esté vacío, ahí no va nada.»</p>
+      </div>
+      <div class="bloque">
+        <p class="k">Qué se cambió</p>
+        <p>El aviso de guardado ya no aparece mientras el día no tiene ni un alimento. Y en
+          verde, que en esta app significa resuelto, menos todavía.</p>
+        <p><b>Los avisos de fallo sí se quedan.</b> «No se ha podido guardar» y «Sin conexión con
+          el servidor» no dicen que algo esté hecho, dicen que algo salió mal, y callarlos sería
+          volver al fallo en silencio que ya costó un día perdido. Se comprobó las dos veces: que
+          no sale con el día vacío, y que <b>sí vuelve a salir en cuanto el día tiene algo</b>.</p>
+      </div>
+      <div class="bloque">
+        <p class="k">Cómo quedó comprobado</p>
+        <ul class="check">
+          <li>Día vacío, a 390 px y a 1280 px: el aviso <b>no existe en la pantalla</b>.</li>
+          <li>Se le mete comida al día y se toca el selector de entreno: <b>vuelve a decir
+            «Guardado»</b>. El aviso sigue haciendo su trabajo.</li>
+        </ul>
+        <p class="ficheros">
+          <b>frontend/src/pages/NutritionPage.jsx</b> · renderEstadoGuardado<br>
+          <b>_guia/_dia_sin_dieta_2808.js</b> · el recorrido de los puntos 205 a 209
+        </p>
+      </div>
+    </div>
+  </article>
+
+  <article class="punto">
+    <div class="pcab">
+      <p class="num">206<br><span style="font-size:.62em">207<br>209</span></p>
+      <div class="ptit">
+        <h3>Los tres ceros sin color, el día con su nombre entero y los tres caminos</h3>
+        <p>Nutrición · el día sin dieta · parte 6 · comprobados, sin tocar nada</p>
+      </div>
+    </div>
+    <div class="pcuerpo">
+      <div class="bloque">
+        <p class="k">Qué se encontró</p>
+        <p>Los tres ya estaban bien en el código de hoy, así que <b>no hubo que cambiar nada</b>.
+          Lo que se hizo fue comprobarlos uno a uno en la app, porque darlos por buenos sin mirar
+          es justo lo que no se puede hacer.</p>
+      </div>
+      <div class="bloque">
+        <p class="k">Lo medido</p>
+        <p><b>206.</b> «faltan 235», «faltan 290» y «faltan 60» salen en blanco
+          (<code>rgb(245,245,245)</code>) y <b>sin punto de color</b>, ni naranja ni verde. Con eso
+          la pantalla del día vacío se queda sin un solo color salvo el botón «Crear el día», que
+          es exactamente lo que pedía el punto.</p>
+        <p><b>207.</b> Arriba «Viernes, 28 de agosto» y en la tarjeta «HOY · VIERNES, 28 DE
+          AGOSTO»: el mismo día escrito igual. Se probó también en un día que <b>no es hoy</b>,
+          que es el caso de la captura del documento: «Miércoles, 26 de agosto» arriba y
+          «MIÉRCOLES, 26 DE AGOSTO» en la tarjeta, sin el «Hoy» delante. No queda ni rastro del
+          «Lun, 24 Ago».</p>
+        <p><b>209.</b> Los tres caminos siguen ahí y en su orden: crear de cero, las guardadas,
+          repetir.</p>
+      </div>
+      <div class="bloque">
+        <p class="k">Ojo con esto</p>
+        <p>Si el 28 por la mañana los viste mal, es que <b>lo que estabas mirando no llevaba
+          todavía los cambios del 27</b>. Están en el código y comprobados; lo que falta es que
+          salgan a producción.</p>
+      </div>
+    </div>
+  </article>
+
+  <!-- ── 213 ────────────────────────────────────────────────── -->
+  <article class="punto">
+    <div class="pcab">
+      <p class="num">213</p>
+      <div class="ptit">
+        <h3>La frase de debajo de la lista se leía dos veces</h3>
+        <p>Nutrición · el día sin dieta · parte 7</p>
+      </div>
+    </div>
+    <div class="pcuerpo">
+      <div class="bloque">
+        <p class="k">Lo que decía el documento</p>
+        <p class="cita">«Se ajusta solo, ¿automáticamente o únicamente? Y este día, ¿el que copio
+          o el que estoy montando?»</p>
+      </div>
+      <div class="bloque">
+        <p class="k">Qué se cambió</p>
+        <p>Antes: <em>«El día elegido se ajusta solo a tus macros de este día.»</em></p>
+        <p>Ahora: <b>«Se copian las comidas y se ajustan a tus macros de hoy.»</b></p>
+        <p>Caen las dos dudas de golpe: cuenta lo que pasa y en el orden en que pasa (primero se
+          copia, luego se ajusta), y «hoy» no admite dos lecturas donde «este día» admitía dos.</p>
+      </div>
+      <div class="bloque">
+        <p class="k">Cómo quedó comprobado</p>
+        <ul class="check">
+          <li>Leída en pantalla a <b>390 px y a 1280 px</b>, palabra por palabra.</li>
+          <li>Y con la parte 7 entera de una pasada: los cuatro puntos, <b>todo en verde</b>.</li>
+        </ul>
+        <p class="ficheros">
+          <b>frontend/src/components/nutrition/DiaVacio.jsx</b> · la frase del pie<br>
+          <b>_guia/_repetir_un_dia_2808.js</b> · el recorrido de los cuatro puntos
+        </p>
+      </div>
+    </div>
+  </article>
+
+  <!-- ── 212 ────────────────────────────────────────────────── -->
+  <article class="punto">
+    <div class="pcab">
+      <p class="num">212</p>
+      <div class="ptit">
+        <h3>ENCAJA lo llevaban todos</h3>
+        <p>Nutrición · el día sin dieta · parte 7</p>
+      </div>
+    </div>
+    <div class="pcuerpo">
+
+      <div class="bloque">
+        <p class="k">Lo que decía el documento</p>
+        <p class="cita">«Si lo lleva el cien por cien, la etiqueta no dice nada. Y encajar con 0
+          macros no se puede saber. Que salga sólo en los que encajan, y que los que no digan por
+          qué: +12 H, o otro día si era de descanso y hoy toca entrenar. Así la etiqueta elige por
+          ti, que es para lo que está.»</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">La causa</p>
+        <p>La etiqueta era una sola comparación: <code>tipo_dia === el de hoy</code>. Ni miraba los
+          macros. Como casi todos los días guardados son de entreno y el día que se monta también,
+          salía ENCAJA en todas las filas. La única alternativa que existía era «Se adapta», y solo
+          aparecía si el día era de descanso.</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">Qué se cambió</p>
+        <p>Ahora la calcula el servidor comparando los macros del día guardado con los del día que
+          se está montando, con el margen de 4 gramos de la parte 2, y dice una de tres cosas:
+          <b>Encaja</b>, <b>+12 H</b> (por dónde se sale y por cuánto) u <b>Otro día</b>.</p>
+        <p><b>De los que se salen se canta lo que sobra, no lo que más se desvía.</b> Es el caso
+          de tu propia maqueta: el día de 158 · 92 · 47 contra 175 · 80 · 50 se queda 17 corto de
+          proteína y se pasa 12 de hidratos, y la etiqueta dice «+12 H». Lo que falta se completa
+          añadiendo; lo que sobra hay que quitarlo. Sólo si no sobra nada se canta lo que falta.</p>
+        <p><b>Y el color va sólo en la que encaja.</b> Las demás en gris: si todas llevan color,
+          ninguna destaca, que es de lo que iba el punto.</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">Dos cosas que salieron al hacerlo</p>
+        <p><b>La fila contaba el perientreno distinto que la cabecera.</b> Los tres números de
+          arriba de esa misma pantalla suman el intra y el post en la proteína y en los hidratos, y
+          no en la grasa. La fila los dejaba fuera de los tres, así que un día con perientreno decía
+          77 de hidratos arriba y 48 en la fila. Eran dos cuentas distintas del mismo día, a diez
+          centímetros una de otra, y para comparar hay que contar igual. Ahora la fila cuenta como
+          la cabecera, y se comprobó abriendo los días de uno en uno.</p>
+        <p><b>La etiqueta se calculaba contra el día equivocado.</b> El día abierto viajaba por una
+          función que lo recorta a un día del de España, porque su trabajo es validar el reloj del
+          cliente, no una fecha cualquiera. Quien abría el lunes 24 veía las etiquetas medidas
+          contra los macros del jueves 28. Aquí esa fecha no es «qué día dice que vive», es «qué día
+          estoy montando», y ese sí puede estar lejos.</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">Cómo quedó comprobado</p>
+        <ul class="check">
+          <li>Se montó a propósito <b>un día que sí cuadra</b> (la cuenta de prueba no tenía
+            ninguno) para poder ver la etiqueta buena: de catorce filas, <b>ENCAJA sólo en una</b>.</li>
+          <li>Las otras trece dicen por qué: doce con su desvío y una con <b>OTRO DÍA</b>.</li>
+          <li><b>En naranja, una sola</b>: la que encaja.</li>
+          <li>Siete pruebas nuevas, seis de ellas contra la regla con los números de la maqueta
+            del documento, incluido el caso del «+12 H». En total <b>25 en verde</b> en el fichero.</li>
+          <li>Todo repetido en <b>390 px y en 1280 px</b>.</li>
+        </ul>
+        <p class="ficheros">
+          <b>backend/routes/diets.py</b> · _como_encaja, _total_como_arriba y el día destino<br>
+          <b>frontend/src/components/nutrition/DiaVacio.jsx</b> · la etiqueta y su color<br>
+          <b>backend/tests/test_f1_4_diet_features.py</b> · TestLaEtiquetaElige<br>
+          <b>_guia/_repetir_un_dia_2808.js</b> · el recorrido, con el día de prueba que cuadra
+        </p>
+      </div>
+
+    </div>
+  </article>
+
+  <!-- ── 211 ────────────────────────────────────────────────── -->
+  <article class="punto">
+    <div class="pcab">
+      <p class="num">211</p>
+      <div class="ptit">
+        <h3>Los días a repetir salían todos a cero</h3>
+        <p>Nutrición · el día sin dieta · parte 7</p>
+      </div>
+    </div>
+    <div class="pcuerpo">
+
+      <div class="bloque">
+        <p class="k">Lo que decía el documento</p>
+        <p class="cita">«Todos dicen 0 P · 0 H · 0 G, incluso los que ponen 6 comidas. O esos días
+          están vacíos, y entonces no deberían ofrecerse, o los macros no se están leyendo. Sea lo
+          que sea: un día a repetir sin macros no se puede elegir. Es la única información que
+          sirve para decidir.»</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">La causa, medida en la base</p>
+        <p>Eran las dos cosas a la vez. La lista sumaba, alimento por alimento, el campo
+          <code>macros_efectivos</code> que quedó guardado en el día. Y ese campo <b>muchas veces
+          no está</b>: en la cuenta de Jesús, los 116 días que vinieron de Calma no lo tienen ni
+          uno. La suma daba cero aunque el día tuviera veintiún alimentos.</p>
+        <p>Ese mismo campo decidía además si el día se podía cuadrar con los macros de hoy, así
+          que con él se caía también ese criterio. Es el fallo que ya se cerró en Inicio el 17 de
+          agosto, repetido en otra pantalla.</p>
+        <div class="datos">
+          <div><p class="v" style="color:var(--acc)">116</p><p class="n">días de Calma sin el campo, de 116</p></div>
+          <div><p class="v" style="color:var(--acc)">21</p><p class="n">alimentos en un día que salía a cero</p></div>
+          <div><p class="v" style="color:var(--acc)">0</p><p class="n">días con macros a la vista</p></div>
+        </div>
+      </div>
+
+      <div class="bloque">
+        <p class="k">Qué se cambió</p>
+        <p><b>Lo cuenta el servidor, con el motor de siempre.</b> La lista ya no suma campos
+          guardados: pide los macros a <code>calibracion_dia</code>, el mismo que cuenta el día
+          abierto y el que usa el chat. Se comprobó cotejando fila a fila: el número que enseña
+          «Repetir un día» es exactamente el que se ve al abrir ese día. Una fuente, un número.</p>
+        <p><b>Y un día sin macros no se ofrece.</b> Si después de contarlo bien un día sigue sin
+          sumar nada, no entra en la lista. Es lo que pedía el punto: sin ese dato no hay nada
+          con lo que decidir.</p>
+        <p>De paso, el catálogo de alimentos se pide <b>una vez para toda la lista</b> y no una
+          por día: catorce consultas menos, que es lo que hacía falta para poder calibrar.</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">Cómo quedó comprobado</p>
+        <ul class="check">
+          <li>En el navegador, a <b>390 px y a 1280 px</b>: los trece días de la lista enseñan sus
+            macros, y ninguno sale a cero.</li>
+          <li><b>Reproduciendo el caso de Jesús</b>: se le quitó a un día montado el campo
+            <code>macros_efectivos</code>, igual que lo tienen los de Calma, y los números
+            <b>siguen saliendo iguales</b>.</li>
+          <li>Cotejo abriendo los días de uno en uno: lo que dice la fila es lo mismo que dicen
+            los tres números de arriba al abrir ese día.</li>
+          <li>Tres pruebas nuevas, más las cuatro del 210 y las once que ya había:
+            <b>18 en verde</b>. Y Mi semana y el día abierto, que cuentan con la misma función:
+            <b>46 en verde</b>.</li>
+        </ul>
+        <p class="ficheros">
+          <b>backend/routes/diets.py</b> · el conteo por comida, y el día que no suma no se ofrece<br>
+          <b>frontend/src/components/nutrition/DiaVacio.jsx</b> · la fila pinta lo que le dan<br>
+          <b>backend/tests/test_f1_4_diet_features.py</b> · TestLosDiasTraenSusMacros<br>
+          <b>_guia/_p211_macros_2808.py</b> · el día pelado, para reproducir el caso de Calma
+        </p>
+      </div>
+
+    </div>
+  </article>
+
+  <!-- ── 210 ────────────────────────────────────────────────── -->
+  <article class="punto">
+    <div class="pcab">
+      <p class="num">210</p>
+      <div class="ptit">
+        <h3>«Repetir un día» ofrecía días del año que viene</h3>
+        <p>Nutrición · el día sin dieta · parte 7</p>
+      </div>
+    </div>
+    <div class="pcuerpo">
+
+      <div class="bloque">
+        <p class="k">Lo que decía el documento</p>
+        <p class="cita">«Lunes 17 de mayo de 2027, 3 de mayo, 19 de abril, 20 de febrero... Bajé la
+          lista entera y no hay ni un día de 2026. Repetir es mirar atrás: la lista tiene que ir
+          desde hoy hacia atrás, empezando por el último día montado.»</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">La causa, medida en la base</p>
+        <p>La lista salía de <code>/diets/recent</code>, que ordenaba por fecha <b>descendente</b> y
+          cortaba a catorce <b>sin techo ninguno</b>. Lo primero que veía el cliente era, por tanto,
+          lo más lejano en el <b>futuro</b>.</p>
+        <p>En la base hay 145 días guardados con fecha por delante de hoy. En la cuenta de Jesús
+          hay 116, y ninguno es un día que él montara: son de la migración de Calma, con fechas
+          que nunca se corrigieron.</p>
+        <div class="datos">
+          <div><p class="v" style="color:var(--acc)">145</p><p class="n">días guardados con fecha futura</p></div>
+          <div><p class="v" style="color:var(--acc)">116</p><p class="n">de ellos en la cuenta de Jesús</p></div>
+          <div><p class="v" style="color:var(--acc)">40</p><p class="n">fechados en 2027, y uno en 2030</p></div>
+          <div><p class="v" style="color:var(--acc)">0</p><p class="n">días de 2026 que llegaban a la lista</p></div>
+        </div>
+      </div>
+
+      <div class="bloque">
+        <p class="k">Qué se cambió</p>
+        <p><b>El techo es hoy, no el día abierto.</b> Son dos fechas distintas y no valía reusar la
+          que ya viajaba: quien está arreglando el lunes tiene que poder repetir el miércoles que ya
+          montó, que son justo los días que el documento echaba en falta, «el 26, el 27 y el 28»,
+          pero no el sábado que todavía no ha vivido. El navegador manda ahora su propio día en
+          <code>hoy_cliente</code>, y el servidor lo valida contra el día de España para que un
+          reloj cambiado a mano no vuelva a abrir la puerta a 2027.</p>
+        <p><b>Los días vacíos dejan de ocupar sitio.</b> Al poner el techo salió un efecto de
+          rebote: los días guardados sin un solo alimento, que antes quedaban tapados por los del
+          futuro, pasaban a llenar la lista. En la cuenta de prueba eran tres de los cinco últimos.
+          Un día vacío no se puede repetir, así que se descartan antes de contar los catorce. Eso
+          es literalmente «empezando por el último día montado».</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">Cómo quedó comprobado</p>
+        <ul class="check">
+          <li>En el navegador, a 390 px, con el día de hoy vaciado a propósito: la lista sale con
+            <b>trece días, del 27 de agosto hacia atrás</b>, y ni una sola fecha por delante de hoy.</li>
+          <li>Abriendo un día pasado y un día futuro: <b>el techo aguanta en los dos</b>. Antes,
+            desde el día 24 se colaban el 25, el 26 y el 27.</li>
+          <li>Cuatro pruebas nuevas en la batería, y las once que ya cubrían el endpoint:
+            <b>15 en verde</b>.</li>
+        </ul>
+        <p class="ficheros">
+          <b>backend/routes/diets.py</b> · el techo y el descarte de vacíos<br>
+          <b>frontend/src/pages/NutritionPage.jsx</b> · el navegador manda su día<br>
+          <b>backend/tests/test_f1_4_diet_features.py</b> · TestRepetirMiraAtras<br>
+          <b>_guia/_repetir_un_dia_2808.js</b> · el recorrido en el navegador, con captura
+        </p>
+      </div>
+
+    </div>
+  </article>
+
+  <div class="aviso">
+    <p class="k">Seis rojos que ya estaban antes, y hay que mirarlos</p>
+    <p>Al pasar las baterías salieron seis pruebas en rojo:
+      <code>test_23_cubierta_la_proteina</code>, <code>test_24_la_ventana_de_menus</code>,
+      <code>test_y_no_puede_recalcularselos_el</code>,
+      <code>test_los_recorridos_de_bienvenida_siguen_apagados</code>,
+      <code>test_la_linea_de_nutricion_tambien_lo_dice</code> y
+      <code>test_la_proteina_tampoco_cuenta_al_calibrar_el_dia</code>.</p>
+    <p>Las seis se volvieron a pasar <b>con los cambios de hoy fuera</b> y fallan igual, así que
+      no son de este trabajo: vienen de lo de días anteriores. Ninguna toca nada de lo cerrado
+      aquí.</p>
+    <p>Pero <b>no se quedan ahí</b>: una de ellas dice que al calibrar el día la proteína de las
+      almendras sigue contando (3,45 en vez de 0), y eso, si es verdad y no es la prueba la que
+      está mal, es un número que el cliente está viendo. Quedan apuntadas para mirarlas aparte,
+      que un rojo dado por ajeno ya tapó fallos de verdad otras veces.</p>
+  </div>
+
+  <p class="pie">
+    <span>12EN12 · informe de trabajo sobre «Para el equipo · todo»</span>
+    <span>28 de agosto de 2026</span>
+  </p>
+
+</div>

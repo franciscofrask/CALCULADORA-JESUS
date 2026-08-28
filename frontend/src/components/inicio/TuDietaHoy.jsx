@@ -598,12 +598,20 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
                                 debajo de la casilla de marcar.
 
                                 Sólo el nombre; la dosis vive en su pantalla. Y el intra y el
-                                post no entran nunca: ver `suplementosPorComida`. */}
+                                post no entran nunca: ver `suplementosPorComida`.
+
+                                EN GRIS Y CON SU FLECHA (punto 202 del 28-08). Iba en el naranja
+                                de la marca, que por la regla del 76 es correcto -- es el color de
+                                lo que se toca --, pero lo gastaba en lo que menos corre: en una
+                                lista donde también hay «sobran 6,5 de hidratos», lo primero que
+                                se ve no puede ser la creatina. La › dice que lleva a otro sitio
+                                sin gastar color. */}
                             {!esPeri && (supPorComida[k] || []).length > 0 && (
                                 <button onClick={() => navigate('/dashboard/supplements')}
                                     data-testid={`suplementos-${k}`}
-                                    className="mt-1 ml-9 text-sm text-brand text-left hover:underline underline-offset-2">
+                                    className="mt-1 ml-9 flex items-center gap-1 text-sm text-muted-foreground text-left hover:text-foreground transition-colors">
                                     + {supPorComida[k].join(' · ')}
+                                    <ChevronRight className="w-3.5 h-3.5 flex-shrink-0" />
                                 </button>
                             )}
                         </div>

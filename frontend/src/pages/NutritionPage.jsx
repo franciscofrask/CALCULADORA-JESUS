@@ -1623,7 +1623,10 @@ const NutritionPage = () => {
         try {
             // `para`: el día abierto. El servidor solo ofrece comidas que se puedan
             // cuadrar con los macros de ESE día (caso 27; punto 14 del 23-08).
-            const result = await api(`/api/diets/recent?limit=14&para=${currentDate}`);
+            // `hoy_cliente`: el día de ESTE reloj, que es el techo de la lista -- repetir
+            // es mirar atrás, y sin techo salían primero los días de 2027 (punto 210).
+            const result = await api(
+                `/api/diets/recent?limit=14&para=${currentDate}&hoy_cliente=${hoyISO()}`);
             setRecentDiets(result.diets || []);
         } catch (err) {
             console.error('Error loading recent diets:', err);
@@ -2580,6 +2583,9 @@ const NutritionPage = () => {
             // Los suplementos que le tocan con esta comida (maqueta de la parte 6: «+ Creatina»
             // debajo de la 3). El mismo dato y la misma regla que en Inicio: lib/suplementosDelDia.
             suplementos={supPorComida[mealKey]}
+            // Y desde ahí se llega a Suplementos (punto 190): es el único sitio de esta
+            // pantalla por donde se entra.
+            irASuplementos={() => navigate('/dashboard/supplements')}
             {...mealCardProps}
             isLocked={isMealLocked(mealKey)}
             canVolcar={mealKey === volcarTargetMeal}
@@ -2622,6 +2628,15 @@ const NutritionPage = () => {
             );
         }
         if (guardadoEstado === 'idle') return null;
+        // «GUARDADO» NO PUEDE SALIR EN UN DÍA VACÍO (punto 205 del 28-08). Salía en verde,
+        // arriba del todo y con su ✓, en un día en el que el cliente no había puesto nada:
+        // «es la primera línea que lee, y es mentira». Y el verde, en esta app, significa
+        // resuelto (punto 77). Mientras no haya nada que guardar, ahí no va nada.
+        //
+        // Los avisos de FALLO sí se quedan (los de arriba y el de abajo): esos no dicen que
+        // algo esté hecho, dicen que algo salió mal, y callarlos sería el fallo en silencio
+        // que ya costó un día perdido.
+        if (diaVacio && (guardadoEstado === 'guardado' || guardadoEstado === 'guardando')) return null;
         if (guardadoEstado === 'error') {
             return (
                 <button onClick={flushGuardado}
@@ -2631,7 +2646,8 @@ const NutritionPage = () => {
             );
         }
         return (
-            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span data-testid="estado-guardado"
+                className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 {guardadoEstado === 'guardando'
                     ? <><div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" /> Guardando...</>
                     : <><Check className="w-3.5 h-3.5 text-green-500" /> Guardado</>}
