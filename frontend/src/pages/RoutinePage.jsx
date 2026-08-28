@@ -49,7 +49,12 @@ const Wrap = ({ children }) => (
 // El descanso es un estado, no un fallo: «Hoy no entrenas», sin rojo y sin pedir nada.
 // A nivel de módulo por lo mismo que Wrap: definido dentro se remonta en cada render.
 // ─────────────────────────────────────────────────────────────────────────────
-const SemanaDeRutina = ({ semana, abrirPdf, tienePdf, onMarcarHoy, onSiLoHice, onRecuperar, marcando }) => {
+// `onElegirDia` y `diaElegido` solo llegan cuando ademas hay rutina estructurada: entonces
+// esta tira ES el selector de dia, porque debajo habia OTRA lista con los mismos siete dias
+// (Francisco, 27-08: «está la misma información repetida dos veces»). Sin rutina
+// estructurada no hay nada que elegir y las casillas se quedan como estaban.
+const SemanaDeRutina = ({ semana, abrirPdf, tienePdf, onMarcarHoy, onSiLoHice, onRecuperar, marcando,
+                         onElegirDia, diaElegido }) => {
     // El selector del día para recuperar: null = cerrado.
     const [eligiendoDia, setEligiendoDia] = useState(false);
     if (!semana?.hay) return null;
@@ -81,13 +86,20 @@ const SemanaDeRutina = ({ semana, abrirPdf, tienePdf, onMarcarHoy, onSiLoHice, o
 
             {/* La tira de la semana: L a D con el grupo o la luna del descanso. */}
             <div className="grid grid-cols-7 gap-1.5" data-testid="semana-rutina-tira">
-                {dias.map(d => (
-                    <div key={d.fecha} data-testid={`semana-dia-${d.fecha}`}
+                {dias.map(d => {
+                    const Casilla = onElegirDia ? 'button' : 'div';
+                    const elegido = onElegirDia && diaElegido === d.dia;
+                    return (
+                    <Casilla key={d.fecha} data-testid={`semana-dia-${d.fecha}`}
+                        {...(onElegirDia ? { type: 'button', onClick: () => onElegirDia(d.dia),
+                                             'aria-pressed': elegido } : {})}
                         // El padding lateral va al mínimo: son siete casillas repartiéndose
                         // 390 px y cada píxel que se come el hueco se lo quita al nombre del
                         // grupo. Ver el `truncate` de abajo.
-                        className={`rounded-xl border px-0.5 py-2 text-center min-w-0
-                            ${d.hoy ? 'border-brand bg-brand/10' : 'border-border bg-card'}`}>
+                        className={`rounded-xl border px-0.5 py-2 text-center min-w-0 w-full
+                            ${onElegirDia ? 'transition-colors hover:border-brand/50' : ''}
+                            ${elegido ? 'border-brand bg-brand/20'
+                                : d.hoy ? 'border-brand bg-brand/10' : 'border-border bg-card'}`}>
                         <p className={`text-[10px] font-bold uppercase ${d.hoy ? 'text-brand' : 'text-muted-foreground'}`}>
                             {DAY_LABELS[d.dia]}
                         </p>
@@ -112,8 +124,9 @@ const SemanaDeRutina = ({ semana, abrirPdf, tienePdf, onMarcarHoy, onSiLoHice, o
                             )}
                         </div>
                         {d.recuperacion && <p className="text-[8px] text-brand font-semibold">recup.</p>}
-                    </div>
-                ))}
+                    </Casilla>
+                    );
+                })}
             </div>
 
             {/* Hoy: el grupo con su MARCAR, o el descanso dicho en paz. */}
@@ -612,7 +625,8 @@ const RoutinePage = () => {
                         es la que pone los grupos si el PDF no trae reparto. */}
                     <SemanaDeRutina semana={semana} abrirPdf={abrirPdf} tienePdf={!!pdfInfo}
                         onMarcarHoy={marcarHoy} onSiLoHice={siLoHice} onRecuperar={recuperar}
-                        marcando={marcando} />
+                        marcando={marcando}
+                        onElegirDia={setSelectedDay} diaElegido={selectedDay} />
 
                     {/* Stats */}
                     <div className="grid grid-cols-3 gap-3 sm:gap-4">
@@ -632,20 +646,14 @@ const RoutinePage = () => {
                     <div className="space-y-3">
                         {dayRoutine ? (
                             dayRoutine.is_rest ? (
-                                /* UNA LINEA, NO UN PANEL (Francisco, 25-08: «rompe toda
-                                   la armonia»). Era una caja de 8 de padding con luna
-                                   grande y titular para decir «descanso», al lado de una
-                                   lista donde esa misma fila YA pone «Descanso». Dos
-                                   veces lo mismo, y la de la derecha ocupando el hueco
-                                   de los ejercicios. */
-                                <div className="surface px-4 py-3 flex items-center gap-2.5"
-                                    data-testid="dia-de-descanso">
-                                    <Moon className="w-4 h-4 text-violet-400 flex-shrink-0" />
-                                    <p className="text-sm text-muted-foreground">
-                                        <span className="font-semibold text-foreground">Día de descanso.</span>{' '}
-                                        Tu cuerpo crece mientras descansas.
-                                    </p>
-                                </div>
+                                /* EN UN DIA DE DESCANSO, AQUI NO VA NADA (Francisco, 27-08).
+                                   Primero fue un panel entero, luego una linea («Dia de
+                                   descanso. Tu cuerpo crece mientras descansas»), y las dos
+                                   veces sobraba por lo mismo: la tira de arriba ya pinta la
+                                   luna en ese dia, y si es hoy encima lo dice con palabras
+                                   («Hoy no entrenas»). Decirlo una tercera vez no añade
+                                   nada. */
+                                null
                             ) : (
                                 <div className="space-y-3" data-testid="exercises-list">
                                     {dayRoutine.exercises?.map((exercise, index) => (
@@ -677,53 +685,14 @@ const RoutinePage = () => {
                         )}
                     </div>
 
-                    {/* La lista de dias, debajo de lo que toca hoy. */}
-                    <div>
-                        <p className="caption mb-2 hidden lg:block">Días</p>
-                        <div className="grid grid-cols-7 lg:grid-cols-1 gap-1.5 lg:gap-2" data-testid="day-selector">
-                            {DAYS_ES.map((day) => {
-                                const d = getDayData(day);
-                                const isToday = todayName === day;
-                                const selected = selectedDay === day;
-                                const isRest = d?.is_rest;
-                                return (
-                                    <button key={day} onClick={() => setSelectedDay(day)} data-testid={`day-btn-${slug(day)}`}
-                                        className={`relative rounded-xl transition-all border
-                                            flex flex-col items-center py-2.5 lg:flex-row lg:items-center lg:justify-between lg:px-4 lg:py-3
-                                            ${selected ? 'bg-brand text-white border-brand shadow-sm' : 'bg-card border-border hover:border-border'}`}>
-                                        {/* Mobile */}
-                                        <span className={`lg:hidden text-[11px] font-bold uppercase ${selected ? 'text-white' : 'text-foreground'}`}>{DAY_LABELS[day]}</span>
-                                        <span className="lg:hidden text-[9px] mt-0.5">
-                                            {isRest ? <Moon className={`w-3 h-3 ${selected ? 'text-white/80' : 'text-muted-foreground'}`} /> : <span className={selected ? 'text-white/80 font-data' : 'text-muted-foreground font-data'}>{d?.exercises?.length || 0}</span>}
-                                        </span>
-                                        {/* Desktop */}
-                                        <span className="hidden lg:flex items-center gap-2">
-                                            <span className={`text-sm font-semibold capitalize ${selected ? 'text-white' : 'text-foreground'}`}>{day}</span>
-                                            {isToday && <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${selected ? 'bg-white/20 text-white' : 'bg-brand/10 text-brand'}`}>Hoy</span>}
-                                        </span>
-                                        <span className="hidden lg:flex items-center gap-1 text-xs">
-                                            {isRest
-                                                ? <span className={`flex items-center gap-1 ${selected ? 'text-white/80' : 'text-muted-foreground'}`}><Moon className="w-3.5 h-3.5" /> Descanso</span>
-                                                : <span className={`font-data ${selected ? 'text-white/90' : 'text-muted-foreground'}`}>{d?.exercises?.length || 0} ej</span>}
-                                        </span>
-                                        {isToday && <span className={`lg:hidden absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ${selected ? 'bg-card' : 'bg-brand'}`} />}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-
-                    {/* Si además hay PDF, la estructurada manda y el PDF queda de enlace
-                        secundario (mismo patrón que el botón de EntrenoPage). */}
-                    {pdfInfo && (
-                        <button onClick={abrirPdf} data-testid="routine-pdf-link"
-                            className="w-full flex items-center justify-between p-4 bg-card border border-border rounded-2xl hover:border-white/30 transition-colors">
-                            <span className="flex items-center gap-2 font-bold text-foreground text-sm">
-                                <FileText className="w-4 h-4 text-brand" /> Ver PDF
-                            </span>
-                            <ChevronRight className="w-4 h-4 text-foreground/40" />
-                        </button>
-                    )}
+                    {/* AQUÍ HABÍA LA MISMA SEMANA OTRA VEZ (Francisco, 27-08: «está la misma
+                        información repetida dos veces»). Una lista de los siete días con su
+                        «Descanso» o su «N ej», justo debajo de la tira de arriba, que ya dice
+                        lo mismo con el grupo de cada día. Y detrás, un segundo «Ver PDF»
+                        idéntico al de la cabecera.
+                        Se van los dos. Elegir día no se pierde: ahora se toca la casilla de
+                        la tira de arriba, que además es la que sabe si ese día está hecho o
+                        se recuperó. Una semana, no dos. */}
                 </div>
             )}
         </Wrap>
