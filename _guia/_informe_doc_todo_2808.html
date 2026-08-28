@@ -171,11 +171,12 @@ ul.check li b{color:var(--tinta)}
       Lo que sigue es <b>lo que quedaba abierto el 28</b>: se cerró de uno en uno, y cada punto
       entra aquí con su diagnóstico, su arreglo y la comprobación hecha en la app de verdad, en el
       teléfono y en el ordenador. <b>Los diez están cerrados</b>, y con ellos el primero de los que
-      quedaban de la parte 1, el <b>49</b>. Falta llevarlos a producción.</p>
+      quedaban de la parte 1: el <b>49</b>, el <b>65</b> y el <b>67/69</b>. Falta llevarlos a
+      producción, salvo el 65, que se hizo directamente en la base.</p>
   </header>
 
   <div class="marcador">
-    <div><p class="c ok" id="n-cerrados">11</p><p class="l">Cerrados</p></div>
+    <div><p class="c ok" id="n-cerrados">14</p><p class="l">Cerrados</p></div>
     <div><p class="c nada">5</p><p class="l">Sin trabajo</p></div>
     <div><p class="c espera">1</p><p class="l">Datos, no código</p></div>
     <div><p class="c acc">6</p><p class="l">Rojos de antes</p></div>
@@ -207,8 +208,116 @@ ul.check li b{color:var(--tinta)}
   </table>
   </div>
 
-  <h2>De la parte 1 · el punto 49</h2>
-  <p class="h2s">El primero de los que quedaban del documento del 24 de agosto.</p>
+  <h2>De la parte 1</h2>
+  <p class="h2s">Lo que quedaba del documento del 24 de agosto y no dependía de nadie.</p>
+
+  <!-- ── 65 ─────────────────────────────────────────────────── -->
+  <article class="punto">
+    <div class="pcab">
+      <p class="num">65</p>
+      <div class="ptit">
+        <h3>El cliente llamado «user», eliminado</h3>
+        <p>Los datos · parte 1 · hecho en producción</p>
+      </div>
+    </div>
+    <div class="pcuerpo">
+      <div class="bloque">
+        <p class="k">Qué era</p>
+        <p>Una cuenta de prueba creada el <b>17 de mayo</b> con el correo
+          <code>user@user.com</code>, que <b>nunca ha entrado</b>. Ya estaba marcada como cuenta
+          de prueba, así que no contaba en el listado; pero <b>seguía generando alertas en el
+          panel</b>: dos de «Reporte quincenal vencido» sin resolver, del 8 y el 20 de agosto.</p>
+        <p>Llevaba colgando una dieta de aquel mismo día, un apunte de cobro de 149 € sin Stripe
+          ni origen, una entrada de historial de macros, tres avisos y las cuatro alertas.</p>
+      </div>
+      <div class="bloque">
+        <p class="k">Cómo se hizo</p>
+        <p>Se barrieron <b>todas</b> las colecciones buscando su rastro, no solo las que uno se
+          imagina, y aparecieron <b>12 documentos en 7 colecciones</b> (tres de ellos donde no
+          los habría buscado a mano). Se guardó copia de los doce <b>antes</b> de tocar nada, así
+          que la cuenta se puede reponer entera.</p>
+        <div class="datos">
+          <div><p class="v">12</p><p class="n">documentos borrados</p></div>
+          <div><p class="v">7</p><p class="n">colecciones</p></div>
+          <div><p class="v">187 → 186</p><p class="n">clientes en la base</p></div>
+        </div>
+        <p class="ficheros" style="margin-top:14px">
+          <b>backend/_backup_user_borrado_20260828_195948.json</b> · la copia<br>
+          <b>_guia/_p65_borrar_user.py</b> · mira y no toca sin <code>--escribir</code>
+        </p>
+      </div>
+    </div>
+  </article>
+
+  <!-- ── 67 y 69 ────────────────────────────────────────────── -->
+  <article class="punto">
+    <div class="pcab">
+      <p class="num">67<br><span style="font-size:.62em">69</span></p>
+      <div class="ptit">
+        <h3>El panel pedía rutina a quien ya tenía su PDF</h3>
+        <p>El panel · parte 1</p>
+      </div>
+    </div>
+    <div class="pcuerpo">
+
+      <div class="bloque">
+        <p class="k">Lo que decía el documento</p>
+        <p class="cita">«Montalvo tiene su PDF subido, su reparto por días y sus 8 semanas, y el
+          sistema lo cuenta como sin rutina. Son dos cosas distintas.»</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">Lo que ya estaba bien, y lo que no</p>
+        <p><b>La pantalla de Rutinas ya lo contaba</b> desde el 24 de agosto: hoy dice <b>«33 de
+          185 clientes con rutina puesta»</b>, y los 33 lo son por su PDF.</p>
+        <p><b>El Dashboard no.</b> Su columna «Por hacer esta semana → Sin rutina» seguía mirando
+          solo la tabla de rutinas estructuradas. Medido en producción: de los <b>177</b> clientes
+          activos cuyo plan incluye rutina, <b>0</b> tienen una estructurada y <b>33</b> tienen su
+          PDF. Así que un panel decía 177 pendientes y el otro 33 puestas, y los dos se leen en la
+          misma sesión.</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">Y una consecuencia que no se veía</p>
+        <p>Esa columna <b>se esconde sola</b> cuando le falta a más de nueve de cada diez, porque
+          entonces «no es trabajo pendiente, es el estado de la casa». Con la cuenta mala eran 177
+          de 177 y se escondía siempre. Con los PDF contados son <b>144 de 177, el 81 %</b>, así
+          que <b>la columna vuelve</b>, que es justo lo que aquella decisión prometía: «vuelve
+          sola en cuanto deje de serlo».</p>
+        <p>Y su subtítulo decía «Plan con rutina, sin una activa», que describía la cuenta vieja.
+          Ahora dice <b>«Plan con rutina y ninguna puesta»</b>, el mismo vocabulario que la
+          pantalla de Rutinas.</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">Lo que NO se ha tocado, porque es tuyo</p>
+        <p>Esto arregla <b>el contador del panel</b>. Cuál de las dos manda para lo que ve el
+          cliente y para la semana del reporte <b>sigue siendo la decisión del punto 69</b>: hoy
+          la cadencia del reporte solo mira la rutina estructurada, así que a quien tiene su PDF
+          le manda la semana de ciclo y no la de su rutina.</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">Cómo quedó comprobado</p>
+        <ul class="check">
+          <li>En dev no hay PDF (los datos no viajan), así que se montaron <b>35 a propósito</b>
+            para reproducir producción: la lista bajó de <b>172 a 137</b>, exactamente los 35.</li>
+          <li>En el navegador, a <b>1280 px y a 390 px</b>: <b>la columna vuelve a verse</b> y dice
+            137, el mismo número que el servidor.</li>
+          <li>Los 35 PDF de prueba se quitaron al terminar: la base queda como estaba.</li>
+          <li>Prueba nueva que <b>reproduce el fallo</b>: con la cuenta vieja se pone roja.</li>
+          <li>Las seis baterías del panel: <b>62 en verde</b>.</li>
+        </ul>
+        <p class="ficheros">
+          <b>backend/routes/admin.py</b> · el contador cuenta también el PDF<br>
+          <b>frontend/src/pages/AdminDashboard.jsx</b> · el subtítulo de la columna<br>
+          <b>backend/tests/test_aviso_pdf_rutina.py</b> · test_el_panel_deja_de_pedir_rutina...<br>
+          <b>_guia/_p67_pdfs_de_prueba.py</b> y <b>_guia/_p67_panel_2808.js</b>
+        </p>
+      </div>
+
+    </div>
+  </article>
 
   <article class="punto">
     <div class="pcab">

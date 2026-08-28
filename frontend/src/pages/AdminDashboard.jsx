@@ -60,7 +60,12 @@ const TodoSemana = ({ todo, soloAlCorriente, setSoloAlCorriente, navigate }) => 
     const cols = [
         { key: 'macros', label: 'Sin macros', icon: Apple, color: '#FF671F', sub: 'Necesitan macros del entrenador', items: flt(todo.sin_macros) },
         ...(rutinaEsLoNormal ? [] : [
-            { key: 'rutina', label: 'Sin rutina', icon: Dumbbell, color: '#3B82F6', sub: 'Plan con rutina, sin una activa', items: flt(sinRutina) },
+            /* «SIN PONER» Y NO «SIN UNA ACTIVA» (puntos 67 y 69, 28-08). Desde hoy esta
+               columna cuenta también la rutina entregada en PDF, igual que la pantalla de
+               Rutinas, así que «sin una activa» describía la cuenta vieja: al que tiene su
+               PDF no le falta rutina, le falta estar en la tabla de rutinas estructuradas,
+               que es otra cosa y no es trabajo pendiente de nadie. */
+            { key: 'rutina', label: 'Sin rutina', icon: Dumbbell, color: '#3B82F6', sub: 'Plan con rutina y ninguna puesta', items: flt(sinRutina) },
         ]),
         { key: 'reportes', label: 'Reporte pendiente', icon: FileText, color: '#EAB308', sub: 'No enviado esta semana', items: flt(todo.reporte_pendiente) },
         // «No puedo esta semana»: avisaron con el botón, así que no ensucian la lista de

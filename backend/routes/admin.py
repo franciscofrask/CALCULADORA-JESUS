@@ -2420,7 +2420,27 @@ async def get_todo_semana(user = Depends(get_admin_user)):
     rutinas_activas = await db.routines.find(
         {"status": "active"}, {"_id": 0, "client_id": 1, "created_at": 1}).to_list(3000)
     rutina_por_cliente = {r["client_id"]: r for r in rutinas_activas if r.get("client_id")}
-    active_routine_clients = set(rutina_por_cliente)
+
+    # EL PDF TAMBIÉN ES TENER RUTINA (puntos 67 y 69 del doc del 24-08: «Montalvo tiene su
+    # PDF subido, su reparto por días y sus 8 semanas, y el sistema lo cuenta como sin
+    # rutina»). La pantalla de Rutinas lo cuenta así desde el 24-08 (`has_routine` = la
+    # estructurada O el PDF); este panel se quedó contando solo la estructurada, y los dos
+    # números se leen en la misma sesión.
+    #
+    # Lo medido en producción el 28-08: de los 177 clientes activos cuyo plan incluye
+    # rutina, 0 tienen una estructurada y 33 tienen su PDF. Así que aquí salían 177 «sin
+    # rutina» y en Rutinas 33 «con rutina puesta».
+    #
+    # Y tiene una consecuencia que no se ve: la columna se esconde sola cuando le falta a
+    # más de nueve de cada diez, porque entonces «no es trabajo pendiente, es el estado de
+    # la casa» (Jesús, 11-08). Con 177 de 177 se escondía; con los PDF contados son 144 de
+    # 177, o sea el 81 %, y la columna vuelve sola, que es lo que aquella decisión prometía.
+    #
+    # OJO, esto es solo el CONTADOR del panel: cuál de las dos manda para lo que ve el
+    # cliente y para la semana del reporte sigue siendo la decisión del punto 69, sin tomar.
+    from routes.routines import _ultimo_pdf_por_cliente
+    con_pdf = await _ultimo_pdf_por_cliente()
+    active_routine_clients = set(rutina_por_cliente) | set(con_pdf)
     cutoff = (now - timedelta(days=10)).isoformat()
     # Con tope hoy (punto 22): un reporte fechado en 2027 cumple el «>= cutoff» y contaba
     # como reporte reciente, o sea que tapaba a su cliente en «Reporte pendiente».

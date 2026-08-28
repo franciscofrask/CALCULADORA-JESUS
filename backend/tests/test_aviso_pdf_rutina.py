@@ -138,3 +138,34 @@ def test_con_el_interruptor_apagado_el_pdf_se_guarda_pero_no_suena(
 def test_un_cliente_que_no_existe_no_deja_aviso_huerfano(cabeceras_admin, entreno_encendido):
     r = _subir(cabeceras_admin, f"no-existe-{uuid.uuid4().hex[:8]}")
     assert r.status_code == 404
+
+
+def test_el_panel_deja_de_pedir_rutina_a_quien_ya_tiene_su_pdf(
+        cabeceras_admin, cliente_desechable, entreno_encendido):
+    """PUNTOS 67 Y 69 DEL DOC DEL 24-08: «Montalvo tiene su PDF subido, su reparto por
+    días y sus 8 semanas, y el sistema lo cuenta como sin rutina».
+
+    La pantalla de Rutinas ya cuenta el PDF desde el 24-08 (`has_routine` = la
+    estructurada O el PDF), pero el «Por hacer esta semana» del Dashboard se quedó
+    contando solo la estructurada. Medido en producción el 28-08: de los 177 clientes
+    activos cuyo plan incluye rutina, 0 tenían una estructurada y 33 su PDF, así que un
+    panel decía 177 «sin rutina» y el otro 33 «con rutina puesta».
+
+    Y no es solo el número: esa columna se esconde sola cuando le falta a más de nueve de
+    cada diez, porque entonces deja de ser trabajo pendiente y pasa a ser el estado de la
+    casa. Con la cuenta mala se escondía siempre.
+    """
+    cid = cliente_desechable["client_id"]
+
+    def sin_rutina():
+        r = requests.get(f"{API}/admin/todo-semana", headers=cabeceras_admin, timeout=120)
+        assert r.status_code == 200, r.text
+        return {c["client_id"] for c in (r.json().get("sin_rutina") or [])}
+
+    assert cid in sin_rutina(), (
+        "el cliente de prueba (plan nivel2, que incluye rutina) tendría que salir como "
+        "pendiente antes de subirle nada")
+
+    assert _subir(cabeceras_admin, cid).status_code == 200
+    assert cid not in sin_rutina(), (
+        "con su PDF subido, el panel sigue pidiéndole rutina: es el punto 69 otra vez")
