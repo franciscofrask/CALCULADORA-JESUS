@@ -15,6 +15,7 @@ import { Image as ImageIcon, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { mensajeDeError } from '../../lib/mensajeDeError';
+import { encogerImagen } from '../../lib/encogerImagen';
 import VisorDeFoto from '../ui/VisorDeFoto';
 
 export const TIPOS_ACEPTADOS = 'image/jpeg,image/png,image/webp,image/heic,image/heif';
@@ -88,17 +89,21 @@ export const AdjuntarImagen = ({ api, adjunto, onAdjunto, deshabilitado }) => {
     const [subiendo, setSubiendo] = useState(false);
 
     const elegida = async (e) => {
-        const file = e.target.files?.[0];
+        const original = e.target.files?.[0];
         e.target.value = '';           // que se pueda volver a elegir la misma
-        if (!file) return;
-        // Se comprueba aquí además de en el servidor: enterarse de que la foto pesa 9 MB
-        // DESPUÉS de subirla por los datos del móvil es lo que no puede pasar.
-        if (file.size > MAX_BYTES) {
-            toast.error(`La imagen pesa ${Math.round(file.size / 1024 / 1024)} MB y el máximo son 4 MB.`);
-            return;
-        }
+        if (!original) return;
         setSubiendo(true);
         try {
+            // SE ENCOGE ANTES DE MIRAR EL TOPE (Francisco, 27-08: «no se pueden cargar
+            // imágenes desde escritorio, sale error»). Una captura o una foto de cámara
+            // guardada en el ordenador pasa de 4 MB sin esfuerzo, y se rechazaba aunque el
+            // servidor fuese a dejarla en 250 KB. Ahora llega ya encogida y el tope solo
+            // salta con lo que no se ha podido tocar.
+            const file = await encogerImagen(original);
+            if (file.size > MAX_BYTES) {
+                toast.error(`La imagen pesa ${Math.round(file.size / 1024 / 1024)} MB y el máximo son 4 MB.`);
+                return;
+            }
             const datos = new FormData();
             datos.append('file', file);
             const r = await api.post('/messages/adjunto', datos,

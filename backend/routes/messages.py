@@ -87,6 +87,27 @@ def _encoger(contenido: bytes, content_type: str) -> tuple:
         return contenido, content_type
 
 
+def es_de_soporte(user: dict) -> bool:
+    """¿Esta cuenta está asignada a soporte? (`SUPPORT_EMAILS`, configurable por entorno).
+
+    QUIEN LLEVA SOPORTE LO VE TODO (Francisco, 27-08): «cualquier persona de las asignadas
+    para soporte debería ver cualquier mensaje de cualquier persona, sin importar su rol o
+    si lo envió la misma persona».
+
+    Y hacía falta decirlo porque había dos sitios donde se escondían mensajes, los dos
+    puestos a propósito en su día y los dos equivocados para quien atiende:
+
+      - las conversaciones ENTRE DOS DEL EQUIPO no se listaban a un tercero (25-08), para
+        que no salieran filas fantasma que luego el hilo no enseñaba;
+      - las que alguien se manda A SÍ MISMO solo las veía su dueño (25-08).
+
+    Ninguna de las dos razones vale para soporte: si atiende, atiende todo. Se limita a las
+    cuentas de soporte y no a todo el equipo a propósito -- un entrenador sigue viendo lo
+    suyo y lo de sus clientes, no la conversación privada de dos compañeros.
+    """
+    return (user.get("email") or "").strip().lower() in SUPPORT_EMAILS
+
+
 async def _ids_de_soporte(excluir: Optional[str] = None) -> List[str]:
     """Las cuentas de soporte que existen de verdad, en el orden de `SUPPORT_EMAILS`.
 
@@ -334,6 +355,13 @@ async def get_messages(with_user: Optional[str] = None, user = Depends(get_curre
             # que al abrirlo tiene que traer algo: el `$or` de abajo tambien lo encontraria,
             # pero se deja explicito porque es el caso que estuvo roto y no se lee solo.
             query = {"sender_id": user["id"], "receiver_id": user["id"]}
+        elif es_de_soporte(user):
+            # SOPORTE ABRE A UNA PERSONA Y VE TODO LO SUYO (27-08): lo que ha escrito y lo
+            # que ha recibido, hable con quien hable y aunque se lo mandara a si mismo. Es
+            # lo mismo que ya se hacia con un cliente -- traer su hilo con el equipo entero
+            # y no solo con quien mira --, sin la excepcion de «si el otro tambien es del
+            # equipo, no». Un mensaje que existe no puede quedar sin verse.
+            query = {"$or": [{"sender_id": with_user}, {"receiver_id": with_user}]}
         elif user["id"] in del_equipo and with_user not in del_equipo:
             query = {
                 "$or": [
@@ -368,12 +396,16 @@ async def get_conversations(user = Depends(get_admin_user)):
 
     Ahora se trae la bandeja del equipo entera y se dice quién contestó por última vez.
     """
+    soporte = es_de_soporte(user)
     staff_ids = set(await db.users.distinct("id", {"role": {"$in": ["admin", "trainer"]}}))
-    msgs = await db.messages.find(
-        {"$or": [{"sender_id": {"$in": list(staff_ids)}},
-                 {"receiver_id": {"$in": list(staff_ids)}}]},
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(20000)
+    # Para soporte no se filtra por «que haya alguien del equipo dentro»: se traen TODOS.
+    # Hoy un mensaje entre dos clientes no puede existir -- el destinatario siempre se
+    # resuelve a su entrenador o a soporte --, pero el dia que exista tiene que salir, que
+    # de eso va justo el encargo.
+    filtro = {} if soporte else {
+        "$or": [{"sender_id": {"$in": list(staff_ids)}},
+                {"receiver_id": {"$in": list(staff_ids)}}]}
+    msgs = await db.messages.find(filtro, {"_id": 0}).sort("created_at", -1).to_list(20000)
 
     convs: Dict[str, Any] = {}
     for m in msgs:
@@ -390,14 +422,15 @@ async def get_conversations(user = Depends(get_admin_user)):
         # siendo de los dos y les sale a ellos, no al resto.
         entre_el_equipo = emisor in staff_ids and receptor in staff_ids
         mio = user["id"] in (emisor, receptor)
-        if entre_el_equipo and not mio:
+        # ... salvo para SOPORTE, que lo ve todo (27-08). Ver `es_de_soporte`.
+        if entre_el_equipo and not mio and not soporte:
             continue
 
         # UNA CONVERSACION DE ALGUIEN CONSIGO MISMO ES SUYA. Se archiva a su nombre y solo
         # la ve el; antes se descartaba siempre por el `otro == user` de abajo, asi que el
         # dueño era justo el unico que NO la veia.
         if emisor == receptor:
-            if emisor != user["id"]:
+            if emisor != user["id"] and not soporte:
                 continue
             otro = emisor
         else:
