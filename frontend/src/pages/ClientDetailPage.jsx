@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { COMIDAS_DEL_SUPLEMENTO, dondeSale, noSaleEnNinguna } from '../lib/comidaDelSuplemento';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -1032,9 +1033,19 @@ const ClientDetailPage = () => {
     };
     const supRemove = (bloque, idx) => setSupProtocol(prev => ({ ...prev, [bloque]: prev[bloque].filter((_, i) => i !== idx) }));
     // Editar un suplemento ya puesto (2.7): dosis, momento u observaciones.
+    // Los dos campos que deciden en qué comida sale (ver lib/comidaDelSuplemento). Al tocar
+    // cualquiera de ellos, lo que dice la línea de abajo se ha quedado viejo: lo calculó el
+    // servidor con los datos de antes. Se borra para que diga «guarda para verlo» en vez de
+    // enseñar una comida que ya no es la suya.
+    const CAMBIAN_LA_COMIDA = ['comida', 'cuando'];
     const supEdit = (bloque, idx, campo, valor) => setSupProtocol(prev => ({
         ...prev,
-        [bloque]: prev[bloque].map((it, i) => i === idx ? { ...it, [campo]: valor } : it),
+        [bloque]: prev[bloque].map((it, i) => {
+            if (i !== idx) return it;
+            const nuevo = { ...it, [campo]: valor };
+            if (CAMBIAN_LA_COMIDA.includes(campo)) delete nuevo.en_comidas;
+            return nuevo;
+        }),
     }));
     // ¿Son el mismo suplemento? Por su ficha del catálogo si los dos la traen;
     // si no, por el título (los ítems escritos a mano no llevan catalog_id).
@@ -2193,6 +2204,42 @@ const ClientDetailPage = () => {
                                         <Input value={it.observaciones || ''} onChange={e => supEdit(bloque, i, 'observaciones', e.target.value)}
                                             placeholder="Observaciones (opcional)" data-testid={`sup-obs-${bloque}-${i}`}
                                             className="bg-[#111] border-[#333] text-white text-xs h-8 mt-2" />
+
+                                        {/* DÓNDE SALE EN SU INICIO, ELEGIDO AQUÍ (27-08).
+                                            Antes esto solo se tocaba en el catálogo -- una
+                                            pantalla a la que no se llega desde el menú -- y
+                                            valía para TODOS los clientes a la vez. Y si se
+                                            dejaba en automático, lo decidía la frase del
+                                            «Cuándo»: la app busca «desayuno» y «cena», así
+                                            que un «al levantarme» o un «desayno» mal escrito
+                                            lo borraba del Inicio sin decir nada.
+                                            Ahora se elige, se elige por cliente, y debajo se
+                                            lee DÓNDE ACABA SALIENDO -- que es lo que no se
+                                            podía ver sin abrir la app como él. */}
+                                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                            <span className="text-white/40 text-[11px] shrink-0">En su Inicio sale con</span>
+                                            <select
+                                                value={it.comida || ''}
+                                                onChange={e => supEdit(bloque, i, 'comida', e.target.value)}
+                                                data-testid={`sup-comida-${bloque}-${i}`}
+                                                className="bg-[#111] border border-[#333] rounded-md text-white text-xs h-8 px-2"
+                                            >
+                                                {COMIDAS_DEL_SUPLEMENTO.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
+                                            </select>
+                                            {/* La frase la calcula el SERVIDOR y viaja en
+                                                `en_comidas`: es la misma que se le manda al
+                                                cliente. Al cambiar el desplegable se queda
+                                                vieja, así que se dice, en vez de enseñar un
+                                                dato que ya no es. */}
+                                            {it.en_comidas === undefined ? (
+                                                <span className="text-[11px] text-[#FF671F]">Guarda para verlo</span>
+                                            ) : (
+                                                <span className={`text-[11px] ${noSaleEnNinguna(it.en_comidas) ? 'text-yellow-500/80' : 'text-white/50'}`}
+                                                    data-testid={`sup-donde-${bloque}-${i}`}>
+                                                    {dondeSale(it.en_comidas)}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                 ))}
                                 {/* Cada bloque es una VERSIÓN con su fecha (punto 33). El de

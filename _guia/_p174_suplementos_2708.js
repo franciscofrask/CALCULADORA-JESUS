@@ -76,7 +76,12 @@ const PRUEBA = [
     console.log(`\n=== PUNTO 174 · ${CUENTA} · ${FECHA} ===\n`);
 
     // ── Lo que había, para reponerlo ────────────────────────────────────────
-    const antesProt = await (await page.request.get(`${API}/api/supplements/current`, { headers: cab })).json().catch(() => null);
+    // LA COPIA SE HACE POR LA PUERTA DEL PANEL, NO POR LA DEL CLIENTE. `/supplements/current`
+    // devuelve los nombres YA LIMPIOS («Creatina», no «Creatina hombre»), así que reponer ESO
+    // borraría de la base la chuleta de Jesús para siempre y sin avisar a nadie. El panel
+    // sirve la línea tal y como está guardada, que es lo que hay que devolver.
+    const _fichaAdmin = await (await page.request.get(`${API}/api/admin/clients/${clientId}`, { headers: cabAdmin })).json().catch(() => ({}));
+    const antesProt = (_fichaAdmin || {}).supplement_protocol || null;
     const habiaProt = !!(antesProt && (antesProt.versiones || []).length);
     const antesDia = await (await page.request.get(`${API}/api/diets/${FECHA}`, { headers: cab })).json();
     const habiaDia = !!antesDia.exists;

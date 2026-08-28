@@ -82,7 +82,10 @@ const abrir = async (page, ruta) => {
     console.log(`     sin el Catálogo Premium   ${ok(!/Cat[aá]logo Premium/i.test(entrada))}`);
     console.log(`     sin el *IMPORTANTE        ${ok(!/IMPORTANTE/i.test(entrada))}`);
 
-    const antesProt = await (await page.request.get(`${API}/api/supplements/current`, { headers: cab })).json().catch(() => null);
+    // Por la puerta del PANEL: `/supplements/current` limpia los nombres antes de servirlos,
+    // así que reponer eso borraría de la base la chuleta de Jesús («Creatina hombre»).
+    const _fichaAdmin = await (await page.request.get(`${API}/api/admin/clients/${cli.id}`, { headers: cabAdmin })).json().catch(() => ({}));
+    const antesProt = (_fichaAdmin || {}).supplement_protocol || null;
     const habia = !!(antesProt && (antesProt.versiones || []).length);
 
     // ══ ESTADO 2 · con plan, SIN protocolo ══════════════════════════════════

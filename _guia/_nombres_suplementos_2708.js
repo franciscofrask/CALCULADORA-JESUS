@@ -71,7 +71,11 @@ const quitarRecorrido = async (page) => {
     const FECHA = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     console.log('\n=== EL NOMBRE QUE VE EL CLIENTE ===\n');
 
-    const antes = await (await page.request.get(`${API}/api/supplements/current`, { headers: cab })).json();
+    // LA COPIA, POR LA PUERTA DEL PANEL. Este guion va precisamente de que `/current` limpia
+    // los nombres, así que reponer desde ahí escribiría los limpios en la base y borraría la
+    // chuleta de Jesús para siempre. El panel la sirve tal cual está guardada.
+    const _fichaAdmin = await (await page.request.get(`${API}/api/admin/clients/${cli.id}`, { headers: cabAdmin })).json().catch(() => ({}));
+    const antes = (_fichaAdmin || {}).supplement_protocol || {};
     const habia = !!(antes && (antes.versiones || []).length);
     await page.request.post(`${API}/api/admin/supplements/save?client_id=${cli.id}`, {
         headers: cabAdmin, data: { actual: PRUEBA, actual_fecha: FECHA, siguiente: [] },

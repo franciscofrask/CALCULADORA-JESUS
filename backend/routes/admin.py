@@ -816,9 +816,18 @@ async def get_client_detail(client_id: str, user = Depends(get_admin_user)):
     ).sort([("effective_date", -1), ("created_at", -1)]).to_list(500)
     # El protocolo va RESUELTO POR FECHA (punto 33): `actual` es el que le toca hoy y
     # `siguiente` el que ya esta preparado, y viaja el historico entero.
-    from routes.supplements import _respuesta as _protocolo_resuelto
+    from routes.supplements import _respuesta as _protocolo_resuelto, _colocar_en_las_comidas
     _sp = await db.supplement_protocols.find_one({"client_id": client_id}, {"_id": 0})
     supplement_protocol = _protocolo_resuelto(_sp) if _sp else None
+    # Y CON LA COMIDA EN LA QUE ACABA CAYENDO CADA UNO. Es lo mismo que se le manda al
+    # cliente, calculado por la misma funcion: el coach elige aqui y tiene que ver el
+    # resultado sin salir a comprobarlo en la app. Sin esto, dejarlo en «automatico»
+    # era escribir una frase y cruzar los dedos -- y si la frase no dice «desayuno» ni
+    # «cena», el suplemento desaparece del Inicio sin avisar a nadie.
+    # OJO: los NOMBRES aqui se quedan como Jesus los escribio (ver
+    # `_con_el_nombre_del_cliente`): esta pantalla es la suya.
+    if supplement_protocol:
+        await _colocar_en_las_comidas(supplement_protocol)
 
     # Datos rescatados de Calma (staging, solo lectura). Se busca por client_id o user_id.
     # Se excluye raw_firestore (verbatim, muy pesado): la ficha usa los campos decodificados.

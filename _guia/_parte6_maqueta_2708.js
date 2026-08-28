@@ -63,7 +63,10 @@ const quitarRecorrido = async (page) => {
 
     const antesDia = await (await page.request.get(`${API}/api/diets/${FECHA}`, { headers: cab })).json();
     const habiaDia = !!antesDia.exists;
-    const antesProt = await (await page.request.get(`${API}/api/supplements/current`, { headers: cab })).json().catch(() => null);
+    // Por la puerta del PANEL: `/supplements/current` limpia los nombres antes de servirlos,
+    // así que reponer eso borraría de la base la chuleta de Jesús («Creatina hombre»).
+    const _fichaAdmin = await (await page.request.get(`${API}/api/admin/clients/${cli.id}`, { headers: cabAdmin })).json().catch(() => ({}));
+    const antesProt = (_fichaAdmin || {}).supplement_protocol || null;
     const habiaProt = !!(antesProt && (antesProt.versiones || []).length);
 
     await page.request.post(`${API}/api/diets`, {

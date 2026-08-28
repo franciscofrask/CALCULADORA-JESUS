@@ -57,7 +57,12 @@ const quitarRecorrido = async (page) => {
     // ── De quién hablamos, y qué tenía ──────────────────────────────────────
     const perfil = await (await page.request.get(`${API}/api/clients/profile`, { headers: cabC })).json();
     const clientId = perfil.id;
-    const protoAntes = await (await page.request.get(`${API}/api/supplements/current`, { headers: cabC })).json();
+    // LA COPIA SE HACE POR LA PUERTA DEL PANEL, NO POR LA DEL CLIENTE. `/supplements/current`
+    // devuelve los nombres YA LIMPIOS («Creatina», no «Creatina hombre»), así que guardar eso
+    // de vuelta borraría de la base la chuleta de Jesús para siempre y sin avisar. El panel
+    // sirve la línea tal cual está guardada, que es lo que hay que reponer.
+    const fichaAdmin = await (await page.request.get(`${API}/api/admin/clients/${clientId}`, { headers: cabA })).json();
+    const protoAntes = fichaAdmin.supplement_protocol || { actual: [], siguiente: [] };
 
     const catalogo = await (await page.request.get(`${API}/api/admin/supplements/catalog`, { headers: cabA })).json();
     // Uno cuyo «¿Cuándo?» hable del desayuno: así se ve la deducción automática ANTES de

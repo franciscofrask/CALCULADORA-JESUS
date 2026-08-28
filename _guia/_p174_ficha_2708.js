@@ -74,7 +74,10 @@ const ok = (b) => (b ? 'BIEN' : 'MAL ');
     const yo = await (await page.request.get(`${API}/api/auth/me`, { headers: cabC })).json();
     const lista = await (await page.request.get(`${API}/api/admin/clients?include_incomplete=true`, { headers: cab, timeout: 90000 })).json();
     const cli = (Array.isArray(lista) ? lista : []).find(c => ((c.user || {}).email || '').toLowerCase() === yo.email.toLowerCase());
-    const antes = await (await page.request.get(`${API}/api/supplements/current`, { headers: cabC })).json();
+    // Por la puerta del PANEL: `/supplements/current` limpia los nombres antes de servirlos,
+    // así que reponer eso borraría de la base la chuleta de Jesús («Creatina hombre»).
+    const _fichaAdmin = await (await page.request.get(`${API}/api/admin/clients/${cli.id}`, { headers: cab })).json().catch(() => ({}));
+    const antes = (_fichaAdmin || {}).supplement_protocol || {};
     const habia = !!(antes && (antes.versiones || []).length);
     const d = new Date();
     const FECHA = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
