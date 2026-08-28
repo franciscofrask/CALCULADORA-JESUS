@@ -1,30 +1,26 @@
-/**
- * Convierte un HTML local en PDF con el Chrome de verdad.
- *
- *   node _guia/_hacer_pdf.js entrada.html "salida.pdf"
- */
-const { chromium } = require('playwright');
+const { chromium } = require('C:/Users/Administrador/Desktop/CALCULADORA-JESUS/node_modules/playwright');
 const { pathToFileURL } = require('url');
-const path = require('path');
 
 const entrada = process.argv[2];
 const salida = process.argv[3];
 
 (async () => {
-    if (!entrada || !salida) {
-        console.error('  uso: node _guia/_hacer_pdf.js entrada.html salida.pdf');
-        process.exit(1);
-    }
-    const nav = await chromium.launch({ channel: 'chrome' });
-    const p = await nav.newPage();
-    await p.goto(pathToFileURL(path.resolve(entrada)).href);
-    await p.waitForTimeout(1500);
+    const nav = await chromium.launch();
+    const p = await (await nav.newContext()).newPage();
+    await p.goto(pathToFileURL(entrada).href, { waitUntil: 'networkidle' });
     await p.pdf({
         path: salida,
         format: 'A4',
         printBackground: true,
-        margin: { top: '18mm', bottom: '16mm', left: '16mm', right: '16mm' },
+        margin: { top: '16mm', bottom: '18mm', left: '15mm', right: '15mm' },
+        displayHeaderFooter: true,
+        headerTemplate: '<div></div>',
+        footerTemplate:
+            '<div style="width:100%;font-family:Segoe UI,sans-serif;font-size:7pt;color:#7d7365;' +
+            'padding:0 15mm;display:flex;justify-content:space-between;">' +
+            '<span>12EN12 &middot; parte del 27 de agosto de 2026</span>' +
+            '<span><span class="pageNumber"></span> / <span class="totalPages"></span></span></div>',
     });
     await nav.close();
-    console.log('  PDF:', salida);
+    console.log('PDF ->', salida);
 })();

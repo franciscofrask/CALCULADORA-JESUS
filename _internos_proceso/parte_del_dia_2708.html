@@ -1,0 +1,645 @@
+<title>Parte del día · 27 de agosto de 2026</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm 18mm; }
+
+  :root {
+    --tinta:       #16130f;
+    --tinta-media: #4b433a;
+    --tinta-tenue: #7d7365;
+    --papel:       #ffffff;
+    --linea:       #d9d2c6;
+    --linea-fina:  #ece6db;
+    --marca:       #c94a0c;
+    --marca-suave: #fbf1e9;
+    --antes:       #8f3535;
+    --ahora:       #2b6642;
+    --aviso:       #8a6a12;
+    --aviso-suave: #fdf6e3;
+
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: "Cascadia Mono", "SF Mono", Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--papel);
+    color: var(--tinta);
+    font-family: var(--sans);
+    font-size: 10.5pt;
+    line-height: 1.5;
+  }
+
+  /* ── Portada ──────────────────────────────────────────────── */
+  .portada {
+    border-bottom: 2.5pt solid var(--tinta);
+    padding-bottom: 10pt;
+    margin-bottom: 14pt;
+  }
+  .sello {
+    font-family: var(--mono);
+    font-size: 7.5pt;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--marca);
+    margin: 0 0 6pt;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-size: 26pt;
+    font-weight: 600;
+    line-height: 1.1;
+    letter-spacing: -.01em;
+    margin: 0 0 6pt;
+  }
+  .bajada { color: var(--tinta-media); margin: 0; font-size: 10.5pt; max-width: 150mm; }
+
+  .cifras {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4pt 16pt;
+    margin-top: 10pt;
+    padding-top: 8pt;
+    border-top: .5pt solid var(--linea-fina);
+    font-family: var(--mono);
+    font-size: 8pt;
+    color: var(--tinta-tenue);
+  }
+  .cifras b { color: var(--tinta); font-weight: 700; }
+
+  /* ── Secciones ────────────────────────────────────────────── */
+  h2 {
+    font-family: var(--serif);
+    font-size: 15pt;
+    font-weight: 600;
+    margin: 0 0 3pt;
+    line-height: 1.2;
+    break-after: avoid;
+  }
+  .bloque {
+    border-top: .75pt solid var(--linea);
+    padding-top: 9pt;
+    margin-bottom: 14pt;
+    break-inside: avoid;
+  }
+  .origen {
+    font-family: var(--mono);
+    font-size: 7.5pt;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--marca);
+    margin: 0 0 3pt;
+  }
+  .bloque p { margin: 0 0 5pt; }
+  .bloque p:last-child { margin-bottom: 0; }
+
+  h3 {
+    font-family: var(--sans);
+    font-size: 10.5pt;
+    font-weight: 700;
+    margin: 9pt 0 3pt;
+    break-after: avoid;
+  }
+
+  .dijo {
+    margin: 0 0 7pt;
+    padding: 6pt 9pt;
+    background: var(--marca-suave);
+    border-left: 2.5pt solid var(--marca);
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 10pt;
+  }
+  .dijo p { margin: 0; }
+  .dijo cite {
+    display: block;
+    margin-top: 4pt;
+    font-family: var(--mono);
+    font-style: normal;
+    font-size: 7pt;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--tinta-tenue);
+  }
+
+  .par { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin: 7pt 0; break-inside: avoid; }
+  .par > div { padding: 6pt 9pt; border: .5pt solid var(--linea); }
+  .par > div + div { border-left: 0; }
+  .par h4 {
+    font-family: var(--mono);
+    font-size: 7pt;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    margin: 0 0 3pt;
+    font-weight: 700;
+  }
+  .par .a h4 { color: var(--antes); }
+  .par .b h4 { color: var(--ahora); }
+  .par p { margin: 0 0 3pt; font-size: 9.5pt; }
+  .par p:last-child { margin-bottom: 0; }
+
+  .medido {
+    font-family: var(--mono);
+    font-size: 8.5pt;
+    color: var(--tinta-media);
+    border-left: 1.5pt solid var(--marca);
+    padding-left: 7pt;
+    margin: 6pt 0;
+  }
+  .medido b { color: var(--tinta); }
+
+  .ojo {
+    background: var(--aviso-suave);
+    border: .5pt solid #e6d9ae;
+    padding: 6pt 9pt;
+    margin: 7pt 0;
+    font-size: 9.5pt;
+    break-inside: avoid;
+  }
+  .ojo strong { color: var(--aviso); }
+
+  code {
+    font-family: var(--mono);
+    font-size: 8.5pt;
+    background: #f4f1ea;
+    padding: .5pt 2.5pt;
+    border: .5pt solid var(--linea-fina);
+  }
+
+  ul { margin: 0 0 5pt; padding-left: 14pt; }
+  li { margin-bottom: 2.5pt; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 9pt; margin: 6pt 0; }
+  th, td { text-align: left; padding: 4pt 6pt; border-bottom: .5pt solid var(--linea-fina); vertical-align: top; }
+  th {
+    font-family: var(--mono);
+    font-size: 7pt;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--tinta-tenue);
+    border-bottom: .75pt solid var(--linea);
+  }
+  td.cod { font-family: var(--mono); font-size: 8pt; white-space: nowrap; }
+
+  .salto { break-before: page; }
+
+  footer {
+    margin-top: 16pt;
+    padding-top: 7pt;
+    border-top: .75pt solid var(--linea);
+    font-size: 8.5pt;
+    color: var(--tinta-tenue);
+  }
+</style>
+
+<div class="portada">
+  <p class="sello">Parte de trabajo · jueves 27 de agosto de 2026</p>
+  <h1>Todo lo que se hizo hoy</h1>
+  <p class="bajada">
+    Las partes 5 y 6 del documento de Jesús (puntos 144 a 197), lo que salió de su vídeo de la
+    mañana, los cuatro puntos del apartado del panel, y siete fallos que aparecieron probando.
+    De cada cosa: qué se pedía, cómo estaba, cómo está y cómo comprobarlo.
+  </p>
+  <div class="cifras">
+    <span><b>16</b> commits</span>
+    <span><b>74</b> ficheros</span>
+    <span><b>+7.780</b> / <b>−964</b> líneas</span>
+    <span><b>22</b> guiones de prueba</span>
+    <span><b>4</b> ficheros de tests</span>
+    <span>en <b>producción</b> y en <b>dev</b></span>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="bloque">
+  <p class="origen">Vídeo del 27-08 · el hallazgo más extendido</p>
+  <h2>El cliente leía la chuleta de Jesús</h2>
+
+  <div class="dijo">
+    <p>«Él solamente ve Aceite de krill. No tiene que ver Aceite de krill, tres perlas.»</p>
+    <cite>Jesús, vídeo del 27 de agosto</cite>
+  </div>
+
+  <p>
+    La letra pequeña que Jesús se escribe a sí mismo en la ficha - «hombre», «mujer», «mes 2»,
+    «3 perlas» - salía tal cual en la pantalla del cliente.
+  </p>
+
+  <div class="medido">
+    Medido en producción: <b>328 de las 528 líneas</b> vivas lo enseñaban, en <b>97 de los 100
+    clientes</b> con protocolo.
+  </div>
+
+  <div class="par">
+    <div class="a"><h4>Cómo estaba</h4>
+      <p>«Creatina hombre», «Omega 3 mes 2 (2 perlas)», «Fat burner hardcore mes 3».</p></div>
+    <div class="b"><h4>Cómo está</h4>
+      <p>«Creatina», «Omega 3». Y «Magnesio 300 mg» se queda entero: ahí los miligramos son la
+         dosis de verdad, no una nota interna.</p></div>
+  </div>
+
+  <p>
+    <strong>No se tocó ni un dato.</strong> El panel y el cliente leen por puertas distintas, así
+    que se limpió solo la del cliente. Jesús sigue viendo su nombre completo donde lo necesita.
+    Se recortan 34 nombres, y solo por detrás. Quedan 6 líneas con letra rara a propósito, porque
+    la letra rara <em>es</em> el producto.
+  </p>
+
+  <h3>Cómo comprobarlo</h3>
+  <p>Cliente › Suplementos: ningún nombre lleva «hombre», «mujer», «mes N» ni «N perlas» detrás.
+     Panel › ese cliente › Suplementos: ahí siguen completos.</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="bloque">
+  <p class="origen">Punto 174 · y su reforma de la tarde</p>
+  <h2>En qué comida sale cada suplemento</h2>
+
+  <p>
+    La maqueta ponía la creatina en la Comida 3, y su «¿Cuándo?» decía «con el desayuno», que es
+    la 1. No se adivina: manda lo que se elija a mano, y si no hay elección se deduce del texto.
+  </p>
+
+  <div class="medido">
+    De las 528 líneas vivas: <b>206</b> caen solas en una comida · <b>235</b> son de entreno y no
+    llevan nada debajo, por diseño · <b>87</b> no se pueden decidir sin que Jesús las coloque.
+  </div>
+
+  <p>
+    Se montó primero en el catálogo, que vale para todos los clientes a la vez. Francisco probó y
+    dijo que era confuso: <em>«debería poder cambiarse desde la ficha del cliente, y además no con
+    texto»</em>. Y tenía razón, porque la deducción por texto tiene un filo:
+  </p>
+
+  <div class="ojo">
+    <strong>Qué mira la app:</strong> solo las palabras <em>desayuno</em> y <em>cena</em>, sin
+    tildes ni mayúsculas, después de descartar lo que hable de entreno. Si el texto no nombra
+    ninguna comida, <strong>no</strong> se queda sin sitio: se cae hacia atrás al texto del
+    catálogo. O sea que reescribir el «¿Cuándo?» de un cliente sirve para <em>moverlo</em>, nunca
+    para <em>quitarlo</em>. Para eso está «En ninguna».
+  </div>
+
+  <div class="par">
+    <div class="a"><h4>Cómo estaba</h4>
+      <p>La comida se elegía solo en el catálogo, una pantalla que no está en el menú, y valía
+         para todos a la vez.</p>
+      <p>En automático lo decidía una frase escrita a mano.</p></div>
+    <div class="b"><h4>Cómo está</h4>
+      <p>Un desplegable en la ficha de cada cliente: Automático · La primera · La última ·
+         Comida 1 a 4 · En ninguna.</p>
+      <p>Al lado, la frase de <strong>dónde acaba saliendo</strong>, calculada por el servidor:
+         la misma que ve el cliente.</p></div>
+  </div>
+
+  <p>
+    Esa frase no se calcula en el navegador a propósito. Hoy mismo se vio lo que pasa cuando el
+    mismo dato lo calculan dos sitios, y aquí sería peor: no hay número que comparar.
+  </p>
+
+  <h3>Cómo comprobarlo</h3>
+  <p>Panel › Clientes › uno › Suplementos. Cambia el desplegable a «Comida 2» y guarda: la frase
+     pasa a «Sale en la Comida 2», y en el Inicio del cliente el suplemento se mueve ahí.</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="bloque">
+  <p class="origen">Parte 6 · puntos 179 a 190</p>
+  <h2>Suplementos: de dos caminos a tres</h2>
+
+  <div class="par">
+    <div class="a"><h4>Cómo estaba</h4>
+      <p>Dos caminos. Con pauta propia: su pauta <em>más la guía entera debajo</em>, siempre. Sin
+         pauta: la guía. Los dos con el mismo título.</p>
+      <p>El tercer caso - a quien no le toca - caía en el mismo sitio por casualidad: el error del
+         servidor se tragaba en silencio.</p></div>
+    <div class="b"><h4>Cómo está</h4>
+      <p>Tres estados, cada uno con su nombre. Con pauta: solo la suya, sin guía. Con plan pero sin
+         pauta: el aviso de que está en camino, y la guía debajo. Sin plan personalizado: la guía,
+         sin promesas.</p>
+      <p>Lo decide un dato del servidor, no un error interpretado.</p></div>
+  </div>
+  <p>
+    De paso: «COMIDA N» va en el naranja de marca, no en el otro que Jesús rechazó en el punto 158.
+    Y en la guía, Alimentos pasa a ser el primer bloque y Básicos el segundo. Los dos suplementos
+    huérfanos se colocaron con un script con copia de seguridad: Citrulina malato a rendimiento,
+    Crema RELIEF EFFECT a descanso.
+  </p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="bloque salto">
+  <p class="origen">Lo más gordo del día · lo destapó una almendra</p>
+  <h2>Tres motores para el mismo número</h2>
+
+  <p>
+    Francisco enseñó unas almendras cuya proteína aparecía y desaparecía sola. Buscando el porqué
+    salió algo más grande: al cambiar una cantidad, ese número lo calculan <strong>tres sitios
+    distintos</strong>, y no siempre dicen lo mismo.
+  </p>
+
+  <ul>
+    <li><code>/macros-efectivos</code>, al que la pantalla no le manda lo que lleva acumulado el día</li>
+    <li><code>/calibrar-dia</code>, que es el que manda</li>
+    <li>una <strong>regla de tres</strong> en el navegador, aplicada sobre una calibración que va
+        por escalones</li>
+  </ul>
+
+  <p>
+    La calibración de Jesús es escalonada: hasta 20 g de frutos secos en el día su proteína no
+    cuenta; de 20 a 40, la mitad; de 40 en adelante, toda. Una regla de tres sobre un escalón da un
+    número que ningún motor daría.
+  </p>
+
+  <div class="medido">
+    Medido contra el catálogo entero, no solo las almendras: de los <b>462 alimentos</b> que se
+    calibran, <b>62 daban un número falso</b> - cremas de cacahuete, anacardos, pipas, granolas,
+    harinas de avena.<br>
+    Reproducido en la app: bajar de 45 a 40 g enseñaba <b>9,2</b> cuando el motor dice <b>4,6</b>.
+    El doble.
+  </div>
+
+  <div class="par">
+    <div class="a"><h4>Cómo estaba</h4>
+      <p>El navegador se inventaba un número mientras llegaba el bueno. El cliente veía cambiar la
+         cifra sola, medio segundo después.</p></div>
+    <div class="b"><h4>Cómo está</h4>
+      <p>Lo que se calibra ya no se escala en el navegador: se mantiene el último número bueno
+         hasta que contesta el servidor. Deja de mentir.</p></div>
+  </div>
+
+  <div class="ojo">
+    <strong>No está cerrado del todo.</strong> El número sigue tardando medio segundo en
+    asentarse. Y debajo hay una decisión que no es técnica: el caso 32 de Jesús dice que la
+    proteína de los frutos secos no cuenta, y su calibración progresiva dice que sí, por tramos.
+    Las dos reglas son suyas y se contradicen. Hasta que él elija, el número depende de por dónde
+    entre el alimento.
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="bloque">
+  <p class="origen">Lo encontró Francisco probando</p>
+  <h2>Cuatro fallos de la pantalla de Nutrición</h2>
+
+  <h3>Los gramos se movían de uno en uno</h3>
+  <p>
+    Y detrás había algo peor que un botón incómodo: el servidor redondea a 5. El cliente ajustaba
+    a 43 g y el servidor lo movía por su cuenta. Ahora el botón usa el mismo paso que el servidor:
+    5 en general, 50 en los de ración grande, y el konjac su 16,4.
+  </p>
+
+  <h3>El botón de tres puntos «no hacía nada»</h3>
+  <p>
+    Sí hacía: el menú se abría y la tarjeta de la comida se lo comía, porque recorta lo que se sale
+    de ella para redondear sus esquinas.
+  </p>
+  <div class="medido">
+    Medido: de los <b>106 px</b> que mide el menú se veían <b>11</b>. Una franja al pie de la
+    tarjeta que no parece un menú ni parece nada.
+  </div>
+  <p>Ahora va colgado del documento, colocado a mano bajo el botón, y si no cabe debajo se abre
+     hacia arriba.</p>
+
+  <h3>La grasa decía 40 aquí y 41 allí (punto 178)</h3>
+  <p>
+    La cabecera sumaba toda la grasa del día contra un objetivo que no cuenta la del entreno.
+  </p>
+  <div class="medido">
+    Reproducido antes y después: <b>20 contra 10</b> antes; <b>10 contra 10</b> ahora. Hay
+    <b>27 días guardados en producción</b> con grasa de entreno, así que se veía de verdad.
+  </div>
+
+  <h3>Los colores de las comidas (puntos 196 y 197)</h3>
+  <p>
+    Aquí el vídeo de la mañana decía una cosa y el documento otra. Francisco zanjó: manda el
+    documento. Verde cuando el macro está resuelto, rojo cuando se ha pasado, y <strong>por debajo
+    sin color</strong>. La comida sin crear va en gris apagado y sin punto; la que falta, en
+    blanco. Fuera el aro naranja de la tarjeta.
+  </p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="bloque">
+  <p class="origen">Vídeo del 27-08 · y su reforma de la noche</p>
+  <h2>La rutina</h2>
+
+  <h3>No se abría en el iPhone</h3>
+  <p>
+    No era el PDF ni un permiso: era el orden. Se pedía el fichero al servidor y, cuando llegaba,
+    se abría la ventana. Para entonces Safari ya no relaciona esa ventana con el dedo del cliente
+    y la bloquea sin decir nada.
+  </p>
+  <div class="medido">
+    Medido en la app: del toque a la ventana pasaban <b>492 ms</b>. Ahora, <b>4 ms</b>.
+  </div>
+  <p>Estaba copiado en tres pantallas - Inicio, Entreno y Rutina -, así que se arregló una vez.</p>
+
+  <h3>Fuera la vista previa del PDF</h3>
+  <p>
+    La pantalla se descargaba el PDF entero - entre 300 KB y 4,6 MB - y lo pintaba dentro. En el
+    móvil eso no funciona: Safari enseña la primera hoja y no deja pasar, y Chrome de Android
+    muchas veces ni la pinta. Casi todo el mundo se bajaba varios megas para ver una hoja muerta y
+    luego pulsaba el botón igual. Queda la tarjeta con la fecha y el botón.
+  </p>
+
+  <h3>La misma semana, dos veces</h3>
+  <p>
+    Debajo de la tira de la semana había otra lista con los mismos siete días, y detrás un segundo
+    «Ver PDF» idéntico al de arriba. Se van los dos. Elegir día no se pierde: ahora se toca la
+    casilla de la tira, que además sabe si ese día está hecho o si se recuperó. Con ellos se va
+    también la línea «Día de descanso, tu cuerpo crece mientras descansas», que era la tercera vez
+    que se decía lo mismo.
+  </p>
+
+  <div class="ojo">
+    <strong>El rótulo del botón.</strong> Ahora pone «Ver PDF» porque Francisco lo pidió así. Queda
+    dicho que contradice al vídeo de esa misma mañana, minuto 8:46: <em>«olvida el PDF, olvida la
+    palabra PDF, eso no tiene sentido»</em>. Manda lo último que se ha pedido, pero está anotado en
+    el código de dónde viene cada versión.
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="bloque salto">
+  <p class="origen">Parte 5 · puntos 144 a 172</p>
+  <h2>El buscador, la solicitud de alimento y la letra del Inicio</h2>
+
+  <div class="par">
+    <div class="a"><h4>Cómo estaba</h4>
+      <p>Cada alimento arrastraba dos frases: «Te cuenta hidratos. Ni su proteína ni su grasa te
+         cuentan.» Un renglón entero por alimento.</p>
+      <p>Al pedir un alimento nuevo, las fotos eran opcionales: llegaban solicitudes que no se
+         podían revisar y había que pedirlas por WhatsApp.</p>
+      <p>El Inicio pedía sus números a peso 850 y se cargaban pesos sueltos hasta el 800.</p></div>
+    <div class="b"><h4>Cómo está</h4>
+      <p>«Te cuenta solo el hidrato». Tres palabras, y cuatro formas según el alimento: todo, solo
+         uno, dos de tres, o nada.</p>
+      <p>Las dos fotos del envase y el enlace - o marcar «no tiene web» - son obligatorios.</p>
+      <p>La letra llega en rango, así que el 850 es el 850 y no un 800 redondeado en silencio.</p></div>
+  </div>
+  <p>
+    Y el texto del vacío es el mismo en las dos pantallas que buscan, que antes decían cosas
+    distintas para lo mismo.
+  </p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="bloque">
+  <p class="origen">Apartado del panel · puntos 61 a 64</p>
+  <h2>Los cuatro del panel</h2>
+
+  <table>
+    <thead><tr><th>Punto</th><th>Estado</th><th>Qué pasó</th></tr></thead>
+    <tbody>
+      <tr><td class="cod">61</td><td>Ya estaba</td>
+          <td>Los dos números (83 y 10) no se igualaron: el cálculo salió del navegador y pasó al
+              servidor, y la pantalla explica el salto. Las dos vistas ya no pueden discrepar.</td></tr>
+      <tr><td class="cod">62</td><td>Hecho hoy</td>
+          <td>El aviso empezaba por «Y» y se leía como media frase. Ahora se entiende solo, y
+              concuerda en singular en los seis sitios de la misma línea donde antes solo había
+              plural.</td></tr>
+      <tr><td class="cod">63</td><td>Ya estaba</td>
+          <td>Los nombres salían a una letra. Medido de 360 a 1920 px: el peor caso deja 111 px de
+              nombre, cuando antes dejaba 12.</td></tr>
+      <tr><td class="cod">64</td><td>Hecho hoy</td>
+          <td>Pantalla nueva de <strong>Ajustes</strong> en el menú, con las 9 pantallas de la app
+              y la frase del día.</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    En el 64 se movió <strong>lo global y solo lo global</strong>. «Mi modo pruebas» se queda en
+    Planes a propósito: no es un ajuste de la app sino de tu cuenta, y juntarlos invita al
+    accidente que esa pantalla existe para evitar - creer que tocas lo tuyo cuando lo tocas para
+    todos. Además, la ayuda de cada interruptor ahora se ve, y el de los correos avisa de que es el
+    único que sale de la app: al encenderlo se mandan correos de verdad.
+  </p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="bloque">
+  <p class="origen">Último de la noche</p>
+  <h2>El chat</h2>
+
+  <h3>La imagen que no subía desde el ordenador</h3>
+  <p>
+    El error era literal: <em>«La imagen pesa 11 MB y el máximo son 4 MB»</em>. El tope se miraba
+    sobre lo que sube el navegador, y una captura o una foto de cámara guardada en el ordenador
+    pasa de 4 MB sin esfuerzo. Lo absurdo es que el servidor ya la encogía al guardarla: se
+    rechazaba una foto que iba a caber de sobra.
+  </p>
+  <div class="medido">
+    Ahora se encoge antes, en el navegador, con la misma regla que el servidor. Medido con la de
+    11 MB: sale en <b>668 KB</b> y tarda <b>una décima de segundo</b>.
+  </div>
+
+  <h3>Soporte no veía todos los mensajes</h3>
+  <p>Había dos filtros escondiendo mensajes, los dos puestos a propósito en su día y los dos
+     equivocados para quien atiende:</p>
+  <ul>
+    <li>una conversación <strong>entre dos del equipo</strong> no se le listaba a un tercero;</li>
+    <li>una que alguien se manda <strong>a sí mismo</strong> solo la veía su dueño.</li>
+  </ul>
+  <p>
+    Para las cuentas de soporte ya no aplican: la bandeja las trae y, al abrir a una persona, el
+    hilo enseña todo lo suyo. Se limitó a soporte a propósito - un entrenador que no lo lleva sigue
+    sin ver la conversación privada de dos compañeros -, y eso es una decisión que se puede cambiar
+    en una línea.
+  </p>
+  <p>
+    Comprobado por los dos lados: soporte ve los dos casos, y un cliente sigue recibiendo un 403 en
+    la bandeja y cero mensajes ajenos en el hilo.
+  </p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="bloque salto">
+  <p class="origen">Lo que se rompió por el camino</p>
+  <h2>Tres errores propios, y cómo se cazaron</h2>
+
+  <p>
+    Van aquí porque los tres enseñan algo, y dos de ellos los vio Francisco antes que yo.
+  </p>
+
+  <h3>Una mina en mis propios guiones de prueba</h3>
+  <p>
+    Los cinco guiones de suplementos hacían la copia de seguridad leyendo el protocolo <em>por la
+    puerta del cliente</em>, que devuelve los nombres ya limpios. Al reponer escribían esos nombres
+    limpios en la base: <strong>borraban la chuleta de Jesús de forma permanente</strong>. Y estaban
+    documentados como reutilizables contra producción. Arreglado en los seis: ahora copian por la
+    puerta del panel. En producción no llegó a ejecutarse ninguno.
+  </p>
+
+  <h3>Un test que se llevó por delante datos de un cliente</h3>
+  <p>
+    El caso 65 guardaba una versión con la fecha de hoy y luego borraba «la versión de hoy»: si el
+    cliente ya tenía la suya con esa fecha, se iban las dos. Pasó de verdad y lo cantó su propio
+    assert. Ahora repone lo que había en vez de borrar a ciegas.
+  </p>
+
+  <h3>Un «)}» pintándose en la pantalla del cliente</h3>
+  <p>
+    Al cortar el bloque duplicado de la rutina se quedó un cierre suelto que se veía tal cual. Lo
+    vio Francisco. Corregido y comprobado en el navegador.
+  </p>
+
+  <div class="ojo">
+    <strong>Y una trampa del entorno que costó un rato:</strong> los guiones calculaban «hoy» con el
+    reloj de la máquina, pero el servidor cuenta con el día de España. Pasada la medianoche
+    española se escribía en la versión de ayer y se leía la de hoy, así que parecía que nada se
+    guardaba. Ya está apuntado en el guion para la próxima.
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="bloque">
+  <p class="origen">Lo que NO está cerrado</p>
+  <h2>Lo que espera una decisión</h2>
+
+  <p>Nada de esto es código a medias. Son decisiones que no me tocan a mí.</p>
+
+  <table>
+    <thead><tr><th>Qué</th><th>Por qué sigue abierto</th></tr></thead>
+    <tbody>
+      <tr><td class="cod">Frutos secos</td>
+          <td>Dos reglas de Jesús se contradicen: el caso 32 dice que su proteína no cuenta; la
+              calibración progresiva dice que sí, por tramos. Es la raíz del número que cambiaba
+              solo. Abierto desde el 12-08.</td></tr>
+      <tr><td class="cod">«Qué te cuenta»</td>
+          <td>Pidió que se diga «en la propia línea del alimento». Llega al buscador y al asistente,
+              pero no a la línea de Nutrición, que es donde se come. Es un test en rojo a propósito,
+              con su explicación dentro.</td></tr>
+      <tr><td class="cod">Cuadrar la comida</td>
+          <td>Al cuadrar una comida solo se manda esa comida, así que el servidor calibra sin saber
+              qué frutos secos llevan las demás. Explica por qué a veces se niega a cuadrar algo que
+              a mano sí cuadra.</td></tr>
+      <tr><td class="cod">Medio segundo</td>
+          <td>El número ya no miente, pero sigue tardando en asentarse tras cambiar una cantidad.</td></tr>
+      <tr><td class="cod">La creatina</td>
+          <td>Su ficha la deja en la Comida 1 y la maqueta del punto 174 la dibuja en la 3. Hay que
+              decidir cuál manda.</td></tr>
+      <tr><td class="cod">87 suplementos</td>
+          <td>De las 528 líneas vivas, 87 no dicen a qué comida van ni se puede deducir. Necesitan
+              que Jesús las coloque.</td></tr>
+      <tr><td class="cod">El catálogo</td>
+          <td>La pantalla del catálogo de suplementos no está en el menú: se llega por un renglón
+              gris dentro de la ficha de un cliente o escribiendo la dirección. Se probó a ponerla y
+              Francisco prefirió dejarlo. Además tiene fichas de prueba antiguas («TEST … NO USAR»)
+              que ensucian la pantalla.</td></tr>
+      <tr><td class="cod">Soporte</td>
+          <td>Se abrió solo para las tres cuentas de soporte. Si tiene que verlo cualquier admin, es
+              cambiar una línea.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<footer>
+  <p>
+    Todo lo de arriba se comprobó abriendo la app en el navegador con cuentas de prueba, no leyendo
+    el código. Los 22 guiones que lo repiten están en <code>_guia/</code> y todos dejan la cuenta
+    como estaba al terminar. Los cambios están en producción y en el clon de pruebas, y en GitHub
+    en 16 commits agrupados por tema.
+  </p>
+</footer>
