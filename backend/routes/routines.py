@@ -1728,8 +1728,12 @@ async def info_pdf_de_rutina_admin(client_id: str, user=Depends(get_admin_user))
 async def _servir_pdf(doc: Optional[dict]) -> Response:
     if not doc:
         raise HTTPException(status_code=404, detail="No hay ninguna rutina en PDF subida.")
+    # Ver `core.fotos.cabecera_nombre`: el PDF lo sube el entrenador desde su ordenador, y
+    # un nombre con un carácter que no cabe en latin-1 dejaría al cliente sin su rutina con
+    # un 500. Hoy los 35 de producción tienen nombre limpio; el candado es para el que venga.
+    from core.fotos import cabecera_nombre
     return Response(content=bytes(doc["data"]), media_type="application/pdf",
-                    headers={"Content-Disposition": f'inline; filename="{doc.get("filename") or "rutina.pdf"}"'})
+                    headers={"Content-Disposition": cabecera_nombre(doc.get("filename"), "rutina.pdf")})
 
 
 @admin_router.get("/pdf/{client_id}")

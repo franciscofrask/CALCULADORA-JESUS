@@ -45,7 +45,9 @@ sale sin las fotos que no esten en disco, sin excepcion.
 import asyncio
 import os
 import re
+import unicodedata
 from typing import Optional, Tuple
+from urllib.parse import quote
 
 from fastapi import HTTPException
 
@@ -202,6 +204,48 @@ def _pose_de_kind(kind: Optional[str]) -> Optional[str]:
 
 def _content_type_de(fichero: str) -> str:
     return _CONTENT_TYPES.get(os.path.splitext(fichero)[1].lower(), "image/jpeg")
+
+
+def cabecera_nombre(nombre: Optional[str], por_defecto: str = "imagen",
+                    modo: str = "inline") -> str:
+    """El `Content-Disposition` de un fichero que subió una persona, sin reventar.
+
+    LO QUE PASÓ (28-08). El chat devolvía 500 al abrir una imagen, y solo cuando la había
+    mandado alguien desde un Mac. La causa no era el Mac: era el NOMBRE. macOS bautiza sus
+    capturas de pantalla con un ESPACIO FINO DE NO SEPARACIÓN (U+202F) delante del AM/PM
+    -- «Screenshot 2026-08-28 at 6.17.43 PM.jpg» -- y las cabeceras HTTP se escriben en
+    latin-1, donde ese carácter no existe. Al montar la respuesta saltaba un
+    UnicodeEncodeError y el servidor devolvía 500 con la imagen perfectamente guardada.
+    Diez de los catorce adjuntos de producción estaban así.
+
+    Por eso desde el iPhone sí se veían: sus fotos se llaman «IMG_4821.jpg», todo ASCII. Y
+    por eso una foto normal arrastrada desde un Mac también iba bien. Viaja el nombre, no
+    el aparato.
+
+    Se hace como manda el RFC 6266: un `filename` en ASCII para quien no sepa más, y el
+    nombre de verdad en `filename*` codificado en UTF-8, que es lo que leen los navegadores
+    de este siglo. Así el cliente se descarga «Screenshot ... PM.jpg» con su nombre entero.
+    """
+    limpio = (nombre or "").strip() or por_defecto
+    # Fuera lo que rompería la cabecera aunque quepa en latin-1: comillas y saltos.
+    limpio = limpio.replace('"', "").replace("\r", " ").replace("\n", " ")
+    # El de respaldo, en ASCII puro: lo que no quepa se sustituye por «_», y si no queda
+    # nada legible se usa el genérico (un nombre entero en japonés no puede quedar en «___»).
+    ascii_puro = unicodedata.normalize("NFKD", limpio).encode("ascii", "ignore").decode()
+    # El espacio se deja: dentro de las comillas del `filename=` es válido y se lee mejor
+    # («Screenshot 2026-08-28 at 6.17.43 PM.png», no «Screenshot_2026-08-28_...»).
+    ascii_puro = "".join(c if 31 < ord(c) < 127 else "_" for c in ascii_puro).strip("_ ")
+    # Y se mira el NOMBRE, no la cadena entera: de «写真.jpg» sobrevive el «.jpg», que pasa
+    # cualquier comprobación de «no está vacío» y deja al cliente bajándose un fichero sin
+    # nombre. Si no queda nombre, se pone el genérico y se le conserva la extensión.
+    cuerpo, punto, extension = ascii_puro.rpartition(".")
+    if not cuerpo.strip("_ "):
+        raiz = por_defecto.rpartition(".")[0] or por_defecto
+        ascii_puro = f"{raiz}.{extension}" if punto and extension else por_defecto
+    cabecera = f'{modo}; filename="{ascii_puro}"'
+    if limpio != ascii_puro:
+        cabecera += f"; filename*=UTF-8''{quote(limpio, safe='')}"
+    return cabecera
 
 
 def _ruta_en_disco(fichero: str) -> Optional[str]:

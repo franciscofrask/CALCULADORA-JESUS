@@ -843,7 +843,9 @@ async def get_photo(photo_id: str, user = Depends(get_current_user)):
         media_type=content_type,
         headers={
             "Cache-Control": "private, max-age=3600",
-            "Content-Disposition": f'inline; filename="{photo.get("filename") or "photo"}"',
+            # Ver `fotos_core.cabecera_nombre`: un nombre con un carácter que no cabe en
+            # latin-1 (las capturas de Mac lo llevan) tumbaba la respuesta con un 500.
+            "Content-Disposition": fotos_core.cabecera_nombre(photo.get("filename"), "foto"),
         },
     )
 

@@ -11,6 +11,7 @@ from typing import List, Dict, Any, Optional
 import uuid
 
 from core.database import db
+from core.fotos import cabecera_nombre as _cabecera_nombre
 from core.security import get_current_user
 from models.common import FoodSuggestion, FoodSuggestionResponse
 
@@ -1903,7 +1904,9 @@ async def get_suggestion_photo(suggestion_id: str, kind: str, user = Depends(get
         media_type=photo.get("content_type") or "application/octet-stream",
         headers={
             "Cache-Control": "private, max-age=3600",
-            "Content-Disposition": f'inline; filename="{photo.get("filename") or kind}"',
+            # Ver `core.fotos.cabecera_nombre`: un nombre con un carácter que no cabe en
+            # latin-1 (las capturas de Mac lo llevan) tumbaba la respuesta con un 500.
+            "Content-Disposition": _cabecera_nombre(photo.get("filename"), kind),
         },
     )
 

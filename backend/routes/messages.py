@@ -254,7 +254,9 @@ async def ver_adjunto(adjunto_id: str, user = Depends(get_current_user)):
     return Response(
         content=data, media_type=content_type,
         headers={"Cache-Control": "private, max-age=3600",
-                 "Content-Disposition": f'inline; filename="{doc.get("filename") or "imagen"}"'},
+                 # Con el nombre tal cual, una captura de Mac tumbaba esto con un 500:
+                 # ver `fotos_core.cabecera_nombre`.
+                 "Content-Disposition": fotos_core.cabecera_nombre(doc.get("filename"), "imagen")},
     )
 
 
