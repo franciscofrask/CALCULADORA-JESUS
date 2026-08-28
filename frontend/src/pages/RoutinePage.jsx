@@ -190,121 +190,41 @@ const SemanaDeRutina = ({ semana, abrirPdf, tienePdf, onMarcarHoy, onSiLoHice, o
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LA RUTINA A LA VISTA, SIN SALIR DE LA PANTALLA (Jesús, 24-08)
+// LA TARJETA DE LA RUTINA
 //
-// Hasta hoy el que tiene su rutina en PDF veía una tarjeta con «Abrir mi rutina» que se la
-// abría en otra pestaña. Ahora se ve aquí dentro.
+// Aquí hubo una vista previa: el PDF se descargaba y se pintaba dentro de la pantalla, en
+// un `<object>`. Se quita (Francisco, 27-08).
 //
-// TRES DECISIONES, y las tres son por el móvil, que es donde se abre:
+// No se pierde nada, y se dijo desde que se montó: un PDF metido en la página se porta mal
+// fuera del escritorio. Safari de iOS pinta la primera página y no deja pasar de ahí, y
+// Chrome de Android muchas veces ni la pinta. O sea que a quien lo abre desde el móvil --
+// que es casi todo el mundo -- la vista previa le enseñaba una hoja muerta, y para leer su
+// rutina tenía que darle igual a «Abrirla entera». Encima se bajaba entre 300 KB y 4,6 MB
+// para eso.
 //
-//  1. El PDF se pide con el token (`api`, como todos los ficheros de la casa) y se pinta
-//     desde un blob: poniéndolo en un `src=` a pelo el visor no manda la cabecera y el
-//     servidor contesta 401.
-//  2. En móvil NO se carga sola. Pesan entre 300 KB y 4,6 MB y van dentro del documento de
-//     Mongo; bajarle eso con datos a quien solo entró a marcar el desayuno no está bien.
-//     Ahí se pide con un botón, y en escritorio se carga al abrir la pantalla.
-//  3. «Abrirla a pantalla completa» SE QUEDA SIEMPRE. Un PDF metido en la página se porta
-//     mal fuera del escritorio: Safari de iOS pinta la primera página y no deja pasar de
-//     ahí, y Chrome de Android muchas veces ni la pinta. Si nos quedáramos solo con la
-//     vista previa habría clientes que no podrían leer su rutina, así que la vista previa
-//     es un añadido y el botón de siempre sigue siendo la salida buena.
+// Queda el botón, que es el camino que siempre funcionó. Y se abre pidiendo la ventana
+// DENTRO del gesto del dedo (lib/abrirRutina), que es lo que hacía que en el iPhone no
+// pasara nada.
 //
-// El día que haga falta la rutina página a página dentro de la app, hace falta un visor de
-// PDF de verdad (pdf.js) y eso es una dependencia nueva: hoy no hay ninguna en el proyecto.
+// «Olvida la palabra PDF» (vídeo del 27-08, minuto 8:46): en qué fichero viene su rutina es
+// cosa nuestra, no suya. La fecha se queda -- saber de cuándo es sí le dice algo.
 // ─────────────────────────────────────────────────────────────────────────────
-const esPantallaPequena = () =>
-    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-        ? window.matchMedia('(max-width: 767px)').matches
-        : false;
-
-const VistaPreviaPdf = ({ api, info, abrirPdf }) => {
-    const [enMovil] = useState(esPantallaPequena);
-    const [url, setUrl] = useState(null);
-    // 'espera' (el móvil, hasta que lo pida) · 'cargando' · 'lista' · 'fallo'
-    const [estado, setEstado] = useState(enMovil ? 'espera' : 'cargando');
-
-    const cargar = React.useCallback(async () => {
-        setEstado('cargando');
-        try {
-            const r = await api.get('/routines/pdf', { responseType: 'blob' });
-            setUrl(URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' })));
-            setEstado('lista');
-        } catch (e) {
-            console.error('[vista previa de la rutina]', e?.response?.status || e);
-            setEstado('fallo');
-        }
-    }, [api]);
-
-    useEffect(() => { if (!enMovil) cargar(); }, [cargar, enMovil]);
-    // El blob se suelta al salir: sin esto la pestaña se queda con los megas en memoria.
-    useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
-
-    // Si ya está descargada, se abre esa y no se vuelve a pedir al servidor.
-    const abrirEntera = () => (url ? window.open(url, '_blank', 'noopener') : abrirPdf());
-
-    // El MISMO ancho que la semana de arriba: con `max-w-3xl` contra su `max-w-2xl` las dos
-    // cajas quedaban centradas pero de distinto tamaño, y los bordes no cuadraban. Centrado
-    // es que las aristas coincidan, no que cada una esté centrada por su cuenta.
-    return (
-        <div className="surface p-4 sm:p-5 space-y-4 min-w-0" data-testid="routine-pdf-preview">
-            <div className="flex items-start justify-between gap-3 flex-wrap">
-                {/* «OLVIDA LA PALABRA PDF» (vídeo del 27-08, minuto 8:46). Ponía «Tu rutina,
-                    en PDF» y debajo «Tu entrenador te la ha preparado el…», y sus palabras
-                    fueron: «esto no. Que directamente, si tienes rutina, que le abra. Olvida
-                    el PDF. Olvida la palabra PDF. Eso no tiene sentido».
-                    En qué fichero viene su rutina es cosa nuestra, no suya. La fecha se queda
-                    -- saber de cuándo es sí le dice algo -- pero dicha en corto. */}
-                <div>
-                    <h2 className="font-heading text-xl font-bold uppercase text-foreground leading-tight">Tu rutina</h2>
-                    <p className="text-muted-foreground text-sm">
-                        Preparada el {new Date(info.uploaded_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}.
-                    </p>
-                </div>
-                <button onClick={abrirEntera} data-testid="routine-pdf-btn"
-                    className="btn-brand inline-flex items-center gap-2 shrink-0">
-                    Abrirla entera <ChevronRight className="w-4 h-4" />
-                </button>
+const TarjetaDeLaRutina = ({ info, abrirPdf }) => (
+    <div className="surface p-4 sm:p-5 min-w-0" data-testid="routine-pdf-preview">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+                <h2 className="font-heading text-xl font-bold uppercase text-foreground leading-tight">Tu rutina</h2>
+                <p className="text-muted-foreground text-sm">
+                    Preparada el {new Date(info.uploaded_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}.
+                </p>
             </div>
-
-            {estado === 'espera' && (
-                <button onClick={cargar} data-testid="routine-pdf-ver-aqui"
-                    className="w-full rounded-2xl border border-dashed border-border py-8 text-center hover:border-brand/50 transition-colors">
-                    <FileText className="w-7 h-7 text-brand/60 mx-auto mb-2" />
-                    <p className="font-semibold text-foreground text-sm">Verla aquí</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">Son unos megas: mejor con wifi.</p>
-                </button>
-            )}
-
-            {estado === 'cargando' && <div className="h-64 rounded-2xl bg-muted animate-pulse" />}
-
-            {estado === 'fallo' && (
-                <div className="rounded-2xl border border-border p-6 text-center space-y-3">
-                    <p className="text-sm text-muted-foreground">
-                        No hemos podido enseñártela aquí. Ábrela entera y la verás igual.
-                    </p>
-                    <button onClick={cargar} className="text-sm font-semibold text-brand hover:underline underline-offset-4">
-                        Volver a intentarlo
-                    </button>
-                </div>
-            )}
-
-            {estado === 'lista' && url && (
-                <object data={url} type="application/pdf" aria-label="Tu rutina"
-                    data-testid="routine-pdf-object"
-                    className="w-full h-[60vh] min-h-[320px] rounded-2xl border border-border bg-card">
-                    {/* Lo que se ve donde el navegador no sabe pintar un PDF dentro de la
-                        página, que en móvil es la mitad de las veces. */}
-                    <div className="p-6 text-center space-y-3">
-                        <p className="text-sm text-muted-foreground">
-                            Tu navegador no la enseña aquí dentro. Ábrela entera y la verás igual.
-                        </p>
-                        <button onClick={abrirEntera} className="btn-brand">Abrirla entera</button>
-                    </div>
-                </object>
-            )}
+            <button onClick={abrirPdf} data-testid="routine-pdf-btn"
+                className="btn-brand inline-flex items-center gap-2 shrink-0">
+                Abrirla entera <ChevronRight className="w-4 h-4" />
+            </button>
         </div>
-    );
-};
+    </div>
+);
 
 const RoutinePage = () => {
     const { api, myPlan, planCatalog, loading: cargandoSesion } = useAuth();
@@ -550,7 +470,7 @@ const RoutinePage = () => {
                             onMarcarHoy={marcarHoy} onSiLoHice={siLoHice} onRecuperar={recuperar}
                             marcando={marcando} />
                     )}
-                    <VistaPreviaPdf api={api} info={pdfInfo} abrirPdf={abrirPdf} />
+                    <TarjetaDeLaRutina info={pdfInfo} abrirPdf={abrirPdf} />
                 </div>
             ) : (
                 <div className="surface p-10 text-center" data-testid="routine-content">
