@@ -72,9 +72,9 @@ const SemanaDeRutina = ({ semana, abrirPdf, tienePdf, onMarcarHoy, onSiLoHice, o
                 {tienePdf && (
                     <button onClick={abrirPdf} data-testid="semana-rutina-pdf"
                         className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand hover:underline underline-offset-4">
-                        {/* «Abrir el PDF» -> «Abrirla entera», la misma palabra que el botón
-                            de abajo (vídeo del 27-08: fuera la palabra PDF). */}
-                        <FileText className="w-4 h-4" /> Abrirla entera
+                        {/* «Ver PDF», la misma palabra que el botón de abajo: los dos abren
+                            lo mismo y no pueden llamarse distinto (Francisco, 27-08). */}
+                        <FileText className="w-4 h-4" /> Ver PDF
                     </button>
                 )}
             </div>
@@ -199,15 +199,17 @@ const SemanaDeRutina = ({ semana, abrirPdf, tienePdf, onMarcarHoy, onSiLoHice, o
 // fuera del escritorio. Safari de iOS pinta la primera página y no deja pasar de ahí, y
 // Chrome de Android muchas veces ni la pinta. O sea que a quien lo abre desde el móvil --
 // que es casi todo el mundo -- la vista previa le enseñaba una hoja muerta, y para leer su
-// rutina tenía que darle igual a «Abrirla entera». Encima se bajaba entre 300 KB y 4,6 MB
-// para eso.
+// rutina tenía que pulsar el botón igual. Encima se bajaba entre 300 KB y 4,6 MB para eso.
 //
 // Queda el botón, que es el camino que siempre funcionó. Y se abre pidiendo la ventana
 // DENTRO del gesto del dedo (lib/abrirRutina), que es lo que hacía que en el iPhone no
 // pasara nada.
 //
-// «Olvida la palabra PDF» (vídeo del 27-08, minuto 8:46): en qué fichero viene su rutina es
-// cosa nuestra, no suya. La fecha se queda -- saber de cuándo es sí le dice algo.
+// EL RÓTULO DEL BOTÓN: «Ver PDF» (Francisco, 27-08). OJO, porque contradice al vídeo de esa
+// misma mañana: en el minuto 8:46 Jesús dice «olvida el PDF, olvida la palabra PDF, eso no
+// tiene sentido», y por eso ponía «Abrirla entera». Manda lo último que se ha pedido, pero
+// si Jesús vuelve a verlo va a preguntar, así que queda escrito de dónde viene cada cosa.
+// La fecha se queda -- saber de cuándo es sí le dice algo.
 // ─────────────────────────────────────────────────────────────────────────────
 const TarjetaDeLaRutina = ({ info, abrirPdf }) => (
     <div className="surface p-4 sm:p-5 min-w-0" data-testid="routine-pdf-preview">
@@ -220,7 +222,7 @@ const TarjetaDeLaRutina = ({ info, abrirPdf }) => (
             </div>
             <button onClick={abrirPdf} data-testid="routine-pdf-btn"
                 className="btn-brand inline-flex items-center gap-2 shrink-0">
-                Abrirla entera <ChevronRight className="w-4 h-4" />
+                Ver PDF <ChevronRight className="w-4 h-4" />
             </button>
         </div>
     </div>
@@ -717,7 +719,7 @@ const RoutinePage = () => {
                         <button onClick={abrirPdf} data-testid="routine-pdf-link"
                             className="w-full flex items-center justify-between p-4 bg-card border border-border rounded-2xl hover:border-white/30 transition-colors">
                             <span className="flex items-center gap-2 font-bold text-foreground text-sm">
-                                <FileText className="w-4 h-4 text-brand" /> Abrir tu rutina
+                                <FileText className="w-4 h-4 text-brand" /> Ver PDF
                             </span>
                             <ChevronRight className="w-4 h-4 text-foreground/40" />
                         </button>
