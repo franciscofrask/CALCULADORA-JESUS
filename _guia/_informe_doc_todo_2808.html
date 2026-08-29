@@ -170,16 +170,17 @@ ul.check li b{color:var(--tinta)}
       Las partes 1 a 5 y los puntos 179 al 197 quedaron cerrados los días 26 y 27.
       Lo que sigue es <b>lo que quedaba abierto el 28</b>: se cerró de uno en uno, y cada punto
       entra aquí con su diagnóstico, su arreglo y la comprobación hecha en la app de verdad, en el
-      teléfono y en el ordenador. <b>Los diez están cerrados</b>, y con ellos el primero de los que
-      quedaban de la parte 1: el <b>49</b>, el <b>52</b>, el <b>65</b> y el <b>67/69</b>. Falta llevarlos a
-      producción, salvo el 65, que se hizo directamente en la base.</p>
+      teléfono y en el ordenador. <b>Los diez están cerrados</b>, y con ellos cuatro de los que
+      quedaban de la parte 1: el <b>49</b>, el <b>52</b>, el <b>65</b> y el <b>67/69</b>.
+      <b>Todo está en producción y en dev desde la noche del 28</b>, verificado dentro de los
+      pods.</p>
   </header>
 
   <div class="marcador">
     <div><p class="c ok" id="n-cerrados">15</p><p class="l">Cerrados</p></div>
     <div><p class="c nada">5</p><p class="l">Sin trabajo</p></div>
     <div><p class="c espera">1</p><p class="l">Datos, no código</p></div>
-    <div><p class="c acc">6</p><p class="l">Rojos de antes</p></div>
+    <div><p class="c acc">12</p><p class="l">Rojos de antes</p></div>
   </div>
 
   <h2>El mapa</h2>
@@ -964,16 +965,153 @@ ul.check li b{color:var(--tinta)}
     </div>
   </article>
 
+  <h2>Fuera del documento</h2>
+  <p class="h2s">Un fallo que apareció mientras se desplegaba lo de arriba.</p>
+
+  <article class="punto">
+    <div class="pcab">
+      <p class="num" style="font-size:22px;letter-spacing:0">500</p>
+      <div class="ptit">
+        <h3>El adjunto del chat mandado desde un Mac no se veía</h3>
+        <p>El chat · cerrado y comprobado por Francisco en producción</p>
+      </div>
+    </div>
+    <div class="pcuerpo">
+
+      <div class="bloque">
+        <p class="k">Lo que se reportó</p>
+        <p class="cita">«Este error solo aparece cuando se envía desde una mac.» Y, poco después:
+          «si lo usan desde un iPhone creo que sí pueden cargar imágenes».</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">La causa: no era el Mac, era el nombre</p>
+        <p>macOS bautiza sus capturas de pantalla con un <b>espacio fino de no separación</b>
+          (U+202F) delante del AM/PM: <code>Screenshot 2026-08-28 at 6.17.43 PM.jpg</code>. Las
+          cabeceras HTTP se escriben en <b>latin-1</b>, donde ese carácter no existe, así que al
+          montar el <code>Content-Disposition</code> saltaba un error de codificación y el
+          servidor devolvía 500 <b>con la imagen perfectamente guardada</b>.</p>
+        <p><b>El dato del iPhone fue el que lo confirmó</b>: sus fotos se llaman
+          <code>IMG_4821.jpg</code>, todo ASCII. Y una foto normal arrastrada desde un Mac también
+          iba bien. Viaja el nombre, no el aparato. Ahí hay una lección para la próxima: cuando
+          alguien dice «solo pasa en X aparato», casi siempre el aparato es una pista del DATO, no
+          la causa.</p>
+        <div class="datos">
+          <div><p class="v" style="color:var(--acc)">10</p><p class="n">de los 14 adjuntos, rotos</p></div>
+          <div><p class="v">4</p><p class="n">puertas con el mismo fallo latente</p></div>
+        </div>
+      </div>
+
+      <div class="bloque">
+        <p class="k">Qué se cambió</p>
+        <p>Un solo sitio, y como manda el estándar: <code>filename</code> en ASCII para quien no
+          sepa más, y el nombre de verdad en <code>filename*</code> en UTF-8, así que la descarga
+          conserva su nombre entero.</p>
+        <p>Se aplicó a <b>las cuatro puertas</b> que sirven un fichero con nombre puesto por una
+          persona, no solo a la que se rompió: el adjunto del chat, la foto del check-in, la del
+          cuestionario y <b>el PDF de la rutina</b>, que lo sube el entrenador desde su ordenador.
+          Ahí un nombre así dejaría a un cliente sin su rutina; los 35 de producción tienen nombre
+          limpio, y el candado es para el que venga.</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">Cómo quedó comprobado</p>
+        <ul class="check">
+          <li><b>Reproduciendo el fallo</b>: con el código de antes, la captura de Mac da 500 y la
+            del iPhone 200. Con el arreglo, las dos 200 y la imagen llega entera.</li>
+          <li>Once pruebas nuevas con los nombres de verdad sacados de producción.</li>
+          <li>Contra el clon de dev ya desplegado, subiendo una imagen con el nombre exacto.</li>
+          <li><b>Y en producción, por Francisco: «ya cargan las imágenes».</b></li>
+        </ul>
+        <p class="ficheros">
+          <b>backend/core/fotos.py</b> · cabecera_nombre, la puerta única<br>
+          <b>backend/tests/test_adjunto_nombre_mac.py</b> · las once pruebas<br>
+          <b>_guia/_adjunto_mac_2808.js</b> · el recorrido nombre a nombre
+        </p>
+      </div>
+
+    </div>
+  </article>
+
+  <h2>Esperando tu decisión</h2>
+  <p class="h2s">Salió al final del día, mirando el 27 de agosto en tu propia cuenta.</p>
+
+  <article class="punto">
+    <div class="pcab">
+      <p class="num" style="font-size:20px;letter-spacing:0">32,5<br><span style="font-size:.7em">ó 33</span></p>
+      <div class="ptit">
+        <h3>El objetivo de la comida se escribe redondeado, y entonces la resta no da</h3>
+        <p>Nutrición · comprobado en producción, sin tocar</p>
+      </div>
+    </div>
+    <div class="pcuerpo">
+
+      <div class="bloque">
+        <p class="k">Lo que se vio</p>
+        <p>«Creo que el cálculo global está mal.» <b>El motor está bien</b>: los objetivos de
+          verdad suman exactamente lo que pide el día, y lo servido también.</p>
+        <div class="scroll">
+        <table class="mapa" style="margin-top:6px">
+          <thead><tr><th></th><th>P</th><th>H</th><th>G</th></tr></thead>
+          <tbody>
+            <tr><td class="q">C1</td><td><b>32,5</b></td><td>20</td><td>10</td></tr>
+            <tr><td class="q">Intra</td><td>9</td><td>6</td><td>—</td></tr>
+            <tr><td class="q">Post</td><td>36</td><td>14</td><td>—</td></tr>
+            <tr><td class="q">C2</td><td><b>32,5</b></td><td>20</td><td>10</td></tr>
+            <tr><td class="q">C3</td><td>26</td><td>10</td><td>15</td></tr>
+            <tr><td class="q">C4</td><td>39</td><td>10</td><td>15</td></tr>
+            <tr><td class="q"><b>Suma</b></td><td><b>175</b></td><td><b>80</b></td><td><b>50</b></td></tr>
+          </tbody>
+        </table>
+        </div>
+        <p style="margin-top:12px">Y el día pide 175 · 80 · 50. Clava.</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">Lo que sí está mal es lo escrito</p>
+        <p>La C1 y la C2 tienen <b>32,5</b> de proteína y la línea del objetivo escribe <b>33</b>.
+          De ahí salen los dos síntomas:</p>
+        <p><b>1. La resta no da.</b> La C2 pone «Objetivo · 33P» y «faltan 11,2». Pero
+          33 − 21,3 = <b>11,7</b>. El 11,2 sale del 32,5 real, que no está escrito en ninguna
+          parte.</p>
+        <p><b>2. Los objetivos no suman el día.</b> Leyendo la pantalla: 33 + 9 + 36 + 33 + 26 +
+          39 = <b>176</b>, y el día dice 175. Aparece un gramo de la nada, que son los dos medios
+          gramos redondeados hacia arriba.</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">Por qué no se ha tocado: chocan dos decisiones tuyas</p>
+        <p><b>17 de agosto:</b> «quien escriba una diferencia al lado de dos cifras redondeadas
+          tiene que restar <em>esas</em>».</p>
+        <p><b>Punto 115, del 25:</b> la línea del objetivo va sin decimales. El ejemplo era
+          literalmente «52,5P · 10H · 15G» → «53 · 10 · 15».</p>
+        <p>Con las dos puestas, «Objetivo · 33P» y «faltan 11,2» no pueden ser ciertas a la vez.</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">La recomendación</p>
+        <p>Que la línea del objetivo enseñe el medio gramo <b>sólo cuando lo hay</b>: «Objetivo ·
+          32,5P · 20H · 10G», nunca «33,0P». Con eso la resta cuadra y los objetivos suman 175
+          exacto. Es una excepción estrecha al punto 115, y la justifica que aquí el decimal
+          <b>sí decide</b>: es la diferencia entre que el día cuadre o no.</p>
+        <p>La alternativa, contarlo todo contra el 33 y decir «faltan 11,7», arregla la resta pero
+          deja los objetivos sumando 176 sobre un día de 175, que es peor.</p>
+      </div>
+
+    </div>
+  </article>
+
   <div class="aviso">
-    <p class="k">Seis rojos que ya estaban antes, y hay que mirarlos</p>
-    <p>Al pasar las baterías salieron seis pruebas en rojo:
+    <p class="k">Doce rojos que ya estaban antes, y hay que mirarlos</p>
+    <p>Al pasar las baterías salieron doce pruebas en rojo. Seis de nutrición y panel:
       <code>test_23_cubierta_la_proteina</code>, <code>test_24_la_ventana_de_menus</code>,
       <code>test_y_no_puede_recalcularselos_el</code>,
       <code>test_los_recorridos_de_bienvenida_siguen_apagados</code>,
       <code>test_la_linea_de_nutricion_tambien_lo_dice</code> y
-      <code>test_la_proteina_tampoco_cuenta_al_calibrar_el_dia</code>.</p>
-    <p>Las seis se volvieron a pasar <b>con los cambios de hoy fuera</b> y fallan igual, así que
-      no son de este trabajo: vienen de lo de días anteriores. Ninguna toca nada de lo cerrado
+      <code>test_la_proteina_tampoco_cuenta_al_calibrar_el_dia</code>. Y seis de fotos, en
+      <code>test_fotos_r2</code> y <code>test_fotos_unificadas</code>.</p>
+    <p>Las doce se volvieron a pasar <b>con los cambios de hoy fuera</b> y fallan igual, así que
+      no son de este trabajo: vienen de días anteriores. Ninguna toca nada de lo cerrado
       aquí.</p>
     <p>Pero <b>no se quedan ahí</b>: una de ellas dice que al calibrar el día la proteína de las
       almendras sigue contando (3,45 en vez de 0), y eso, si es verdad y no es la prueba la que
