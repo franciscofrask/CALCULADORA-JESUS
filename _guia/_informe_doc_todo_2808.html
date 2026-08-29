@@ -171,12 +171,12 @@ ul.check li b{color:var(--tinta)}
       Lo que sigue es <b>lo que quedaba abierto el 28</b>: se cerró de uno en uno, y cada punto
       entra aquí con su diagnóstico, su arreglo y la comprobación hecha en la app de verdad, en el
       teléfono y en el ordenador. <b>Los diez están cerrados</b>, y con ellos el primero de los que
-      quedaban de la parte 1: el <b>49</b>, el <b>65</b> y el <b>67/69</b>. Falta llevarlos a
+      quedaban de la parte 1: el <b>49</b>, el <b>52</b>, el <b>65</b> y el <b>67/69</b>. Falta llevarlos a
       producción, salvo el 65, que se hizo directamente en la base.</p>
   </header>
 
   <div class="marcador">
-    <div><p class="c ok" id="n-cerrados">14</p><p class="l">Cerrados</p></div>
+    <div><p class="c ok" id="n-cerrados">15</p><p class="l">Cerrados</p></div>
     <div><p class="c nada">5</p><p class="l">Sin trabajo</p></div>
     <div><p class="c espera">1</p><p class="l">Datos, no código</p></div>
     <div><p class="c acc">6</p><p class="l">Rojos de antes</p></div>
@@ -210,6 +210,110 @@ ul.check li b{color:var(--tinta)}
 
   <h2>De la parte 1</h2>
   <p class="h2s">Lo que quedaba del documento del 24 de agosto y no dependía de nadie.</p>
+
+  <!-- ── 52 ─────────────────────────────────────────────────── -->
+  <article class="punto">
+    <div class="pcab">
+      <p class="num">52</p>
+      <div class="ptit">
+        <h3>Los avisos ya generados llevaban los textos viejos</h3>
+        <p>La bandeja del cliente · parte 1 · hecho en producción</p>
+      </div>
+    </div>
+    <div class="pcuerpo">
+
+      <div class="bloque">
+        <p class="k">Lo que decía el documento</p>
+        <p class="cita">«En la bandeja del cliente: "Llevas 133 semanas con los mismos macros" y
+          "Con tus datos puedo mirarlo" en primera persona. Se topó el número y se pasó todo a
+          plural, pero lo que ya estaba escrito no se tocó.»</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">Lo que quedaba de verdad</p>
+        <p>Se cotejaron <b>los 475 avisos vivos</b> de producción contra lo que el código escribe
+          hoy, uno a uno. Dos de los tres ejemplos del punto <b>ya estaban resueltos</b>:</p>
+        <p><b>Los de «133 semanas» ya estaban retirados</b> desde la fase 0 del 24 de agosto: ocho
+          marcados como caducados, que el cliente no ve. Los seis que siguen vivos están todos por
+          debajo del tope de 12. Y de <b>«puedo mirarlo» no quedaba ninguno</b>, ni en el título
+          ni en el cuerpo.</p>
+        <p>Lo que sí seguía en las bandejas eran <b>tres títulos que el código ya no escribe</b>,
+          en 14 avisos.</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">Qué se cambió</p>
+        <div class="scroll">
+        <table class="mapa" style="margin-top:2px">
+          <thead><tr><th>Nº</th><th>Lo que decía</th><th>Lo que dice ahora</th></tr></thead>
+          <tbody>
+            <tr><td>11</td><td class="q">Tu coach ha actualizado tus macros</td><td>Ya tienes tus macros nuevos</td></tr>
+            <tr><td>2</td><td class="q">Tu protocolo de suplementos se ha actualizado</td><td>Tienes suplementación nueva</td></tr>
+            <tr><td>1</td><td class="q">Sin fotos no puedo comparar</td><td>Sin fotos no podemos comparar</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <p style="margin-top:12px"><b>Se reescribe el título, no se retira el aviso.</b> Los tres
+          siguen siendo verdad y llevan al mismo sitio: retirarlos le quitaría al cliente un aviso
+          que le sirve.</p>
+        <p><b>Y no se toca nada más.</b> Ni el cuerpo, porque en varios es la nota que escribió el
+          entrenador con sus palabras; ni el «leído», porque marcarlos sin leer sería avisar hoy
+          de algo de julio.</p>
+        <p>Del de suplementación se eligió la variante en plural a propósito: la otra que existe
+          hoy es «Te he cambiado la suplementación», y reescribir un aviso viejo <em>metiéndole</em>
+          la primera persona sería hacer justo lo que este punto viene a quitar.</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">El número, en su sitio</p>
+        <p>De los 14, <b>solo 2 estaban sin leer en la bandeja de un cliente de verdad</b> (del 23
+          de julio). Los otros 12 son de cuentas del equipo o de prueba, y varios llevan de cuerpo
+          literalmente «prueba» o «et». Se reescribieron todos igual, para que la bandeja se lea
+          coherente, pero conviene saber a cuánta gente afectaba.</p>
+        <div class="datos">
+          <div><p class="v">475</p><p class="n">avisos vivos cotejados</p></div>
+          <div><p class="v">14</p><p class="n">con texto viejo, reescritos</p></div>
+          <div><p class="v" style="color:var(--acc)">2</p><p class="n">sin leer y de un cliente real</p></div>
+          <div><p class="v ok" style="color:var(--ok)">0</p><p class="n">quedan sin cotejar</p></div>
+        </div>
+      </div>
+
+      <div class="bloque">
+        <p class="k">Y una regla que no estaba escrita en ninguna parte</p>
+        <p>Al cotejarlo aparecieron textos en primera persona que <b>siguen vivos en el código</b>:
+          «Te he cambiado la suplementación», «Con mi feedback y tus macros nuevos». Por poco los
+          «arreglo».</p>
+        <p><b>No son un descuido.</b> La regla de verdad no es «nunca primera persona», es
+          <b>«primera persona solo si alguien lo ha hecho de verdad»</b>: esos salen cuando una
+          persona acaba de cambiar la suplementación o de publicar el informe. El que fallaba,
+          «Con tus datos puedo mirarlo», era un aviso <b>automático</b>: el servidor prometiendo,
+          en nombre de una persona que ni se había enterado, que le mirarían el caso.</p>
+        <p>Quedó escrita en la cabecera de <code>core/avisos_cliente.py</code> y con un candado
+          que la vigila: una prueba que lee los textos de los avisos automáticos y falla si
+          alguno habla en primera persona. Se comprobó metiéndole el texto exacto del punto
+          («Con tus datos puedo mirarlo») y <b>se pone roja</b>.</p>
+      </div>
+
+      <div class="bloque">
+        <p class="k">Cómo quedó comprobado</p>
+        <ul class="check">
+          <li>Segundo cotejo tras el cambio: <b>ningún título</b> que el código ya no escriba, y
+            <b>ninguna</b> primera persona de las que citaba el punto.</li>
+          <li>Copia de los 14 antes de tocarlos, en
+            <code>backend/_backup_avisos_texto_20260828_210849.json</code>.</li>
+          <li>El candado nuevo: <b>110 textos revisados</b>, y probado que muerde.</li>
+          <li>Las tres baterías de avisos y panel: <b>145 en verde</b>.</li>
+        </ul>
+        <p class="ficheros">
+          <b>_guia/_p52_cotejo.py</b> · el cotejo contra el código<br>
+          <b>_guia/_p52_reescribir_avisos.py</b> · mira y no toca sin <code>--escribir</code><br>
+          <b>backend/core/avisos_cliente.py</b> · la regla 4, escrita<br>
+          <b>backend/tests/test_avisos_en_plural.py</b> · el candado
+        </p>
+      </div>
+
+    </div>
+  </article>
 
   <!-- ── 65 ─────────────────────────────────────────────────── -->
   <article class="punto">

@@ -23,6 +23,20 @@ Tres reglas que no son de estilo:
      clave siga viva, asi que da igual cuantas veces se evalue: entrar diez veces en la
      app no genera diez avisos.
 
+  4. AQUI SE HABLA EN PLURAL, SIEMPRE. Lo decidio el punto 57 del doc del 23-08 y lo
+     recordo el 52 del 24-08: «"Con tus datos puedo mirarlo" en primera persona... se paso
+     todo a plural».
+
+     Y la razon no es de estilo, es de verdad: ESTOS AVISOS LOS ESCRIBE LA MAQUINA SOLA.
+     Cuando uno dice «puedo mirarlo», nadie ha mirado nada; es el servidor prometiendo en
+     nombre de una persona que ni se ha enterado.
+
+     OJO AL CONFUNDIRLO con los de `routes/notifications.py`: aquellos («Te he cambiado la
+     suplementacion», «Con mi feedback y tus macros nuevos») SI van en primera persona, y
+     estan bien, porque salen cuando una persona ACABA DE HACER esa cosa. La regla no es
+     «nunca primera persona», es «primera persona solo si alguien lo ha hecho de verdad».
+     Hay una prueba que vigila este fichero: `tests/test_avisos_en_plural.py`.
+
 DESDE EL DOC DEL 16-08 (T10, "los 19 avisos") hay ademas una cuarta regla y dos funciones
 nuevas:
 
@@ -353,6 +367,8 @@ def avisos_condicionados(*, ahora: datetime,
             "tipo": "reporte",
             "variantes": [
                 # Plural siempre: lo DECIDIDO del punto 57 del 23-08 (citaba este aviso).
+                # Y no es una manía de estilo, es la regla de todo este fichero: ver la
+                # nota de la cabecera sobre la primera persona.
                 {"titulo": "Sin fotos no podemos comparar",
                  "cuerpo": "Te lleva un minuto y es lo que de verdad enseña lo que ha cambiado."},
                 {"titulo": "Te faltan las fotos del reporte",
