@@ -1064,6 +1064,28 @@ const NutritionPage = () => {
         }, { P: 0, H: 0, G: 0 });
     };
 
+    /**
+     * LO QUE SE GUARDA ES LO QUE SE VE (Francisco, 29-08-2026).
+     *
+     * `mealsData` se queda con TODAS las comidas que alguna vez tuvieron alimentos, también
+     * las que el reparto de ahora ya no enseña. La pantalla pinta y suma por `getMealOrder()`,
+     * así que el día se ve perfecto -- pero los cinco guardados mandaban `mealsData` entero.
+     *
+     * Lo reportó guardando una favorita: su día tenía 3 comidas más intra y post, y la
+     * favorita salió con SEIS, con una «Comida 4» que él no había puesto. Era la suya de
+     * antes de bajar de 4 a 3 comidas, invisible desde entonces. Reproducido: al pasar a 3, el
+     * autoguardado seguía mandando `["C1","C4","Intra","Post","C2","C3"]` con `num_comidas: 3`.
+     *
+     * El mismo agujero tiene otra puerta: en un día de descanso el intra y el post no se
+     * pintan, y si traían alimentos se guardaban igual. El backend ya lo resolvía al aplicar
+     * una favorita (`descartar_sin_objetivo` en refit-diet, con este mismo motivo escrito:
+     * «si quedaran alimentos ocultos, el autosave los persistiría»); faltaba aquí.
+     */
+    const comidasDelReparto = () => {
+        const orden = getMealOrder();
+        return Object.fromEntries(Object.entries(mealsData).filter(([k]) => orden.includes(k)));
+    };
+
 
     // Guard: only honor the volcado if its meal still exists in the current layout (e.g. the
     // user dropped from 4 to 3 meals after volcando to C4 → ignore, don't lock everything).
@@ -1816,7 +1838,7 @@ const NutritionPage = () => {
                     num_comidas: numComidas,
                     momento_entreno: momentoEntreno,
                     opcion_peri: opcionPeri,
-                    comidas: mealsData,
+                    comidas: comidasDelReparto(),
                     macros_snapshot: distribution?.resumen,
                     distribution_targets: distribTargetsOverlay || null,
                     is_cuadrado: getDayStatus() === 'cuadrado',
@@ -1925,7 +1947,7 @@ const NutritionPage = () => {
                     name,
                     tipo_dia: tipoDia, num_comidas: numComidas,
                     momento_entreno: momentoEntreno, opcion_peri: opcionPeri,
-                    comidas: mealsData, macros_snapshot: distribution?.resumen,
+                    comidas: comidasDelReparto(), macros_snapshot: distribution?.resumen,
                     distribution_targets: distribTargetsOverlay || null,
                 })
             });
@@ -2304,7 +2326,7 @@ const NutritionPage = () => {
                     fecha: currentDate,
                     tipo_dia: tipoDia, num_comidas: numComidas,
                     momento_entreno: momentoEntreno, opcion_peri: opcionPeri,
-                    comidas: mealsData, macros_snapshot: distribution?.resumen,
+                    comidas: comidasDelReparto(), macros_snapshot: distribution?.resumen,
                     distribution_targets: distribTargetsOverlay || null,
                     is_cuadrado: getDayStatus() === 'cuadrado',
                     comida_volcada: meal,
@@ -2361,7 +2383,7 @@ const NutritionPage = () => {
                 body: JSON.stringify({
                     fecha: currentDate, tipo_dia: tipoDia, num_comidas: numComidas,
                     momento_entreno: momentoEntreno, opcion_peri: opcionPeri,
-                    comidas: mealsData,
+                    comidas: comidasDelReparto(),
                 }),
             });
             setMealsData(res.comidas || {});
@@ -2437,7 +2459,7 @@ const NutritionPage = () => {
         num_comidas: numComidas,
         momento_entreno: momentoEntreno,
         opcion_peri: opcionPeri,
-        comidas: mealsData,
+        comidas: comidasDelReparto(),
         macros_snapshot: distribution?.resumen,
         distribution_targets: distribTargetsOverlay || null,
         is_cuadrado: getDayStatus() === 'cuadrado',
