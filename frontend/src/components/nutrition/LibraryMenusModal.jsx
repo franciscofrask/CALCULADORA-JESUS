@@ -113,8 +113,6 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
     const [sinCosechar, setSinCosechar] = React.useState(false);
     const [total, setTotal] = React.useState(0);
     const [objetivo, setObjetivo] = React.useState(null);
-    // El momento del día de ESTA comida, tal y como lo calcula el servidor (`meal_moment`).
-    const [momentoComida, setMomentoComida] = React.useState(null);
     const [loading, setLoading] = React.useState(false);
     const [error, setError] = React.useState(null);
     const [applying, setApplying] = React.useState(false);
@@ -174,7 +172,6 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                 setMenus(res.menus || []);
                 setTotal(res.total || 0);
                 setObjetivo(res.objetivo || null);
-                setMomentoComida(res.momento_comida || null);
                 // El servidor sabe distinguir «no hay ninguno que te cuadre» de «la base no
                 // está cosechada» y lo dice en `filtros.sin_cosechar` (punto 10.3). Aquí no
                 // se leía, así que el cero salía con el mismo texto en los dos casos y el
@@ -233,18 +230,8 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
 
     const obj = objetivo || target || { P: 0, H: 0, G: 0 };
 
-    // LAS RECETAS, SOLO EN SU CHIP, Y LAS DE ESTA COMIDA (Francisco, 29-08): «que recetas
-    // solo se muestren con el filtro de recetas y que distinga la comida».
-    //
-    // Salían mezcladas con los menús de la gente en todos los chips, y con «Recetas» puesto
-    // salía el recetario ENTERO -- desayunos incluidos -- porque ahí no se filtraba por
-    // momento. Ahora: en cualquier otro chip no hay recetas, y en el suyo salen las del
-    // momento que le toca a esta comida, que lo dice el servidor en `momento_comida` (con 4
-    // comidas la 3 es merienda; con 3, cena). Si la receta no dice sus momentos, se enseña:
-    // más vale ofrecerla que esconderla por un dato que falta.
-    const recetasFiltradas = !soloRecetas ? [] : (recetario || []).filter(receta => {
-        const momentos = receta.momentos || [];
-        if (momentoComida && momentos.length && !momentos.includes(momentoComida)) return false;
+    const recetasFiltradas = (recetario || []).filter(receta => {
+        if (momento !== 'todos' && !soloRecetas && !(receta.momentos || []).includes(momento)) return false;
         const q = normalizar(textFilter.trim());
         if (!q) return true;
         return normalizar(receta.nombre).includes(q)

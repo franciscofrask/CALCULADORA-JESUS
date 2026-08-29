@@ -2669,22 +2669,6 @@ _LIBRARY_TIPOS = {"C1": "Comida 1", "C2": "Comida 2", "C3": "Comida 3", "C4": "C
                   "C5": "Comida 4", "C6": "Comida 4", "Intra": "Peri", "Post": "Peri"}
 _LIBRARY_MARGEN_DEFAULT = 5.0
 _LIBRARY_MARGEN_MAX = 15.0
-
-
-def _momento_de_esta_comida(meal_key: str, data: dict) -> str:
-    """El momento del día que le toca a esta comida: desayuno, comida, merienda, cena o peri.
-
-    La regla vive en `meal_moment` y depende del número de comidas del día -- con 4 la
-    tercera es la merienda, con 3 es la cena --, así que se calcula aquí y viaja en la
-    respuesta en vez de repetirla en la pantalla.
-    """
-    from meal_moment import momento_de_comida
-
-    try:
-        num = int(data.get("num_comidas") or 4)
-    except (TypeError, ValueError):
-        num = 4
-    return momento_de_comida(meal_key, num, single_meal=(num == 1))
 _LIBRARY_CANDIDATOS_MAX = 4000
 _LIBRARY_TRABAJO_MAX = 300  # solo los mejores N se materializan con macros por item
 
@@ -3073,11 +3057,6 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
         "margen": margen,
         "orden": orden,
         "tipo_comida": tipo_comida,
-        # QUÉ MOMENTO DEL DÍA ES ESTA COMIDA (29-08). Lo dice el servidor y no lo calcula
-        # la pantalla porque la regla es una y vive en `meal_moment`: con 4 comidas la 3 es
-        # la merienda, con 3 es la cena. La ventana lo usa para enseñar las recetas que le
-        # tocan a ESTA comida en vez del recetario entero.
-        "momento_comida": _momento_de_esta_comida(meal_key, data),
         # Para saber por qué salió lo que salió sin tener que adivinarlo. `sin_cosechar`
         # es la diferencia entre "no hay menús para este objetivo" y "a esta base nunca
         # se le pasó la cosecha", que hasta el 09-08-2026 se veían igual.
