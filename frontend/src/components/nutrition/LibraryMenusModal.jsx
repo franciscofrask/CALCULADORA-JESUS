@@ -113,6 +113,8 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
     const [sinCosechar, setSinCosechar] = React.useState(false);
     const [total, setTotal] = React.useState(0);
     const [objetivo, setObjetivo] = React.useState(null);
+    // El momento del día de ESTA comida, tal y como lo calcula el servidor (`meal_moment`).
+    const [momentoComida, setMomentoComida] = React.useState(null);
     const [loading, setLoading] = React.useState(false);
     const [error, setError] = React.useState(null);
     const [applying, setApplying] = React.useState(false);
@@ -158,6 +160,13 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                         // llegaba al tope enseguida y ampliar el margen no cambiaba
                         // nada de lo que se veía.
                         limit: 120,
+                        // EL CHIP TAMBIÉN ACOTA LOS MENÚS DE LA GENTE (Francisco, 29-08).
+                        // Antes solo acotaba el recetario y aquí se pedía por la POSICIÓN de
+                        // la comida, así que al filtrar por Meriendas salían las cenas de
+                        // todo el mundo: con 4 comidas la 3 es merienda, con 3 es cena. El
+                        // servidor filtra por `momentos`, que pone `_momentos_biblioteca.py`.
+                        // Con «Todas» y con «Recetas» no se manda nada y sigue como estaba.
+                        ...(momento !== 'todos' && momento !== 'recetas' ? { momento } : {}),
                         ...(dayConfig || {}),
                     }),
                 });
@@ -165,6 +174,7 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                 setMenus(res.menus || []);
                 setTotal(res.total || 0);
                 setObjetivo(res.objetivo || null);
+                setMomentoComida(res.momento_comida || null);
                 // El servidor sabe distinguir «no hay ninguno que te cuadre» de «la base no
                 // está cosechada» y lo dice en `filtros.sin_cosechar` (punto 10.3). Aquí no
                 // se leía, así que el cero salía con el mismo texto en los dos casos y el
@@ -181,8 +191,10 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
         };
         cargar();
         return () => { cancelado = true; };
+        // `momento` entra en las dependencias: cambiar de chip vuelve a pedir los menús,
+        // que es lo que hace que el filtro se note en ellos y no solo en las recetas.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, mealKey, margen, orden]);
+    }, [open, mealKey, margen, orden, momento]);
 
     // El catálogo del recetario no depende de la comida ni del objetivo: se pide una sola
     // vez, al abrir. Ya no espera a que nadie entre en una pestaña -- no hay pestañas --,
@@ -218,8 +230,18 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
 
     const obj = objetivo || target || { P: 0, H: 0, G: 0 };
 
-    const recetasFiltradas = (recetario || []).filter(receta => {
-        if (momento !== 'todos' && !soloRecetas && !(receta.momentos || []).includes(momento)) return false;
+    // LAS RECETAS, SOLO EN SU CHIP, Y LAS DE ESTA COMIDA (Francisco, 29-08): «que recetas
+    // solo se muestren con el filtro de recetas y que distinga la comida».
+    //
+    // Salían mezcladas con los menús de la gente en todos los chips, y con «Recetas» puesto
+    // salía el recetario ENTERO -- desayunos incluidos -- porque ahí no se filtraba por
+    // momento. Ahora: en cualquier otro chip no hay recetas, y en el suyo salen las del
+    // momento que le toca a esta comida, que lo dice el servidor en `momento_comida` (con 4
+    // comidas la 3 es merienda; con 3, cena). Si la receta no dice sus momentos, se enseña:
+    // más vale ofrecerla que esconderla por un dato que falta.
+    const recetasFiltradas = !soloRecetas ? [] : (recetario || []).filter(receta => {
+        const momentos = receta.momentos || [];
+        if (momentoComida && momentos.length && !momentos.includes(momentoComida)) return false;
         const q = normalizar(textFilter.trim());
         if (!q) return true;
         return normalizar(receta.nombre).includes(q)
@@ -337,10 +359,12 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                     </div>
                 </DialogHeader>
 
-                {/* UNOS SOLOS CONTROLES PARA TODA LA LISTA. El buscador filtra las dos
-                    cosas a la vez (por nombre de receta o por alimento) y los chips de
-                    momento acotan las recetas; los menús reales ya vienen del momento de
-                    esta comida, que lo decide el servidor con `mealKey`. */}
+                {/* UNOS SOLOS CONTROLES PARA TODA LA LISTA. El buscador filtra las dos cosas
+                    a la vez (por nombre de receta o por alimento) y los chips de momento
+                    acotan LAS DOS: las recetas por su `momento`, y los menús de la gente por
+                    `momentos`, que el servidor cruza con las dietas donde se montaron.
+                    Hasta el 29-08 los chips solo acotaban las recetas y los menús venían por
+                    la posición de la comida, así que al pedir Meriendas salían cenas. */}
                 <div className="px-4 pt-3 pb-3 border-b bg-card flex-shrink-0 space-y-2.5">
                     <div className="flex items-center gap-1.5 flex-wrap">
                         {chips.map(m => (

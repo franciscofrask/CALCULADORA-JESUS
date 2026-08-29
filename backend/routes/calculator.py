@@ -2669,6 +2669,22 @@ _LIBRARY_TIPOS = {"C1": "Comida 1", "C2": "Comida 2", "C3": "Comida 3", "C4": "C
                   "C5": "Comida 4", "C6": "Comida 4", "Intra": "Peri", "Post": "Peri"}
 _LIBRARY_MARGEN_DEFAULT = 5.0
 _LIBRARY_MARGEN_MAX = 15.0
+
+
+def _momento_de_esta_comida(meal_key: str, data: dict) -> str:
+    """El momento del día que le toca a esta comida: desayuno, comida, merienda, cena o peri.
+
+    La regla vive en `meal_moment` y depende del número de comidas del día -- con 4 la
+    tercera es la merienda, con 3 es la cena --, así que se calcula aquí y viaja en la
+    respuesta en vez de repetirla en la pantalla.
+    """
+    from meal_moment import momento_de_comida
+
+    try:
+        num = int(data.get("num_comidas") or 4)
+    except (TypeError, ValueError):
+        num = 4
+    return momento_de_comida(meal_key, num, single_meal=(num == 1))
 _LIBRARY_CANDIDATOS_MAX = 4000
 _LIBRARY_TRABAJO_MAX = 300  # solo los mejores N se materializan con macros por item
 
@@ -2699,6 +2715,7 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
 
     Body: {mealKey, macros_objetivo?: {P,H,G}, margen?: 1-15 (def 5),
            orden?: 'cuadrado'|'usado', limit?: <=60,
+           momento?: 'desayuno'|'comida'|'merienda'|'cena'|'peri',
            fecha?, tipo_dia?, num_comidas?, momento_entreno?, opcion_peri? (fallback)}
     """
     from meal_library import BIBLIOTECA_DE_CLIENTES
@@ -2734,7 +2751,25 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
     # puede acabar dentro tras ajustar su driver (P ±20, H ±30, G ±8).
     from meal_library import AJUSTE_MAX, _ajustar_menu
     from meal_builder import get_effective_macros_per_100g
-    q = {"tipo_comida": tipo_comida}
+    # POR MOMENTO DEL DÍA CUANDO SE PIDE UNO, Y NO POR POSICIÓN (Francisco, 29-08-2026).
+    #
+    # En su vídeo filtra por Meriendas y le salen langostinos, pimientos asados y una
+    # merienda con «conejo contramuslo 16 g»: «en las recetas del recetario sí, pero en los
+    # menús estos que se cogen de la gente no cuadra». Y era verdad: los chips de la ventana
+    # acotaban solo el recetario, porque esto buscaba por POSICIÓN -- `tipo_comida`, Comida
+    # 1..4 -- y la posición no dice el momento. Con 4 comidas la 3 es la merienda; con 3, la
+    # cena. Al pedir meriendas le llegaban las cenas de todo el mundo.
+    #
+    # `momentos` lo pone `_momentos_biblioteca.py` cruzando la biblioteca con db.diets, que
+    # es donde está el `num_comidas` que hace falta para saber el momento. Los menús sin ese
+    # campo (los heredados del CSV de la calculadora antigua, que no están en ninguna dieta)
+    # NO salen cuando se pide un momento: no consta en cuál se comen, y colarlos es
+    # exactamente el fallo que se está arreglando. Sin momento pedido, todo sigue igual.
+    momento = (data.get("momento") or "").strip().lower()
+    if momento in ("desayuno", "comida", "merienda", "cena", "peri"):
+        q = {"momentos": momento}
+    else:
+        q = {"tipo_comida": tipo_comida}
     # Los menús de clientes son de relleno y van SIEMPRE con filtro (punto 67 del
     # 07-08): solo los que llevan verdura, no son una lista de botes y tienen un
     # número razonable de ingredientes. Lo marca la cosecha (_cosechar_menus.py).
@@ -3038,6 +3073,11 @@ async def library_menus(data: dict, user = Depends(get_current_user)):
         "margen": margen,
         "orden": orden,
         "tipo_comida": tipo_comida,
+        # QUÉ MOMENTO DEL DÍA ES ESTA COMIDA (29-08). Lo dice el servidor y no lo calcula
+        # la pantalla porque la regla es una y vive en `meal_moment`: con 4 comidas la 3 es
+        # la merienda, con 3 es la cena. La ventana lo usa para enseñar las recetas que le
+        # tocan a ESTA comida en vez del recetario entero.
+        "momento_comida": _momento_de_esta_comida(meal_key, data),
         # Para saber por qué salió lo que salió sin tener que adivinarlo. `sin_cosechar`
         # es la diferencia entre "no hay menús para este objetivo" y "a esta base nunca
         # se le pasó la cosecha", que hasta el 09-08-2026 se veían igual.

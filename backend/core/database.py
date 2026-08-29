@@ -133,6 +133,12 @@ async def create_indexes():
     # El PDF que se entrega al que COMPRA la rutina del mes (`routes/routines.py`). Una
     # sola fila vigente; el índice es para que buscarla no dependa de cuántas se archiven.
     await _ensure("rutina_mes_pdf", [("vigente", 1), ("uploaded_at", -1)])
+    # EL MOMENTO DEL DÍA DE LOS MENÚS DE LA BIBLIOTECA (29-08). Desde que «Sugiéreme un
+    # menú» filtra por momento y no por posición, esta es la consulta que se hace sobre las
+    # 266.199 filas, y va con los mismos macros detrás que el índice de `tipo_comida` que ya
+    # había: sin él, pedir meriendas recorre la colección entera.
+    await _ensure("meal_library", [("momentos", 1), ("macros.P", 1),
+                                   ("macros.H", 1), ("macros.G", 1)])
 
 async def close_connection():
     """Cerrar conexión a MongoDB."""
