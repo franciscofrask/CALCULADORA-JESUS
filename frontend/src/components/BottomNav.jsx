@@ -28,12 +28,17 @@ const BottomNav = ({ items = [], unread = 0, fichaPendiente = false }) => {
     useEffect(() => { setHojaAbierta(false); }, [location.pathname]);
 
     const tieneRutina = items.some(i => i.path === '/dashboard/routine');
+    // SIN PLAN, SOLO EL INICIO (29-08). «Mi semana» se pone aquí a mano -- no viene en
+    // `items` --, así que el recorte del menú lateral no la alcanzaba y en el teléfono
+    // seguía saliendo una pestaña que rebota al Inicio. Se detecta por lo que llega: si al
+    // layout solo le queda el Inicio, es que este cliente no tiene acceso.
+    const soloInicio = !items.some(i => i.path !== '/dashboard' && i.path !== '/dashboard/profile');
     const principales = useMemo(() => ([
         { path: '/dashboard', icon: Home, label: 'Inicio', end: true },
         // La página existe desde el rediseño del 21-08; esta es su primera puerta.
-        { path: '/dashboard/semana', icon: CalendarRange, label: 'Mi semana' },
+        ...(soloInicio ? [] : [{ path: '/dashboard/semana', icon: CalendarRange, label: 'Mi semana' }]),
         ...(tieneRutina ? [{ path: '/dashboard/routine', icon: Dumbbell, label: 'Rutina' }] : []),
-    ]), [tieneRutina]);
+    ]), [tieneRutina, soloInicio]);
 
     // La hoja: todo lo del menú lateral que no está ya en la barra. Inicio y Rutina se
     // quitan por ruta; «Mi semana» no viene en la lista (no tiene entrada lateral).

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate, Outlet, NavLink, useLocation } from 'react-router-dom';
+import { useNavigate, Outlet, NavLink, useLocation, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { leer as leerLocal, escribir as escribirLocal } from '../lib/almacenLocal';
 import { plural, nombreDePlan } from '../lib/labels';
@@ -1133,7 +1133,14 @@ const ClientDashboard = () => {
     if (profile?.acceso?.motivo === 'caducado' || verComo(user) === 'caducado') {
         return <PlanCaducado navigate={navigate} nombre={user?.name} api={api} email={user?.email} />;
     }
-    if (!profile || planUnpaid) {
+    // Y SIN PLAN, AUNQUE TENGA FICHA (29-08). Esto miraba `!profile`, así que solo salía si
+    // el perfil no existía; al que se registra Y se le crea la ficha con `plan: null` -- que
+    // es lo normal desde el alta -- se le pintaba el Inicio entero: la frase del día, sus
+    // macros, todo. Quien decide es `acceso`, que ya viene calculado del servidor
+    // (`estado_de_acceso`) y distingue los tres casos.
+    const sinPlanTodavia = profile?.acceso?.activo === false
+        && ['sin_plan', 'sin_pagar'].includes(profile?.acceso?.motivo);
+    if (!profile || planUnpaid || sinPlanTodavia) {
         return (
             <div className="px-4 sm:px-6 lg:px-8 py-8 max-w-2xl mx-auto animate-fade-in">
                 <div className="surface p-8 text-center">
@@ -1142,7 +1149,7 @@ const ClientDashboard = () => {
                     </div>
                     <h2 className="heading-2 text-foreground mb-2">Bienvenido a 12EN12</h2>
                     <p className="text-muted-foreground mb-6 text-sm">
-                        {planUnpaid
+                        {planUnpaid || profile?.acceso?.motivo === 'sin_pagar'
                             ? 'El pago de tu plan no llegó a completarse. Elige un plan para terminar la compra.'
                             : 'Para comenzar tu transformación, selecciona un plan.'}
                     </p>
@@ -1695,7 +1702,38 @@ const SidebarLink = ({ item, collapsed, unread, fichaPendiente, onClick }) => (
 // =============== CLIENT LAYOUT ===============
 
 const ClientLayout = () => {
-    const { user, logout, profile, perfilNoCargado, api, can, planUnpaid, myPlan, pantalla, refreshProfile } = useAuth();
+    const { user, logout, profile, perfilNoCargado, api, can, planUnpaid, myPlan, pantalla, refreshProfile, loading } = useAuth();
+    const donde = useLocation();
+
+    // SIN PLAN, SOLO EL INICIO (Francisco, 29-08): «una persona que no tiene plan no puede
+    // utilizar el sistema, solo puede seleccionar un plan para volver a recuperar acceso».
+    //
+    // El bloqueo vivía únicamente en el Inicio, así que escribiendo /dashboard/nutrition se
+    // entraba igual. Aquí se cierra el layout entero: cualquier pantalla que no sea el
+    // Inicio devuelve al Inicio, que es donde está «Seleccionar plan». El servidor lo cierra
+    // por su lado con un 402 (`core/candado_de_plan`), pero eso llega DESPUÉS de pintar la
+    // pantalla; esto evita que llegue a verse.
+    //
+    // Al equipo no se le aplica: no compra planes. Y `perfilNoCargado` tampoco entra, que es
+    // la diferencia entre «no tiene plan» y «no se pudo leer su perfil» (un 500 dejaba al
+    // cliente navegando como si nunca hubiera contratado nada, QA del 15-08).
+    //
+    // El `return` va abajo del todo, con el resto de los hooks ya declarados: cortar aquí
+    // arriba deja los de más abajo sin ejecutar y React no lo permite.
+    // SIN PERFIL TAMBIÉN ES SIN ACCESO, y ese era el agujero de la primera versión: exigía
+    // `profile` para bloquear, y una cuenta RECIÉN CREADA no tiene ficha todavía -- llega
+    // `null` --, así que al que se acababa de registrar no se le paraba nada. Lo probó
+    // Francisco: «cree una cuenta, me logueo y salgo en la pantalla de planes, pero puedo
+    // presionar el botón de volver, y por url ir al inicio del sistema».
+    //
+    // `loading` es lo que evita el falso positivo: mientras se lee el perfil, `profile`
+    // también es null, y sin esperar se echaría del sitio a quien sí tiene plan cada vez
+    // que recarga. Y `perfilNoCargado` distingue «no tiene ficha» de «no se pudo leer»
+    // (un 500 dejaba al cliente navegando como si nunca hubiera contratado nada, QA 15-08).
+    const esDelEquipo = user?.role === 'admin' || user?.role === 'trainer';
+    const sinAcceso = !loading && !esDelEquipo && !perfilNoCargado
+        && (!profile || profile?.acceso?.activo === false);
+    const fueraDelInicio = sinAcceso && donde.pathname !== '/dashboard';
 
     // ALGO PENDIENTE EN LA FICHA (punto 111): datos que faltan o que no pueden ser
     // (edad 5, estatura de 1 cm de la importación de Calma). Lo calcula el servidor al
@@ -1738,7 +1776,13 @@ const ClientLayout = () => {
     // el panel el día que se quiera, sin volver a desplegar. La pantalla sigue existiendo
     // (`ChatbotPage`) y el backend intacto: lo que se quita es la puerta.
     const asistenteVisible = pantalla('t7_asistente');
-    const navItems = NAV_ITEMS
+    // SIN PLAN, EL MENÚ SE QUEDA EN EL INICIO Y SU PERFIL. Con el bloqueo puesto seguían
+    // saliendo Nutrición, Alimentos y Mis macros: puertas que ya no abren -- se entra y
+    // rebota al Inicio --, y enseñarlas es prometerle algo que no tiene. Su perfil se queda
+    // porque ahí están sus datos y el cierre de sesión (29-08).
+    const navItems = (sinAcceso
+            ? NAV_ITEMS.filter(i => i.path === '/dashboard' || i.path === '/dashboard/profile')
+            : NAV_ITEMS)
         .filter(i => (!i.cap || can(i.cap)) && i.path !== '/dashboard/checkins')
         .filter(i => i.path !== '/dashboard/chatbot' || asistenteVisible)
         .map(i => i.path === '/dashboard/reports'
@@ -1750,12 +1794,14 @@ const ClientLayout = () => {
         // del móvil -- y detrás del MISMO interruptor que ella (t1_inicio_nuevo), para
         // que el lunes se encienda todo junto. En el móvil no duplica nada: la hoja de
         // «Más» descarta las rutas que ya están en la barra.
-        .flatMap(i => (i.path === '/dashboard' && pantalla('t1_inicio_nuevo'))
+        .flatMap(i => (i.path === '/dashboard' && pantalla('t1_inicio_nuevo') && !sinAcceso)
             ? [i, { path: '/dashboard/semana', icon: CalendarRange, label: 'Mi semana' }]
             : [i]);
     // La barra de abajo no se toca: ahí ya pone «Macros» a secas, que vale para los dos casos y
     // es lo que cabe en un móvil.
-    const bottomItems = BOTTOM_ITEMS.filter(i => !i.cap || can(i.cap));
+    // Lo mismo en la barra de abajo del móvil, que es el menú de verdad en un teléfono.
+    const bottomItems = (sinAcceso ? BOTTOM_ITEMS.filter(i => i.path === '/dashboard') : BOTTOM_ITEMS)
+        .filter(i => !i.cap || can(i.cap));
     const navigate = useNavigate();
     const location = useLocation();
     const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar-collapsed') === '1');
@@ -1831,6 +1877,9 @@ const ClientLayout = () => {
             )}
         </div>
     );
+
+    // SIN PLAN, SOLO EL INICIO. Aquí, con todos los hooks ya declarados (ver arriba).
+    if (fueraDelInicio) return <Navigate to="/dashboard" replace />;
 
     return (
         <div className="min-h-screen bg-background flex">

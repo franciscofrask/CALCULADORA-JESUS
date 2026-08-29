@@ -114,6 +114,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# SIN PLAN NO SE USA LA APP (Francisco, 29-08-2026). Va como middleware y no como
+# dependencia de cada ruta a propósito: la regla es «no puede usar el sistema», y puesta
+# endpoint por endpoint el agujero vuelve con la siguiente ruta que se añada. El porqué,
+# lo que queda abierto y quién no pasa por aquí, en `core/candado_de_plan`.
+from core.candado_de_plan import candado_de_plan  # noqa: E402
+
+app.middleware("http")(candado_de_plan)
+
 # Manejadores globales de errores de entrada que, si no, saldrían como 500.
 # Un número entero enorme (> int64) revienta al escribir en MongoDB (OverflowError);
 # lo convertimos en un 400 limpio para TODOS los endpoints de una vez, en vez de

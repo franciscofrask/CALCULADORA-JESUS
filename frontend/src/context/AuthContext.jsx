@@ -84,6 +84,14 @@ export const AuthProvider = ({ children }) => {
                     }
                     logout();
                 }
+                // SIN PLAN NO SE USA LA APP (Francisco, 29-08). El servidor contesta 402 a
+                // todo lo que no sea elegir plan (`core/candado_de_plan`), y sin esto la
+                // pantalla se quedaba a medias sin decir por qué. Se le lleva al Inicio, que
+                // es donde está la salida: «selecciona un plan». No se cierra la sesión --
+                // sigue siendo él y su cuenta está bien -- ni se le echa al login.
+                if (error.response?.status === 402 && window.location.pathname !== '/dashboard') {
+                    window.location.assign('/dashboard');
+                }
                 return Promise.reject(error);
             }
         );
