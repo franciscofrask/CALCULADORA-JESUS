@@ -122,9 +122,31 @@ async def get_current_user(
     if not objetivo or objetivo.get("deleted_at"):
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
-    # Cerrojo 2: solo hacia clientes. Actuar como otro admin seria una escalada de
-    # privilegios con nombre bonito.
-    if objetivo.get("role") != "client":
+    # Cerrojo 2: hacia clientes; y un ADMIN, hacia cualquiera.
+    #
+    # Esto era «todo el que no sea client, 403», con el motivo de que actuar como otro admin
+    # seria una escalada de privilegios con nombre bonito. Se abre para el admin, y no por
+    # comodidad:
+    #
+    #   - Un admin NO GANA NINGUN PERMISO entrando en la cuenta de un entrenador ni en la de
+    #     otro admin: ya los tiene todos. No es escalar, es ponerse en su sitio para ver lo
+    #     que ve.
+    #   - Y sobre todo: UN ADMIN YA PODIA HACERLO, por la puerta mala. Desde Usuarios genera
+    #     una contraseña temporal a cualquiera (`POST /admin/users/{id}/reset-password`) y
+    #     entra con ella. Eso deja a la otra persona FUERA de su propia cuenta y no dice quien
+    #     miro que. Suplantar con el registro puesto es menos invasivo, no mas.
+    #
+    # FRANCISCO, 29-08-2026: el equipo usa la app como cliente y reporta fallos de SUS
+    # pantallas; la unica forma de ver «como cargan las cosas» era pedirles la clave o irse al
+    # clon de dev. El caso que lo destapo: Gonzalo Rubio entrena, pero su cuenta tiene rol
+    # admin -- de los 15 del equipo, 7 son admin --, asi que abrirlo solo para `trainer` no
+    # habria servido justo para quien lo pidio.
+    #
+    # LO QUE SIGUE CERRADO, y es lo que de verdad importa: un ENTRENADOR no entra en nadie del
+    # equipo, ni en un admin ni en otro entrenador. Ahi si seria ganar permisos. Y siguen los
+    # cerrojos 3 (hace falta ficha de cliente) y 4 (queda anotado quien lo hizo).
+    rol_objetivo = objetivo.get("role")
+    if rol_objetivo != "client" and user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Solo se puede actuar como un cliente")
 
     # Cerrojo 3: solo sobre los suyos, la misma regla que la ficha.

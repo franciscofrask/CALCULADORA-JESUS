@@ -6,13 +6,16 @@ Esto es SUPLANTACION, asi que lo que hay que probar no es que funcione -- eso se
 primera -- sino que no funcione cuando no debe. Los cuatro cerrojos de `core/actuar_como`:
 
   1. solo el equipo,
-  2. solo hacia clientes (nada de actuar como otro admin),
+  2. hacia clientes, y de admin tambien hacia un entrenador (29-08; nada de actuar como un
+     admin, y un entrenador no entra en nadie del equipo),
   3. solo sobre los suyos (la misma regla que la ficha),
   4. y queda anotado.
 
 Se prueba contra la API de verdad porque la cabecera la resuelve `get_current_user`, que es
 una dependencia de FastAPI: probarla en aislado seria probar otra cosa.
 """
+import os
+
 import pytest
 import requests
 
@@ -38,6 +41,19 @@ def admin(token_admin):
 @pytest.fixture(scope="module")
 def cliente(token_cliente):
     return token_cliente
+
+
+# El coach de las cuentas de QA (22-08). No esta en conftest porque hasta hoy ninguna prueba
+# necesitaba entrar COMO entrenador: el unico caso que lo pide es el cerrojo 2, que desde el
+# 29-08 responde distinto segun quien pregunte.
+@pytest.fixture(scope="module")
+def entrenador(api_disponible):
+    from conftest import login
+    t = login(os.getenv("TEST_TRAINER_EMAIL", "coach.prueba@test.com"),
+              os.getenv("TEST_TRAINER_PASSWORD", "QaPrueba2026!"))
+    if not t:
+        pytest.skip("No se pudo entrar como entrenador. Ajusta TEST_TRAINER_EMAIL/PASSWORD.")
+    return t
 
 
 @pytest.fixture(scope="module")
@@ -69,18 +85,50 @@ class TestLosCerrojos:
         assert r.status_code == 200
         assert r.json()["id"] == me["id"]
 
-    def test_no_se_puede_actuar_como_otro_del_equipo(self, admin):
-        """Actuar como otro admin seria una escalada de privilegios con nombre bonito."""
+    @pytest.mark.parametrize("rol", ["trainer", "admin"])
+    def test_un_admin_entra_en_cualquiera_del_equipo(self, admin, rol):
+        """Francisco, 29-08: el equipo usa la app como cliente y reporta fallos de SUS
+        pantallas, y no habia forma de verlas sin pedirles la clave.
+
+        Los DOS roles, y el segundo no es un extra: quien lo pidio -- Gonzalo Rubio, que
+        entrena -- tiene la cuenta con rol admin, como 7 de los 15 del equipo. Abrirlo solo
+        para `trainer` no habria servido justo para su caso.
+
+        Un admin no gana ningun permiso con esto (ya los tiene todos) y ademas ya podia entrar
+        por la puerta mala: resetearle la contraseña desde Usuarios.
+
+        Hace falta que el objetivo tenga ficha de cliente: sin ella no hay calculadora que
+        abrir y el cerrojo 3 responde 404, que es lo correcto.
+        """
         me = requests.get(f"{API}/auth/me", headers=_cabeceras(admin), timeout=30).json()
-        equipo = requests.get(f"{API}/admin/trainers", headers=_cabeceras(admin), timeout=30)
+        equipo = requests.get(f"{API}/admin/users?staff=true", headers=_cabeceras(admin), timeout=30)
         if equipo.status_code != 200:
             pytest.skip("no se pudo listar el equipo")
-        otros = [t for t in (equipo.json() or []) if t.get("id") and t["id"] != me["id"]]
+        objetivos = [u for u in (equipo.json() or [])
+                     if u.get("role") == rol and u.get("profile_id") and u["id"] != me["id"]]
+        if not objetivos:
+            pytest.skip(f"no hay ningun {rol} con ficha de cliente con el que probar")
+        r = requests.get(f"{API}/clients/profile",
+                         headers=_cabeceras(admin, objetivos[0]["id"]), timeout=30)
+        assert r.status_code == 200, f"un admin no ha podido entrar en un {rol} ({r.status_code})"
+
+    def test_un_entrenador_no_entra_en_nadie_del_equipo(self, entrenador, admin):
+        """Lo que NO se abrio el 29-08: de entrenador a entrenador sigue cerrado.
+
+        El objetivo se busca con el token de ADMIN a proposito: la lista de Usuarios es solo de
+        admin, y si se pidiera con el del entrenador esto seria un skip permanente disfrazado
+        de prueba en verde.
+        """
+        me = requests.get(f"{API}/auth/me", headers=_cabeceras(entrenador), timeout=30).json()
+        equipo = requests.get(f"{API}/admin/users?staff=true", headers=_cabeceras(admin), timeout=30)
+        if equipo.status_code != 200:
+            pytest.skip("no se pudo listar el equipo")
+        otros = [u for u in (equipo.json() or []) if u.get("id") and u["id"] != me["id"]]
         if not otros:
             pytest.skip("no hay otro miembro del equipo con el que probar")
         r = requests.get(f"{API}/clients/profile",
-                         headers=_cabeceras(admin, otros[0]["id"]), timeout=30)
-        assert r.status_code == 403, "se ha podido actuar como otro miembro del equipo"
+                         headers=_cabeceras(entrenador, otros[0]["id"]), timeout=30)
+        assert r.status_code == 403, "un entrenador ha entrado en la cuenta de otro del equipo"
 
     def test_un_usuario_que_no_existe(self, admin):
         r = requests.get(f"{API}/clients/profile",

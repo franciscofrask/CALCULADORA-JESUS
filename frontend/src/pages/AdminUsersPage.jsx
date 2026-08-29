@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -8,7 +9,7 @@ import { Badge } from '../components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 import { toast } from 'sonner';
 import { useConfirm } from '../components/ui/confirm';
-import { Search, Pencil, UserX, RotateCcw, Loader2, Shield, KeyRound } from 'lucide-react';
+import { Search, Pencil, UserX, RotateCcw, Loader2, Shield, KeyRound, ExternalLink } from 'lucide-react';
 import { mensajeDeError } from '../lib/mensajeDeError';
 
 const ROLES = [
@@ -25,6 +26,7 @@ const EMPTY_EDIT = { name: '', email: '', phone: '', role: 'client', plan: '', c
 const AdminUsersPage = () => {
     const { api, user: me, planCatalog } = useAuth();
     const { confirm } = useConfirm();
+    const navigate = useNavigate();
     const assignablePlans = Object.values(planCatalog || {}).filter(p => p.asignable);
     const planName = (code) => planCatalog?.[code]?.name || code;
     const [users, setUsers] = useState([]);
@@ -208,6 +210,20 @@ const AdminUsersPage = () => {
                                             <td className="px-4 py-3">{u.deleted ? <Badge className="bg-red-500/15 text-red-400 border-0">Baja</Badge> : <Badge className="bg-green-500/15 text-green-500 border-0">Activo</Badge>}</td>
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center justify-end gap-1">
+                                                    {/* SU FICHA DE CLIENTE, DESDE AQUÍ (Francisco, 29-08). Los del equipo
+                                                        usan la app de las dos formas, pero se les sacó de la lista de
+                                                        clientes para que no contaran como negocio (`_fuera_el_equipo`,
+                                                        09-08), y de paso su ficha se quedó sin puerta: había que saberse
+                                                        el id y escribirlo en la barra de direcciones. El permiso ya
+                                                        estaba -- `assert_client_access` mira quién entra, no a quién --,
+                                                        y el id ya viajaba en `profile_id`. Faltaba el botón.
+                                                        Sin ficha de cliente (4 de los 16 del equipo) no se pinta: ahí no
+                                                        hay nada que abrir. */}
+                                                    {u.profile_id && (
+                                                        <button onClick={() => navigate(`/admin/clients/${u.profile_id}`)}
+                                                            title="Ver su ficha de cliente" data-testid={`ficha-cliente-${u.id}`}
+                                                            className="p-1.5 rounded text-white/40 hover:text-[#FF671F] hover:bg-[#FF671F]/10"><ExternalLink className="w-4 h-4" /></button>
+                                                    )}
                                                     <button onClick={() => openEdit(u)} title="Editar" className="p-1.5 rounded text-white/40 hover:text-white hover:bg-white/10"><Pencil className="w-4 h-4" /></button>
                                                     {!u.deleted && <button onClick={() => resetPassword(u)} title="Restablecer contraseña" className="p-1.5 rounded text-white/40 hover:text-yellow-400 hover:bg-yellow-500/10" data-testid={`reset-pwd-${u.id}`}><KeyRound className="w-4 h-4" /></button>}
                                                     {u.deleted

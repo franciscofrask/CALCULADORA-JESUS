@@ -2380,24 +2380,51 @@ const ClientDetailPage = () => {
                         forma de añadir nada ni de montarle una comida. Desde aquí se abre el
                         MISMO editor que usa él, con una barra naranja arriba que no deja
                         olvidarse de en qué cuenta estás. */}
+                    {/* TAMBIÉN EN LA FICHA DE UN ENTRENADOR (Francisco, 29-08): «que tenga el
+                        botón de entrar a su calculadora para yo poder ver cómo cargan las cosas
+                        cuando reportan un error». El equipo usa la app como cliente y reporta
+                        fallos de SUS pantallas; hasta hoy la única forma de verlas era pedirles
+                        la clave. El candado que lo impedía se abrió en `core/security.py` solo
+                        para admin -> entrenador, así que aquí se pregunta lo mismo que allí: si
+                        el backend va a decir que no, no se pinta el botón.
+                        Sigue cerrado entrar en un ADMIN, y que un entrenador entre en nadie del
+                        equipo -- por eso la condición mira los DOS roles, no solo el de la
+                        ficha. */}
                     <Card className="bg-[#111] border-[#222]">
                         <CardContent className="p-4 flex items-center gap-3 flex-wrap">
                             <UserCog className="w-5 h-5 text-[#FF671F] shrink-0" />
-                            <div className="min-w-0 flex-1">
-                                <p className="text-white text-sm font-semibold">Crearle el día tú mismo</p>
-                                <p className="text-white/40 text-xs">
-                                    Abre su calculadora tal y como la ve él. Lo que guardes queda
-                                    firmado con tu nombre y él lo verá.
-                                </p>
-                            </div>
-                            <Button onClick={() => actuarComo({
-                                userId: profile?.user_id,
-                                clientId: clientId,
-                                nombre: user?.name || profile?.name || 'tu cliente',
-                            })} data-testid="entrar-en-su-calculadora"
-                                className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white">
-                                Entrar en su calculadora
-                            </Button>
+                            {(user?.role === 'client'
+                                || adminUser?.role === 'admin'
+                                // Y LA SUYA PROPIA. Cada uno del equipo se encuentra en la lista
+                                // de clientes desde el 13-08 (la excepción de una fila de
+                                // `_fuera_el_equipo`), y en su ficha el botón abre su propia
+                                // calculadora: el backend ni siquiera lo cuenta como suplantar
+                                // (`security.py`, «actuar como uno mismo no es actuar»).
+                                || profile?.user_id === adminUser?.id) ? (<>
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-white text-sm font-semibold">Crearle el día tú mismo</p>
+                                    <p className="text-white/40 text-xs">
+                                        Abre su calculadora tal y como la ve él. Lo que guardes queda
+                                        firmado con tu nombre y él lo verá.
+                                    </p>
+                                </div>
+                                <Button onClick={() => actuarComo({
+                                    userId: profile?.user_id,
+                                    clientId: clientId,
+                                    nombre: user?.name || profile?.name || 'tu cliente',
+                                })} data-testid="entrar-en-su-calculadora"
+                                    className="bg-[#FF671F] hover:bg-[#FF671F]/90 text-white">
+                                    Entrar en su calculadora
+                                </Button>
+                            </>) : (
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-white text-sm font-semibold">Su ficha sí, su cuenta no</p>
+                                    <p className="text-white/40 text-xs">
+                                        Aquí ves y editas sus datos de cliente como los de cualquiera.
+                                        En la cuenta de alguien del equipo solo entra un administrador.
+                                    </p>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                     {nutrition_stats?.total_diets > 0 ? (<>
