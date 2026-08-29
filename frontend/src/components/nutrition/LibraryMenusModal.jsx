@@ -222,6 +222,9 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
 
     // Con el chip «Recetas» puesto, los menús de la gente no salen: es el propio filtro.
     const soloRecetas = momento === 'recetas';
+    // Hay un chip de momento puesto (Desayunos, Comidas, Meriendas, Cenas): ni «Todas» ni
+    // «Recetas». Sirve para explicar un vacío que causa el filtro y no la falta de menús.
+    const hayFiltroDeMomento = momento !== 'todos' && !soloRecetas;
     const filtrados = soloRecetas ? []
         : textFilter.trim()
             ? menus.filter(menu => normalizar(menu.nombre || '').includes(normalizar(textFilter))
@@ -475,16 +478,33 @@ const LibraryMenusModal = ({ open, mealKey, onClose, mealInfo, target, api, dayC
                            palabra» que «la biblioteca no está preparada» (punto 10.3). */
                         <div className="text-center py-14 px-6" data-testid={sinCosechar ? 'biblioteca-sin-cosechar' : undefined}>
                             <span className="text-4xl mb-3 block">{textFilter.trim() ? '🔍' : '🍽️'}</span>
+                            {/* Y CUANDO EL VACÍO LO CAUSA EL CHIP, SE DICE (Francisco, 29-08).
+                                Con «Desayunos» puesto y una comida que pide 100 g de proteína
+                                salía «No hay menús para esta comida», y ahí no hay forma de
+                                saber que lo que falta son DESAYUNOS de ese tamaño: en la
+                                biblioteca la mediana de un desayuno es 50 g de proteína.
+                                Ahora se nombra el momento y se ofrece la salida (quitar el
+                                filtro), en vez de mandarle a subir el margen sin más. */}
                             <p className="font-semibold text-foreground mb-1.5">
                                 {textFilter.trim()
                                     ? `Nada con "${textFilter.trim()}"`
-                                    : 'No hay menús para esta comida'}
+                                    : hayFiltroDeMomento
+                                        ? `No hay ${(MOMENTO_LABEL[momento] || momento).toLowerCase()} que cuadren`
+                                        : 'No hay menús para esta comida'}
                             </p>
                             <p className="text-sm text-muted-foreground">
                                 {textFilter.trim()
                                     ? 'Prueba con otro alimento, otro momento del día, o borra el filtro.'
-                                    : 'Sube el margen o monta la comida con "Lo hago yo".'}
+                                    : hayFiltroDeMomento
+                                        ? `Ninguno cuadra con ${Math.round(obj.P)}P · ${Math.round(obj.H)}H · ${Math.round(obj.G)}G. Sube el margen o mira en «Todas».`
+                                        : 'Sube el margen o monta la comida con "Lo hago yo".'}
                             </p>
+                            {hayFiltroDeMomento && (
+                                <button onClick={() => setMomento('todos')} data-testid="quitar-filtro-momento"
+                                    className="mt-3 px-4 py-2 rounded-full border border-brand text-brand text-sm font-bold hover:bg-brand hover:text-white transition-colors">
+                                    Ver todas
+                                </button>
+                            )}
                             {(error || recetarioError) && (
                                 <p className="text-xs text-amber-500 font-medium mt-3">{error || recetarioError}</p>
                             )}
