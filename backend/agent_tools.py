@@ -33,6 +33,7 @@ from calculator import (
 )
 from calma_engine import parse_categories
 from chatbot import nombre_visible
+from core.generico import es_de_marca
 from food_semantic import BusquedaSemantica, CorrectorErratas
 from meal_moment import momento_de_comida, describe_comida, PERI, DESAYUNO
 from moment_profile import PerfilMomento, cat2_de
@@ -660,9 +661,11 @@ class AgentTools:
                             for c in parse_categories(food.get("categorias")))):
                 vetados_momento += 1
                 continue
-            if generico is True and food.get("url"):
+            # Genérico o de marca por `core/generico`, no por «tiene url»: había seis
+            # alimentos de marca sin enlace y con `generico=True` se colaban (29-08).
+            if generico is True and es_de_marca(food):
                 continue
-            if generico is False and not food.get("url"):
+            if generico is False and not es_de_marca(food):
                 continue
             if marca_norm and marca_norm not in self.bot._norm_text(food.get("nombre", "")):
                 continue

@@ -10,6 +10,7 @@ import { num1 } from '../lib/numeros';
 // use también el panel de «Añadir ingrediente» de Nutrición: era el mismo catálogo con dos
 // buscadores distintos, y el de montar la dieta era el roto (Jesús, 15-08).
 import { matchWord, matchAll, relevancia } from '../lib/busquedaAlimentos';
+import { esGenerico } from '../lib/generico';
 
 // Calma $() token match: token === code OR token starts with `${code}.<digit>`.
 const tokenMatchesCode = (token, code) =>
@@ -31,7 +32,9 @@ const AHU_T = (f) => inAny(f, ['3.7', 'AHU']) || matchWord(f.nombre || '', 'ahum
 
 // preparaciones con .test() propio; el resto usan match de token (default `c`).
 const PREP_TESTS = {
-    GEN: f => !f.url,
+    // GEN va por `lib/generico`, no por «no tiene enlace»: había seis alimentos de marca sin
+    // enlace en producción y este filtro los daba por genéricos (29-08).
+    GEN: esGenerico,
     FRE: f => inAny(f, ['FRE', '1.2.1', '2.2.1', '2.3.1', '2.4.1', '3.1', '3.9.1', '11.1', '13.1']),
     CGE: f => inAny(f, ['CGE', '2.2.4', '2.3.4', '2.4.4', '3.4', '3.9.4', '10.1.4', '11.4', '13.4']) || nameSome(f.nombre || '', ['congelad', 'helad']),
     AHU: AHU_T,
@@ -196,12 +199,16 @@ const FoodRow = ({ food }) => {
                         className="flex-shrink-0 text-xs font-semibold text-brand-orange whitespace-nowrap">
                         Ver web ↗
                     </a>
-                ) : (
+                ) : esGenerico(food) ? (
+                    /* Y «GENÉRICO» solo si lo es. Esto lo ponía a todo lo que no tuviera web,
+                       así que el «Chicharrón ibérico (7 Hermanos)» salía etiquetado como
+                       genérico con la marca escrita al lado (29-08). Los de marca sin web no
+                       llevan etiqueta: no hay web que ofrecer y genéricos no son. */
                     <span data-testid={`generico-${food.id}`}
                         className="flex-shrink-0 text-[10px] uppercase tracking-wider text-muted-foreground whitespace-nowrap">
                         Genérico
                     </span>
-                )}
+                ) : null}
             </div>
 
             {/* Línea 2 · la categoría que manda y por cuánto es */}
@@ -317,7 +324,7 @@ const FoodSearchPage = () => {
 
     const filtered = useMemo(() => {
         let list = foods;
-        if (opcion === 'genericos') list = list.filter(f => !f.url);        // GEN: sin enlace
+        if (opcion === 'genericos') list = list.filter(esGenerico);          // ni enlace ni marca
         if (opcion === 'sinMacros') list = list.filter(f => !f.tiene_macros); // noAportaMacros
         if (cats.length > 0) {
             list = list.filter(f => cats.every(code => catMatch(f, code)));
