@@ -13,7 +13,10 @@ const fs = require('fs');
 const path = require('path');
 
 const ENTRADA = process.argv[2] || path.join(__dirname, '_informe_doc_todo_2808.html');
-const SALIDA = process.argv[3] || path.join(__dirname, '..', '12EN12 · Lo trabajado el 28 de agosto.pdf');
+// AL ESCRITORIO, no a la carpeta del proyecto (Francisco, 28-08): es donde estan los demas
+// documentos que se le pasan a Jesus, y ahi no se cuela en el repo.
+const ESCRITORIO = path.join(process.env.USERPROFILE || require('os').homedir(), 'Desktop');
+const SALIDA = process.argv[3] || path.join(ESCRITORIO, '12EN12 · Lo trabajado el 28 de agosto.pdf');
 
 const IMPRESION = `
 <style>
