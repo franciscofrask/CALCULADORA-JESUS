@@ -232,8 +232,12 @@ const Descuento = () => {
                 </button>
                 {copiado && <span className="text-xs font-semibold text-brand">Copiado</span>}
             </div>
+            {/* «Activo TODO EL TIEMPO, mientras dure tu suscripción» decía las dos cosas: que
+                es para siempre y que se acaba. Y «te aplicarán» empuja al de al lado -- es
+                FullGas quien lo aplica, no nosotros --, cuando lo que hay que decir es qué
+                tiene. Una sola frase, sin la contradicción y sin el tercero. */}
             <p className="text-sm text-foreground">
-                Lo tendrás activo todo el tiempo, mientras dure tu suscripción. Te aplicarán un 20 % en toda la web.
+                Lo tendrás activo mientras dure tu suscripción, con un 20 % en toda la web.
             </p>
         </div>
     );
@@ -253,9 +257,17 @@ const Descuento = () => {
  * propio bloque con el texto que dictó el 21-08. Decírselo dos veces en la misma pantalla
  * no es ser literal, es repetirse.
  */
-const TEXTO_DE_ENTRADA_DE_CASA = 'Estos son los suplementos que más utilizo y recomiendo. '
-    + 'Con pautas exactas sobre su uso. Están organizados por categorías según su función. '
-    + 'En condiciones normales, se recomienda empezar por los básicos.';
+// Y EL DE RESPALDO, PALABRA POR PALABRA IGUAL QUE EL DEL SERVIDOR (regla de las voces,
+// 30-08). Este decía «se recomienda empezar por los básicos»: el impersonal, que no es ni
+// la casa ni Jesús y suena a prospecto. La guía es criterio suyo y va en primera persona
+// -- «los suplementos que YO más recomiendo», «TE recomiendo empezar por los básicos» --,
+// que es como ya está en `core/guia_suplementacion.TEXTO_DE_LA_GUIA`.
+//
+// Se copia en vez de importarse porque esto es justo el respaldo de cuando el servidor no
+// contesta; pero son el mismo texto, y si se cambia uno se cambia el otro.
+const TEXTO_DE_ENTRADA_DE_CASA = 'Estos son los suplementos que yo más recomiendo con pautas '
+    + 'exactas de uso. Están organizados por categorías según su función. '
+    + 'En condiciones normales, te recomiendo empezar por los básicos.';
 
 // LO QUE NO SE LE PINTA AL CLIENTE, aunque venga en el texto de la base.
 //
@@ -531,10 +543,21 @@ const SupplementsPage = () => {
                     quiere: mientras no le pongamos la suya, se le enseña la general. El
                     servidor la manda siempre que el catálogo tenga base o intra, así que
                     esto ya solo sale si el catálogo está vacío. */}
-                <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">Todavía no tienes suplementación</h2>
+                {/* Y FUERA EL CHAT TAMBIÉN AQUÍ (punto 180). El título ya se arregló esta
+                    mañana; lo que seguía era este texto, que le manda a una puerta que puede
+                    no ser suya -- el chat solo lo llevan el Gold y el Premium -- y le pide
+                    que sea él quien reclame. Si se lo estamos preparando nosotros, no hay
+                    nada que reclamar: se le dice qué espera y que estamos en ello.
+
+                    «Tu plan de suplementación personalizado» y no «suplementación» a secas:
+                    a quien tiene plan se le está preparando el suyo, y esa es la diferencia
+                    que el 179 pide que se note. */}
+                <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">
+                    {conPlan ? 'Todavía no tienes tu plan de suplementación personalizado'
+                        : 'Todavía no tienes suplementación'}
+                </h2>
                 <p className="text-muted-foreground text-sm">
-                    En cuanto te la pautemos la ves aquí. Si crees que te toca ya, dínoslo
-                    por el chat y le echamos un ojo.
+                    Estamos en ello, te avisamos en cuanto esté.
                 </p>
             </div>
         </Wrap>;

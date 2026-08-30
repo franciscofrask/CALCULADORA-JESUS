@@ -496,8 +496,17 @@ const RoutinePage = () => {
                         /* No es que no tenga rutina: es que no hemos podido traerla. */
                         <div data-testid="routine-fallo">
                             <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">No hemos podido cargar tu rutina</h2>
+                            {/* ESTE SÍ SE QUEDA CON EL CHAT, y es el único de la pantalla:
+                                cuando la app se rompe no es una duda de su plan, es un fallo
+                                nuestro, y ahí tiene que poder avisar cualquiera -- lleve el
+                                plan que lleve.
+
+                                Lo que cambia es cómo se dice. «Ha sido cosa nuestra» se echa
+                                la culpa ANTES de saberlo: puede ser la red del cliente, y
+                                entonces la app está confesando un fallo que no ha tenido.
+                                «Esto parece» dice lo mismo sin dar nada por hecho. */}
                             <p className="text-muted-foreground text-sm mb-5 max-w-sm mx-auto">
-                                Ha sido cosa nuestra, no tuya. Inténtalo otra vez en un momento y, si sigue igual, dínoslo por el chat.
+                                Esto parece cosa nuestra, no tuya. Inténtalo una vez más y, si la cosa sigue igual, escribe por el chat.
                             </p>
                             <button onClick={fetchRoutine} data-testid="routine-reintentar" className="btn-brand">
                                 Volver a intentarlo
@@ -515,14 +524,29 @@ const RoutinePage = () => {
                     ) : rutinaIncluida === null ? (
                         /* El catálogo no ha llegado y ya no va a llegar: lo neutro, que es
                            verdad en los dos casos. Sin botón de pagar. */
+                        /* NI «SIN RUTINA ASIGNADA» NI AL CHAT. Dos cosas distintas y las dos
+                           molestaban:
+
+                           «Sin rutina asignada» suena a expediente -- es como se habla del
+                           cliente en el panel, no CON él --, y además no es lo que quiere
+                           saber: lo que quiere saber es si tiene que hacer algo o si ya se lo
+                           están preparando.
+
+                           Y el «dínoslo por el chat» le manda a una puerta que puede no ser
+                           suya: el chat solo lo llevan el Gold y el Premium, así que a tres
+                           de cada cinco planes se les invita a escribir donde no pueden. Si
+                           la rutina se la estamos preparando nosotros, no hay nada que
+                           preguntar: lo que toca es decirle que estamos en ello. */
                         <>
-                            <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">Sin rutina asignada</h2>
-                            <p className="text-muted-foreground text-sm">Aquí verás tu rutina en cuanto la tengas. Si crees que ya debería estar, dínoslo por el chat.</p>
+                            <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">Todavía no tienes tu rutina</h2>
+                            <p className="text-muted-foreground text-sm">Estamos en ello, te avisamos en cuanto esté.</p>
                         </>
                     ) : rutinaIncluida ? (
+                        /* La suya, la personalizada: son 57 personas esperándola. Y en
+                           «nosotros», no «tu entrenador»: quien la prepara es la casa. */
                         <>
-                            <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">Sin rutina asignada</h2>
-                            <p className="text-muted-foreground text-sm">Tu entrenador está preparando tu rutina personalizada.</p>
+                            <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">Todavía no tienes tu rutina personalizada</h2>
+                            <p className="text-muted-foreground text-sm">Estamos en ello, te avisamos en cuanto esté.</p>
                         </>
                     ) : (compraHecha || peticion) ? (
                         /* Ya la pidió: lo que se le enseña es cuándo, no otra vez el botón
@@ -537,10 +561,19 @@ const RoutinePage = () => {
                            rutina del mes preparada, ni botón ni precio. El servidor también
                            lo rechaza, pero un botón de pagar que rebota es peor que no
                            tenerlo. */
+                        /* EL TÍTULO ERA EL EQUIVOCADO, NO EL TEXTO. Ponía «Tu plan no incluye
+                           rutina» y el renglón de debajo le prometía la del mes: dos cosas
+                           contrarias pegadas. Y el nombre del propio bloque delata cuál de
+                           las dos iba en serio -- `rutina-del-mes-no-lista` --: aquí no se
+                           está hablando de su plan, se está hablando de que la rutina de este
+                           mes todavía no está hecha. Son 26 personas.
+
+                           Segunda línea igual que las de arriba: la espera se cuenta siempre
+                           con las mismas palabras, la esté esperando quien la esté esperando. */
                         <div data-testid="rutina-del-mes-no-lista">
-                            <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">Tu plan no incluye rutina</h2>
+                            <h2 className="font-heading text-xl font-bold uppercase text-foreground mb-2">Todavía no está la rutina de este mes</h2>
                             <p className="text-muted-foreground text-sm max-w-sm mx-auto">
-                                La rutina de este mes todavía no está lista. En cuanto la tengamos podrás pedirla desde aquí.
+                                Estamos en ello, te avisamos en cuanto esté.
                             </p>
                         </div>
                     ) : rutinaDelMesLista === null ? (
