@@ -2163,6 +2163,19 @@ async def get_dashboard_stats_v2(user = Depends(get_admin_user)):
          # Direccion -- que si lo proyecta -- volveria a discrepar.
          "comp_plan": 1, "renovacion_importe_prevision": 1, "current_period_start": 1},
     ).to_list(5000)
+    # Y SIN LAS FICHAS HUERFANAS: perfil de cliente cuyo usuario ya no existe. Esta cuenta
+    # recorre `client_profiles` a secas y la lista de Clientes cruza con `users`, asi que
+    # una ficha sin usuario la contaba solo una de las dos: el Dashboard decia 52 caducados
+    # donde la lista enseñaba 51, y el que sobraba no se podia abrir ni encontrar en ninguna
+    # pantalla. Es la misma familia que el punto 46 -- dos cifras del mismo panel que no
+    # cuadran -- y aqui se cierra por construccion, cruzando lo mismo que cruza la lista.
+    #
+    # Hoy en produccion no hay ninguna (comprobado el 30-08: 0 de 166); salen al borrar un
+    # usuario sin borrar su ficha. Sin este cruce, la primera que aparezca vuelve a
+    # descuadrar el panel en silencio.
+    uids = [p["user_id"] for p in todos if p.get("user_id")]
+    con_usuario = {u["id"] async for u in db.users.find({"id": {"$in": uids}}, {"_id": 0, "id": 1})}
+    todos = [p for p in todos if p.get("user_id") in con_usuario]
     total = len(todos)
     # Los cuatro cajones, excluyentes y en este orden, para que el total cuadre siempre
     # con sus partes: con acceso, bajas, caducados (etiqueta «activo» sin acceso) y otros.

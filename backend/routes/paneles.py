@@ -141,7 +141,12 @@ async def _activos_con_usuarios(solo_con_acceso: bool = False
         {"id": {"$in": uids}},
         {"_id": 0, "id": 1, "name": 1, "email": 1, "phone": 1, "last_seen": 1},
     ).to_list(len(uids) or 1)
-    return profiles, {u["id"]: u for u in users}
+    umap = {u["id"]: u for u in users}
+    # Y FUERA LAS FICHAS HUERFANAS: perfil de cliente cuyo usuario ya no existe. Sin esto
+    # se cuelan en todos los paneles como una fila sin nombre ni correo, y de rebote
+    # descuadran el Inicio del panel, que cruza con `users` y no las ve. Salen al borrar un
+    # usuario sin borrar su ficha; en produccion hoy no hay ninguna (30-08: 0 de 166).
+    return [p for p in profiles if p.get("user_id") in umap], umap
 
 
 def _plan_de(catalogo: Dict[str, Any], p: Dict[str, Any]) -> Dict[str, Any]:
@@ -243,9 +248,14 @@ async def panel_direccion(user=Depends(get_admin_only_user)):
     # paga y que engordaba la cartera y la factura del mes. Ahora cuenta como el Inicio del
     # panel, y `caducados_fuera` viaja para poder decirlo en pantalla: la cifra baja porque
     # se dejan de contar los caducados, no porque haya caído el negocio.
-    profiles, umap = await _activos_con_usuarios(solo_con_acceso=True)
-    con_etiqueta_activo = await db.client_profiles.count_documents(
-        {**await _fuera_el_equipo(), "status": "activo"})
+    # LOS DOS NUMEROS DE LA RESTA, DE LA MISMA POBLACION. `con_etiqueta_activo` era un
+    # `count_documents` en crudo sobre `client_profiles` mientras `profiles` venia ya
+    # cruzado con `users`, asi que una ficha huerfana -- perfil sin usuario -- entraba en el
+    # minuendo y no en el sustraendo, y se contaba sola como un caducado que ninguna
+    # pantalla podia enseñar. Ahora los dos salen del mismo sitio.
+    con_etiqueta, umap = await _activos_con_usuarios()
+    profiles = [p for p in con_etiqueta if estado_de_acceso(p)["activo"]]
+    con_etiqueta_activo = len(con_etiqueta)
     caducados_fuera = max(0, con_etiqueta_activo - len(profiles))
 
     emails = [umap[p["user_id"]]["email"] for p in profiles
