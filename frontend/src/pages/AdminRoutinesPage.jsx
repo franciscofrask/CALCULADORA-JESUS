@@ -556,6 +556,16 @@ const AdminRoutinesPage = () => {
                     {withRoutine} de {rows.length} clientes con rutina puesta
                     {rows.length - withRoutine > 0 && <span className="text-yellow-400"> · {rows.length - withRoutine} sin rutina</span>}
                 </p>
+                {/* Y SOBRE CUÁNTOS SE ESTÁ CONTANDO (punto 36). «El panel dice 166 clientes y
+                    la pantalla de Rutinas cuenta sobre 164. Son dos números del mismo día.»
+                    Los dos son ciertos y cuentan cosas distintas: aquí se dejan fuera los que
+                    están de baja, porque a quien se fue no se le pone rutina. Medido en
+                    producción el 30-08, la diferencia eran exactamente esos dos.
+                    No se cambia el número -- el criterio es el bueno --, se dice cuál es. */}
+                <p className="text-white/25 text-xs mt-0.5" data-testid="rutinas-sobre-cuantos">
+                    Sobre los clientes que siguen de alta: los que están de baja no cuentan
+                    aquí, así que este total sale por debajo del de Clientes.
+                </p>
                 {/* El número que de verdad es una tarea: a los demás no se les prometió. */}
                 {laLlevanSinRutina > 0 && (
                     <p className="text-white/60 text-sm mt-1" data-testid="rutinas-prometidas">

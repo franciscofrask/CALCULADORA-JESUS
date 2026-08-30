@@ -48,6 +48,12 @@ const RUTINA_OPTS = [
 const REPORTE_OPTS = ['quincenal', 'mensual', 'semanal'];
 const CICLO_OPTS = ['mensual', 'trimestral', 'bimestral', 'semestral', 'unico', 'variable'];
 
+//: Lo que nadie ha decidido todavía, dicho como tal. En ámbar y no en gris: un hueco en la
+//  ficha de un plan que se está vendiendo es trabajo, no un dato más apagado.
+const SinDecidir = () => (
+    <span className="text-amber-400/80 font-normal italic" data-testid="sin-decidir">sin decidir</span>
+);
+
 const HabRow = ({ label, value }) => (
     <div className="flex items-center justify-between text-xs py-0.5">
         <span className="text-white/50">{label}</span>
@@ -274,9 +280,20 @@ const PlanCard = ({ plan, onEdit }) => {
                     <div className="flex items-center gap-2">
                         {/* Que un plan retirado esté abierto a los suyos se tiene que ver
                             desde fuera, sin abrir la ficha: es lo que decide si a un
-                            cliente le sale «Seguir igual» al acabar su ciclo. */}
+                            cliente le sale «Seguir igual» al acabar su ciclo.
+
+                            «LOS SUYOS PUEDEN SEGUIR» Y NO «RENOVABLE» (punto 40). La etiqueta
+                            ponía «renovable» y dos líneas más abajo, en la misma tarjeta,
+                            «Renovación automática: No». Son dos cosas distintas -- una es que
+                            el plan siga abierto a quien ya lo tiene, la otra es si se le cobra
+                            solo -- pero puestas juntas se leen como una contradicción, y la
+                            pregunta que abrió este punto era justo ésa: ¿se recontratan solos?
+                            No. Con el nombre entero ya no hace falta preguntarlo. */}
                         {plan.renovable_por_los_suyos && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-semibold">renovable</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-semibold"
+                                title="Este plan ya no se vende, pero quien lo tiene puede seguir en él al acabar su ciclo. No se le cobra solo: eso lo dice «Renovación automática».">
+                                los suyos pueden seguir
+                            </span>
                         )}
                         {plan.has_override && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 font-semibold">editado</span>
@@ -306,8 +323,20 @@ const PlanCard = ({ plan, onEdit }) => {
                     <HabRow label="Rutina" value={h.rutina || '-'} />
                     <HabRow label="Reportes" value={(h.reportes && h.reportes.length) ? h.reportes.join(' + ') : 'ninguno'} />
                     <HabRow label="Suplementación" value={etiquetaSuplementacion(h.suplementacion)} />
-                    <HabRow label="Feedback" value={h.feedback || 'Ninguno'} />
-                    <HabRow label="Canal de contacto" value={h.canal_contacto || 'Ninguno'} />
+                    {/* «NINGUNO» ES UNA DECISIÓN; VACÍO ES UN HUECO (punto 71). Estas dos
+                        filas escribían «Ninguno» cuando el campo venía sin poner, así que un
+                        plan de 1.500 € o de 2.500 € se leía como si se hubiera decidido que
+                        no lleva feedback ni canal, cuando lo que pasa es que nadie lo ha
+                        dicho todavía. Y el punto lo pedía con esas palabras: «alguien tiene
+                        que decir por dónde se les escribe».
+
+                        Medido en producción el 30-08: `canal_contacto` está puesto en cinco
+                        planes -- los nuevos, del trabajo del 19-08 -- y en NINGUNO de los
+                        legacy, y ahí dentro hay 19 clientes en reto12en12 y 2 en plan_6m.
+                        Con «sin decidir» el hueco se ve, que es el primer paso para taparlo.
+                        Lo que vale cada plan no lo puede inventar esta pantalla. */}
+                    <HabRow label="Feedback" value={h.feedback || <SinDecidir />} />
+                    <HabRow label="Canal de contacto" value={h.canal_contacto || <SinDecidir />} />
                     <HabRow label="Videollamadas" value={h.videollamadas || '0'} />
                     <div className="flex items-center justify-between text-xs py-0.5">
                         <span className="text-white/50">Grupo privado</span><Dot on={!!h.grupo_privado} />
