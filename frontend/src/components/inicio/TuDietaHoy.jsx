@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, CheckSquare, ChevronRight, Circle, Square, Zap } from 'lucide-react';
 import { leer as leerLocal, escribir as escribirLocal } from '../../lib/almacenLocal';
-import { num0, num1 } from '../../lib/numeros';
+import { num0, num1, numMedio } from '../../lib/numeros';
 import { leerMacro, claseDelMacro, fondoDelMacro, llevaPunto } from '../../lib/estadoDelMacro';
 import { suplementosPorComida } from '../../lib/suplementosDelDia';
 import ExtrasDelDia from '../nutrition/ExtrasDelDia';
@@ -86,11 +86,25 @@ const montadoDe = (comida) => (comida?.alimentos || []).reduce((acc, a) => {
 // porque el orden ya está escrito arriba, en los rótulos de los tres números. Mirando la
 // app, Jesús lo revierte: «en el resto de la app llevan letra; aquí no, y es la misma
 // pantalla». Manda la coherencia, así que «32P · 19H · 6G».
-// Lo que NO vuelve es el decimal: «61 · 30,2 · 19,6» en una lista que se lee de un vistazo
-// no decide nada, y eso el punto 173 no lo toca.
-const lineaMacros = (m, sinGrasa = false) => [
-    `${num0(m.P || 0)}P`, `${num0(m.H || 0)}H`, ...(sinGrasa ? [] : [`${num0(m.G || 0)}G`]),
+//
+// LO MONTADO VA REDONDO Y EL OBJETIVO AL MEDIO GRAMO (punto 80 y su excepción del 29). El
+// punto 80 es el de esta pantalla -- «ni un decimal en Inicio, ni arriba ni en las comidas» --
+// y el 29 le pone una sola excepción: «lo único que lleva decimal es el objetivo de una
+// comida cuando cae en medio gramo, y sólo entonces. Está contado en el 115».
+//
+// Y no es cosmética, es la misma cuenta que arregló el 115 en la ficha de la comida: con los
+// objetivos escritos en entero, los seis del día suman 236 sobre un día de 235. Con el medio
+// gramo puesto, la suma da el día exacto.
+//
+// Lo montado sigue redondo, que es lo que pedía el 98: «61P · 30,2H · 19,6G» queda «61 · 30
+// · 20». Ahí el decimal no decide nada; en el objetivo sí, porque es contra lo que se resta.
+const lineaMacros = (m, sinGrasa = false, n = num0) => [
+    `${n(m.P || 0)}P`, `${n(m.H || 0)}H`, ...(sinGrasa ? [] : [`${n(m.G || 0)}G`]),
 ].join(' · ');
+
+//: El objetivo de una comida, al medio gramo. `numMedio` no escribe «48,0»: los enteros
+//  salen enteros y sólo el medio gramo trae coma.
+const lineaObjetivo = (m, sinGrasa = false) => lineaMacros(m, sinGrasa, numMedio);
 
 const nombreComida = (k, unica) => (unica ? 'Comida única' : `Comida ${k.slice(1)}`);
 
@@ -300,7 +314,16 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
     const falta = faltaExacto ? {
         P: Math.round(faltaExacto.P), H: Math.round(faltaExacto.H), G: Math.round(faltaExacto.G),
     } : null;
-    const pasadas = falta ? ['P', 'H', 'G'].filter((k) => falta[k] < 0) : [];
+    // LA LÍNEA DE AVISO TAMBIÉN RESPETA EL MARGEN (punto 78). Se pintaba con `falta[k] < 0`,
+    // o sea con cualquier gramo de más, y el margen de 4 no entraba: con 293 de hidratos
+    // sobre 290, la tarjeta decía «3 · cuadrado» en verde y justo debajo «Te has pasado 3 g
+    // de hidratos» en naranja. La misma tarjeta absolviendo y regañando por el mismo dato.
+    // Manda el 78: «de 1 a 4, falte o sobre, es válido y sale en verde. No hace falta cuadrar
+    // al gramo». Así que la línea la deciden las MISMAS reglas que el color, preguntándole a
+    // `leerMacro`, y no una comparación aparte que nadie volvió a mirar.
+    const pasadas = conPeri ? ['P', 'H', 'G'].filter((k) => leerMacro({
+        vista: 'falta', hay: llevas[k], objetivo: conPeri[k],
+    }).color === 'pasado') : [];
 
     // EL PERIENTRENO, DENTRO O APARTE (puntos 86 a 88). Los dos números salen del MISMO
     // reparto, así que la resta cuadra siempre: el total lleva el peri sumado
@@ -577,8 +600,8 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
                                         {tieneAlimentos
                                             ? lineaMacros(montado, esPeri)
                                             : objetivoFila
-                                                ? (esPeri ? lineaMacros(objetivoFila, true)
-                                                    : `Sin hacer · objetivo ${lineaMacros(objetivoFila)}`)
+                                                ? (esPeri ? lineaObjetivo(objetivoFila, true)
+                                                    : `Sin hacer · objetivo ${lineaObjetivo(objetivoFila)}`)
                                                 : 'Sin hacer'}
                                     </p>
                                 </div>
