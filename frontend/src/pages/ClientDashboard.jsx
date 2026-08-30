@@ -1560,9 +1560,20 @@ const ClientDashboard = () => {
             {/* Y también para quien compró el ajuste a medida: hace el completo igual que un
                 Gold (doc del cuestionario, 18-08), así que la tarjeta que le lleva a
                 terminarlo tiene que salirle a él también. */}
+            {/* Y NO A QUIEN YA TIENE QUIEN SE LOS PONGA (30-08). Este aviso promete
+                «terminamos de ajustar tus macros», y a un cliente de años cuyos macros
+                escribe Jesús no le queda nada que terminar: nunca hizo ese cuestionario
+                porque no le hacía falta. Medido en producción: le salía a 99 clientes, 82
+                de ellos con la suscripción al día -- gente de gold, nivel3 y calma12 --, y
+                en el teléfono es el ÚNICO aviso que se pinta, así que era lo primero que
+                veían al abrir la app. Es el caso B del documento de Jesús, y el test que lo
+                vigilaba estaba en verde por casualidad: cogía a un cliente caducado.
+                La excepción se queda: quien compró el ajuste a medida hace el completo
+                igual que un Gold, tenga o no macros puestos por alguien. */}
             {sale('perfil', (can('macros_personalizados') || profile?.ajuste_a_medida?.cobrado)
                 && profile?.questionnaire_completed
                 && (profile?.ajuste_macros_completado || profile?.macros_puestos_por_alguien)
+                && (!profile?.macros_puestos_por_alguien || profile?.ajuste_a_medida?.cobrado)
                 && !profile?.questionnaire_nivel1_completed) && (
                 <button onClick={() => navigate('/questionnaire')} data-testid="nivel1-pending-banner"
                     className="surface surface-hover w-full p-4 flex items-center justify-between group border-2 border-brand/40">

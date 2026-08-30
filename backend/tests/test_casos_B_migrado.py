@@ -120,6 +120,13 @@ def migrado(cabeceras_admin):
         perfil = pide("get", "/clients/profile", headers=suplantando)
         if perfil.status_code != 200:
             continue        # su usuario no es un cliente: no se puede entrar en su cuenta
+        # Y CON EL PLAN AL DIA (30-08). Desde el candado de `core/candado_de_plan`, a quien
+        # se le acabo la suscripcion la app le responde 402 a todo -- que es lo que se quiere
+        # --, pero estos casos preguntan si el migrado VE SUS DATOS, no si el caducado entra.
+        # Con un caducado el fixture devolvia a alguien que no puede usar la app y cuatro
+        # casos se caian con un 402 que era correcto.
+        if (perfil.json().get("acceso") or {}).get("activo") is False:
+            continue
         return {
             "id": c["id"],
             "user_id": c["user_id"],
@@ -185,9 +192,14 @@ class TestCaso08NoLeTratanComoUnAltaNueva:
         es lo primero que ve un migrado al abrir la app.
         """
         p = migrado["perfil"]
+        # La condicion de la pantalla, con el veto del 30-08: a quien le ponen los macros no
+        # le queda nada que terminar. Salvo que haya comprado el ajuste a medida, que ese si
+        # hace el cuestionario completo.
+        a_medida = bool((p.get("ajuste_a_medida") or {}).get("cobrado"))
         sale = bool(puede_macros_personalizados(migrado["plan"], catalogo)
                     and p.get("questionnaire_completed")
                     and (p.get("ajuste_macros_completado") or p.get("macros_puestos_por_alguien"))
+                    and (not p.get("macros_puestos_por_alguien") or a_medida)
                     and not p.get("questionnaire_nivel1_completed"))
         assert not sale, (
             "a un cliente migrado le sale «Te quedan unas preguntas: biotipo, salud, "
@@ -252,9 +264,30 @@ class TestCaso09SusMacrosSonLosQueTenia:
             "alguien los volvio a calcular")
 
     def test_y_no_puede_recalcularselos_el(self, migrado):
-        """Su plan es de los que lleva entrenador: la calculadora no es suya (punto 4.10)."""
+        """La calculadora no es suya SI su plan lleva entrenador detras (punto 4.10).
+
+        ESTE TEST DABA UN ROJO QUE NO ERA UN FALLO (30-08). Afirmaba `puede is False` para
+        cualquier migrado, y `PLANES_HEREDADOS` mete en el mismo saco a ELM, que es de
+        AUTOGESTION: el de ELM se calcula sus macros, asi que ahi `True` es lo correcto. El
+        fixture coge al de la serie de pesos mas larga y ese cambia con los datos; el dia que
+        paso a ser uno de ELM (`fitnesstrippcoaching@gmail.com`, 250 pesajes), el test se
+        puso rojo sin que nadie hubiera roto nada.
+
+        Ahora se pregunta lo que de verdad decide la regla: el MODO del plan. Medido en
+        produccion el 30-08: 80 clientes tienen historial de macros y pueden editarlos, y son
+        los de elm y mantenimiento -- los de autogestion --, que es como debe ser.
+        """
+        from core.quien_pone_los_macros import modo_calculadora
+
+        plan = (migrado["perfil"].get("plan") or "").lower()
         ajustables = migrado["perfil"].get("macros_ajustables") or {}
-        assert ajustables.get("puede") is False, ajustables
+        if modo_calculadora(plan) == "personalizado":
+            assert ajustables.get("puede") is False, (
+                f"plan {plan!r} lleva entrenador y aun asi le deja tocarse los macros: {ajustables}")
+            assert ajustables.get("por_que_no"), "se le cierra la puerta sin decirle por que"
+        else:
+            assert ajustables.get("puede") is True, (
+                f"plan {plan!r} es de autogestion y no le deja calcularselos: {ajustables}")
 
 
 # ── Caso 10: cuantas pantallas hasta su primera dieta ──────────────────────────────────────
@@ -268,10 +301,9 @@ class TestCaso10SinBienvenidasEncadenadas:
     """
 
     @pytest.mark.parametrize("fichero,constante", [
-        ("context/OnboardingContext.jsx", "RECORRIDO_ACTIVO"),
         ("pages/NutritionPage.jsx", "BIENVENIDA_NUTRICION"),
     ])
-    def test_los_recorridos_de_bienvenida_siguen_apagados(self, fichero, constante):
+    def test_la_bienvenida_de_nutricion_sigue_apagada(self, fichero, constante):
         ruta = FRONT / fichero
         if not ruta.exists():
             pytest.skip(f"no encuentro {ruta}")
@@ -280,6 +312,30 @@ class TestCaso10SinBienvenidasEncadenadas:
         assert m, f"ya no existe la constante {constante} en {fichero}"
         assert m.group(1) == "false", (
             f"{constante} esta encendido: al migrado le vuelve a salir la bienvenida")
+
+    def test_el_recorrido_no_se_ofrece_dos_veces(self):
+        """AQUI VIGILABAMOS `RECORRIDO_ACTIVO`, Y ESA CONSTANTE YA NO EXISTE (30-08).
+
+        No es que alguien la borrara: el tour de driver.js que apagaba se SUSTITUYO por el
+        recorrido de la primera vez que pidio Jesus el 21-08 (apartado 23), y ese si sale a
+        proposito. La decision del 21-08 es posterior a la del 11-08, asi que manda.
+
+        Lo que sigue en pie del caso 10 es que las bienvenidas no se encadenen: que a quien
+        ya lo vio -- o lo salto -- no se le vuelva a ofrecer solo. Eso hoy no es un
+        interruptor, es el candado `ajustes_app.recorrido` de `OnboardingContext`, y es lo
+        que se vigila aqui. Comprobado en produccion el 30-08: 2 perfiles lo tienen guardado,
+        asi que el candado se escribe de verdad.
+        """
+        ruta = FRONT / "context/OnboardingContext.jsx"
+        if not ruta.exists():
+            pytest.skip(f"no encuentro {ruta}")
+        texto = ruta.read_text(encoding="utf-8")
+        assert re.search(r"ajustes_app\?\.recorrido", texto), (
+            "el auto-arranque del recorrido ya no mira `ajustes_app.recorrido`: a quien lo "
+            "vio o lo salto se le va a volver a ofrecer cada vez que entre")
+        assert re.search(r"guardarAjusteEnFicha\(AJUSTE_RECORRIDO", texto), (
+            "el recorrido ya no guarda en la ficha que se vio: el candado de arriba no se "
+            "llegara a cerrar nunca")
 
     def test_la_dieta_de_hoy_se_sirve_a_la_primera(self, migrado):
         """Ninguna pantalla intermedia por parte del servidor: se pide el dia y esta."""
