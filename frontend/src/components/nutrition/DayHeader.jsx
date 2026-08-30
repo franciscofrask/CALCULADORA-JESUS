@@ -180,7 +180,17 @@ const DayHeader = ({
                                                     className={`w-1.5 h-1.5 rounded-full ${fondoDelMacro(lectura.color)}`} />
                                             )}
                                         </p>
-                                        <p className="numero-grande font-data leading-none text-[34px] sm:text-[40px] mt-1.5 text-foreground">
+                                        {/* 44 PX, LOS MISMOS QUE INICIO (punto 107). Estaban a
+                                            34 en el móvil y 40 en el ordenador, y el 172 subió
+                                            los de Inicio a 44 sin tocar estos: dos pantallas
+                                            que dicen lo mismo -- los tres macros del día -- y
+                                            lo decían con dos tamaños, así que al lado del
+                                            Inicio estos se veían pequeños.
+                                            El 107 pedía «mismo tamaño y mismo estirado»; el
+                                            estirado ya lo daba `.numero-grande`, faltaba el
+                                            tamaño. Sin `sm:`: en Inicio tampoco lo hay, y era
+                                            justo el escalón el que metía el tercer número. */}
+                                        <p className="numero-grande font-data leading-none text-[44px] mt-1.5 text-foreground">
                                             {creado}
                                         </p>
                                         <p data-testid={`dia-palabra-${key}`}

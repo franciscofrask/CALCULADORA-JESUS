@@ -6,6 +6,9 @@ import SuggestFoodModal from '../components/nutrition/SuggestFoodModal';
 import SinResultados from '../components/nutrition/SinResultados';
 import { useEsTelefono } from '../lib/esTelefono';
 import { num1 } from '../lib/numeros';
+// El día que está viviendo el cliente, el de SU reloj: es contra ese día contra el que se
+// mide lo que lleva comido (la regla de los relojes, lib/horaEspana).
+import { hoyLocal } from '../lib/horaEspana';
 // La búsqueda por nombre (filtro + relevancia, portada de Calma) vive en lib para que la
 // use también el panel de «Añadir ingrediente» de Nutrición: era el mismo catálogo con dos
 // buscadores distintos, y el de montar la dieta era el roto (Jesús, 15-08).
@@ -166,10 +169,21 @@ const categoriaQueManda = (food) => {
  * y con ellos los tres tramos, con el del cliente marcado. La categoría no se repite dentro:
  * ya salió arriba. Y ahora se puede abrir CUALQUIER alimento, no solo los que llevan punto.
  */
-const FoodRow = ({ food }) => {
+//: En qué tramo cae lo que lleva el día. Devuelve 0, 1, 2 -- o `null` si todavía no se sabe
+//  lo que lleva, y entonces no se marca ninguno. Los cortes son los mismos que aplica el
+//  servidor (`calibracion_dia`): el primer tramo es HASTA el corte, sin incluirlo.
+const tramoDelDia = (gramos, tramos) => {
+    if (gramos == null || !tramos) return null;
+    return gramos > tramos[1] ? 2 : gramos > tramos[0] ? 1 : 0;
+};
+
+const FoodRow = ({ food, acumDelDia }) => {
     const categoria = categoriaQueManda(food);
     const [abierto, setAbierto] = React.useState(false);
     const cal = food.calibracion;
+    // `cal.bloque` dice de qué familia es este alimento; `acumDelDia` cuánto lleva hoy de
+    // cada una. Sin día cargado, `null`: no se marca nada.
+    const tramoDeHoy = tramoDelDia(acumDelDia?.[cal?.bloque], cal?.tramos);
     const reales = linea_PHG(food.macros_reales);
     const necesita = linea_PHG(food.necesitas);
     // «Come lo que quieras» / «Bebe lo que quieras» ocupa el sitio del número cuando no le
@@ -258,16 +272,33 @@ const FoodRow = ({ food }) => {
                             <p className="text-[11px] text-muted-foreground">
                                 Su proteína, según lo que lleves de <b className="text-foreground">{cal.familia}</b> en todo el día:
                             </p>
+                            {/* EL SUYO, MARCADO (punto 140). Los tres tramos ya salían, pero
+                                idénticos y sin una gota de color: para saber cuál le toca hoy
+                                había que ir a contar los gramos que lleva, que es justo lo que
+                                la app tiene delante y él no.
+
+                                Se marca en NARANJA, que aquí no significa «te has pasado» sino
+                                «este es el tuyo»: es el color de lo que mira (la regla del 76
+                                es de los macros del Inicio, no de esta lista). Y se marca la
+                                fila entera, número y palabra, para que se vea sin leer.
+
+                                `aria-current` porque un color no es un dato: quien no lo
+                                distinga tiene que poder saber igual cuál es el suyo. */}
                             {[
                                 { hasta: `hasta ${cal.tramos[0]} g`, que: 'nada' },
                                 { hasta: `de ${cal.tramos[0]} a ${cal.tramos[1]} g`, que: 'la mitad' },
                                 { hasta: `más de ${cal.tramos[1]} g`, que: 'toda' },
-                            ].map((t) => (
-                                <p key={t.hasta} className="text-xs flex items-center justify-between gap-3">
-                                    <span className="text-muted-foreground">{t.hasta}</span>
-                                    <span className="font-semibold text-foreground">{t.que}</span>
-                                </p>
-                            ))}
+                            ].map((t, i) => {
+                                const suyo = tramoDeHoy === i;
+                                return (
+                                    <p key={t.hasta} aria-current={suyo ? 'true' : undefined}
+                                        data-testid={suyo ? `tramo-suyo-${food.id}` : undefined}
+                                        className={`text-xs flex items-center justify-between gap-3 ${suyo ? 'text-brand' : ''}`}>
+                                        <span className={suyo ? 'font-semibold' : 'text-muted-foreground'}>{t.hasta}</span>
+                                        <span className={`font-semibold ${suyo ? '' : 'text-foreground'}`}>{t.que}</span>
+                                    </p>
+                                );
+                            })}
                         </div>
                     )}
                     {/* Un alimento sin reales y sin calibración se puede abrir igual -- el
@@ -301,6 +332,11 @@ const FoodSearchPage = () => {
         return next;
     });
 
+    // LO QUE LLEVA HOY DE CADA FAMILIA, para poder marcar en qué tramo está (punto 140).
+    // `null` mientras no se sabe: sin este dato no se marca ninguno, que es mejor que
+    // marcar el primero por defecto y decirle que hoy no le cuenta cuando igual sí.
+    const [acumDelDia, setAcumDelDia] = useState(null);
+
     useEffect(() => {
         let alive = true;
         (async () => {
@@ -311,6 +347,32 @@ const FoodSearchPage = () => {
                 console.error('Error cargando alimentos', e);
             } finally {
                 if (alive) setLoading(false);
+            }
+        })();
+        return () => { alive = false; };
+    }, [api]);
+
+    // EL ACUMULADO SE SUMA DE LO GUARDADO, NO SE VUELVE A CLASIFICAR AQUÍ. Cada alimento
+    // del día viaja con su `bloque` (`fruto_seco` | `cereal_pan` | null), que lo puso el
+    // servidor con `clasificar_bloque`. Sumar por ese campo es usar su regla, no copiarla:
+    // si mañana cambia qué categorías son fruto seco, esta pantalla se entera sola.
+    //
+    // El día es el del NAVEGADOR, que es el que está viviendo el cliente (regla de los
+    // relojes). Y si falla, se queda en `null` y no se marca nada: esta pantalla es de
+    // consulta, no puede romperse porque el día no cargue.
+    useEffect(() => {
+        let alive = true;
+        (async () => {
+            try {
+                const res = await api.get(`/diets/${hoyLocal()}`);
+                const comidas = (res.data?.exists && res.data.comidas) || {};
+                const suma = { fruto_seco: 0, cereal_pan: 0 };
+                Object.values(comidas).forEach((c) => (c?.alimentos || []).forEach((a) => {
+                    if (a?.bloque in suma) suma[a.bloque] += Number(a.cantidad_g) || 0;
+                }));
+                if (alive) setAcumDelDia(suma);
+            } catch (e) {
+                console.error('[alimentos] no se pudo saber lo que lleva el día', e);
             }
         })();
         return () => { alive = false; };
@@ -482,7 +544,7 @@ const FoodSearchPage = () => {
                         )}
                         <div className="space-y-2">
                             {filtered.slice(0, aLaVista).map((f, i) => (
-                                <FoodRow key={f.id ?? i} food={f} />
+                                <FoodRow key={f.id ?? i} food={f} acumDelDia={acumDelDia} />
                             ))}
                             {filtered.length === 0 && <SinResultados />}
                         </div>
