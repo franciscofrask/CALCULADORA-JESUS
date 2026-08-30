@@ -3377,8 +3377,28 @@ const CalmaBadge = () => (
 // (p. ej. "Descanso OK|A", "...semanales|I"): lo quitamos para mostrarlo limpio.
 const _limpiaCodigo = (s) => typeof s === 'string' ? s.replace(/\s*\|[A-Za-z0-9]{1,2}\s*$/, '').trim() : s;
 
+// UN «1» NO ES UNA RESPUESTA (punto 66 del doc del 24-08). «El cuestionario de Montalvo
+// está lleno de unos: edad 5, estatura 1 cm, peso inicial 1 kg y las diez medidas a 1 -- y
+// en la misma pestaña, arriba, peso inicial 96 kg».
+//
+// Comprobado en producción el 30-08: su `formulario_inicial` de Calma trae VEINTE campos
+// con el valor 1, y ahí dentro van `estatura`, `peso`, `pesoMaximo`, las mediciones y hasta
+// el Instagram y la profesión. No son datos: es lo que dejó el formulario de Calma cuando
+// no se contestó. Pintados tal cual, la ficha decía «Peso inicial 1 kg» tres centímetros
+// debajo de sus 96 kg de verdad, y de las dos la que se lee primero es la de arriba.
+//
+// Se esconde el campo en vez de pintar un aviso, que es lo que ya hace esta misma función
+// con lo vacío: un cuestionario que nadie rellenó tiene que verse como lo que es, vacío.
+// Y quien tenga que arreglarlo lo tiene en el panel, en Operaciones > «datos imposibles»,
+// que es la pantalla que existe para eso.
+//
+// El crudo NO se toca: `calma_raw` es el archivo de lo que había en Calma y reescribirlo
+// sería perder la única copia de lo que de verdad se importó.
+const _esRelleno = (v) => Number(v) === 1 && String(v).trim().replace(',', '.') === '1';
+
 const CalmaField = ({ label, value }) => {
     if (value == null || value === '' || (Array.isArray(value) && !value.length)) return null;
+    if (_esRelleno(value)) return null;
     const text = Array.isArray(value) ? value.join(', ') : _limpiaCodigo(String(value));
     return (
         <div>
@@ -3622,10 +3642,29 @@ const PerfilLargo = ({ nivel1 }) => {
     );
 };
 
+//: Un número de Calma con su unidad, salvo que sea el relleno del punto 66.
+const _utilCalma = (v, unidad) => (v && !_esRelleno(v) ? `${v} ${unidad}` : null);
+
+//: Las medidas cuando solo hay la cadena cruda («82|95|101|...»): se parte y se le quita el
+//  relleno, igual que al array. Si no queda ni una medida de verdad, no hay nada que enseñar.
+const _medidasRaw = (raw) => {
+    if (!raw) return null;
+    const piezas = String(raw).split(/[|;,·]/).map(s => s.trim()).filter(s => s && !_esRelleno(s));
+    return piezas.length ? piezas.join(' · ') : null;
+};
+
 const CalmaCuestionario = ({ fi }) => {
     if (!fi) return null;
-    const med = fi.mediciones?.valores?.filter(v => v != null);
-    const fnac = fi.fechaNacimiento ? new Date(fi.fechaNacimiento).toLocaleDateString('es-ES') : null;
+    // Las medidas, sin los unos: «las diez medidas a 1» del punto 66. Una medida corporal
+    // de 1 cm no existe, así que no es un dato que se pueda enseñar ni promediar.
+    const med = fi.mediciones?.valores?.filter(v => v != null && !_esRelleno(v));
+    // Y LA FECHA DE NACIMIENTO, IGUAL (punto 66). Del mismo relleno salen fechas del año 1:
+    // en la ficha de Juan Chamero se leía «Fecha nacimiento 31/12/1». No se filtra por el
+    // valor crudo sino por el año que sale, que es lo que se ve; nadie nacido antes de 1900
+    // está entrenando hoy, así que ahí no hay dato que enseñar.
+    const _fnac = fi.fechaNacimiento ? new Date(fi.fechaNacimiento) : null;
+    const fnac = _fnac && !isNaN(_fnac) && _fnac.getFullYear() >= 1900
+        ? _fnac.toLocaleDateString('es-ES') : null;
     return (
         <Card className="bg-[#111] border-[#222]">
             <CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider flex items-center gap-2"><ClipboardList className="w-4 h-4" />Cuestionario inicial <CalmaBadge /></CardTitle></CardHeader>
@@ -3638,9 +3677,11 @@ const CalmaCuestionario = ({ fi }) => {
                     <CalmaField label="Dirección" value={fi.direccion} />
                     <CalmaField label="Profesión" value={fi.profesion} />
                     <CalmaField label="Cómo nos conoció" value={fi.fuenteCliente} />
-                    <CalmaField label="Estatura" value={fi.estatura ? `${fi.estatura} cm` : null} />
-                    <CalmaField label="Peso inicial" value={fi.peso ? `${fi.peso} kg` : null} />
-                    <CalmaField label="Peso máximo" value={fi.pesoMaximo ? `${fi.pesoMaximo} kg` : null} />
+                    {/* Los tres llegan ya compuestos («1 cm»), así que el filtro del relleno
+                        del punto 66 no los vería: se preguntan por el valor de dentro. */}
+                    <CalmaField label="Estatura" value={_utilCalma(fi.estatura, 'cm')} />
+                    <CalmaField label="Peso inicial" value={_utilCalma(fi.peso, 'kg')} />
+                    <CalmaField label="Peso máximo" value={_utilCalma(fi.pesoMaximo, 'kg')} />
                     <CalmaField label="Objetivo" value={fi.objetivo} />
                     <CalmaField label="Estilo de vida" value={fi.estiloVida} />
                     <CalmaField label="Experiencia con preparadores" value={fi.preparadores} />
@@ -3651,7 +3692,10 @@ const CalmaCuestionario = ({ fi }) => {
                     <CalmaField label="Interés en suplementación" value={fi.interesEnSuplementacion} />
                 </div>
                 <div className="space-y-3 border-t border-[#222] pt-3">
-                    <CalmaField label="Medidas (cm)" value={med?.length ? med.join(' · ') : (fi.mediciones?.raw || null)} />
+                    {/* Y la cadena de reserva, que es por donde se colaban: filtrado el array
+                        de valores, esto caía en `mediciones.raw` y pintaba «1|1|1|1|1|1|1|1|1»
+                        tal cual. Se mira pieza a pieza, que es lo mismo que se hace arriba. */}
+                    <CalmaField label="Medidas (cm)" value={med?.length ? med.join(' · ') : _medidasRaw(fi.mediciones?.raw)} />
                     <CalmaField label="Medicación" value={fi.medicacion} />
                     <CalmaField label="Fármacos actuales" value={fi.farmacosActuales} />
                     <CalmaField label="Maquinaria disponible" value={fi.maquinaria} />
