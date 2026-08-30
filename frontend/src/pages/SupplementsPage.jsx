@@ -257,9 +257,24 @@ const TEXTO_DE_ENTRADA_DE_CASA = 'Estos son los suplementos que más utilizo y r
     + 'Con pautas exactas sobre su uso. Están organizados por categorías según su función. '
     + 'En condiciones normales, se recomienda empezar por los básicos.';
 
+// LO QUE NO SE LE PINTA AL CLIENTE, aunque venga en el texto de la base.
+//
+// El «*IMPORTANTE» del descuento va justo debajo en su propio bloque: decirlo dos veces en
+// la misma pantalla no es ser literal, es repetirse.
+//
+// Y EL PÁRRAFO DEL CATÁLOGO PREMIUM SE CAE (punto 182 del 27-08): «el que vende el Catálogo
+// Premium dentro de lo que ya ha pagado». Aquí hay dos decisiones encontradas y manda la
+// última: el 24-08 se recuperó el texto entero de Jesús -- y con él este párrafo, que la
+// versión de casa no traía -- y tres días después él pidió que se cayera. Se filtra al
+// pintar y no se le toca el texto en la base, que es suyo y lo usa en más sitios.
+const FUERA_DEL_TEXTO = [
+    (p) => p.startsWith('*IMPORTANTE'),
+    (p) => /cat[áa]logo premium/i.test(p),
+];
+
 const TextoDeEntrada = ({ texto }) => {
     const suyos = (texto || '').split('\n').map(p => p.trim())
-        .filter(p => p && !p.startsWith('*IMPORTANTE'));
+        .filter(p => p && !FUERA_DEL_TEXTO.some(fuera => fuera(p)));
     const parrafos = suyos.length > 0 ? suyos : [TEXTO_DE_ENTRADA_DE_CASA];
     return (
         <div className="mb-5 max-w-2xl space-y-2" data-testid="texto-entrada-guia">
@@ -484,8 +499,14 @@ const SupplementsPage = () => {
 
     if (!protocol || (!tieneActual && !tieneSiguiente && !protocol.nota)) {
         return <Wrap>
+            {/* AQUÍ SE HABÍA QUEDADO «TU SUPLEMENTACIÓN» (30-08). El punto 180 la quitó de
+                las otras dos pantallas -- «Mis suplementos» cuando es suyo, «Suplementación»
+                cuando es la guía --, pero esta tercera, la de cuando no hay ni protocolo ni
+                guía que enseñar, seguía con el nombre viejo. Y encima decidía con `nuevo`,
+                que es el interruptor de la pantalla, no si el cliente tiene plan: por eso no
+                se vio. Misma señal que arriba, `conPlan`. */}
             <h1 className="font-heading text-3xl md:text-4xl font-bold uppercase text-foreground mb-6">
-                {nuevo ? 'Tu suplementación' : 'Suplementación'}
+                {conPlan ? 'Mis suplementos' : 'Suplementación'}
             </h1>
             <div className="surface p-10 text-center">
                 <div className="w-16 h-16 bg-brand/10 rounded-2xl flex items-center justify-center mx-auto mb-4">

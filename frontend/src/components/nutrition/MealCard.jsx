@@ -673,8 +673,13 @@ const MealCard = ({
             {/* Con el día entero desplegado el modo va aquí, en pequeño: la banda de
                 "Modo de cálculo" repetida seis veces no cabía, pero esconderla dejaba
                 sin Automático/Manual a las comidas que aún no tienen alimentos. */}
+            {/* Y AQUÍ SE HABÍA QUEDADO LA FRASE VIEJA (30-08). El punto 191 sacó «Yo te
+                ajusto las cantidades» del singular y le puso a qué ajusta, pero solo en la
+                tarjeta normal: en la vista «Todo seguido» el modo se pinta aquí, con la
+                explicación metida en un `title`, y ahí seguía la de antes. Mismas palabras
+                que abajo, para que la app no diga dos cosas. */}
             {denso && !isPeri && !isLocked && setMealMode && (
-                <div className="inline-flex rounded-lg bg-muted p-0.5 flex-shrink-0" title="Automático: yo te ajusto las cantidades. Manual: las pones tú y lo compensas en el día">
+                <div className="inline-flex rounded-lg bg-muted p-0.5 flex-shrink-0" title="Automático: ajusta las cantidades de los alimentos a tus macros. Manual: las pones tú y lo compensas en el día">
                     <button className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-colors ${mealMode !== 'manual' ? 'bg-brand text-white' : 'text-muted-foreground hover:text-foreground'}`}
                         onClick={() => setMealMode(mealKey, 'auto')} data-testid={`mode-auto-${mealKey}`}>Automático</button>
                     <button className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-colors ${mealMode === 'manual' ? 'bg-brand text-white' : 'text-muted-foreground hover:text-foreground'}`}
