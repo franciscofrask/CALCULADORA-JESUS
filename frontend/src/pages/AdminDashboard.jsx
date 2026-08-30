@@ -1178,7 +1178,17 @@ const AdminClientsList = () => {
         : cual === 'activos' ? !estaFuera(c) : estaFuera(c));
     const delAcceso = (c) => esDelAcceso(c, acceso);
 
-    const filteredClients = clients.filter(c => deLaCartera(c) && delAcceso(c) && (
+    // TU PROPIA FICHA NO ES UNA FILA DE ESTA LISTA (punto 61 del 24-08, comprobado en
+    // producción el 30-08). El servidor devuelve la ficha del miembro del equipo que está
+    // mirando (`es_tu_ficha`, desde el 13-08) y `cuentaComoCliente` la deja fuera del
+    // número de la pestaña... pero no de la tabla, porque este filtro nunca la preguntó.
+    // Resultado en prod: «Sin entrenador (9)» arriba y «VIENDO 10» debajo, y la décima fila
+    // era `francisco@test.com`, la ficha del propio Francisco. La misma pantalla dando dos
+    // números para lo mismo, que es justo lo que denuncia el 61.
+    //
+    // Los registros a medias SÍ se siguen pintando: van a «Fuera» a propósito (Jesús,
+    // 24-08) y la línea de arriba los anuncia aparte. Lo que no puede salir es tu ficha.
+    const filteredClients = clients.filter(c => !c.es_tu_ficha && deLaCartera(c) && delAcceso(c) && (
         c.user?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         c.user?.email?.toLowerCase().includes(searchQuery.toLowerCase())
     ));
@@ -1275,13 +1285,23 @@ const AdminClientsList = () => {
                     )}
                     {/* EL SALTO DE 83 A 10 SE EXPLICA (punto 61). La pestaña «Sin entrenador»
                         es la que se abre por defecto: sin esta línea, quien entre mañana verá
-                        diez filas donde ayer había ochenta y tres y pensará lo peor. */}
+                        diez filas donde ayer había ochenta y tres y pensará lo peor.
+
+                        Y NO PROMETE EL MISMO NÚMERO, sino el mismo criterio, que no es lo
+                        mismo. Decía «es el mismo criterio que Paneles > Operaciones» a secas
+                        y el 30-08, en producción, aquí salían 9 y allí 8: la regla de quién
+                        está sin entrenador es la misma en los dos sitios (el servidor la
+                        calcula una vez, `sin_entrenador`), pero Operaciones recorre solo a
+                        los que siguen con la etiqueta «activo» y aquí sale también el
+                        cancelado. Quien lea las dos pantallas tiene que saber por qué
+                        bailan, o volverá a abrir el punto 61. */}
                     {cartera === 'sin_coach' && sinCoachPorPlan > 0 && (
                         <p className="text-white/30 text-xs mt-0.5" data-testid="sin-coach-por-plan">
                             Aquí solo salen los que su plan lleva entrenador. Otros {sinCoachPorPlan} no
                             tienen entrenador porque su plan es de autogestión (ELM, Mantenimiento,
-                            Calculadora JP): están como su plan manda y no le faltan a nadie. Es el
-                            mismo criterio que Paneles &gt; Operaciones.
+                            Calculadora JP): están como su plan manda y no le faltan a nadie. Es la
+                            misma regla que Paneles &gt; Operaciones, donde el número puede salir más
+                            bajo porque allí solo se listan los que siguen activos.
                         </p>
                     )}
                 </div>
