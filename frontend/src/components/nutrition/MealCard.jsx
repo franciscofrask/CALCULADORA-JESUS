@@ -2,7 +2,7 @@ import React from 'react';
 import { StatusDot } from './DaySummary';
 import { margenDe, seExcede } from '../../lib/exceso';
 import { leerMacro, claseDelMacro, fondoDelMacro, llevaPunto } from '../../lib/estadoDelMacro';
-import { num0, num1, numMedio, alMedio, alDecima } from '../../lib/numeros';
+import { num1, numMedio, alMedio, alDecima } from '../../lib/numeros';
 import { TOPE_GRAMOS } from '../../lib/cantidades';
 import ContadorFamilia from './ContadorFamilia';
 import MenuDeLaPantalla from './MenuDeLaPantalla';
@@ -478,15 +478,23 @@ const MealCard = ({
     // lado, así que esos no se tocan.
     const estado = estadoDeLaComida(status, target, calculateMealMacros(mealKey), foods.length, isPeri, isLocked);
 
-    // CON LETRA Y SIN DECIMALES: «33P · 20H · 10G» (maqueta de la parte 6).
-    // El punto 115 las había quitado -- «53 · 10 · 15» -- y esto lo revierte, igual que el
-    // punto 173 revirtió el 98 para el Inicio: en el resto de la app los macros llevan su
-    // letra, y tres números sueltos sólo se entienden si te sabes el orden de memoria.
-    // Los decimales no vuelven: eso el documento no lo toca.
+    // CON LETRA Y CON EL MEDIO GRAMO: «52,5P · 10H · 15G» (maqueta de la parte 6, y la
+    // decisión del 29-08 dentro del punto 115).
+    //
+    // El 115 quitó las dos cosas -- «53 · 10 · 15» --; las letras volvieron con la parte 6, y
+    // el medio gramo vuelve ahora: «cuando el objetivo cae en medio gramo, se escribe -- 52,5P
+    // ·10H · 15G, nunca 53,0P». Aquí ponía `num0`, que redondea a entero, y este comentario
+    // decía que el documento no tocaba los decimales: lo tocó el 29.
+    //
+    // Y NO ES COSMÉTICA, son dos cuentas que no cuadraban. Con 53 escrito, los seis objetivos
+    // del día suman 176 sobre un día de 175; y el «faltan 11,2» de debajo está restado contra
+    // un 52,5 que no aparecía en ninguna parte, así que la resta que hace el cliente no le
+    // daba. `numMedio` es justo eso -- el redondeo de Calma al medio gramo, sin escribir
+    // «53,0» -- y su gemelo `alMedio` es el que ya usan las restas.
     // La grasa del peri no cuenta en el método, así que ahí son dos números.
     const lineaObjetivo = isPeri
-        ? `${num0(target.P)}P · ${num0(target.H)}H`
-        : `${num0(target.P)}P · ${num0(target.H)}H · ${num0(target.G)}G`;
+        ? `${numMedio(target.P)}P · ${numMedio(target.H)}H`
+        : `${numMedio(target.P)}P · ${numMedio(target.H)}H · ${numMedio(target.G)}G`;
 
     // SE APAGA LO HECHO, EN VEZ DE PINTAR LO QUE FALTA (punto 197 del 27-08).
     //
