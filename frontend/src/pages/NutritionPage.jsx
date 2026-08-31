@@ -160,7 +160,7 @@ const NutritionPage = () => {
     const { notify } = useOnboarding();
     // Para preguntar antes de hacer algo que no se puede deshacer (copiar sobre un día que
     // ya tiene dieta, borrar una favorita). El confirm del navegador bloquea la pestaña.
-    const { confirm } = useConfirm();
+    const { confirm, elegir } = useConfirm();
 
     // Preferences state - for checking if user has configured preferences
     const [showPreferencesSetup, setShowPreferencesSetup] = useState(false);
@@ -2061,10 +2061,28 @@ const NutritionPage = () => {
                 numComidas: cfg.numComidas, tipoDia: cfg.tipoDia, opcionPeri: cfg.opcionPeri,
                 momentoEntreno: cfg.momentoEntreno, unica: cfg.numComidas === 1,
             });
+            // AQUÍ NO SE PREGUNTA DE DÓNDE BAJAR (31-08-2026). Una favorita recuadra cuatro o
+            // cinco comidas de golpe: preguntarlo comida por comida sería un interrogatorio.
+            // El servidor baja en proporción, que es lo neutral, y las comidas donde hubo
+            // decisión de verdad quedan marcadas para que la pregunta salte cuando el cliente
+            // abra esa comida y le dé a «Cuadrar».
             const traidas = res.comidas || {};
-            setMealsData(Object.fromEntries(delReparto.map(
-                (k) => [k, traidas[k] || { alimentos: [] }])));
+            const conDecision = res.decisiones || {};
+            setMealsData(Object.fromEntries(delReparto.map((k) => {
+                const comida = traidas[k] || { alimentos: [] };
+                if (!conDecision[k]) return [k, comida];
+                return [k, { ...comida,
+                    eleccion_pendiente: eleccionPendienteDe(fav.comidas?.[k], conDecision[k]) }];
+            })));
             if (res.distribution) setDistribution(res.distribution);
+            const aElegir = Object.keys(conDecision).filter(k => delReparto.includes(k));
+            if (aElegir.length) {
+                toast.info(aElegir.length === 1
+                    ? `En ${mealInfo[aElegir[0]]?.name || aElegir[0]} sobraba y lo he bajado de todo a la vez.`
+                    : `En ${aElegir.length} comidas sobraba y lo he bajado de todo a la vez.`,
+                    { description: 'Si prefieres bajarlo de un alimento concreto, dale a "Cuadrar" en esa comida.',
+                      duration: 9000 });
+            }
 
             const excluidos = res.excluidos || [];
             const periQuitado = excluidos.filter(e => e.motivo === 'sin_objetivo_en_dia');
@@ -2160,24 +2178,127 @@ const NutritionPage = () => {
         }
     };
 
+    // ── ¿DE DÓNDE SE BAJA? (Jesús, nota de voz del 31-08-2026) ───────────────
+    //
+    // «Cuando recalcule, pregunte, pregunte de qué quiere bajar la proteína, del polvo o del
+    // queso [...] es imposible que la aplicación aprenda eso, porque te puede quedar más
+    // denso, menos denso [...] lo más sencillo es preguntar.»
+    //
+    // El servidor dice CUÁNDO hay algo que preguntar y con qué números (core/de_donde_bajo.py);
+    // aquí solo se pinta. Las opciones no dicen nada que la app no sepa: cuánto hay, cuánto
+    // pone y en cuánto se quedaría. Nada de «queda más espeso», que en un plato de pollo con
+    // arroz no significaría nada.
+    const NOMBRE_DEL_MACRO = { P: 'proteína', H: 'hidratos', G: 'grasa' };
+
+    /** Lo que hay que guardar para poder preguntar MÁS TARDE por una comida que se recuadró
+     *  sin preguntar: la pregunta que devolvió el servidor y las cantidades sobre las que se
+     *  hizo. Sin las cantidades de partida no hay nada que elegir: ya están bajadas. */
+    const eleccionPendienteDe = (comidaEnviada, decision) => ({
+        decision,
+        alimentos: ((comidaEnviada?.alimentos) || []).map(a => ({
+            alimento_id: a.alimento_id, nombre: a.nombre, cantidad_g: a.cantidad_g,
+        })),
+    });
+
+    const huellaDeLaComida = (mealKey) => ((mealsData[mealKey]?.alimentos) || [])
+        .map(a => a.alimento_id).sort().join(',');
+
+    // La respuesta vale para ESA comida de ESE día mientras no cambien sus alimentos. No se
+    // guarda para otros días ni para otras comidas: es justo lo que Jesús dice que la app no
+    // puede dar por sabido. Sirve para que el recuadre automático -- que no puede preguntar --
+    // respete lo que el cliente ya contestó en vez de decidir por su cuenta.
+    const eleccionGuardada = (mealKey) => {
+        const g = mealsData[mealKey]?.bajar_de;
+        if (!g || g.huella !== huellaDeLaComida(mealKey)) return null;
+        return g.alimento_id ? { modo: 'solo', alimento_id: g.alimento_id } : { modo: 'proporcional' };
+    };
+
+    const preguntarDeDondeBajo = async (decision) => {
+        const opciones = (decision.opciones || []).map((o) => (o.modo === 'proporcional'
+            ? {
+                valor: 'proporcional',
+                titulo: 'De todos, en la misma proporción',
+                detalle: (o.cantidades || []).map(c =>
+                    `${c.nombre}: ${num1(c.cantidad_ahora)} → ${num1(c.queda_en)} g`).join(' · '),
+            }
+            : {
+                valor: String(o.alimento_id),
+                // «Pone 52,8 g» pegado a «· 60 g» se lee como si fueran los mismos gramos:
+                // uno es lo que pesa el alimento y otro lo que aporta. Va con el nombre del
+                // macro para que no haya duda.
+                titulo: `${o.nombre} · ${num1(o.cantidad_ahora)} g`,
+                detalle: `${num1(o.aporta)} g de ${NOMBRE_DEL_MACRO[decision.macro] || decision.macro}`
+                    + ` → se quedaría en ${num1(o.queda_en)} g`
+                    + (o.sobraria_aun > 4 ? `, y aún sobrarían ${num1(o.sobraria_aun)}` : ''),
+            }));
+        const elegido = await elegir({
+            title: decision.titulo,
+            description: 'Lo que elijas es lo único que baja: el resto se queda con los gramos que le pusiste.',
+            opciones,
+            cancelLabel: 'Dejarlo como está',
+        });
+        if (!elegido) return null;
+        return elegido === 'proporcional'
+            ? { modo: 'proporcional' }
+            : { modo: 'solo', alimento_id: Number(elegido) };
+    };
+
     // Cuadrar una comida a demanda: re-ajusta sus alimentos a los macros de HOY, sin pasarse y
     // respetando el mínimo de cada uno (reusa /refit-diet solo para esa comida).
     // `silencioso`: lo usa el recuadre automático al cruzar un umbral (doc 57, F3), que ya
-    // pone su propio aviso; sin él saldrían dos carteles por el mismo gesto.
+    // pone su propio aviso; sin él saldrían dos carteles por el mismo gesto. Y como no puede
+    // parar a preguntar, tira de la respuesta que el cliente ya dio para esta comida.
     const cuadrarComida = async (mealKey, { silencioso = false } = {}) => {
         try {
-            const res = await api('/api/calculator/refit-diet', {
+            // SI QUEDÓ UNA ELECCIÓN PENDIENTE, LA PREGUNTA VA SOBRE LAS CANTIDADES DE ENTONCES.
+            //
+            // Al aplicar una favorita no se puede preguntar comida por comida, así que se baja
+            // de todo a la vez y la comida queda marcada. Pero para cuando el cliente toca la
+            // marca, esas cantidades YA están bajadas: preguntar sobre ellas no daría ninguna
+            // opción, porque no sobra nada. Se guardó lo que había antes justo para esto.
+            const pendiente = (!silencioso && mealsData[mealKey]?.eleccion_pendiente) || null;
+            const dePartida = pendiente
+                ? { alimentos: pendiente.alimentos || [] }
+                : (mealsData[mealKey] || { alimentos: [] });
+            const huella = (dePartida.alimentos || []).map(a => a.alimento_id).sort().join(',');
+            const pedir = (ajuste) => api('/api/calculator/refit-diet', {
                 method: 'POST',
                 body: JSON.stringify({
                     fecha: currentDate,
                     tipo_dia: tipoDia, num_comidas: numComidas,
                     momento_entreno: momentoEntreno, opcion_peri: opcionPeri,
-                    comidas: { [mealKey]: mealsData[mealKey] || { alimentos: [] } },
+                    comidas: { [mealKey]: dePartida },
+                    ...(ajuste ? { ajuste: { [mealKey]: ajuste } } : {}),
                 }),
             });
+            let res;
+            let elegido = null;
+            if (pendiente?.decision) {
+                elegido = await preguntarDeDondeBajo(pendiente.decision);
+                if (!elegido) return;   // cerrar sin elegir: se queda como está
+                res = await pedir(elegido);
+            } else {
+                const yaContestado = eleccionGuardada(mealKey);
+                elegido = silencioso ? yaContestado : null;
+                res = await pedir(elegido);
+                const decision = res.decisiones?.[mealKey];
+                if (decision && !silencioso) {
+                    elegido = await preguntarDeDondeBajo(decision);
+                    // Cerrar sin elegir es «déjalo como está»: no se toca la comida.
+                    if (!elegido) return;
+                    res = await pedir(elegido);
+                }
+            }
             const refit = res.comidas?.[mealKey];
             if (!refit) { if (!silencioso) toast.error('No se pudo cuadrar la comida'); return; }
-            setMealsData(prev => ({ ...prev, [mealKey]: refit }));
+            setMealsData(prev => ({
+                ...prev,
+                [mealKey]: {
+                    ...refit,
+                    eleccion_pendiente: null,
+                    ...(elegido ? { bajar_de: { ...elegido, huella } } : {}),
+                },
+            }));
             setDistribTargetsOverlay(null);   // pasa a mostrar los macros de hoy
             // Tras el recuadre automático del cruce de umbral, los macros del refit vienen
             // SIN la calibración del día encima: se fuerza una pasada más para que lo que
@@ -2310,7 +2431,16 @@ const NutritionPage = () => {
                 }),
             });
             const refit = res.comidas?.[mealKey];
-            setMealsData(prev => ({ ...prev, [mealKey]: refit || { alimentos } }));
+            // Si al recuadrarla sobraba y había varios sitios de donde bajarlo, se ha bajado
+            // de todos a la vez y la comida queda marcada: la pregunta salta con «Cuadrar».
+            const hayQueElegir = res.decisiones?.[mealKey];
+            setMealsData(prev => ({
+                ...prev,
+                [mealKey]: hayQueElegir
+                    ? { ...(refit || { alimentos }),
+                        eleccion_pendiente: eleccionPendienteDe({ alimentos }, hayQueElegir) }
+                    : (refit || { alimentos }),
+            }));
             setDistribTargetsOverlay(null);   // los macros de HOY, no los del día guardado
             if (!refit) {
                 toast.success(`"${fav.name}" puesta con las cantidades guardadas`);

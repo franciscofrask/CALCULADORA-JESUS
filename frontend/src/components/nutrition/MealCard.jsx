@@ -467,6 +467,9 @@ const MealCard = ({
     const isExpanded = forceExpanded ? true : expandedMeals[mealKey];
     const target = getMealTarget(mealKey);
     const foods = mealsData[mealKey]?.alimentos || [];
+    // Aquí sobraba un macro, había varios sitios de donde bajarlo y se bajó de todos a la
+    // vez porque nadie pudo preguntar (ver el aviso de más abajo, 31-08-2026).
+    const eleccionPendiente = Boolean(mealsData[mealKey]?.eleccion_pendiente);
     const isPeri = mealKey === 'Intra' || mealKey === 'Post';
     const info = mealInfo[mealKey];
     const status = getMealStatus(mealKey);
@@ -975,6 +978,24 @@ const MealCard = ({
                                 `title`: en el móvil no hay ratón, así que ningún cliente lo
                                 había leído nunca. La frase baja debajo del botón, visible.
                                 (La que él escribe no existía: la de antes hablaba de mínimos.) */}
+                            {/* «LO BAJÉ DE TODO A LA VEZ» (31-08-2026, la nota de voz de Jesús).
+                                Aplicar una favorita o repetir un día recuadra varias comidas de
+                                golpe, y ahí no se puede parar a preguntar de dónde bajar cada
+                                una. Se baja en proporción y la comida queda marcada aquí, para
+                                que quien quiera elegir sepa que hay algo que elegir: sin esta
+                                línea, la decisión seguiría tomándola la app en silencio. */}
+                            {!isLocked && onCuadrar && eleccionPendiente && (
+                                <button onClick={() => onCuadrar(mealKey)}
+                                    data-testid={`eleccion-pendiente-${mealKey}`}
+                                    className="w-full text-left rounded-xl border border-brand/40 bg-brand/5 px-3 py-2.5 mb-2">
+                                    <span className="block text-xs font-bold text-brand">
+                                        Aquí sobraba y lo bajé de todo a la vez
+                                    </span>
+                                    <span className="block text-xs text-muted-foreground mt-0.5">
+                                        Toca si prefieres bajarlo de un alimento concreto
+                                    </span>
+                                </button>
+                            )}
                             {!isLocked && onCuadrar && (
                                 <div>
                                     <button onClick={() => onCuadrar(mealKey)} data-testid={`cuadrar-${mealKey}`}

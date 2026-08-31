@@ -13,6 +13,7 @@ import uuid
 from core.database import db
 from core.fotos import cabecera_nombre as _cabecera_nombre
 from core.security import get_current_user
+from core import de_donde_bajo
 from models.common import FoodSuggestion, FoodSuggestionResponse
 
 # Import calculator functions
@@ -1341,7 +1342,13 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
     Flag opcional `descartar_sin_objetivo` (adaptar una favorita al tipo de día actual,
     entreno<->descanso): las comidas que no existen en el día destino (Intra/Post en
     descanso, o Intra con opcion_peri solo_post) se vacían y sus alimentos van a
-    'excluidos' con motivo 'sin_objetivo_en_dia' en vez de copiarse tal cual."""
+    'excluidos' con motivo 'sin_objetivo_en_dia' en vez de copiarse tal cual.
+
+    CUANDO SOBRA UN MACRO Y HAY VARIOS SITIOS DE DONDE BAJARLO, NO LO DECIDE ESTO (31-08-2026).
+    Devuelve la pregunta en `decisiones` (ver core/de_donde_bajo.py) y baja en proporción
+    mientras nadie conteste. La respuesta vuelve en `ajuste`, por comida:
+        {"ajuste": {"C3": {"modo": "solo", "alimento_id": 2822}}}
+        {"ajuste": {"C3": {"modo": "proporcional"}}}"""
     dist = await distribute_macros({
         "fecha": data.get("fecha"),
         "tipo_dia": data.get("tipo_dia", "entrenamiento"),
@@ -1380,6 +1387,11 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
     out_comidas = {}
     excluidos = []
     desfases = {}
+    # La respuesta del cliente a «¿de dónde bajo?», por comida: {"C3": {"modo": "solo",
+    # "alimento_id": 2822}} o {"modo": "proporcional"}. Sin ella se baja en proporción y se
+    # devuelve la pregunta en `decisiones` para que la pantalla la haga.
+    ajustes = data.get("ajuste") or {}
+    decisiones = {}
     for meal_key, meal in comidas_in.items():
         meal = meal if isinstance(meal, dict) else {}
         # El peri sí se cuadra: tiene objetivo, solo que en `periworkout`.
@@ -1440,23 +1452,157 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
             aplicar_regla_macros_calma(food)
             entradas.append((it, food, cantidad_minima_calma(food)))
 
+        # ── ¿DE DÓNDE SE BAJA? (31-08-2026, la nota de voz de Jesús) ─────────
+        #
+        # «Pregunte de qué quiere bajar la proteína, del polvo o del queso [...] es imposible
+        # que la aplicación aprenda eso.» Las reglas de a quién se le pregunta están en
+        # core/de_donde_bajo.py; aquí se calculan las cantidades de cada opción.
+        #
+        # Las tres salidas se traducen a lo mismo: qué alimentos quedan clavados y en cuánto.
+        # «Del polvo» = los demás se quedan con los gramos que puso el cliente y el polvo baja
+        # a lo que quepa. «De los dos» = los dos bajan por el mismo factor. Y mientras nadie
+        # conteste, se baja en proporción: NUNCA por el orden de la lista, que es lo que hacía
+        # hasta hoy y por eso el mismo batido salía de dos maneras según quién estuviera antes.
+        objetivo = _target(meal_key)
+        aportes = []
+        for it, food, _m in entradas:
+            racion_a = float(food.get("racion") or 100)
+            cant_g = float(it.get("cantidad_g") or 0)
+            cant_a = (cant_g / racion_a) if bool(food.get("unidades")) else cant_g
+            ma = macros_at_calma(food, cant_a)
+            aportes.append({
+                "alimento_id": int(food.get("id") or 0),
+                "nombre": food.get("nombre") or it.get("nombre"),
+                "cantidad_g": cant_g,
+                "macros": {"P": ma["proteinas"], "H": ma["hidratos"], "G": ma["grasas"]},
+                "_food": food,
+            })
+        servido_ahora = {m: sum(a["macros"][m] for a in aportes) for m in ("P", "H", "G")}
+        objetivo_m = {"P": objetivo["proteinas"], "H": objetivo["hidratos"],
+                      "G": objetivo["grasas"]}
+        macro_sobra = de_donde_bajo.hay_que_preguntar(servido_ahora, objetivo_m, aportes)
+
+        fijos = None
+        decision = None
+        if macro_sobra:
+            candidatos = de_donde_bajo.de_donde_se_puede_bajar(aportes, macro_sobra)
+            objetivo_del_macro = objetivo_m[macro_sobra]
+            sobra_total = servido_ahora[macro_sobra] - objetivo_del_macro
+
+            def _suelo(food):
+                # El import va aquí dentro a propósito: más abajo, la pasada de afinado hace
+                # `from calculator import get_food_config`, y eso convierte el nombre en local
+                # de toda la función, así que el de arriba deja de verse desde aquí.
+                from calculator import get_food_config as _config_del_alimento
+                cfg_s = _config_del_alimento(food)
+                return minimo_pesable(food, float(cfg_s.get("minimo", 5) or 5))
+
+            def _pesable(food, cantidad):
+                """A una cantidad que se pueda pesar, sin bajar del suelo de ese alimento."""
+                suelo = _suelo(food)
+                return max(suelo, redondear_cantidad(food, max(suelo, cantidad), minimo_g=suelo))
+
+            def _bajar_solo_de(elegido):
+                """Ese alimento se lleva toda la bajada; los demás candidatos, como estaban."""
+                resto = servido_ahora[macro_sobra] - elegido["macros"][macro_sobra]
+                por_gramo = (elegido["macros"][macro_sobra] / elegido["cantidad_g"]
+                             if elegido["cantidad_g"] > 0 else 0.0)
+                hueco = objetivo_del_macro - resto
+                cant = (elegido["cantidad_g"] if por_gramo <= 0
+                        else min(elegido["cantidad_g"], hueco / por_gramo))
+                cant = _pesable(elegido["_food"], cant)
+                pins = {a["alimento_id"]: a["cantidad_g"] for a in candidatos}
+                pins[elegido["alimento_id"]] = cant
+                return pins, cant, max(0.0, resto + por_gramo * cant - objetivo_del_macro)
+
+            def _bajar_de_todos():
+                """Todos los candidatos por el mismo factor: la comida mantiene su equilibrio."""
+                puesto = sum(a["macros"][macro_sobra] for a in candidatos)
+                k = de_donde_bajo.factor_proporcional(sobra_total, puesto)
+                return {a["alimento_id"]: _pesable(a["_food"], a["cantidad_g"] * k)
+                        for a in candidatos}
+
+            elegido_id = (ajustes.get(meal_key) or {}).get("alimento_id")
+            modo = (ajustes.get(meal_key) or {}).get("modo")
+            elegido = next((a for a in candidatos
+                            if elegido_id and a["alimento_id"] == int(elegido_id)), None)
+            if modo == "solo" and elegido:
+                fijos, _, _ = _bajar_solo_de(elegido)
+            elif modo == "proporcional":
+                fijos = _bajar_de_todos()
+            else:
+                # Nadie ha contestado: se baja en proporción y se devuelve la pregunta.
+                fijos = _bajar_de_todos()
+                opciones = []
+                for a in candidatos:
+                    _, queda, sobraria = _bajar_solo_de(a)
+                    opciones.append({
+                        "modo": "solo",
+                        "alimento_id": a["alimento_id"],
+                        "nombre": a["nombre"],
+                        "cantidad_ahora": round(a["cantidad_g"], 1),
+                        "aporta": round(a["macros"][macro_sobra], 1),
+                        "queda_en": round(queda, 1),
+                        "sobraria_aun": round(sobraria, 1),
+                    })
+                opciones.append({
+                    "modo": "proporcional",
+                    "cantidades": [{"alimento_id": a["alimento_id"], "nombre": a["nombre"],
+                                    "cantidad_ahora": round(a["cantidad_g"], 1),
+                                    "queda_en": round(fijos[a["alimento_id"]], 1)}
+                                   for a in candidatos],
+                })
+                decision = {
+                    "macro": macro_sobra,
+                    "sobra": round(sobra_total, 1),
+                    "titulo": de_donde_bajo.titulo(macro_sobra, sobra_total),
+                    "opciones": opciones,
+                }
+        if decision:
+            decisiones[meal_key] = decision
+
+        # LOS ALIMENTOS CLAVADOS NO SE TOCAN (31-08-2026, la nota de voz de Jesús).
+        #
+        # Cuando el cliente contesta «bájalo del polvo», lo que eso significa por dentro es
+        # que el queso se queda con los gramos que él le puso y solo se mueve el polvo. Y
+        # «de los dos en la misma proporción» es lo mismo con los dos clavados a su parte.
+        # De ahí que la respuesta se traduzca a esto y no a un algoritmo aparte: el cuadre
+        # sigue siendo el de siempre, solo que con menos sitio donde repartir.
+        #
+        # Un alimento clavado gasta su cantidad entera del presupuesto (no su mínimo), que
+        # es justo lo que deja sin sitio a los demás.
+        def _clavado(food):
+            fijo = (fijos or {}).get(int(food.get("id") or 0))
+            if fijo is None:
+                return None
+            racion = float(food.get("racion") or 100)
+            return (float(fijo) / racion) if bool(food.get("unidades")) else float(fijo)
+
         # Lo que consumen los mínimos sale del presupuesto antes de repartir.
         for _, food, minimo in entradas:
-            aporte = macros_at_calma(food, minimo)
+            clavado = _clavado(food)
+            aporte = macros_at_calma(food, clavado if clavado is not None else minimo)
             for k in ("proteinas", "hidratos", "grasas"):
                 if not math.isinf(remaining[k]):
                     remaining[k] = max(0.0, remaining[k] - aporte[k])
 
         for it, food, minimo in entradas:
             aid = it.get("alimento_id")
-            # Lo que quepa por encima del mínimo, con el mismo dimensionado de siempre.
-            extra = ajustar_cantidad_calma(food, remaining)
-            if extra <= 0 or math.isinf(extra):
-                extra = 0.0
-            # `ajustar_cantidad` devuelve la cantidad total que cabría, no un extra:
-            # como el mínimo ya está reservado, se descuenta para no contarlo dos veces.
-            cant = max(minimo, extra)
-            contrib = macros_at_calma(food, cant)
+            clavado = _clavado(food)
+            if clavado is not None:
+                # Ya se descontó entero arriba: aquí solo se coloca.
+                cant = max(0.0, clavado)
+                contrib = macros_at_calma(food, cant)
+                minimo = cant   # para que el afinado de abajo tampoco lo mueva
+            else:
+                # Lo que quepa por encima del mínimo, con el mismo dimensionado de siempre.
+                extra = ajustar_cantidad_calma(food, remaining)
+                if extra <= 0 or math.isinf(extra):
+                    extra = 0.0
+                # `ajustar_cantidad` devuelve la cantidad total que cabría, no un extra:
+                # como el mínimo ya está reservado, se descuenta para no contarlo dos veces.
+                cant = max(minimo, extra)
+                contrib = macros_at_calma(food, cant)
             aporte_minimo = macros_at_calma(food, minimo)
             for k in ("proteinas", "hidratos", "grasas"):
                 if not math.isinf(remaining[k]):
@@ -1502,6 +1648,19 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
                 _, maximo_base = get_food_limits(food, cfg)
                 peso_unidad = float(food.get("peso_unidad") or food.get("racion") or 0)
                 es_unidad = bool(food.get("unidades") or food.get("por_unidad") or cfg.get("por_unidad"))
+                # Y AL AFINADO TAMPOCO SE LE DEJA MOVER LO CLAVADO (31-08-2026). El afinado
+                # intercambia cantidades entre alimentos para acercarse al objetivo, así que
+                # sin esto deshacía la respuesta del cliente por detrás: le decías «del polvo»
+                # y volvía a bajarte el queso. Se clava dejándole el rango en un solo punto,
+                # que es el lenguaje que ya entiende.
+                clavado = (fijos or {}).get(int(food.get("id") or 0))
+                if clavado is not None:
+                    opt_foods.append({
+                        "cantidad": float(clavado), "minimo": float(clavado),
+                        "maximo": float(clavado), "ef": ef, "cat": ef.get("cat", ""),
+                        "paso_unidad": None,
+                    })
+                    continue
                 opt_foods.append({
                     "cantidad": max(float(rf["cantidad_g"]), minimo),
                     "minimo": minimo,
@@ -1597,7 +1756,7 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
         desfases[meal_key] = {**desfase, "sugerencia": sugerencia, "redondeado": redondeado}
         out_comidas[meal_key] = {**meal, "alimentos": refit_foods}
     return {"comidas": out_comidas, "distribution": dist, "excluidos": excluidos,
-            "desfases": desfases}
+            "desfases": desfases, "decisiones": decisiones}
 
 
 @router.post("/suggest")
