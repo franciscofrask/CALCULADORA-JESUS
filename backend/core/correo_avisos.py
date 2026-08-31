@@ -127,8 +127,25 @@ async def pasada_de_correos_de_avisos(solo_user_id: str = None) -> int:
             #     el «tu reporte está abierto» de las 10:00, que solo es candidato ese día.
             await sincronizar_avisos(uid, marcar_entrada=False, solo_calendario=True)
 
+            # «POR CORREO», APAGADO (doc «El día», 31-08). Se va el correo, no el aviso: en
+            # la app le siguen saliendo los que no haya apagado.
+            #
+            # OJO, QUE AQUÍ HAY UNA TRAMPA. `FAMILIAS_CORREO` incluye el fuera de plazo y los
+            # dos del contrato, y esos tres están entre los CUATRO QUE NO SE APAGAN NUNCA
+            # («si lo apaga, se le caduca la suscripción sin enterarse y luego la culpa es
+            # tuya»). Así que apagar el correo no puede ser un `continue`: hay que dejar
+            # pasar esos y quitar el resto.
+            from core.avisos_cliente import NUNCA_SE_APAGAN
+            perfil_avisos = await db.client_profiles.find_one(
+                {"user_id": uid}, {"_id": 0, "avisos": 1})
+            quiere_correo = ((perfil_avisos or {}).get("avisos") or {}).get("por_correo", True)
+            familias = (FAMILIAS_CORREO if quiere_correo
+                        else FAMILIAS_CORREO & NUNCA_SE_APAGAN)
+            if not familias:
+                continue
+
             pendientes = await db.notifications.find(
-                {"user_id": uid, "familia": {"$in": list(FAMILIAS_CORREO)},
+                {"user_id": uid, "familia": {"$in": list(familias)},
                  "created_at": {"$gte": desde}},
                 {"_id": 0, "clave": 1, "title": 1, "body": 1, "link": 1},
             ).to_list(20)

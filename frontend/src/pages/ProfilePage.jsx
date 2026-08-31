@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { PlanBadge } from './ClientDashboard';
 import { queIncluyeElPlan } from '../lib/planAccess';
 import { fraseDeLoQueFalta } from '../lib/datosDudosos';
+import { useConfirm } from '../components/ui/confirm';
 import {
     User, Mail,
     LogOut, Lock, ChevronRight, Crown,
@@ -34,6 +35,40 @@ import { mensajeDeError } from '../lib/mensajeDeError';
 // día que haya checkout de upgrade la maqueta sirve; el aviso es para que no se encienda tal
 // cual y se le ofrezca a un cliente un plan que no existe a un precio que no es.
 const UPGRADE_PLAN_UI = false;
+
+// Los cuatro grupos de «Avisos y recordatorios» (doc «El día», 31-08). Un rótulo pequeño y
+// sus filas debajo: siete interruptores seguidos, sin agrupar, se leen como una lista de la
+// compra y no como cuatro decisiones distintas.
+const GrupoDeAvisos = ({ titulo, children }) => (
+    <div>
+        <p className="text-[11px] font-bold uppercase tracking-wider text-foreground/40 mb-1">{titulo}</p>
+        <div className="divide-y divide-border">{children}</div>
+    </div>
+);
+
+// Una fila con su interruptor. A nivel de módulo y no dentro de la pantalla por lo de
+// siempre: definida dentro, cada render crea un componente nuevo y React remonta la fila en
+// vez de actualizarla.
+const FilaDeAviso = ({ titulo, ayuda, valor, guardando, onCambiar, testId }) => (
+    <div className="flex items-center justify-between gap-4 py-2.5">
+        <div className="min-w-0">
+            <p className="text-base lg:text-sm text-foreground">{titulo}</p>
+            {ayuda && <p className="text-sm lg:text-xs text-foreground/50 mt-0.5">{ayuda}</p>}
+        </div>
+        <button
+            type="button"
+            role="switch"
+            aria-checked={!!valor}
+            aria-label={titulo}
+            disabled={guardando}
+            onClick={() => onCambiar(!valor)}
+            data-testid={testId}
+            className={`relative w-12 h-7 rounded-full transition-colors shrink-0 disabled:opacity-50 ${valor ? 'bg-[#FF671F]' : 'bg-muted'}`}
+        >
+            <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${valor ? 'left-6' : 'left-1'}`} />
+        </button>
+    </div>
+);
 
 const ProfilePage = () => {
     const navigate = useNavigate();
@@ -150,6 +185,7 @@ const ProfilePage = () => {
 
     // Preferencias de avisos. El fallo se traga a propósito: no poder leerlas no es algo
     // que el cliente tenga que arreglar, y la fila simplemente no aparece.
+    const { confirm } = useConfirm();
     const [prefAvisos, setPrefAvisos] = useState(null);
     const [guardandoPref, setGuardandoPref] = useState(false);
     useEffect(() => {
@@ -160,12 +196,14 @@ const ProfilePage = () => {
         return () => { vivo = false; };
     }, [api]);
 
-    const guardarPrefCierre = async (valor) => {
+    // Vale para los siete y para la hora (doc «El día», 31-08). Responde al toque y no al
+    // servidor: si el guardado falla, vuelve a como estaba y se dice.
+    const guardarPref = async (cambio) => {
         const antes = prefAvisos;
-        setPrefAvisos({ ...prefAvisos, cierre_dia: valor });   // responde al toque, no al servidor
+        setPrefAvisos({ ...prefAvisos, ...cambio });
         setGuardandoPref(true);
         try {
-            const { data } = await api.put('/notifications/preferencias', { cierre_dia: valor });
+            const { data } = await api.put('/notifications/preferencias', cambio);
             setPrefAvisos(data);
         } catch (error) {
             setPrefAvisos(antes);
@@ -174,6 +212,25 @@ const ProfilePage = () => {
         } finally {
             setGuardandoPref(false);
         }
+    };
+
+    // APAGAR EL CIERRE DEL DÍA SE PREGUNTA ANTES (doc «El día», 31-08). «Al apagarlo hay que
+    // decirle lo que se lleva, porque si no parece gratis.» El texto es suyo, literal.
+    //
+    // Y la segunda línea no es adorno: «sin ella el interruptor parece una puerta de un solo
+    // sentido, y hay gente que no lo toca por miedo a no poder deshacerlo».
+    //
+    // Encenderlo NO pregunta: volver atrás no le quita nada.
+    const cambiarCierreDelDia = async (valor) => {
+        if (!valor && !await confirm({
+            title: 'Rellenar el cierre del día',
+            description: 'Si lo apagas, no podrás registrar tus datos del día, pero deberás '
+                + 'rellenar las preguntas del reporte quincenal y del reporte mensual para '
+                + 'poder recibir tus ajustes.\n\nPuedes volver a activarlo cuando quieras.',
+            confirmLabel: 'Apagarlo',
+            cancelLabel: 'Dejarlo como está',
+        })) return;
+        await guardarPref({ cierre_dia: valor });
     };
 
     const handleLogout = () => {
@@ -642,39 +699,129 @@ const ProfilePage = () => {
                     </CardContent>
                 </Card>
 
-                {/* AVISOS · el único que el cliente puede apagar (doc 16-08, T10).
-                    Es el de las 20:00, el único diario. Los demás son de calendario o los
-                    manda Jesús al tocarle algo, y esos no se silencian: son el programa.
-                    Sale nada más entrar en la pantalla; si el backend no contesta, la fila
-                    no se pinta en vez de mentir con un interruptor que no guarda nada. */}
+                {/* AVISOS Y RECORDATORIOS (doc «El día», 31-08). Hasta hoy era UN interruptor
+                    -- «Recordarme cerrar el día · cada día a las 20:00» -- y el documento pide
+                    siete en cuatro grupos, más el selector de hora.
+
+                    LA REGLA QUE LO SOSTIENE TODO: «lo que interrumpe sí, lo que informa no».
+                    La fila de pendientes del Inicio NO es un aviso, es el estado de su cuenta:
+                    la app diciéndole «tienes esto abierto». Si se apagara, abre la app un
+                    miércoles y no sabe que tiene un reporte esperando. Por eso ninguno de estos
+                    interruptores la toca, y por eso el último grupo lo dice con todas las
+                    letras: con esa línea puede apagarlo todo sin quedarse a ciegas.
+
+                    Y no hay interruptor de notificaciones del móvil porque no hay
+                    notificaciones: «un interruptor que no hace nada enseña que la configuración
+                    miente». Cuando existan, se añade. */}
                 {prefAvisos && (
                     <Card className="bg-card border-border">
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-foreground text-base">AVISOS</CardTitle>
+                            <CardTitle className="text-foreground text-base">AVISOS Y RECORDATORIOS</CardTitle>
                         </CardHeader>
-                        <CardContent className="p-4 pt-2">
-                            <div className="flex items-center justify-between gap-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center">
-                                        <Bell className="w-5 h-5 text-[#FF671F]" />
-                                    </div>
-                                    <div className="text-left">
-                                        <p className="font-medium text-foreground text-base lg:text-sm">Recordarme cerrar el día</p>
-                                        <p className="text-sm lg:text-xs text-foreground/50">Cada día a las 20:00, si no lo has cerrado</p>
-                                    </div>
-                                </div>
-                                <button
-                                    type="button"
-                                    role="switch"
-                                    aria-checked={prefAvisos.cierre_dia}
-                                    disabled={guardandoPref}
-                                    onClick={() => guardarPrefCierre(!prefAvisos.cierre_dia)}
-                                    data-testid="aviso-cierre-dia"
-                                    className={`relative w-12 h-7 rounded-full transition-colors shrink-0 disabled:opacity-50 ${prefAvisos.cierre_dia ? 'bg-[#FF671F]' : 'bg-muted'}`}
-                                >
-                                    <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${prefAvisos.cierre_dia ? 'left-6' : 'left-1'}`} />
-                                </button>
-                            </div>
+                        <CardContent className="p-4 pt-2 space-y-5">
+                            {/* ── El cierre del día ────────────────────────────────────
+                                LOS DOS SON DISTINTOS Y HOY ERAN UNO. «Rellenar el cierre»
+                                apagado quita la fila para siempre y ese cliente cae en la
+                                versión del reporte que no pide datos diarios; «Recordármelo»
+                                apagado la deja salir pero sin la escalada de los 2, 4 y 7
+                                días. Es para el que sí quiere rellenarlo pero no quiere que se
+                                lo recuerden cuando falla, y hoy no podía elegir eso. */}
+                            <GrupoDeAvisos titulo="El cierre del día">
+                                <FilaDeAviso
+                                    titulo="Rellenar el cierre del día"
+                                    testId="aviso-cierre-dia"
+                                    valor={prefAvisos.cierre_dia}
+                                    guardando={guardandoPref}
+                                    onCambiar={cambiarCierreDelDia} />
+                                {prefAvisos.cierre_dia && (
+                                    <>
+                                        <div className="flex items-center justify-between gap-4 py-2">
+                                            <p className="text-base lg:text-sm text-foreground">A qué hora me sale</p>
+                                            <select
+                                                value={prefAvisos.hora_cierre}
+                                                disabled={guardandoPref}
+                                                onChange={(e) => guardarPref({ hora_cierre: Number(e.target.value) })}
+                                                data-testid="aviso-hora-cierre"
+                                                className="bg-muted border border-border rounded-lg text-foreground text-sm px-3 py-2 disabled:opacity-50"
+                                            >
+                                                {/* De las 17:00 en adelante y nada más: «puedes
+                                                    activarla a cualquier hora A PARTIR de las
+                                                    17:00». Antes no, que no se puede cerrar un
+                                                    día que todavía no ha pasado. */}
+                                                {[17, 18, 19, 20, 21, 22, 23].map(h => (
+                                                    <option key={h} value={h}>{h}:00</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <FilaDeAviso
+                                            titulo="Recordármelo si me lo salto"
+                                            testId="aviso-recordar-cierre"
+                                            valor={prefAvisos.recordar_cierre}
+                                            guardando={guardandoPref}
+                                            onCambiar={(v) => guardarPref({ recordar_cierre: v })} />
+                                        {/* Su frase, literal. Y es la que explica que la ventana
+                                            de la mañana no es un mecanismo aparte: es la misma. */}
+                                        <p className="text-sm lg:text-xs text-foreground/50">
+                                            Puedes activarla a cualquier hora a partir de las 17:00.
+                                            Permanecerá activa hasta las 15:00 del día siguiente.
+                                        </p>
+                                    </>
+                                )}
+                            </GrupoDeAvisos>
+
+                            {/* ── Los reportes ─────────────────────────────────────────
+                                El quincenal y el mensual NO se pueden desactivar: son los que
+                                hacen su ajuste. Aquí solo se apaga el recordatorio, y se dice. */}
+                            <GrupoDeAvisos titulo="Los reportes">
+                                <FilaDeAviso
+                                    titulo="Recordatorio del reporte quincenal"
+                                    testId="aviso-quincenal"
+                                    valor={prefAvisos.recordatorio_quincenal}
+                                    guardando={guardandoPref}
+                                    onCambiar={(v) => guardarPref({ recordatorio_quincenal: v })} />
+                                <FilaDeAviso
+                                    titulo="Recordatorio del reporte mensual"
+                                    testId="aviso-mensual"
+                                    valor={prefAvisos.recordatorio_mensual}
+                                    guardando={guardandoPref}
+                                    onCambiar={(v) => guardarPref({ recordatorio_mensual: v })} />
+                                <p className="text-sm lg:text-xs text-foreground/50">
+                                    El quincenal y el mensual no se pueden desactivar: son los que
+                                    hacen tu ajuste. Aquí solo apagas los recordatorios.
+                                </p>
+                            </GrupoDeAvisos>
+
+                            {/* ── El peso ──────────────────────────────────────────── */}
+                            <GrupoDeAvisos titulo="El peso">
+                                <FilaDeAviso
+                                    titulo="Recordatorio de los días de pesada"
+                                    testId="aviso-peso"
+                                    valor={prefAvisos.recordatorio_peso}
+                                    guardando={guardandoPref}
+                                    onCambiar={(v) => guardarPref({ recordatorio_peso: v })} />
+                            </GrupoDeAvisos>
+
+                            {/* ── Cómo te aviso ────────────────────────────────────────
+                                LA LÍNEA DE ABAJO ES LA QUE SOSTIENE TODO EL APARTADO. Sin ella,
+                                apagarlo todo se lee como quedarse a ciegas. */}
+                            <GrupoDeAvisos titulo="Cómo te aviso">
+                                <FilaDeAviso
+                                    titulo="Avisos en la app"
+                                    testId="aviso-en-la-app"
+                                    valor={prefAvisos.avisos_en_la_app}
+                                    guardando={guardandoPref}
+                                    onCambiar={(v) => guardarPref({ avisos_en_la_app: v })} />
+                                <FilaDeAviso
+                                    titulo="Por correo"
+                                    testId="aviso-por-correo"
+                                    valor={prefAvisos.por_correo}
+                                    guardando={guardandoPref}
+                                    onCambiar={(v) => guardarPref({ por_correo: v })} />
+                                <p className="text-sm lg:text-xs text-foreground/50">
+                                    Lo que tengas pendiente seguirá saliendo en Inicio. Aquí solo
+                                    apagas los avisos.
+                                </p>
+                            </GrupoDeAvisos>
                         </CardContent>
                     </Card>
                 )}

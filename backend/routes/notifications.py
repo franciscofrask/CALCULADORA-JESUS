@@ -331,7 +331,7 @@ async def sincronizar_avisos(user_id: str, marcar_entrada: bool = True,
     try:
         from core.avisos_cliente import (
             avisos_condicionados, avisos_de_calendario, avisos_de_calendario_doc,
-            elegir_avisos)
+            elegir_avisos, filtrar_por_preferencias)
 
         perfil = await db.client_profiles.find_one({"user_id": user_id}, {"_id": 0})
         if not perfil:
@@ -397,6 +397,14 @@ async def sincronizar_avisos(user_id: str, marcar_entrada: bool = True,
             # «Llevas 5 días sin apuntar nada» también manda a /dashboard/checkins.
             plan_con_cierre_dia=datos.get("plan_con_cierre_dia", True),
         )
+
+        # LO QUE EL CLIENTE HAYA APAGADO, FUERA (doc «El día», 31-08). Se hace aquí, sobre
+        # las dos listas ya montadas y en un solo sitio, y no colando cuatro booleanos más
+        # por la firma de cada generador: la regla se lee de una vez y respeta los cuatro
+        # que no se apagan nunca. Ver `filtrar_por_preferencias`.
+        preferencias = (perfil.get("avisos") or {})
+        calendario = filtrar_por_preferencias(calendario, preferencias)
+        condicionados = filtrar_por_preferencias(condicionados, preferencias)
 
         # LA PASADA DE FONDO NO CREA CONDICIONADAS (ver `solo_calendario` arriba). Se
         # calculan igual porque son puras y de ellas sale lo que hay que caducar, pero no
@@ -1000,25 +1008,76 @@ async def unread_count(user = Depends(get_current_user)):
     return {"count": count}
 
 
+# LOS SIETE INTERRUPTORES Y LA HORA (doc «El día», 31-08). Hasta hoy era UNO -- «Recordarme
+# cerrar el día» -- y el documento pide siete en cuatro grupos, más el selector de hora.
+#
+# LA REGLA QUE LOS SOSTIENE: «lo que interrumpe sí, lo que informa no». La fila de pendientes
+# del Inicio NO es un aviso, es el estado de su cuenta: la app diciéndole «tienes esto
+# abierto». Si eso se apagara, abre la app un miércoles y no sabe que tiene un reporte
+# esperando. Por eso ninguno de estos interruptores la toca, y por eso el último grupo lleva
+# escrito «Lo que tengas pendiente seguirá saliendo en Inicio».
+#
+# Y LOS DOS DEL CIERRE SON DISTINTOS, que hoy eran uno solo:
+#   `cierre_dia`      apagado -> la fila no sale NUNCA, y ese cliente cae en la versión del
+#                                reporte que no pide datos diarios.
+#   `recordar_cierre` apagado -> la fila sale igual, pero sin la escalada de los 2, 4 y 7
+#                                días. Para el que sí quiere rellenarlo pero no quiere que se
+#                                lo recuerden cuando falla.
+#
+# Lo que NO lleva interruptor y no es un olvido: las notificaciones del móvil, porque no
+# existen. «Un interruptor que no hace nada enseña que la configuración miente.» Cuando
+# existan, se añade.
+PREFERENCIAS = {
+    # El cierre del día
+    "cierre_dia": True,          # rellenarlo siquiera
+    "recordar_cierre": True,     # que insista si se lo salta
+    # Los reportes. El quincenal y el mensual NO se pueden desactivar -- son los que hacen su
+    # ajuste --: aquí solo se apaga el recordatorio.
+    "recordatorio_quincenal": True,
+    "recordatorio_mensual": True,
+    # El peso
+    "recordatorio_peso": True,
+    # Cómo se le avisa
+    "avisos_en_la_app": True,
+    "por_correo": True,
+}
+
+#: La hora a la que se le enciende el cierre. Ver `core/ventana_del_dia`: de 17 a 23.
+HORA_POR_DEFECTO = 17
+
+
 @router.get("/preferencias")
 async def get_preferencias(user=Depends(get_current_user)):
-    """Qué avisos quiere recibir. Hoy solo se puede apagar el del cierre del día: es el
-    único diario, y es el que el doc marca como "activado por defecto · puede apagarlo".
+    """Qué avisos quiere recibir y a qué hora le sale el cierre del día.
 
     Va aparte del perfil porque el perfil es del coach tanto como del cliente, y esto es
     una preferencia suya que no tiene que pasar por `PUT /clients/profile`."""
+    from core.ventana_del_dia import hora_de_apertura
+
     perfil = await db.client_profiles.find_one(
         {"user_id": user["id"]}, {"_id": 0, "avisos": 1})
     avisos = (perfil or {}).get("avisos") or {}
-    return {"cierre_dia": bool(avisos.get("cierre_dia", True))}
+    datos = {clave: bool(avisos.get(clave, valor)) for clave, valor in PREFERENCIAS.items()}
+    datos["hora_cierre"] = hora_de_apertura(avisos.get("hora_cierre"))
+    return datos
 
 
 @router.put("/preferencias")
 async def update_preferencias(payload: Dict[str, Any] = Body(...), user=Depends(get_current_user)):
-    """Guarda las preferencias de avisos del cliente."""
+    """Guarda las preferencias de avisos del cliente.
+
+    Solo claves conocidas: un typo no crea un interruptor fantasma que nadie lee. Y la hora
+    pasa por `hora_de_apertura`, que aplica el mínimo de las 17:00 -- «puedes activarla a
+    cualquier hora A PARTIR de las 17:00» --, así que una hora imposible no entra en la base.
+    """
+    from core.ventana_del_dia import hora_de_apertura
+
     cambios = {}
-    if "cierre_dia" in payload:
-        cambios["avisos.cierre_dia"] = bool(payload.get("cierre_dia"))
+    for clave in PREFERENCIAS:
+        if clave in payload:
+            cambios[f"avisos.{clave}"] = bool(payload.get(clave))
+    if "hora_cierre" in payload:
+        cambios["avisos.hora_cierre"] = hora_de_apertura(payload.get("hora_cierre"))
     if cambios:
         await db.client_profiles.update_one({"user_id": user["id"]}, {"$set": cambios})
     return await get_preferencias(user)

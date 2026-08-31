@@ -510,6 +510,63 @@ def avisos_condicionados(*, ahora: datetime,
 # `ahora_es` viene YA en hora de España (`ahora_madrid()`), porque todas las horas del
 # doc lo son. Mongo guarda UTC y la conversion se hace en el borde, en `sincronizar_avisos`.
 
+# ── QUE SE APAGA Y QUE NO (doc «El día», 31-08) ─────────────────────────────────────────
+#
+# «Lo que interrumpe si, lo que informa no.» El cliente puede apagar los recordatorios; lo
+# que NO puede apagar es enterarse del estado de su cuenta. Son cuatro, y el documento los
+# lista uno a uno:
+#
+#   1. La fila de pendientes del Inicio. No es un aviso, es el estado de su cuenta, y por
+#      eso no aparece aqui: no pasa por los avisos.
+#   2. El aviso de que le has contestado -- sus macros, su rutina, su informe, los mensajes
+#      del chat. «Es lo unico que le DA algo en vez de pedirle algo, asi que es el que mas
+#      quiere recibir.» Todavia no existe (bloque F), y cuando exista entra aqui.
+#   3. El fuera de plazo del jueves. No le pide nada: le dice que ha perdido el ajuste de
+#      esta quincena.
+#   4. La renovacion. «Va de su contrato, no de su entrenamiento: si lo apaga, se le caduca
+#      la suscripcion sin enterarse y luego la culpa es tuya.»
+NUNCA_SE_APAGAN = {
+    "reporte_no_llego",                       # el fuera de plazo
+    "fin_ciclo", "ciclo_terminado", "volvemos",   # todo lo que va del contrato
+}
+
+#: Que familia apaga cada interruptor. Lo que no esta aqui no se puede apagar por familia:
+#: o cae con `avisos_en_la_app` o no cae nunca.
+FAMILIAS_POR_INTERRUPTOR = {
+    "recordar_cierre": {"cierra_dia", "sin_cerrar"},
+    "recordatorio_quincenal": {"quincenal_abierto", "quincenal_ultimo"},
+    "recordatorio_mensual": {"mensual_abierto", "mensual_ultimo"},
+    "recordatorio_peso": {"peso_miercoles", "peso_jueves"},
+}
+
+
+def filtrar_por_preferencias(avisos: List[Dict[str, Any]],
+                             preferencias: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Quita los avisos que el cliente ha apagado, respetando los cuatro que no se apagan.
+
+    Se hace aqui, sobre la lista ya montada, y no colando cuatro booleanos mas por la firma
+    de cada generador: asi la regla se lee de una vez y se prueba sin montar un cliente.
+    """
+    p = preferencias or {}
+    apagadas = set()
+    for interruptor, familias in FAMILIAS_POR_INTERRUPTOR.items():
+        if not p.get(interruptor, True):
+            apagadas |= familias
+
+    # «Avisos en la app» apagado se lleva TODO lo demas por delante -- que es lo que ese
+    # interruptor significa --, menos los cuatro. Y la linea de abajo de su pantalla se lo
+    # dice: «Lo que tengas pendiente seguira saliendo en Inicio. Aqui solo apagas los avisos».
+    todo_fuera = not p.get("avisos_en_la_app", True)
+
+    def entra(a):
+        familia = a.get("familia")
+        if familia in NUNCA_SE_APAGAN:
+            return True
+        return not (todo_fuera or familia in apagadas)
+
+    return [a for a in avisos if entra(a)]
+
+
 def avisos_de_calendario_doc(*, ahora_es: datetime,
                              cliente_id: Optional[str] = None,
                              arranque: Optional[date] = None,
