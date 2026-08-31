@@ -126,7 +126,17 @@ const FavoritesModal = ({ open, onClose, favorites, onSave, onApply, onDelete, t
                     {(!favorites || favorites.length === 0) ? (
                         <p className="text-sm text-muted-foreground text-center py-6">Todavía no tienes favoritas.</p>
                     ) : favorites.map(fav => {
-                        const n = Object.values(fav.comidas || {}).filter(m => (m?.alimentos || []).length > 0).length;
+                        // EL INTRA Y EL POST NO SON COMIDAS (31-08-2026). Esto contaba todas
+                        // las claves con alimentos, peri incluido, así que un día de TRES
+                        // comidas con intra y post salía en la lista como «5 comidas» -- y con
+                        // una Comida 4 fantasma de las de antes del 29-08, como «6». Un cliente
+                        // lo reportó: guarda su día de tres y la favorita dice otra cosa.
+                        // El peri va detrás y por su nombre, que es como se llama en la app.
+                        const conAlgo = Object.entries(fav.comidas || {})
+                            .filter(([, m]) => (m?.alimentos || []).length > 0)
+                            .map(([k]) => k);
+                        const n = conAlgo.filter(k => /^C\d+$/.test(k)).length;
+                        const peri = conAlgo.filter(k => k === 'Intra' || k === 'Post');
                         const favTipo = fav.tipo_dia || 'entrenamiento';
                         return (
                             <div key={fav.id} className="bg-muted rounded-lg p-2">
@@ -144,7 +154,9 @@ const FavoritesModal = ({ open, onClose, favorites, onSave, onApply, onDelete, t
                                                 : <ChevronDown className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />}
                                         </p>
                                         <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                                            {n === 1 ? '1 comida' : `${n} comidas`} <TipoDiaBadge tipo={favTipo} />
+                                            {n === 1 ? '1 comida' : `${n} comidas`}
+                                            {peri.length > 0 && ` + ${peri.join(' y ')}`}
+                                            {' '}<TipoDiaBadge tipo={favTipo} />
                                         </p>
                                     </button>
                                     <Button variant="outline" size="sm" className="rounded-full border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white shrink-0"
