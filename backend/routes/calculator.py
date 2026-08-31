@@ -23,7 +23,7 @@ from calma_engine import (
     run_tests as calma_run_tests,
     parse_categories,
 )
-from calculator import buscar_alimentos as buscar_alimentos_async, sugerir_alimentos, get_food_config, calcular_cantidad_automatica, get_categoria_principal, get_all_foods_cached, normalize_text, cat_in_list
+from calculator import buscar_alimentos as buscar_alimentos_async, sugerir_alimentos, get_food_config, calcular_cantidad_automatica, get_categoria_principal, get_all_foods_cached, normalize_text, cat_in_list, es_generico
 from calma_suggest import (
     ajustar_cantidad as ajustar_cantidad_calma,
     macros_at as macros_at_calma,
@@ -164,7 +164,9 @@ _PREP_TESTS = {
     "HAM": lambda a: _has_token(a, "HAM"),
     "SNA": lambda a: _has_token(a, "SNA"),
     "SGL": lambda a: _has_token(a, "SGL"),
-    "GEN": lambda a: not a.get("url"),
+    # La regla vive en calculator.es_generico, con el motivo escrito: es la URL, más las
+    # marcas a las que nadie se la rellenó y hay que marcar a mano (31-08-2026).
+    "GEN": es_generico,
     "PRO": lambda a: _has_token(a, "PRO"),
     # Original: P(nombre,["polvo","harina"]) || o(e,["POL","4","7.1.2.6","16.5","18.3","27"]) || P(nombre,["crema","arroz"],AND)
     "POL": lambda a: (

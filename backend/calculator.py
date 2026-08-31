@@ -249,6 +249,33 @@ def es_marca_recomendada(alimento: dict) -> bool:
     return 'PRO' in tags
 
 
+def es_generico(alimento: dict) -> bool:
+    """¿Es un alimento genérico -- «pechuga de pollo» -- y no un producto de marca?
+
+    LA REGLA ES LA URL, y ya lo era: el chip «Genérico» filtraba con `not a.get("url")`
+    metido en una lambda. Está aquí para poder decir POR QUÉ, y sobre todo para el `es_marca`
+    de abajo, que la lambda no tenía.
+
+    La URL separa marca de genérico mejor que ninguna otra señal del catálogo. Contrastada
+    con la otra pista que hay -- la marca entre paréntesis al final del nombre -- las dos
+    dicen lo mismo en 3.146 de 3.211 (98 %), y casi todos los desacuerdos los gana la URL:
+    «Aquarius» o «Gatorade» no llevan paréntesis y son marcas, y «Filete de ternera (corte
+    magro)» lleva paréntesis y es genérico, porque ahí el paréntesis es una aclaración.
+
+    PERO LA URL SOLA NO BASTA, y esto lo cazó Francisco el 31-08-2026: hay marcas a las que
+    nadie les rellenó la URL -- Nutrisport (dos), 7 Hermanos, Sol Natural, Esgir y un
+    Hacendado --, y sin marcarlas se cuelan en el filtro de genéricos. Por eso existe
+    `es_marca`, que se pone a mano en esas fichas, y por eso existe
+    `tests/test_marcas_sin_url_3108.py`, que salta cuando aparece una nueva.
+
+    No se inventa una URL para taparlo: una URL falsa acaba siendo un enlace que se le enseña
+    a un cliente.
+    """
+    if alimento.get("es_marca") is True:
+        return False
+    return not str(alimento.get("url") or "").strip()
+
+
 # =========================================================
 # FUNCIONES DE CATEGORÍA
 # =========================================================

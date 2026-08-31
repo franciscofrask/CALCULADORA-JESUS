@@ -785,6 +785,16 @@ const BuildMealModal = ({
         try {
             const macrosParams = getMacrosParams();
             const params = new URLSearchParams({ q: texto, limit: '200', ...macrosParams, ...getDiaParams() });
+            // LOS CHIPS ENCENDIDOS TAMBIÉN FILTRAN AL ESCRIBIR (31-08-2026).
+            //
+            // Aquí se mandaba solo `q`. Los chips seguían pintados y encendidos, pero en
+            // cuanto tecleabas dejaban de existir: un cliente puso «Genérico», buscó «pechuga
+            // de pollo» y le salieron todas las marcas. Un filtro que se ve encendido y no
+            // filtra es peor que no tenerlo, porque el cliente cree que la lista ya está
+            // filtrada.
+            const cats = selectedCategories.flatMap(c => c.prefixes || []).filter(Boolean);
+            if (cats.length) params.set('category', cats.join(','));
+            if (selectedPreparations.length) params.set('tag', selectedPreparations.join(','));
             if (Object.keys(macrosParams).length > 0) params.set('solo_cantidad', 'true');
             if (isIntraMode || isPostMode) params.set('peri', isIntraMode ? 'intra' : 'post');
             const result = await api(`/api/calculator/search?${params}`);
@@ -802,6 +812,18 @@ const BuildMealModal = ({
             if (miTurno === turnoBusqueda.current) setLoadingFoods(false);
         }
     };
+
+    // Y SI TOCAS UN CHIP CON ALGO ESCRITO, SE VUELVE A BUSCAR (31-08-2026). La búsqueda solo
+    // se lanza al teclear, así que sin esto encender «Genérico» con «pechuga de pollo» ya
+    // escrito no cambiaba la lista: el chip se veía encendido y los resultados eran los de
+    // antes. Mismo fallo por otra puerta.
+    useEffect(() => {
+        if (!open) return;
+        const texto = (searchQuery || '').trim();
+        if (texto.length < 2) return;
+        handleSearch(searchQuery);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedCategories, selectedPreparations]);
 
     const handleSelectFood = async (food) => {
         try {
