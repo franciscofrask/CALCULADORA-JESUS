@@ -10,7 +10,7 @@ Incluye health score (rojo/amarillo/verde) y fotos de progreso (binario en
 colección dedicada `client_photos` para no inflar los documentos de check-in).
 """
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Query, Response
-from datetime import datetime, timezone, timedelta
+from datetime import date, datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any
 import uuid
 
@@ -271,6 +271,74 @@ async def _cierre_de_hoy(client_id: str, fecha: str) -> Optional[dict]:
         return None
     cuando = a_madrid(ultimo.get("created_at"))
     return ultimo if cuando and cuando.date().isoformat() == fecha else None
+
+
+@router.get("/checkins/estado")
+async def estado_del_cierre(fecha: Optional[str] = Query(None), user=Depends(get_current_user)):
+    """Qué día se puede cerrar ahora y cuántos lleva sin cerrar (doc «El día», 31-08).
+
+    LA REGLA VIVE EN UN SOLO SITIO, `core/ventana_del_dia`, y se sirve resuelta: hasta el
+    texto de la fila del Inicio sale de aquí. La escalada de los 2, 4 y 7 días es una regla
+    de producto, no una decisión de maquetado, y con ella escrita en la pantalla acabaríamos
+    con la misma cuenta en dos lados -- que es exactamente lo que pasó con los macros el
+    27-08 y costó un día entero encontrarlo.
+
+    `fecha` es el día del reloj del cliente, como en `/checkins/hoy`. Las HORAS, en cambio,
+    son las de España: el reloj del cliente decide qué día vive; España, los plazos.
+    """
+    from core.tiempo import a_madrid, ahora_madrid, dia_del_cliente
+    from core.ventana_del_dia import (dia_abierto, dias_sin_cerrar, hora_de_apertura,
+                                      texto_de_la_linea, HORA_LIMITE_DE_AYER)
+
+    profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+
+    avisos = profile.get("avisos") or {}
+    # Los dos interruptores del cierre son distintos y hoy eran uno (doc «El día»):
+    #   `cierre_dia`      apagado -> la fila no sale nunca
+    #   `recordar_cierre` apagado -> la fila sale igual, pero sin la escalada
+    quiere = bool(avisos.get("cierre_dia", True))
+    recuerda = bool(avisos.get("recordar_cierre", True))
+    hora = hora_de_apertura(avisos.get("hora_cierre"))
+
+    ahora_es = ahora_madrid()
+    hoy_cliente = date.fromisoformat(dia_del_cliente(fecha))
+    abierto = dia_abierto(ahora_es, hoy_cliente, hora)
+
+    # Los días que ya cerró, para contar la racha. Con mirar dos meses atrás sobra: la
+    # cuenta se corta sola a los 60.
+    desde = (hoy_cliente - timedelta(days=70)).isoformat()
+    filas = await db.checkins.find(
+        {"client_id": profile["id"], "type": "daily", "dia": {"$gte": desde}},
+        {"_id": 0, "dia": 1, "created_at": 1}).to_list(200)
+    dias = [f.get("dia") for f in filas if f.get("dia")]
+    # Los de antes del 16-08 no llevan `dia`: se les mira el `created_at`, que va en UTC.
+    for f in filas:
+        if not f.get("dia"):
+            cuando = a_madrid(f.get("created_at"))
+            if cuando:
+                dias.append(cuando.date().isoformat())
+
+    hecho = await _cierre_de_hoy(profile["id"], abierto.isoformat()) if abierto else None
+    racha = dias_sin_cerrar(dias, ahora_es, hoy_cliente, hora)
+    es_de_ayer = bool(abierto and abierto < hoy_cliente)
+
+    return {
+        # Qué día se puede cerrar ahora mismo, y hasta cuándo. `null` entre las 15:00 y su
+        # hora: ahí no hay ningún día abierto, y eso es lo que impide que se solapen dos.
+        "abierto": abierto.isoformat() if abierto else None,
+        "es_de_ayer": es_de_ayer,
+        "cierra_a": HORA_LIMITE_DE_AYER if abierto else None,
+        "hora_de_apertura": hora,
+        "hecho": bool(hecho),
+        "dias_sin_cerrar": racha,
+        "quiere_cierre": quiere,
+        "quiere_recordatorio": recuerda,
+        # Ya resuelto: la fila del Inicio solo tiene que pintarlo. Sin escalada si apagó el
+        # recordatorio, que es justo lo que ese interruptor significa.
+        "linea": texto_de_la_linea(racha if recuerda else 0, es_de_ayer),
+    }
 
 
 @router.get("/checkins/hoy")

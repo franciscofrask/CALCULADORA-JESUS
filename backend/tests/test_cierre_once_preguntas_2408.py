@@ -104,15 +104,24 @@ class TestLoQueSeGuardaDeLasOnce:
 
 
 class TestLasOncePreguntasEnLaPantalla:
+    # TRES LITERALES CAMBIARON EL 31-08, CON EL DOC «El día». No se borran de aquí sin
+    # decir por qué, que es la única forma de que dentro de un mes se sepa si se cayeron a
+    # propósito o se perdieron:
+    #
+    #   - «Sensaciones generales del día» SE FUE de la pantalla. Ya no está en la lista de
+    #     preguntas del documento. El campo se sigue guardando y el historial de quien lo
+    #     tenga contestado lo sigue pintando, así que el modelo no se toca.
+    #   - «¿Tomaste tus suplementos?» pasa a «¿Tomaste la suplementación que tenías
+    #     pautada?», y la opción del medio de «No todos» a «No toda».
+    #   - La ayuda de los extras pasa a pedir en vez de describir.
     @pytest.mark.parametrize("literal", [
-        "Sensaciones generales del día",
         "¿Entrenaste hoy?",
         "¿Cómo fue?",
         "¿Hiciste cardio?",
         "¿Te moviste lo suficiente?",
-        "¿Tomaste tus suplementos?",
+        "¿Tomaste la suplementación que tenías pautada?",
         "¿Se te ha escapado algo más hoy?",
-        "Algo que comieras de más y no pusieras en el apartado «extras»",
+        "Si no lo pusiste en el apartado de extras, ponlo ahora",
         "¿Cómo descansaste la noche de ayer?",
         "Niveles de energía durante el día",
         "Hambre / ansiedad con la dieta",
@@ -139,24 +148,41 @@ class TestLasOncePreguntasEnLaPantalla:
 # ============ 2. LA REGLA DEL COLOR Y EL GUARDAR ============
 
 class TestComoSeComportaLaPantalla:
-    def test_una_sola_tarjeta_encendida(self):
-        """«Solo una encendida a la vez»: la que toca es la primera sin contestar, salvo
-        que el cliente haya vuelto a abrir otra a mano."""
+    def test_todas_a_la_vista(self):
+        """SE ACABÓ EL ACORDEÓN (doc «El día», 31-08): «todas a la vista, sin plegar nada».
+
+        Hasta el 31-08 iba una encendida cada vez -- la primera sin contestar, salvo que el
+        cliente reabriera otra a mano -- y la encendida era la naranja. El documento pide lo
+        contrario, así que se cae la cadena y con ella el `abierta`.
+
+        Y con el acordeón se cae también el naranja de la tarjeta: marcaba «esta es la que
+        toca», y con las ocho abiertas no distingue nada. En esta app el naranja quiere decir
+        «te has pasado» (punto 76), así que ocho tarjetas naranjas se leen como ocho errores.
+        """
         pantalla = _fuente(PANTALLA)
-        assert ("const encendida = preguntas.some(p => p.id === abierta) ? abierta "
-                ": (pendientes[0]?.id ?? null);") in pantalla
-        assert "border-brand bg-brand/5" in pantalla, "la encendida es la naranja"
+        # Se miran los TOKENS del estado, no la palabra: «abierta» sigue apareciendo en los
+        # comentarios que cuentan por qué se fue, y eso es lo que se quiere conservar.
+        assert "const [abierta," not in pantalla, "queda el estado del acordeón"
+        assert "setAbierta" not in pantalla, "queda quien lo apagaba y encendía"
+        assert "encendida" in pantalla, "el componente sigue recibiendo el flag, siempre a true"
+        assert "border-brand bg-brand/5" not in pantalla, (
+            "la tarjeta ya no se pinta de naranja por estar abierta")
 
     def test_al_contestar_hay_tick_y_respuesta_debajo(self):
         pantalla = _fuente(PANTALLA)
         assert 'data-testid={`${testId}-tick`}' in pantalla
         assert 'data-testid={`${testId}-resumen`}' in pantalla
 
-    def test_se_vuelve_a_encender_al_tocarla(self):
-        """Punto 18: al reabrir el cierre sale todo en oscuro, y tocando una respuesta se
-        enciende esa tarjeta."""
+    def test_contestar_no_pliega_la_tarjeta(self):
+        """Lo que el punto 18 resolvía con el «vuelve a encenderse al tocarla» ya no hace
+        falta: nunca se apaga. Contestar solo guarda el valor (doc «El día», 31-08).
+
+        Se comprueba por el lado de que NO vuelva a colarse el plegado, que es lo que este
+        caso vigilaba desde el otro lado.
+        """
         pantalla = _fuente(PANTALLA)
-        assert "onAbrir={() => setAbierta(p.id)}" in pantalla
+        assert "onAbrir={() => setAbierta" not in pantalla
+        assert "const responder = (campo, valor) => set(campo, valor);" in pantalla
 
     def test_el_guardar_esta_apagado_hasta_el_final_Y_DICE_QUE_FALTA(self):
         """Un Guardar apagado sin decir por que es peor que uno encendido."""
@@ -219,10 +245,21 @@ class TestLasComidasSinRegistrar:
         assert "const sinRegistrar = hoy?.comidas_pendientes || [];" in pantalla
         assert "Te quedan ${sinRegistrar.length} comidas sin registrar" in pantalla
         assert "Puedes cerrarlas antes de seguir" in pantalla
-        assert "Dieta registrada" in pantalla
-        # Y «Dieta registrada» no se dice por que exista el documento del dia: el extra lo
-        # crea con `upsert` y ni una comida dentro.
-        assert "const hayDietaMontada = Object.values(dia?.comidas || {})" in pantalla
+        # EL OTRO ESTADO CAMBIÓ EL 31-08 (doc «El día»). Decía «Dieta registrada» y sólo
+        # salía si había dieta montada -- por `hayDietaMontada`, que existía porque un día
+        # al que sólo le apuntaron «dos cañas» tiene documento y ninguna comida, y decirle
+        # «dieta registrada» habría sido mentira.
+        #
+        # Ahora el hueco dice «El día, todo bien · No te queda nada por registrar», y esa
+        # frase sí es verdad no haya comidas pendientes, haya montado dieta o no. Por eso
+        # se cae el candado: lo que cambió no es la condición, es lo que se afirma.
+        assert "El día, todo bien" in pantalla
+        assert "No te queda nada por registrar" in pantalla
+        assert "hayDietaMontada = " not in pantalla
+        # Ojo: «Dieta registrada» SIGUE en el fichero y tiene que seguir. Es otra cosa: la
+        # línea del historial de un día pasado («· Dieta registrada»). Lo que se comprueba
+        # es que no esté como AVISO de arriba.
+        assert "<p className=\"text-sm text-foreground\">Dieta registrada</p>" not in pantalla
         # Y se va la casilla «La hice» de abajo: las dos no (decision de Jesus, 24-08).
         assert 'data-testid="cierre-comida-hecha"' not in pantalla
 

@@ -454,6 +454,8 @@ const InicioNuevo = () => {
     // El día de mañana, para la línea «Mañana · aún sin dieta · Repetir la de hoy».
     const [dietaManana, setDietaManana] = useState(null);
     const [ultimoCierre, setUltimoCierre] = useState(null);
+    // La ventana del cierre y la racha, resueltas por el servidor (doc «El día», 31-08).
+    const [estadoDelCierre, setEstadoDelCierre] = useState(null);
     const [reportes, setReportes] = useState([]);
     const [tienePreferencias, setTienePreferencias] = useState(true);
 
@@ -467,13 +469,17 @@ const InicioNuevo = () => {
             // fuentes -- ese fue el fallo: según cuál llegara antes, Inicio enseñaba 190, 235
             // o 225 del mismo día mientras el cliente miraba. Viene resuelto con la dieta o
             // no viene.
-            const [dietaRes, suplRes, rutinaRes, logRes, cierreRes, dueRes, prefsRes, pdfRes, mananaRes,
-                   semanaRes, cfgRes] = await Promise.all([
+            const [dietaRes, suplRes, rutinaRes, logRes, cierreRes, estadoRes, dueRes, prefsRes,
+                   pdfRes, mananaRes, semanaRes, cfgRes] = await Promise.all([
                 api.get(`/diets/${hoyDeLaDieta()}`).catch(() => ({ data: { exists: false } })),
                 api.get('/supplements/current').catch(() => ({ data: null })),
                 api.get('/routines/current').catch(() => ({ data: null })),
                 api.get(`/workout-logs/hoy?fecha=${hoyLocal()}`).catch(() => ({ data: { log: null } })),
                 api.get('/checkins?type=daily&limit=1').catch(() => ({ data: [] })),
+                // QUÉ DÍA ESTÁ ABIERTO Y CUÁNTOS LLEVA SIN CERRAR (doc «El día», 31-08).
+                // Viene resuelto del servidor, texto incluido: la escalada de los 2, 4 y 7
+                // días es una regla de producto y no puede vivir en dos sitios.
+                api.get(`/checkins/estado?fecha=${hoyLocal()}`).catch(() => ({ data: null })),
                 api.get('/reports/due').catch(() => ({ data: { items: [] } })),
                 api.get('/user/preferences').catch(() => ({ data: { has_preferences: true } })),
                 api.get('/routines/pdf/info').catch(() => ({ data: { hay: false } })),
@@ -505,6 +511,7 @@ const InicioNuevo = () => {
             setConfigDieta(cfgRes.data || null);
             setDietaManana(mananaRes.data || null);
             setUltimoCierre(Array.isArray(cierreRes.data) ? cierreRes.data[0] || null : null);
+            setEstadoDelCierre(estadoRes.data || null);
             setReportes(dueRes.data?.items || []);
             setTienePreferencias(!!prefsRes.data?.has_preferences);
 
@@ -664,14 +671,35 @@ const InicioNuevo = () => {
     // `reportes` y por eso la línea no le salía a los 81 clientes cuyo plan no vende
     // ningún reporte -- ELM, Mantenimiento, Calculadora JP, Básica --, que son justo los
     // que solo tienen esto para contar su día. Ver CAP.CIERRE_DIA en lib/planAccess.js.
-    if (can('cierre_dia') && !cierreDeHoy) {
+    // LA FILA DEL CIERRE, CON SU HORA Y SU ESCALADA (doc «El día», 31-08).
+    //
+    // Hasta hoy salía a cualquier hora y decía lo mismo el primer día que el décimo. Ahora
+    // manda `/checkins/estado`, que resuelve las tres cosas en el servidor:
+    //
+    //   - QUÉ DÍA está abierto. Por la mañana es el de AYER (hasta las 15:00), que es lo
+    //     único que recupera un día perdido; de 15:00 a su hora no hay ninguno y la fila no
+    //     sale; a partir de su hora (17:00 por defecto), el de hoy.
+    //   - CUÁNTOS lleva sin cerrar, contando solo los que ya no tienen arreglo.
+    //   - QUÉ DICE. El texto viene hecho: es una regla de producto, y escrita aquí además
+    //     estaría en dos sitios.
+    //
+    // `quiere_cierre` apagado quita la fila del todo, que es lo que ese interruptor
+    // significa; el de la escalada lo aplica el servidor.
+    const estado = estadoDelCierre;
+    const cierreAbierto = estado ? (!!estado.abierto && !estado.hecho && estado.quiere_cierre)
+                                 : (can('cierre_dia') && !cierreDeHoy);
+    if (can('cierre_dia') && cierreAbierto) {
         pendientes.push({
-            id: 'cierre', icono: ClipboardCheck, titulo: '¿Cómo fuiste hoy?',
+            id: 'cierre', icono: ClipboardCheck,
+            titulo: estado?.linea?.titulo || '¿Cómo fuiste hoy?',
             // En cursiva, como lo pide el doc 19-08: es una aclaración, no una orden.
-            detalle: 'Para rellenar al final del día', cursiva: true,
+            detalle: estado?.linea?.detalle || 'Para rellenar al final del día', cursiva: true,
             // La fecha y la hora del último, en vez de la palabra «pendiente».
             extra: ultimoCierre ? `último registro: ${etiquetaMomento(ultimoCierre.created_at)}` : null,
-            path: '/dashboard/checkins',
+            // Con la ventana de la mañana abierta lleva al día de AYER, no al de hoy.
+            path: estado?.es_de_ayer
+                ? `/dashboard/checkins?fecha=${estado.abierto}`
+                : '/dashboard/checkins',
         });
     }
     const faltaElAjuste = profile?.questionnaire_completed && !profile?.ajuste_macros_completado

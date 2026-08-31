@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useEsTelefono } from '../lib/esTelefono';
 import { revisarPeso, PESO_MIN, PESO_MAX } from '../lib/pesoValido';
@@ -433,10 +433,18 @@ const Opciones = ({ opciones, value, onChange, testId, columnas = 3 }) => (
 // desaparecer la caja donde tenía que escribir cuál.
 const Tarjeta = ({ titulo, ayuda, ayudaCursiva = false, encendida, contestada,
                   resumen, onAbrir, cola, testId, children }) => (
+    // Y SIN EL NARANJA, que era del acordeón. Marcaba «esta es la que toca» cuando sólo
+    // había una abierta; con las ocho a la vista no distingue nada, y en esta app el
+    // naranja quiere decir «algo que corregir» (la regla del punto 76). Ocho tarjetas
+    // naranjas se leen como ocho errores. Lo que dice si está contestada es el tic, y lo
+    // que dice qué falta es el pie.
     <div data-testid={testId} data-encendida={encendida ? '1' : '0'}
-        className={`rounded-2xl border p-4 transition-colors ${encendida
-            ? 'border-brand bg-brand/5'
-            : 'border-border bg-card'}`}>
+        className="rounded-2xl border border-border bg-card p-4 transition-colors">
+        {/* TODAS ABIERTAS, SIN PLEGAR NADA («El día», 31-08). `encendida` llega siempre a
+            true desde que la pantalla dejó de ser un acordeón; la rama de abajo -- la
+            tarjeta cerrada con su resumen -- se queda escrita porque el mismo componente
+            lo usan el semanal y el mensual, que sí pliegan. Si un día vuelve el acordeón
+            del cierre, está aquí. */}
         {encendida ? (
             <div className="flex items-start gap-2">
                 {contestada && (
@@ -516,9 +524,6 @@ const ENTRENO_DE_VUELTA = { si_no_lo_puse: 'si', no_entrene: 'no' };
 const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado, inicial = null }) => {
     const navigate = useNavigate();
     const [enviando, setEnviando] = useState(false);
-    // La tarjeta que el cliente ha vuelto a abrir a mano. Sin ella manda el orden: la
-    // primera sin contestar.
-    const [abierta, setAbierta] = useState(null);
     const [f, setF] = useState(() => ({
         sensaciones: inicial?.sensaciones ?? null,
         entreno_respuesta: inicial?.entreno_respuesta
@@ -538,9 +543,9 @@ const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado, inicial = null 
         weight: inicial?.weight != null ? String(inicial.weight) : '',
     }));
     const set = (campo, valor) => setF(prev => ({ ...prev, [campo]: valor }));
-    // Contestar apaga la tarjeta y enciende la siguiente: se suelta la que se abrió a
-    // mano y vuelve a mandar el orden.
-    const responder = (campo, valor) => { set(campo, valor); setAbierta(null); };
+    // Antes esto además apagaba la tarjeta y encendía la siguiente. Con todas a la vista
+    // («El día», 31-08), contestar solo guarda el valor.
+    const responder = (campo, valor) => set(campo, valor);
 
     // EL DÍA DE LA DIETA QUE SE ESTABA COMIENDO (punto 32). El cierre de las 23:50 tiene
     // que caer en el día de hoy y no en el de mañana, y el extra que se apunte desde aquí
@@ -588,15 +593,11 @@ const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado, inicial = null 
     // nunca se pueden dar por contestadas, y una tarjeta que no se puede contestar dejaría
     // el naranja clavado en ella para siempre. Van abiertas al final, como en el
     // maquetado.
+    // FUERA «SENSACIONES GENERALES DEL DÍA» («El día», 31-08). Era la primera y ya no está
+    // en la lista del documento. Se va de la PANTALLA, no de la base: el campo se sigue
+    // guardando vacío y el historial de quien ya lo tenga contestado lo sigue pintando con
+    // sus estrellitas. Borrarlo del modelo dejaría meses de días sin poder enseñarse.
     const preguntas = [
-        {
-            id: 'sensaciones', testId: 'cierre-sensaciones', visible: true,
-            titulo: 'Sensaciones generales del día',
-            hecha: f.sensaciones != null,
-            resumen: estrellitas(f.sensaciones),
-            campo: <Estrellas testid="cierre-sensaciones-estrellas" valor={f.sensaciones}
-                onChange={v => responder('sensaciones', v)} />,
-        },
         {
             id: 'entreno', testId: 'cierre-entreno', visible: true,
             titulo: '¿Entrenaste hoy?',
@@ -613,7 +614,7 @@ const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado, inicial = null 
                         onChange={v => {
                             set('entreno_respuesta', v);
                             // Cambiar de idea limpia lo que colgaba del «Sí».
-                            if (v !== 'si') { set('entreno_estrellas', null); setAbierta(null); }
+                            if (v !== 'si') set('entreno_estrellas', null);
                         }}
                         opciones={[{ v: 'si', l: 'Sí' }, { v: 'no', l: 'No' },
                                    { v: 'descanso', l: 'Descanso' }]} />
@@ -666,15 +667,25 @@ const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado, inicial = null 
         },
         {
             id: 'suplementos', testId: 'cierre-suplementos',
-            // Solo a quien su PLAN le da suplementación y además tiene protocolo puesto.
-            // Lo decide el servidor, con el mismo candado que su pantalla (punto 06).
-            visible: !!hoy?.suplementos,
-            titulo: '¿Tomaste tus suplementos?',
+            // A TODO EL MUNDO («El día», 31-08). Hasta hoy era condicional: el servidor
+            // miraba dos cosas -- que su plan incluyera suplementación y que tuviera
+            // protocolo vigente ese día -- y solo entonces salía. El documento la lista
+            // entre las nueve sin condición ninguna, y Francisco cerró que manda el
+            // documento.
+            //
+            // Queda dicho lo que se lleva por delante, porque el candado no era un capricho
+            // (punto 06 del 24-08): había cuatro clientes activos con protocolo de su etapa
+            // anterior y un plan que ya no incluye suplementación, y el cierre les
+            // preguntaba cada noche por unos suplementos que su propia pantalla no les deja
+            // ni ver. Con la pregunta para todos, ese caso vuelve. `hoy.suplementos` sigue
+            // llegando del servidor por si un día hay que volver a mirarlo.
+            visible: true,
+            titulo: '¿Tomaste la suplementación que tenías pautada?',
             hecha: f.suplementos != null,
             resumen: SUPLES_VALOR[f.suplementos],
             campo: <Opciones testId="cierre-suplementos-op" value={f.suplementos}
                 onChange={v => responder('suplementos', v)}
-                opciones={[{ v: 'si', l: 'Sí' }, { v: 'no_todos', l: 'No todos' },
+                opciones={[{ v: 'si', l: 'Sí' }, { v: 'no_todos', l: 'No toda' },
                            { v: 'no', l: 'No' }]} />,
             cola: f.suplementos === 'no_todos' ? (
                 <input value={f.suplementos_detalle} onChange={e => set('suplementos_detalle', e.target.value)}
@@ -685,7 +696,9 @@ const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado, inicial = null 
         {
             id: 'extras', testId: 'cierre-extras', visible: true,
             titulo: '¿Se te ha escapado algo más hoy?',
-            ayuda: 'Algo que comieras de más y no pusieras en el apartado «extras»',
+            // «El día», 31-08. Decía «Algo que comieras de más y no pusieras en el apartado
+            // "extras"», que describe; esta pide.
+            ayuda: 'Si no lo pusiste en el apartado de extras, ponlo ahora',
             hecha: f.extras_respuesta != null,
             resumen: f.extras_respuesta === 'si' ? 'Sí' : 'No',
             campo: <Opciones columnas={2} testId="cierre-extras-op" value={f.extras_respuesta}
@@ -749,10 +762,14 @@ const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado, inicial = null 
         },
     ].filter(p => p.visible);
 
-    // La primera sin contestar es la que toca; la que se haya abierto a mano manda sobre
-    // ella. Nunca hay más de una encendida.
+    // TODAS A LA VISTA («El día», 31-08). Hasta hoy iba una encendida cada vez: se
+    // contestaba una, se plegaba con su resumen y se abría sola la siguiente. El documento
+    // pide lo contrario -- «todas a la vista, sin plegar nada: nueve preguntas y las notas»
+    // --, así que la cadena se cae y con ella el `abierta`.
+    //
+    // Lo que hacía esa cadena era decir por dónde iba; ahora eso lo dice el pie («Te queda
+    // por contestar»), que por eso pasa a enseñarlas TODAS y no las tres primeras.
     const pendientes = preguntas.filter(p => !p.hecha);
-    const encendida = preguntas.some(p => p.id === abierta) ? abierta : (pendientes[0]?.id ?? null);
 
     // ── El Guardar, apagado hasta el final (punto 15) ────────────────────────
     //
@@ -766,11 +783,8 @@ const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado, inicial = null 
     // antes de empezar por si aún está a tiempo de corregirlo. Con esto se va la casilla
     // «La hice» de abajo, que preguntaba lo mismo de una sola comida.
     const sinRegistrar = hoy?.comidas_pendientes || [];
-    // «Dieta registrada» solo si de verdad tiene algo puesto. `dia.exists` no vale: desde
-    // que los extras hacen `upsert`, un día al que solo le apuntaron «dos cañas» tiene
-    // documento y ninguna comida, y le diríamos que su dieta está registrada.
-    const hayDietaMontada = Object.values(dia?.comidas || {})
-        .some(c => ((c || {}).alimentos || []).length > 0);
+    // Aquí vivía `hayDietaMontada`, que decidía si el hueco de arriba decía «Dieta
+    // registrada». Con «El día, todo bien» ya no hace falta: ver el aviso más abajo.
 
     const guardar = async () => {
         if (faltan.length > 0) return;
@@ -846,19 +860,29 @@ const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado, inicial = null 
                         Puedes cerrarlas antes de seguir
                     </button>
                 </div>
-            ) : hayDietaMontada ? (
-                <div className="rounded-2xl border border-border bg-muted p-4 flex items-center gap-2"
+            ) : (
+                /* «EL DÍA, TODO BIEN» («El día», 31-08). Antes este hueco decía «Dieta
+                   registrada» y sólo salía si había dieta montada; si el cliente no había
+                   montado nada, se quedaba vacío y la pantalla empezaba en seco.
+                   El documento pide el mismo hueco en verde, y con dos renglones. Y el
+                   candado de `hayDietaMontada` se cae porque lo que se afirma ha cambiado:
+                   «no te queda nada por registrar» es verdad no haya comidas pendientes,
+                   haya montado dieta o no. Decir «dieta registrada» al que sólo apuntó dos
+                   cañas sí habría sido mentira; esto no. */
+                <div className="rounded-2xl border border-border bg-muted p-4 flex items-start gap-2"
                     data-testid="cierre-dieta-aviso">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                    <p className="text-sm text-foreground">Dieta registrada</p>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                    <div>
+                        <p className="text-sm font-bold text-foreground">El día, todo bien</p>
+                        <p className="text-sm text-foreground/60 mt-0.5">No te queda nada por registrar</p>
+                    </div>
                 </div>
-            ) : null}
+            )}
 
             {preguntas.map(p => (
                 <Tarjeta key={p.id} testId={p.testId} titulo={p.titulo} ayuda={p.ayuda}
-                    ayudaCursiva={p.ayudaCursiva} encendida={encendida === p.id}
-                    contestada={p.hecha} resumen={p.resumen} cola={p.cola}
-                    onAbrir={() => setAbierta(p.id)}>
+                    ayudaCursiva={p.ayudaCursiva} encendida
+                    contestada={p.hecha} resumen={p.resumen} cola={p.cola}>
                     {p.campo}
                 </Tarjeta>
             ))}
@@ -925,9 +949,12 @@ const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado, inicial = null 
                 // empezar, y al final -- que es cuando el cliente mira el botón -- quedan
                 // una o dos. Lo que hace falta es que sepa qué le falta, no leerse la
                 // pantalla otra vez.
+                // LAS OCHO ENTERAS, SIN «Y N MÁS» («El día», 31-08). Cortaba en tres porque
+                // con el acordeón la pantalla ya decía por dónde ibas; ahora que están todas
+                // abiertas, esta línea es lo único que lo dice, y decir «y 5 más» obliga a
+                // releerse la pantalla para saber cuáles.
                 <p className="text-[11px] text-foreground/40" data-testid="cierre-que-falta">
-                    Te queda por contestar: {faltan.slice(0, 3).join(' · ')}
-                    {faltan.length > 3 && ` y ${faltan.length - 3} más`}
+                    Te queda por contestar: {faltan.join(' · ')}
                 </p>
             )}
             <button onClick={guardar} disabled={enviando || faltan.length > 0} data-testid="cierre-guardar"
@@ -952,11 +979,23 @@ const CheckInsPage = () => {
     // queda el check-in diario de siempre, que es lo que hay hoy en producción.
     const cierreNuevo = pantalla('t4_cierre_nuevo');
     const [hoy, setHoy] = useState(null);
-    // El día de la dieta de hoy: de él salen el aviso de arriba («Dieta registrada») y la
-    // lista de extras ya apuntados. `listo` evita el parpadeo del formulario.
+    // El día de la dieta de hoy: de él sale la lista de extras ya apuntados. `listo` evita
+    // el parpadeo del formulario. (El aviso de arriba ya no lo mira: desde el 31-08 dice
+    // «El día, todo bien» y le basta con las comidas pendientes.)
     const [diaHoy, setDiaHoy] = useState({ dia: null, listo: false });
     const { confirm } = useConfirm();
     const navigate = useNavigate();
+    // EL DÍA QUE SE ESTÁ CERRANDO. Normalmente el de hoy; con `?fecha=` el de ayer, que es
+    // la ventana de la mañana (doc «El día», 31-08). Se acepta un día atrás y nada más: el
+    // servidor lo vuelve a validar, pero una pantalla que se cree cualquier fecha de la URL
+    // enseñaría un día que no se puede cerrar.
+    const [parametros] = useSearchParams();
+    const elDiaQueSeCierra = (() => {
+        const pedido = parametros.get('fecha');
+        if (!pedido || !/^\d{4}-\d{2}-\d{2}$/.test(pedido)) return todayKey();
+        const dias = Math.round((new Date(`${todayKey()}T12:00:00`) - new Date(`${pedido}T12:00:00`)) / 86400000);
+        return dias === 1 ? pedido : todayKey();
+    })();
     const [checkins, setCheckins] = useState([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
@@ -991,13 +1030,17 @@ const CheckInsPage = () => {
     const fetchHoy = useCallback(async () => {
         try {
             // Con el día del cliente: el cierre pregunta por el día que ÉL está viviendo.
-            const { data } = await api.get(`/checkins/hoy?fecha=${todayKey()}`);
+            //
+            // Salvo que venga con fecha: es LA VENTANA DE LA MAÑANA (doc «El día», 31-08).
+            // Hasta las 15:00 el de ayer sigue abierto, y la fila del Inicio trae aquí con
+            // `?fecha=` para que se rellene ese y no el de hoy, que aún no ha pasado.
+            const { data } = await api.get(`/checkins/hoy?fecha=${elDiaQueSeCierra}`);
             setHoy(data || null);
         } catch (err) {
             console.error('No se pudo consultar el día de hoy:', err?.response?.data || err);
             setHoy(null);
         }
-    }, [api]);
+    }, [api, elDiaQueSeCierra]);
 
     const loadMoreHistory = async () => {
         if (histShown < checkins.length) { setHistShown(s => s + 12); return; }
@@ -1062,7 +1105,7 @@ const CheckInsPage = () => {
         }
         setSubmitting(true);
         try {
-            await api.post('/checkins', { type: 'daily', fecha: todayKey(), ...daily });
+            await api.post('/checkins', { type: 'daily', fecha: elDiaQueSeCierra, ...daily });
             toast.success('Check-in diario enviado');
             setDaily({ energy: null, hunger_anxiety: null });
             fetchAll();
