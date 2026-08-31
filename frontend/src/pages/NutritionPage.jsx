@@ -1027,18 +1027,26 @@ const NutritionPage = () => {
     // 0/0/0 (QA 15-08 ronda 3, B3-04).
     const singleMeal = distribution?.config?.single_meal === true || numComidas === 1;
 
-    const getMealOrder = () => {
-        const baseMeals = singleMeal ? ['C1'] : (numComidas === 3 ? ['C1', 'C2', 'C3'] : ['C1', 'C2', 'C3', 'C4']);
-        if (tipoDia === 'descanso') return baseMeals;
-        const periMeals = opcionPeri === 'intra_post' ? ['Intra', 'Post'] :
-                         opcionPeri === 'solo_post' ? ['Post'] :
-                         opcionPeri === 'solo_intra' ? ['Intra'] : [];
+    // Qué comidas tiene un día con ESA configuración. Se le pasa la configuración a
+    // propósito: al aplicar una favorita hay que saber el reparto NUEVO antes de que el
+    // estado lo haya recogido (setState no es inmediato), y con el de la pantalla se
+    // calculaba el del día anterior.
+    const ordenDeComidas = ({ numComidas: n, tipoDia: td, opcionPeri: op, momentoEntreno: me, unica }) => {
+        const baseMeals = unica ? ['C1'] : (n === 3 ? ['C1', 'C2', 'C3'] : ['C1', 'C2', 'C3', 'C4']);
+        if (td === 'descanso') return baseMeals;
+        const periMeals = op === 'intra_post' ? ['Intra', 'Post'] :
+                         op === 'solo_post' ? ['Post'] :
+                         op === 'solo_intra' ? ['Intra'] : [];
         if (periMeals.length === 0) return baseMeals;
         const result = [...baseMeals];
         // single mode: peri after the one comida; otherwise spliced at the training moment.
-        result.splice(singleMeal ? baseMeals.length : momentoEntreno, 0, ...periMeals);
+        result.splice(unica ? baseMeals.length : me, 0, ...periMeals);
         return result;
     };
+
+    const getMealOrder = () => ordenDeComidas({
+        numComidas, tipoDia, opcionPeri, momentoEntreno, unica: singleMeal,
+    });
 
     // Mantener la comida seleccionada (vista master-detail) válida al cambiar la config
     useEffect(() => {
@@ -1904,6 +1912,29 @@ const NutritionPage = () => {
             });
             if (!adelante) return;
 
+            // COPIAR SUSTITUYE DE VERDAD (31-08-2026).
+            //
+            // El cartel de arriba promete «la dieta de ese día se sustituye por esta», y no
+            // era cierto: este POST fusiona (el servidor conserva lo que no le llega, para
+            // que dos pestañas no se pisen), así que las comidas que el origen no tenía se
+            // quedaban en el destino. Un cliente lo reportó el 31-08: copió un día y se
+            // encontró unas lentejas «que se añadieron solas» -- eran las del día que creía
+            // haber sustituido.
+            //
+            // `comidas_completas` es la puerta que el propio servidor dejó abierta para
+            // quien de verdad quiera reemplazar el día entero. Aquí toca: el cliente acaba
+            // de decir que sí a sustituirlo.
+            //
+            // Y se copia lo que el día de origen ENSEÑA, no lo que arrastra: un día que bajó
+            // de cuatro comidas a tres guarda la cuarta escondida, y copiarla la haría
+            // aparecer en el destino.
+            const delOrigen = ordenDeComidas({
+                numComidas: sourceDiet.num_comidas,
+                tipoDia: sourceDiet.tipo_dia,
+                opcionPeri: sourceDiet.opcion_peri,
+                momentoEntreno: sourceDiet.momento_entreno,
+                unica: sourceDiet.num_comidas === 1,
+            });
             await api('/api/diets', {
                 method: 'POST',
                 body: JSON.stringify({
@@ -1912,7 +1943,9 @@ const NutritionPage = () => {
                     num_comidas: sourceDiet.num_comidas,
                     momento_entreno: sourceDiet.momento_entreno,
                     opcion_peri: sourceDiet.opcion_peri,
-                    comidas: sourceDiet.comidas,
+                    comidas: Object.fromEntries(delOrigen.map(
+                        (k) => [k, (sourceDiet.comidas || {})[k] || { alimentos: [] }])),
+                    comidas_completas: true,
                     macros_snapshot: sourceDiet.macros_snapshot,
                     distribution_targets: sourceDiet.distribution_targets,
                     is_cuadrado: sourceDiet.is_cuadrado,
@@ -1994,14 +2027,43 @@ const NutritionPage = () => {
                 body: JSON.stringify({
                     fecha: currentDate,
                     tipo_dia: cfg.tipoDia,
-                    num_comidas: (fav.num_comidas === 3) ? 4 : cfg.numComidas,
+                    // UNA FAVORITA DE TRES COMIDAS SE REPARTÍA ENTRE CUATRO (31-08-2026).
+                    //
+                    // Aquí ponía `(fav.num_comidas === 3) ? 4 : cfg.numComidas`. Es lo que
+                    // quedó del apaño de cuando el reparto no sabía de días de tres comidas;
+                    // el 17-06 se quitó de los otros tres sitios (702da51) y este se quedó.
+                    //
+                    // Lo reportó un cliente de tres comidas: sus objetivos por comida salían
+                    // 45 P / 45 P / 36 P en vez de 60, y al día le faltaban los de una cuarta
+                    // comida que no se pinta en ninguna parte. Reproducido contra el servidor
+                    // (_guia/_fallo_favoritas_3108.js): con 3 pide 63,3 P por comida; con 4,
+                    // 47,5 / 47,5 / 38 -- el mismo 1,25 entre la primera y la tercera que veía él.
+                    num_comidas: cfg.numComidas,
                     momento_entreno: cfg.momentoEntreno,
                     opcion_peri: cfg.opcionPeri,
                     comidas: fav.comidas || {},
                     descartar_sin_objetivo: adaptar,
                 }),
             });
-            setMealsData(res.comidas || {});
+            // LO QUE LA FAVORITA NO TRAE, SE VACÍA (31-08-2026).
+            //
+            // Aquí se ponía `res.comidas` tal cual, que solo tiene las comidas de la
+            // favorita. Las demás desaparecían de la pantalla... pero no del día: el
+            // autoguardado manda solo lo que tiene delante y el servidor FUSIONA (lo hace a
+            // propósito desde el 16-08, para que dos pestañas no se pisen). Así que al
+            // recargar volvían las de antes, y el cliente veía un alimento «que se añadió
+            // solo». Reportado el 31-08 con unas lentejas en una comida que él ya no tenía.
+            //
+            // Se mandan vacías, que es lo único que el servidor entiende como «esta comida
+            // ya no lleva nada». Las que no están en el reparto de hoy no se tocan: esas
+            // siguen guardadas a propósito, para que volver a cuatro comidas las devuelva.
+            const delReparto = ordenDeComidas({
+                numComidas: cfg.numComidas, tipoDia: cfg.tipoDia, opcionPeri: cfg.opcionPeri,
+                momentoEntreno: cfg.momentoEntreno, unica: cfg.numComidas === 1,
+            });
+            const traidas = res.comidas || {};
+            setMealsData(Object.fromEntries(delReparto.map(
+                (k) => [k, traidas[k] || { alimentos: [] }])));
             if (res.distribution) setDistribution(res.distribution);
 
             const excluidos = res.excluidos || [];
@@ -2043,10 +2105,21 @@ const NutritionPage = () => {
                     : `${noCaben.length} alimentos no cabían ni al mínimo y se han quitado.`);
             }
 
-            // Descanso -> entreno: la favorita no trae peri; avisar de que queda vacío.
+            // LO QUE LA FAVORITA NO TRAE, SE DICE (31-08-2026).
+            //
+            // Este aviso solo salía al adaptar de descanso a entreno. Y hasta hoy daba igual,
+            // porque lo que la favorita no traía no se vaciaba: seguía guardado y volvía al
+            // recargar. Ahora se vacía de verdad, así que hay que contarlo siempre: cambiar
+            // un añadido silencioso por un borrado silencioso no arregla nada.
             const trae = (k) => ((fav.comidas?.[k]?.alimentos) || []).length > 0;
-            if (adaptar && cfg.tipoDia === 'entrenamiento' && cfg.opcionPeri !== 'sin_peri' && !trae('Intra') && !trae('Post')) {
-                toast.info('El peri ha quedado vacío: añádelo con "Sugiéreme un menú".');
+            const vaciadas = delReparto.filter((k) => !trae(k)
+                && ((mealsData[k]?.alimentos) || []).length > 0);
+            if (vaciadas.length) {
+                const soloPeri = vaciadas.every((k) => ['Intra', 'Post'].includes(k));
+                toast.info(soloPeri
+                    ? 'El peri ha quedado vacío: la favorita no lo traía. Añádelo con "Sugiéreme un menú".'
+                    : `${vaciadas.map(k => mealInfo[k]?.name || k).join(' y ')}: la favorita no traía nada ahí y se han vaciado.`,
+                    { duration: 8000 });
             }
         } catch (err) {
             toast.error('Error al aplicar la favorita');
