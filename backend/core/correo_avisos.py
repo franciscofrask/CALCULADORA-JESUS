@@ -214,6 +214,54 @@ async def pasada_de_correos_de_avisos(solo_user_id: str = None) -> int:
     return enviados
 
 
+async def pasada_de_promesas_del_reporte() -> int:
+    """Avisa al equipo de los reportes cuya respuesta se prometió para HOY.
+
+    Una vez al día y a las 10:00 de España: a esa hora queda media jornada por delante, que
+    es lo que hace que la promesa se cumpla en vez de dejar constancia de que se rompió.
+    Ver `core/promesa_del_reporte` para el porqué de avisar al equipo y no al cliente.
+
+    Idempotente por el día: la marca es la misma clave que usan los correos, así que aunque
+    el bucle pase cuatro veces entre las 10:00 y las 11:00, el aviso sale uno.
+    """
+    from core.avisos_equipo import avisar_al_equipo
+    from core.promesa_del_reporte import HORA_DEL_REPASO, a_quien_le_toca, texto_del_aviso
+    from core.tiempo import ahora_madrid
+
+    ahora_es = ahora_madrid()
+    if ahora_es.hour != HORA_DEL_REPASO:
+        return 0
+    hoy = ahora_es.date()
+
+    clave = f"promesa_reporte:{hoy.isoformat()}"
+    try:
+        await db.correos_de_avisos.insert_one({
+            "id": str(uuid.uuid4()), "user_id": "equipo", "clave": clave,
+            "intentos": 1, "creado_en": datetime.now(timezone.utc).isoformat()})
+    except Exception:
+        return 0        # ya salió hoy (o lo está sacando la otra réplica)
+
+    # Los de las tres últimas semanas: más atrás la promesa no vence hoy ni por asomo.
+    desde = (hoy - timedelta(days=21)).isoformat()
+    reportes = await db.reports.find(
+        {"created_at": {"$gte": desde}},
+        {"_id": 0, "id": 1, "client_id": 1, "tipo": 1, "created_at": 1,
+         "informe_estado": 1, "calma_migrated": 1, "trainer_feedback": 1},
+    ).to_list(2000)
+
+    esperando = a_quien_le_toca(reportes, hoy)
+    if not esperando:
+        return 0
+
+    texto = texto_del_aviso(len(esperando))
+    await avisar_al_equipo(
+        db, tipo="promesa_reporte", titulo=texto["titulo"], mensaje=texto["mensaje"],
+        # Sin `client_id`: es una lista, no un cliente. Quien lo abra va a la de reportes.
+        extra={"reportes": [r.get("id") for r in esperando][:50]})
+    log.info("promesa del reporte: %d esperando respuesta hoy", len(esperando))
+    return len(esperando)
+
+
 async def bucle_de_correos() -> None:
     """El bucle de fondo: una pasada cada 15 minutos, para siempre.
 
@@ -227,4 +275,11 @@ async def bucle_de_correos() -> None:
             await pasada_de_correos_de_avisos()
         except Exception as e:   # noqa: BLE001
             log.warning("correo_avisos: la pasada falló entera: %s", e)
+        # LA PROMESA DEL REPORTE, EN EL MISMO BUCLE (doc «El día», 31-08). No merece una
+        # tarea de fondo propia -- es una consulta al día -- y aquí ya hay un reloj andando.
+        # Va aparte del `try` de arriba para que un fallo del correo no se la lleve.
+        try:
+            await pasada_de_promesas_del_reporte()
+        except Exception as e:   # noqa: BLE001
+            log.warning("promesa del reporte: la pasada falló: %s", e)
         await asyncio.sleep(CADA_SEGUNDOS)
