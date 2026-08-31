@@ -84,7 +84,10 @@ def cita(doc, texto):
 
 
 def captura(doc, fichero, ancho=3.1, pie=None):
-    ruta = os.path.join(FOTOS, fichero)
+    # Un nombre suelto sale de las capturas de «El día»; con barra, de cualquier carpeta de
+    # `_guia` (lo de la tarde vive en `_de_donde_bajo/`, `_generico/` y compañía).
+    ruta = (os.path.join(RAIZ, "_guia", fichero) if "/" in fichero
+            else os.path.join(FOTOS, fichero))
     if not os.path.exists(ruta):
         parrafo(doc, f"[falta la captura {fichero}]", color=NARANJA)
         return
@@ -330,6 +333,144 @@ PUNTOS = [
      "«Avisos apagados».",
      [("E2_apagado_en_la_tabla.png", 6.2,
        "El mismo cliente con el cierre apagado: la columna lo dice en vez de contar.")]),
+
+    # ── Lo de la tarde: no sale del documento de Jesús, sale de clientes usando la app ──
+    ("F · LO QUE LLEGÓ DESPUÉS · LOS FALLOS QUE REPORTARON LOS CLIENTES", None, None, None, None, None),
+
+    ("Copiar una favorita descuadraba los macros",
+     "No está en el documento: lo reportó Gonzalo Rubio el 31-08",
+     "«Al copiar un menú que ya guardé como favorito en otro día, se me desajustan los "
+     "macros. Los que deberían ser: 3 comidas de 60 prote / 33,5 carbs / 16,5 grasa.»",
+     "Al aplicar una favorita, la pantalla le pedía al servidor el reparto para CUATRO "
+     "comidas siempre que la favorita tuviera tres. Era lo que quedaba del apaño de cuando el "
+     "reparto no sabía de días de tres comidas: el 17-06 se quitó de los otros tres sitios y "
+     "este se quedó.\n\n"
+     "Medido contra el servidor: con 3 reparte 63,3 g de proteína por comida; con 4, "
+     "47,5 / 47,5 / 38. Él veía 45 / 45 / 36 — distintos macros, el mismo 1,25 exacto entre "
+     "la primera y la tercera. Esa es la huella. Y al día le faltaban los de una cuarta "
+     "comida que no se pinta en ninguna parte: 57 g de proteína al aire.\n\n"
+     "Arreglado y en producción desde el 31-08.",
+     None),
+
+    ("«Lentejas cocidas que se añadió solo»",
+     "No está en el documento: lo reportó Gonzalo Rubio el 31-08",
+     "«Cuando quiero copiar un post entreno que ya creé otro día, al copiarlo me aparecen "
+     "diferentes cantidades y lo de lentejas cocidas, que obviamente se añadió solo.»",
+     "Guardar un día NUNCA sustituye: fusiona. Eso es a propósito desde el 16-08, para que "
+     "dos pestañas abiertas no se pisen. Pero de ahí salían dos cosas: una comida que la "
+     "favorita no traía desaparecía de la pantalla y seguía guardada — volvía al recargar —, "
+     "y «Copiar a otro día», que promete por escrito «la dieta de ese día se sustituye por "
+     "esta», dejaba dentro lo que el origen no llevaba.\n\n"
+     "Reproducido literal antes de tocar nada: se copió encima de un día con lentejas en la "
+     "Comida 3 y ahí seguían. Ahora aplicar una favorita vacía lo que no trae, y copiar "
+     "sustituye de verdad. Y se dice: cambiar un añadido silencioso por un borrado silencioso "
+     "no arregla nada.",
+     [("_favoritas_3108/3_tras_recargar.png", 3.0,
+       "Tras aplicar la favorita y recargar: el intra con lentejas ya no vuelve.")]),
+
+    ("Cuadrar pregunta de dónde bajar, en vez de decidirlo por el orden de la lista",
+     "No está en el documento: nota de voz de Jesús del 31-08",
+     "«Cuando recalcule, pregunte, pregunte de qué quiere bajar la proteína, del polvo o del "
+     "queso. Es imposible que la aplicación aprenda eso, porque te puede quedar más denso, "
+     "menos denso. Lo más sencillo es preguntar, o sea que pregunte de dónde recalcula.»",
+     "Medido antes de tocar nada: una comida con 60 g de aislado y 300 g de queso batido "
+     "para un objetivo de 38 g de proteína salía con el aislado en 5 g y el queso intacto. Y "
+     "con los mismos dos alimentos, cambiando SOLO el orden de la lista, salía el queso en "
+     "285 y el aislado en 10. La app ya decidía; lo que no tenía era criterio: mandaba el "
+     "orden.\n\n"
+     "Y no es cosa de batidos: pollo 250 g + atún 150 g + arroz 100 g salía con el pollo "
+     "desplomado a 60 g y el atún casi entero en 125. Quien se hizo un plato de pollo con "
+     "algo de atún se encontraba un plato de atún con algo de pollo.\n\n"
+     "La pregunta solo dice lo que la app sabe: cuánto hay, cuánto pone del macro que sobra y "
+     "en cuánto se quedaría. Nada de «queda más espeso»: la app no sabe la textura de nada, y "
+     "en un plato de pollo con arroz esa frase no significaría nada. Ninguna opción viene "
+     "marcada («ni siquiera que sugiera»).\n\n"
+     "Si solo un alimento pone ese macro, no pregunta: lo baja y lo dice. Y mientras nadie "
+     "conteste se baja en proporción, nunca por el orden de la lista.",
+     [("_de_donde_bajo/1_la_pregunta.png", 3.4,
+       "La pregunta, con las tres salidas y sus cantidades.")]),
+
+    ("Aplicar una favorita no interroga: marca la comida",
+     "No está en el documento: consecuencia de lo anterior",
+     "—",
+     "Una favorita recuadra cuatro o cinco comidas de golpe, y ahí un interrogatorio sería "
+     "peor que el problema. Se baja en proporción, se avisa, y la comida queda marcada en su "
+     "tarjeta con la pregunta a un toque.\n\n"
+     "Para eso se guarda también lo que había ANTES: cuando el cliente toca la marca, las "
+     "cantidades de ahora ya están bajadas y preguntar sobre ellas no daría ninguna opción.",
+     [("_de_donde_bajo/4_la_marca.png", 5.2,
+       "La marca en la tarjeta de la comida.")]),
+
+    ("Y si bajar no llega, pregunta qué quitar — hasta que cuadre",
+     "No está en el documento: lo probó Francisco el 31-08",
+     "«Puse cuadrar, me dio a elegir entre 2 opciones, la resto pero sigue sin cuadrar. Para "
+     "qué me dice que quite; también me debería preguntar qué quitar. Los macros tienen que "
+     "quedar cuadrados, ese es el objetivo del botón.»",
+     "Su comida tenía catorce alimentos y CON TODO A SU MÍNIMO PESABLE daba 57,9 P / 18,2 H / "
+     "50,2 G contra un objetivo de 47,5 / 72 / 12: sobraban 38 g de grasa aunque no quedara "
+     "nada que bajar. Esa comida no se puede cuadrar bajando, así que el modal no tenía "
+     "ninguna salida que ofrecer y ni salía.\n\n"
+     "Ahora la aritmética elige la forma de la pregunta: si con todo en el suelo el macro "
+     "cabe, «¿de dónde bajo?»; si ni así cabe, «¿qué quito?». Y se sigue preguntando hasta "
+     "que la comida cuadre o el cliente lo deje. No rompe la regla del 08-08 de que cuadrar "
+     "no quita ingredientes: la app sigue sin quitar nada por su cuenta, lo quita él.\n\n"
+     "De paso salió que el corte de quién entraba en la pregunta estaba al revés: era «que "
+     "ponga al menos el 15 % del macro», y eso callaba la pregunta cuando un alimento "
+     "dominaba — el bacon ponía la mitad de la grasa y era el único que pasaba, así que "
+     "quedaba un solo candidato. Ahora el criterio es el margen: lo que pone menos lo que "
+     "pondría en su mínimo.",
+     [("_cuadra_hasta_cuadrar/2_como_queda.png", 6.2,
+      "La comida de los catorce, ya cuadrada: 47,2 P y 72,9 H en verde.")]),
+
+    ("Una sola pregunta, con la cuenta a la vista",
+     "No está en el documento: lo pidió Francisco el 31-08",
+     "«Va haciendo muchas veces las preguntas, supongo que lo hará hasta que cuadre pero es "
+     "tedioso.»",
+     "Era verdad: su comida pedía cinco diálogos seguidos, uno por alimento, y solo al cerrar "
+     "el quinto se enteraba de que ya cuadraba. La decisión sigue siendo suya, pero cabía "
+     "entera en una pantalla.\n\n"
+     "Ahora se marcan varios de una vez y el pie lleva la cuenta a cada clic: «hay que quitar "
+     "unos 38,2 g» → «aún sobrarían 27,6» → … → «con eso ya cuadra». La misma comida pasa de "
+     "CINCO preguntas a UNA, y acaba igual de cuadrada.\n\n"
+     "Cada línea decía además «quitándolo aún sobrarían N», que es el número de quitar ESE "
+     "SOLO: en cuanto marcabas dos, cada línea decía una cosa y el pie otra. La línea dice lo "
+     "que pone el alimento y la cuenta la lleva el pie.",
+     [("_cuadra_hasta_cuadrar/1b_marcados.png", 3.4,
+       "Cinco marcados y el pie diciendo que ya cuadra.")]),
+
+    ("Una favorita de tres comidas decía que tenía cinco",
+     "No está en el documento: lo reportó un cliente el 31-08",
+     "«Cuando guardo una dieta para poder usarlo otro día, aparte de descuadrarme las "
+     "cantidades, me sale esto» — y en la lista, su día de tres comidas aparecía con seis.",
+     "El contador sumaba TODAS las claves con alimentos, y el intra y el post son claves. Un "
+     "día de tres comidas con peri salía como «5 comidas»; y si además arrastraba la Comida 4 "
+     "fantasma de antes del 29-08, como «6».\n\n"
+     "Medido en producción de paso: de todas las favoritas de día de la base, solo UNA lleva "
+     "más comidas montadas que su propio número, así que lo de la Comida 4 fantasma está "
+     "prácticamente limpio desde aquel arreglo. Lo que seguía vivo era contar el peri.",
+     [("_favorita_contador/1_tres_mas_peri.png", 3.4,
+       "La misma favorita: «3 comidas + Intra y Post».")]),
+
+    ("El filtro «Genérico» sacaba igual todas las marcas",
+     "No está en el documento: lo reportó un cliente el 31-08",
+     "«Cuando empiezo a hacer una dieta y selecciono alimentos genéricos, me salen también "
+     "otros alimentos y todas sus marcas.»",
+     "La regla del chip ya era buena — genérico = sin ficha de producto —. Lo que no "
+     "funcionaba es que la búsqueda por texto no mandaba los chips: se mandaba solo lo "
+     "escrito, así que el filtro seguía pintado y encendido pero dejaba de existir. Un filtro "
+     "que se ve encendido y no filtra es peor que no tenerlo, porque el cliente cree que la "
+     "lista ya está filtrada. El mismo agujero por otra puerta: encender el chip con el texto "
+     "ya escrito tampoco rehacía la lista.\n\n"
+     "Y una segunda cosa que encontró Francisco: «pero hay marcas que no tienen url». Tenía "
+     "razón. Había SEIS fichas de marca sin URL que se colaban en «Genérico» — 7 Hermanos, "
+     "Sol Natural, Nutrisport (dos), un Hacendado y Esgir —, ya marcadas a mano. No se les "
+     "inventa una URL: una URL falsa acaba siendo un enlace que se le enseña a un cliente.\n\n"
+     "Y hay una prueba que salta cuando aparezca otra, porque si no, dentro de dos meses "
+     "volvemos a tener marcas coladas y nadie se entera.",
+     [("_generico/1_sin_filtro.png", 3.0,
+       "Sin filtro: Aldelís, Aldi, Frial, La Selva, Lidl, Hacendado…"),
+      ("_generico/2_con_generico.png", 3.0,
+       "Con «Genérico» encendido, y el texto ya escrito: ni una marca.")]),
 ]
 
 
@@ -360,6 +501,11 @@ def main():
             "pedía, qué hace hoy el sistema y una captura de la app de verdad.",
             tam=10.5, color=GRIS, despues=6)
     parrafo(doc,
+            "El bloque F no sale del documento: son los fallos que reportaron los clientes y "
+            "Francisco usando la app ese mismo día, con la nota de voz de Jesús sobre el "
+            "botón de cuadrar. Van aquí para que todo lo del 31 esté en un sitio.",
+            tam=9.5, color=GRIS, despues=6)
+    parrafo(doc,
             "Las capturas están sacadas con la app corriendo y con una cuenta de prueba, no "
             "son maquetas. Las que dependen de la hora se sacan forzando la respuesta del "
             "servidor, que es lo mismo que el navegador recibe a esa hora; la regla de las "
@@ -384,9 +530,12 @@ def main():
         for trozo in (hace or "").split("\n\n"):
             parrafo(doc, trozo, tam=10)
 
-        etiqueta(doc, "la prueba")
-        for fichero, ancho, pie in (fotos or []):
-            captura(doc, fichero, ancho, pie)
+        # Hay puntos sin captura posible (los que se ven en los números, no en la pantalla):
+        # ahí no se pone el rótulo, que si no queda un «la prueba» sin nada debajo.
+        if fotos:
+            etiqueta(doc, "la prueba")
+            for fichero, ancho, pie in fotos:
+                captura(doc, fichero, ancho, pie)
 
     # ── Cierre ──
     titulo(doc, "Lo que no se ve en una captura", tam=13, color=NARANJA, espacio_antes=24)
