@@ -1,0 +1,14 @@
+{
+ "abierto": "2026-08-31",
+ "es_de_ayer": false,
+ "cierra_a": 15,
+ "hora_de_apertura": 17,
+ "hecho": true,
+ "dias_sin_cerrar": 5,
+ "quiere_cierre": true,
+ "quiere_recordatorio": true,
+ "linea": {
+  "titulo": "Llevas 4 días sin cerrar",
+  "detalle": "Retómalo hoy mismo: es de donde salen tus ajustes"
+ }
+}

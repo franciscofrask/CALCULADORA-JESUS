@@ -391,7 +391,14 @@ const LineaDeHoy = ({ icono: Icono, titulo, detalle, cursiva, extra, hecho, onCl
             )}
             <div className="min-w-0 flex-1">
                 <p className="font-bold text-foreground text-sm">{titulo}</p>
-                {detalle && <p className={`text-muted-foreground text-sm truncate${cursiva ? ' italic' : ''}`}>{detalle}</p>}
+                {/* EL DETALLE CABE ENTERO, NO SE CORTA (31-08). Iba con `truncate`, que en una
+                    línea de cuatro palabras no molesta pero se comió justo lo que hay que
+                    leer: la escalada del cierre del día salía «Llevas 2 días seguidos si...»,
+                    y esa frase ES el trabajo. Se probó a dejarlo en dos líneas y la más larga
+                    -- «Dejo de recordártelo. Si te está costando, dímelo y lo vemos» -- seguía
+                    cortada a 390 px, así que se quita el recorte. Las demás filas de esta
+                    lista llevan frases de cuatro palabras y no les cambia nada. */}
+                {detalle && <p className={`text-muted-foreground text-sm${cursiva ? ' italic' : ''}`}>{detalle}</p>}
                 {extra && <p className="text-muted-foreground text-xs mt-0.5">{extra}</p>}
             </div>
             {hecho ? (
