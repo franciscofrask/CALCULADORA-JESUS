@@ -618,7 +618,12 @@ async def get_all_clients(
                    # importe puesto a mano. Sin `comp_plan` en la proyeccion, la lista le
                    # ponia al de cortesia la tarifa de su plan, que es justo lo que
                    # `precio_de_ciclo` esta escrito para no hacer.
-                   "comp_plan": 1, "renovacion_importe_prevision": 1}
+                   "comp_plan": 1, "renovacion_importe_prevision": 1,
+                   # Los interruptores de avisos del cliente (doc «El día», 31-08). Sin
+                   # ellos en la proyección, la columna «Sin cerrar» le contaba los días al
+                   # que lo tiene apagado, que es justo el error que la columna existe para
+                   # no cometer: «uno eligió y el otro se está yendo».
+                   "avisos": 1}
     profiles = await db.client_profiles.find(query, LIST_FIELDS).to_list(1000)
 
     uids = [p["user_id"] for p in profiles]
@@ -663,6 +668,26 @@ async def get_all_clients(
         {"_id": 0, "client_id": 1, "created_at": 1}).to_list(len(profiles) or 1)
     rutina_de = {r["client_id"]: r for r in rutinas if r.get("client_id")}
     hoy_es = (_a_madrid(ahora) or ahora).date()
+
+    # DÍAS SIN CERRAR, EN BLOQUE (doc «El día», 31-08: «lo que sí falta está en el panel:
+    # una columna de días sin cerrar en Clientes. Dejar de cerrar suele ser el primer
+    # síntoma, y llega antes que el impago»).
+    #
+    # Una sola consulta para toda la lista, como la semana de rutina: uno por cliente serían
+    # doscientas. Con diez semanas atrás sobra, que la cuenta se corta sola a los 60.
+    from core.ventana_del_dia import dias_sin_cerrar as _dias_sin_cerrar
+    _desde = (hoy_es - timedelta(days=70)).isoformat()
+    _cierres = await db.checkins.find(
+        {"client_id": {"$in": [p["id"] for p in profiles if p.get("id")]},
+         "type": "daily", "dia": {"$gte": _desde}},
+        {"_id": 0, "client_id": 1, "dia": 1}).to_list(20000)
+    _dias_de = {}
+    for c in _cierres:
+        if c.get("client_id") and c.get("dia"):
+            _dias_de.setdefault(c["client_id"], []).append(c["dia"])
+    # La hora es la de España y es la misma para toda la tabla: aquí no hay reloj de cliente
+    # que valga, es el coach mirando su panel.
+    _ahora_es = _a_madrid(ahora) or ahora
 
     # La fecha buena de «cuándo se le tocó por última vez», la del histórico: la tarjeta
     # «Esta semana te tocan» ya la resolvía así y esta lista mandaba el campo crudo, con lo
@@ -716,6 +741,23 @@ async def get_all_clients(
             fila["reportes_sin_responder"] = reportes_sin_responder(
                 cal, sem_reporte, profile.get("ultimo_reporte"), hoy_es)
             fila["ultima_entrada"] = profile.get("ultima_entrada")
+            # CUÁNTOS LLEVA SIN CERRAR, y si es que lo apagó (doc «El día», 31-08).
+            #
+            # «Un 0 de 14 de alguien que lo apagó y uno de alguien que te está abandonando te
+            # llegan exactamente iguales, y no son lo mismo: uno eligió y el otro se está
+            # yendo.» Por eso viajan los dos datos: el número y el porqué.
+            _avisos = profile.get("avisos") or {}
+            fila["cierre_apagado"] = not _avisos.get("cierre_dia", True)
+            fila["avisos_apagados"] = not (
+                _avisos.get("avisos_en_la_app", True)
+                and _avisos.get("recordatorio_quincenal", True)
+                and _avisos.get("recordatorio_mensual", True))
+            # Al que lo tiene apagado no se le cuentan los días: no se ha dejado nada, es que
+            # no lo tiene. Contarlos sería el mismo error por el otro lado.
+            fila["dias_sin_cerrar"] = (
+                None if fila["cierre_apagado"]
+                else _dias_sin_cerrar(_dias_de.get(profile.get("id"), []), _ahora_es, hoy_es,
+                                      _avisos.get("hora_cierre")))
             # El último contacto PERSONAL (chat del equipo o WhatsApp via GHL), como
             # fecha cruda: el semáforo dice «hace N días» y esta es la fecha para quien
             # la quiera ver. Manda el canal más reciente.

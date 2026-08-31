@@ -1436,6 +1436,10 @@ const AdminClientsList = () => {
                                         hoy es su última entrada; el tiempo de verdad no lo
                                         registra nada, y el propio doc lo admite. */}
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden xl:table-cell">Entrada</TableHead>
+                                    {/* «Lo que sí falta está en el panel: una columna de días sin
+                                        cerrar en Clientes. Dejar de cerrar suele ser el primer
+                                        síntoma, y llega antes que el impago» (doc «El día»). */}
+                                    <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden xl:table-cell">Sin cerrar</TableHead>
                                     <TableHead className="text-white/50 uppercase tracking-wider text-xs hidden lg:table-cell">Peso</TableHead>
                                     {/* EL PERFIL LARGO. Al que lleva entrenador no se le puede
                                         trabajar sin él, y hasta ahora la única señal era una
@@ -1568,8 +1572,19 @@ const AdminClientsList = () => {
                                             {/* Las dos cuentas del 19-08: recogidas del lunes en
                                                 vacío y reportes que le tocaban y no mandó. Solo
                                                 cuando debe algo: al que está al día, ni una línea. */}
-                                            {(client.semanas_sin_reporte > 0 || client.reportes_sin_responder > 0) && (
-                                                <p className="text-[11px] text-white/40 mt-0.5"
+                                            {/* SU SILENCIO NO SIGNIFICA LO MISMO (doc «El día»,
+                                                31-08, Duda 7). Al que lo ignoró y al que tenía
+                                                el aviso apagado les llegaba la misma línea, y
+                                                «cambia cómo lees su silencio».
+                                                El que debe algo, en naranja; el que lo apagó,
+                                                en gris y dicho. */}
+                                            {client.avisos_apagados ? (
+                                                <p className="text-[11px] text-white/30 mt-0.5"
+                                                    data-testid={`avisos-apagados-${client.id}`}>
+                                                    Avisos apagados
+                                                </p>
+                                            ) : (client.semanas_sin_reporte > 0 || client.reportes_sin_responder > 0) && (
+                                                <p className="text-[11px] text-[#FF671F] mt-0.5"
                                                     data-testid={`sin-reporte-${client.id}`}>
                                                     {client.semanas_sin_reporte > 0 && `${client.semanas_sin_reporte} sem sin reporte`}
                                                     {client.semanas_sin_reporte > 0 && client.reportes_sin_responder > 0 && ' · '}
@@ -1586,6 +1601,29 @@ const AdminClientsList = () => {
                                                     ? new Date(client.ultima_entrada + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
                                                     : <span className="text-white/25">-</span>}
                                             </span>
+                                        </TableCell>
+                                        {/* DÍAS SIN CERRAR (doc «El día», 31-08). El número a
+                                            secas, y solo se pinta cuando dice algo: al que está
+                                            al día, un guion, como en las demás columnas.
+                                            Y al que lo APAGÓ no se le cuentan los días -- no se
+                                            ha dejado nada, es que no lo tiene --: se dice que lo
+                                            apagó, que es otra cosa. */}
+                                        <TableCell className="hidden xl:table-cell">
+                                            {client.cierre_apagado ? (
+                                                <span className="text-[11px] text-white/30"
+                                                    data-testid={`sin-cerrar-${client.id}`}>apagado</span>
+                                            ) : client.dias_sin_cerrar > 0 ? (
+                                                <span className={`text-sm font-data ${client.dias_sin_cerrar >= 4 ? 'text-[#FF671F]' : 'text-white/60'}`}
+                                                    data-testid={`sin-cerrar-${client.id}`}>
+                                                    {/* La cuenta se corta a los 60 -- nadie
+                                                        necesita saber que lleva 400 --, así que
+                                                        ahí se dice «+60» y no «60», que sería
+                                                        un número exacto que no es verdad. */}
+                                                    {client.dias_sin_cerrar >= 60 ? '+60' : client.dias_sin_cerrar}
+                                                </span>
+                                            ) : (
+                                                <span className="text-white/25" data-testid={`sin-cerrar-${client.id}`}>-</span>
+                                            )}
                                         </TableCell>
                                         <TableCell className="hidden lg:table-cell">
                                             <CeldaSemaforo celda={client.semaforo?.peso} />
