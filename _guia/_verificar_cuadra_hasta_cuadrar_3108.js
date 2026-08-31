@@ -84,8 +84,8 @@ const pide = async (ruta, opciones = {}) => {
     await p.locator('[data-testid="cuadrar-C1"]').first().click();
     await p.waitForTimeout(3500);
 
-    // Se contesta siempre la PRIMERA opción, que es la que más quita. Un cliente elegiría
-    // otra cosa; lo que se prueba aquí es que la app sigue preguntando y acaba cuadrando.
+    // En la pregunta de QUITAR se marcan varios de una vez: se van marcando hasta que el pie
+    // dice que ya cuadra, y se confirma. Es lo que haría el cliente leyendo ese contador.
     let vueltas = 0;
     while (vueltas < 20) {
         const dlg = p.locator('[data-testid="confirm-dialog"]').first();
@@ -93,13 +93,34 @@ const pide = async (ruta, opciones = {}) => {
         vueltas++;
         const titulo = (await dlg.locator('h2, [class*="DialogTitle"]').first().innerText()
             .catch(async () => (await dlg.innerText()).split('\n')[0])).replace(/\s+/g, ' ').trim();
-        const primera = dlg.locator('[data-testid^="elegir-"]').first();
-        const queElijo = (await primera.innerText().catch(() => '?')).replace(/\s+/g, ' ').trim();
-        console.log(`\n  vuelta ${vueltas}: ${titulo}`);
-        console.log(`     elijo -> ${queElijo}`);
+        console.log(`\n  pregunta ${vueltas}: ${titulo}`);
         if (vueltas === 1) await dlg.screenshot({ path: `${CARPETA}/1_que_quito.png` }).catch(() => {});
-        await primera.click();
-        await p.waitForTimeout(3500);
+
+        const resumen = dlg.locator('[data-testid="elegir-resumen"]');
+        if (!(await resumen.count())) {           // pregunta de una sola respuesta
+            const primera = dlg.locator('[data-testid^="elegir-"]').first();
+            console.log('     elijo ->', (await primera.innerText()).replace(/\s+/g, ' ').trim());
+            await primera.click();
+            await p.waitForTimeout(3500);
+            continue;
+        }
+        console.log('     al abrir:', (await resumen.innerText()).replace(/\s+/g, ' ').trim());
+        const opciones = await dlg.locator('[data-testid^="elegir-"]').all();
+        let marcados = 0;
+        for (const o of opciones) {
+            const texto = (await o.innerText()).replace(/\s+/g, ' ').trim();
+            await o.click();
+            marcados++;
+            const ahora = (await resumen.innerText()).replace(/\s+/g, ' ').trim();
+            console.log(`     marco ${texto.split('·')[0].trim()} -> ${ahora}`);
+            if (ahora.includes('ya cuadra')) break;
+        }
+        if (vueltas === 1) {
+            await dlg.screenshot({ path: `${CARPETA}/1b_marcados.png` }).catch(() => {});
+        }
+        console.log(`     confirmo con ${marcados} marcados`);
+        await dlg.locator('[data-testid="confirm-ok"]').click();
+        await p.waitForTimeout(4000);
     }
     console.log(`\n  (${vueltas} preguntas en total)`);
 

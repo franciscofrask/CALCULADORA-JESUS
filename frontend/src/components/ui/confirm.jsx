@@ -16,6 +16,11 @@
  * confirm devuelve true/false; prompt devuelve el texto o null si se cancela; elegir
  * devuelve el `valor` de la opción elegida, o null si se cierra sin elegir.
  *
+ * Con `multiple: true`, elegir devuelve un ARRAY de valores y las opciones se marcan y se
+ * desmarcan hasta darle al botón. Se le puede pasar `resumen(seleccionados)`, que se pinta
+ * abajo y se recalcula a cada clic: es lo que convierte cinco preguntas seguidas en una sola
+ * («aún sobrarían 27,6 g» → «con eso ya cuadra»).
+ *
  * NINGUNA OPCIÓN VIENE MARCADA (Jesús, 31-08-2026, sobre de dónde bajar un macro: «ni
  * siquiera que sugiera»). Marcar una es sugerirla, y lo que se pregunta aquí es justo lo
  * que la app no puede saber.
@@ -40,6 +45,7 @@ export const useConfirm = () => {
 export const ConfirmProvider = ({ children }) => {
     const [dialogo, setDialogo] = useState(null);   // null = cerrado
     const [texto, setTexto] = useState('');
+    const [marcados, setMarcados] = useState([]);   // solo en elegir múltiple
     const resolver = useRef(null);
     const location = useLocation();
     const oscuro = location.pathname.startsWith('/admin');
@@ -47,6 +53,7 @@ export const ConfirmProvider = ({ children }) => {
     const abrir = useCallback((opts, modo) => new Promise((resolve) => {
         resolver.current = resolve;
         setTexto(opts.defaultValue || '');
+        setMarcados([]);
         setDialogo({ modo, ...opts });
     }), []);
 
@@ -61,8 +68,13 @@ export const ConfirmProvider = ({ children }) => {
 
     const esPrompt = dialogo?.modo === 'prompt';
     const esElegir = dialogo?.modo === 'elegir';
-    const puedeConfirmar = !esPrompt || dialogo?.optional || texto.trim().length > 0;
+    const esVarios = esElegir && dialogo?.multiple;
+    const puedeConfirmar = esVarios
+        ? marcados.length > 0
+        : (!esPrompt || dialogo?.optional || texto.trim().length > 0);
     const nada = esPrompt || esElegir ? null : false;   // qué devuelve cerrar sin elegir
+    const alternar = (valor) => setMarcados((ya) =>
+        ya.includes(valor) ? ya.filter(v => v !== valor) : [...ya, valor]);
 
     return (
         <ConfirmContext.Provider value={{ confirm, prompt, elegir }}>
@@ -92,23 +104,48 @@ export const ConfirmProvider = ({ children }) => {
                             />
                         )}
                         {esElegir && (
-                            <div className="space-y-2">
-                                {(dialogo.opciones || []).map((o) => (
-                                    <button key={o.valor} type="button"
-                                        onClick={() => cerrar(o.valor)}
-                                        data-testid={`elegir-${o.valor}`}
-                                        className={`w-full text-left rounded-xl border p-3 transition-colors ${oscuro
-                                            ? 'border-[#333] hover:border-[#FF671F] hover:bg-[#FF671F]/10'
-                                            : 'border-border hover:border-brand hover:bg-brand/5'}`}>
-                                        <span className="block text-sm font-semibold">{o.titulo}</span>
-                                        {o.detalle && (
-                                            <span className={`block text-xs mt-0.5 ${oscuro ? 'text-white/60' : 'text-muted-foreground'}`}>
-                                                {o.detalle}
+                            // La lista scrollea: con catorce alimentos la ventana no cabía y el
+                            // botón de confirmar se salía por abajo de la pantalla.
+                            <div className="space-y-2 max-h-[55vh] overflow-y-auto">
+                                {(dialogo.opciones || []).map((o) => {
+                                    const marcado = marcados.includes(o.valor);
+                                    return (
+                                        <button key={o.valor} type="button"
+                                            onClick={() => (esVarios ? alternar(o.valor) : cerrar(o.valor))}
+                                            data-testid={`elegir-${o.valor}`}
+                                            aria-pressed={esVarios ? marcado : undefined}
+                                            className={`w-full text-left rounded-xl border p-3 transition-colors flex gap-3 items-start ${
+                                                marcado
+                                                    ? (oscuro ? 'border-[#FF671F] bg-[#FF671F]/10' : 'border-brand bg-brand/5')
+                                                    : (oscuro
+                                                        ? 'border-[#333] hover:border-[#FF671F] hover:bg-[#FF671F]/10'
+                                                        : 'border-border hover:border-brand hover:bg-brand/5')}`}>
+                                            {esVarios && (
+                                                <span className={`mt-0.5 w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center text-[10px] font-bold ${
+                                                    marcado
+                                                        ? 'bg-[#FF671F] border-[#FF671F] text-white'
+                                                        : (oscuro ? 'border-[#555]' : 'border-border')}`}>
+                                                    {marcado ? '✓' : ''}
+                                                </span>
+                                            )}
+                                            <span className="min-w-0">
+                                                <span className="block text-sm font-semibold">{o.titulo}</span>
+                                                {o.detalle && (
+                                                    <span className={`block text-xs mt-0.5 ${oscuro ? 'text-white/60' : 'text-muted-foreground'}`}>
+                                                        {o.detalle}
+                                                    </span>
+                                                )}
                                             </span>
-                                        )}
-                                    </button>
-                                ))}
+                                        </button>
+                                    );
+                                })}
                             </div>
+                        )}
+                        {esVarios && dialogo.resumen && (
+                            <p className={`text-sm font-semibold ${oscuro ? 'text-white' : 'text-foreground'}`}
+                                data-testid="elegir-resumen">
+                                {dialogo.resumen(marcados)}
+                            </p>
                         )}
                         <DialogFooter>
                             <Button variant="outline"
@@ -117,11 +154,13 @@ export const ConfirmProvider = ({ children }) => {
                                 data-testid="confirm-cancel">
                                 {dialogo.cancelLabel || 'Cancelar'}
                             </Button>
-                            {/* En «elegir» el botón de aceptar no existe: cada opción es su propio
-                                botón, así que un «Confirmar» aparte no confirmaría nada. */}
-                            {!esElegir && (
+                            {/* En «elegir» de uno el botón de aceptar no existe: cada opción es su
+                                propio botón, así que un «Confirmar» aparte no confirmaría nada.
+                                En el de varios sí hace falta: hay que poder marcar y desmarcar
+                                antes de decidir. */}
+                            {(!esElegir || esVarios) && (
                                 <Button
-                                    onClick={() => cerrar(esPrompt ? texto.trim() : true)}
+                                    onClick={() => cerrar(esVarios ? marcados : (esPrompt ? texto.trim() : true))}
                                     disabled={!puedeConfirmar}
                                     className={dialogo.danger
                                         ? 'bg-red-600 hover:bg-red-700 text-white'

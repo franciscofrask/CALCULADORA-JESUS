@@ -55,6 +55,11 @@ SOBRA_MINIMA = 4.0
 # pregunta: es un muro. Salen los que más ponen del macro, que son los que deciden.
 MAXIMO_OPCIONES = 5
 
+# La de quitar admite más, porque se marcan varios de una vez y hacen falta los suficientes
+# para llegar a cuadrar sin tener que volver a preguntar. Con una lista corta, el cliente
+# marca los cinco, sigue sobrando y le vuelve a salir el diálogo: justo lo que molestaba.
+MAXIMO_OPCIONES_QUITAR = 9
+
 
 def _g(n):
     """Gramos como se escriben aquí: sin decimal si es redondo, y con coma si no."""
@@ -116,7 +121,7 @@ def que_se_puede_quitar(aportes, macro):
     """
     candidatos = [a for a in aportes if _de(a, "suelo", macro) > 0.5]
     candidatos.sort(key=lambda a: _de(a, "suelo", macro), reverse=True)
-    return candidatos[:MAXIMO_OPCIONES]
+    return candidatos[:MAXIMO_OPCIONES_QUITAR]
 
 
 def bajar_no_llega(aportes, objetivo, macro):

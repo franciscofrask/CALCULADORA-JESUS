@@ -2221,10 +2221,12 @@ const NutritionPage = () => {
                 titulo: `${o.nombre} · ${num1(o.cantidad_ahora)} g`,
                 // Lo que importa aquí no es lo que pone ahora, sino lo que seguiría poniendo
                 // aunque se bajara al mínimo: eso es lo que de verdad se lleva quitarlo.
-                detalle: `${num1(o.aporta_en_el_minimo)} g de ${macro} aunque lo bajes al mínimo`
-                    + (o.sobraria_aun > 4
-                        ? ` → quitándolo aún sobrarían ${num1(o.sobraria_aun)}`
-                        : ' → quitándolo ya cuadra'),
+                //
+                // Y NADA DE «quitándolo aún sobrarían N» EN CADA LÍNEA: ese número es el de
+                // quitar ese solo, así que en cuanto marcas dos, cada línea dice una cosa y
+                // el pie otra. La cuenta la lleva el pie, que es el que sabe lo que hay
+                // marcado.
+                detalle: `${num1(o.aporta_en_el_minimo)} g de ${macro} aunque lo bajes al mínimo`,
             }
             : o.modo === 'proporcional'
             ? {
@@ -2243,20 +2245,44 @@ const NutritionPage = () => {
                     + ` → se quedaría en ${num1(o.queda_en)} g`
                     + (o.sobraria_aun > 4 ? `, y aún sobrarían ${num1(o.sobraria_aun)}` : ''),
             }));
+        // QUITAR SE PREGUNTA UNA SOLA VEZ, MARCANDO VARIOS (Francisco, 31-08-2026).
+        //
+        // «Va haciendo muchas veces las preguntas, supongo que lo hará hasta que cuadre pero
+        // es tedioso.» Y tenía razón: su comida pedía cinco diálogos seguidos, uno por
+        // alimento. La decisión es la misma -- la toma él, no la app --, pero cabe entera en
+        // una pantalla: se marcan los que sobran y el pie va diciendo cuánto queda por quitar,
+        // así se ve de un vistazo cuántos hacen falta en vez de descubrirlo a golpes.
+        if (decision.tipo === 'quitar') {
+            const enElMinimo = new Map((decision.opciones || [])
+                .map(o => [`quitar-${o.alimento_id}`, o.aporta_en_el_minimo || 0]));
+            const marcados = await elegir({
+                title: decision.titulo,
+                description: 'Bajar las cantidades ya no da más de sí. Cuadrar no quita nada por su cuenta: eliges tú.',
+                opciones,
+                multiple: true,
+                resumen: (sel) => {
+                    const fuera = sel.reduce((s, v) => s + (enElMinimo.get(v) || 0), 0);
+                    const queda = (decision.sobra || 0) - fuera;
+                    if (!sel.length) return `Hay que quitar unos ${num1(decision.sobra)} g de ${macro}.`;
+                    return queda > 4
+                        ? `Con eso aún sobrarían ${num1(queda)} g de ${macro}.`
+                        : 'Con eso ya cuadra.';
+                },
+                confirmLabel: 'Quitar los marcados',
+                cancelLabel: 'Dejarlo como está',
+            });
+            if (!marcados || !marcados.length) return null;
+            return { modo: 'quitar',
+                     alimento_ids: marcados.map(v => Number(v.slice(7))) };
+        }
         const elegido = await elegir({
             title: decision.titulo,
-            description: decision.tipo === 'quitar'
-                // Por qué se pregunta esto y no «de dónde bajo»: si no, parece un capricho.
-                ? 'Bajar las cantidades ya no da más de sí. Cuadrar no quita nada por su cuenta: eliges tú.'
-                : 'Lo que elijas es lo único que baja: el resto se queda con los gramos que le pusiste.',
+            description: 'Lo que elijas es lo único que baja: el resto se queda con los gramos que le pusiste.',
             opciones,
             cancelLabel: 'Dejarlo como está',
         });
         if (!elegido) return null;
         if (elegido === 'proporcional') return { modo: 'proporcional' };
-        if (elegido.startsWith('quitar-')) {
-            return { modo: 'quitar', alimento_id: Number(elegido.slice(7)) };
-        }
         return { modo: 'solo', alimento_id: Number(elegido) };
     };
 
@@ -2323,9 +2349,10 @@ const NutritionPage = () => {
                 // toca; si ya se habían quitado cosas, se guarda lo hecho hasta aquí.
                 if (!respuesta) { if (!hizoAlgo) return; break; }
                 if (respuesta.modo === 'quitar') {
-                    const fuera = alimentos.find(a => a.alimento_id === respuesta.alimento_id);
-                    if (fuera) quitados.push(fuera.nombre);
-                    alimentos = alimentos.filter(a => a.alimento_id !== respuesta.alimento_id);
+                    const fuera = new Set(respuesta.alimento_ids || []);
+                    alimentos.filter(a => fuera.has(a.alimento_id))
+                        .forEach(a => quitados.push(a.nombre));
+                    alimentos = alimentos.filter(a => !fuera.has(a.alimento_id));
                     hizoAlgo = true;
                 } else {
                     siguienteAjuste = respuesta;
