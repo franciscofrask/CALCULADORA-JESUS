@@ -1,0 +1,567 @@
+<title>Partes 5 y 6 · los 54 puntos, uno a uno</title>
+<style>
+  @page { size: A4; margin: 15mm 14mm 17mm; }
+
+  :root {
+    --tinta:       #16130f;
+    --tinta-media: #4b433a;
+    --tinta-tenue: #7d7365;
+    --linea:       #d9d2c6;
+    --linea-fina:  #ece6db;
+    --marca:       #c94a0c;
+    --marca-suave: #fbf1e9;
+    --hecho:       #2b6642;
+    --hecho-f:     #eaf2ec;
+    --nada:        #6b6155;
+    --nada-f:      #f2efe8;
+    --abierto:     #8a6a12;
+    --abierto-f:   #fdf6e3;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: "Cascadia Mono", "SF Mono", Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; color: var(--tinta); font-family: var(--sans); font-size: 9.5pt; line-height: 1.45; }
+
+  .portada { border-bottom: 2.5pt solid var(--tinta); padding-bottom: 9pt; margin-bottom: 12pt; }
+  .sello { font-family: var(--mono); font-size: 7.5pt; letter-spacing: .18em; text-transform: uppercase; color: var(--marca); margin: 0 0 5pt; }
+  h1 { font-family: var(--serif); font-size: 24pt; font-weight: 600; line-height: 1.1; margin: 0 0 5pt; }
+  .bajada { color: var(--tinta-media); margin: 0; font-size: 10pt; max-width: 150mm; }
+  .cifras { display: flex; flex-wrap: wrap; gap: 3pt 14pt; margin-top: 9pt; padding-top: 7pt;
+            border-top: .5pt solid var(--linea-fina); font-family: var(--mono); font-size: 7.5pt; color: var(--tinta-tenue); }
+  .cifras b { color: var(--tinta); }
+
+  h2 { font-family: var(--serif); font-size: 15pt; font-weight: 600; margin: 0 0 2pt; break-after: avoid; }
+  h3 { font-size: 10pt; font-weight: 700; margin: 10pt 0 3pt; break-after: avoid; }
+  .bloque { border-top: .75pt solid var(--linea); padding-top: 8pt; margin-bottom: 12pt; }
+  .origen { font-family: var(--mono); font-size: 7.5pt; letter-spacing: .12em; text-transform: uppercase; color: var(--marca); margin: 0 0 2pt; }
+  .intro { color: var(--tinta-media); margin: 0 0 6pt; max-width: 155mm; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 8.5pt; margin: 5pt 0 0; }
+  th, td { text-align: left; padding: 3.5pt 5pt; border-bottom: .5pt solid var(--linea-fina); vertical-align: top; }
+  th { font-family: var(--mono); font-size: 6.8pt; letter-spacing: .1em; text-transform: uppercase;
+       color: var(--tinta-tenue); border-bottom: .75pt solid var(--linea); }
+  td.n { font-family: var(--mono); font-weight: 700; white-space: nowrap; width: 26pt; }
+  td.e { white-space: nowrap; width: 52pt; }
+  tr { break-inside: avoid; }
+
+  .et { font-family: var(--mono); font-size: 6.8pt; letter-spacing: .06em; text-transform: uppercase;
+        padding: 1pt 3.5pt; border: .5pt solid; white-space: nowrap; }
+  .ok  { color: var(--hecho);   background: var(--hecho-f);   border-color: #bcd6c5; }
+  .ya  { color: var(--nada);    background: var(--nada-f);    border-color: #d5cdc0; }
+  .ab  { color: var(--abierto); background: var(--abierto-f); border-color: #e6d9ae; }
+
+  .dijo { margin: 6pt 0; padding: 5pt 8pt; background: var(--marca-suave); border-left: 2.5pt solid var(--marca);
+          font-family: var(--serif); font-style: italic; font-size: 9.5pt; break-inside: avoid; }
+  .dijo p { margin: 0 0 3pt; } .dijo p:last-child { margin: 0; }
+  .dijo cite { display: block; margin-top: 3pt; font-family: var(--mono); font-style: normal; font-size: 6.8pt;
+               letter-spacing: .1em; text-transform: uppercase; color: var(--tinta-tenue); }
+
+  .medido { font-family: var(--mono); font-size: 8pt; color: var(--tinta-media);
+            border-left: 1.5pt solid var(--marca); padding-left: 6pt; margin: 5pt 0; break-inside: avoid; }
+  .medido b { color: var(--tinta); }
+
+  .ojo { background: var(--abierto-f); border: .5pt solid #e6d9ae; padding: 5pt 8pt; margin: 6pt 0;
+         font-size: 9pt; break-inside: avoid; }
+  .ojo strong { color: var(--abierto); }
+
+  code { font-family: var(--mono); font-size: 8pt; background: #f4f1ea; padding: .5pt 2pt; border: .5pt solid var(--linea-fina); }
+  p { margin: 0 0 5pt; } ul { margin: 0 0 5pt; padding-left: 13pt; } li { margin-bottom: 2pt; }
+  .salto { break-before: page; }
+  footer { margin-top: 14pt; padding-top: 6pt; border-top: .75pt solid var(--linea); font-size: 8.5pt; color: var(--tinta-tenue); }
+</style>
+
+<div class="portada">
+  <p class="sello">12EN12 · 27 de agosto de 2026</p>
+  <h1>Partes 5 y 6, punto a punto</h1>
+  <p class="bajada">
+    Los dos documentos de Jesús trabajados el 27 de agosto: del punto 144 al 197. De cada uno,
+    qué pedía y qué se hizo. Al final, lo que la maqueta enseñaba sin numerar, las dos decisiones
+    que hubo que cerrar, lo que salió al hacerlo y lo que sigue abierto.
+  </p>
+  <div class="cifras">
+    <span><b>54</b> puntos</span>
+    <span><b>48</b> hechos</span>
+    <span><b>5</b> ya estaban</span>
+    <span><b>1</b> bloqueado y desbloqueado el mismo día</span>
+    <span>en <b>producción</b> y en <b>dev</b></span>
+  </div>
+</div>
+
+<!-- ═══════════════════ PARTE 5 ═══════════════════ -->
+<div class="bloque">
+  <p class="origen">Parte 5 · bloque A</p>
+  <h2>El buscador de alimentos (144 a 160)</h2>
+  <p class="intro">
+    La ficha de nueve alimentos escogidos para cubrir todos los casos: un macro, dos, todos,
+    ninguno; con calibración y sin ella; genérico y marca; por gramos, por unidad y por media
+    unidad. Se comprobaron uno a uno contra los literales del documento.
+  </p>
+
+  <table>
+    <thead><tr><th>Nº</th><th>Estado</th><th>Qué pedía</th><th>Qué se hizo</th></tr></thead>
+    <tbody>
+      <tr><td class="n">144</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>«Sin resultados» y «No se encontraron alimentos» no dicen que se pueda pedir. Mismo texto en los dos sitios.</td>
+        <td>Una sola frase compartida («No lo tenemos…») en <code>SinResultados</code>, usada por Alimentos y por el buscador de dentro de una comida.</td></tr>
+      <tr><td class="n">145</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>Cuatro líneas por alimento, todas a la izquierda.</td>
+        <td>La fila se rehízo entera: los macros dejan de ir alineados a la derecha. Es el punto que más código movió del bloque.</td></tr>
+      <tr><td class="n">146</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>«Por cuánto es», lo primero y debajo del nombre.</td>
+        <td>Sube al segundo renglón y cambia la redacción: «por cada unidad de 63g» → «por unidad, de 63 g».</td></tr>
+      <tr><td class="n">147</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>Las frases de «te cuenta», caso por caso, comparando con los macros que el alimento <em>tiene</em>.</td>
+        <td>Cuatro formas: «Te cuenta todo» · «Te cuenta solo el hidrato» · «Te cuenta la proteína y la grasa» · «No te cuenta nada». Y en los que se calibran, sin el «solo». Desaparece la coletilla «Su proteína no te cuenta», que era un renglón por alimento.</td></tr>
+      <tr><td class="n">148</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>La cantidad mínima, que está en CALMA y falta en la app.</td>
+        <td>Faltaba en la pantalla, no en el servidor: ya viajaba. Se pinta junto al «necesitas», en la misma línea.</td></tr>
+      <tr><td class="n">149</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>Y cómo se escribe ese mínimo: «desde media hamburguesa», «desde 1 unidad».</td>
+        <td>Unidad entera → «1 unidad». Media unidad → el nombre del alimento, con «media unidad» de reserva.</td></tr>
+      <tr><td class="n">150</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>Los que no aportan macros: el mínimo existe, el «necesitas» no.</td>
+        <td>«Siempre puede ser sugerido» → «Desde 50 g · siempre cabe». Y el filtro «Verduras libres» pasa a «No aportan macros».</td></tr>
+      <tr><td class="n">151</td><td class="e"><span class="et ya">Ya estaba</span></td>
+        <td>Tener macros y contarlos no es lo mismo: el kétchup zero.</td>
+        <td>La regla del servidor ya era correcta. Lo que cambia es dónde se pintan esos números, que es el punto 154.</td></tr>
+      <tr><td class="n">152</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>El nombre abre la ficha; la web tiene su botón.</td>
+        <td>Fuera el subrayado naranja. El nombre abre la ficha en marcas <em>y</em> en genéricos, y a la derecha va «GENÉRICO» o «Ver web ↗». Obligó a que cualquier alimento pueda abrirse, no solo los que llevan punto.</td></tr>
+      <tr><td class="n">153</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>Una categoría, no cuatro.</td>
+        <td>No vale «quedarse la primera»: en 35 fichas de 3.219 la primera es una etiqueta transversal (YA, POL, SNA). La regla buena es la primera <em>numérica</em>.</td></tr>
+      <tr><td class="n">154</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>Al abrir: los macros reales y la calibración entera.</td>
+        <td>Los reales bajan de la lista al detalle, y con ellos los tres tramos. La categoría deja de repetirse dentro.</td></tr>
+      <tr><td class="n">155</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>El punto, el mismo en la leyenda y en la lista.</td>
+        <td>Eran dos elementos distintos con tamaños distintos. Ahora es el mismo.</td></tr>
+      <tr><td class="n">156</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>El buscador, de arriba abajo: se entra y se escribe.</td>
+        <td>El campo sube al principio. Los filtros pasan de seis líneas a una fila de botones. Después la leyenda, el contador y los resultados.</td></tr>
+      <tr><td class="n">157</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>La leyenda pierde los tramos, que ya están dentro.</td>
+        <td>Se caen las dos frases de tramos. Queda qué es un genérico y qué significa el punto.</td></tr>
+      <tr><td class="n">158</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>El botón de pedir, al final de la lista.</td>
+        <td>Baja del principio al final y deja de ser un botón amarillo: es un enlace. («Ese amarillo no es de la casa».)</td></tr>
+      <tr><td class="n">159</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>El texto de arriba: negrita en «marcas», guion en vez de dos puntos, y la jerarquía de tamaños al revés.</td>
+        <td>Hecho. Y con una contradicción resuelta: ver el aviso de abajo.</td></tr>
+      <tr><td class="n">160</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>Los colores: los que ya están escritos, no otros nuevos.</td>
+        <td>Fuera el color por tipo de macro. Los números en el color del texto. Cierra la regla de la parte 4: el color es estado, no tipo de macro.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="ojo">
+    <strong>Dos puntos aprobados que se contradecían.</strong> El 159 manda conservar el texto del
+    punto 137, que dice «las marcas llevan el nombre subrayado en naranja y tocando el nombre vas a
+    su web». El 152 quita el subrayado <em>y</em> quita ese gesto. La frase se quedaba describiendo
+    algo que ya no pasa. Se cerró reescribiéndola: «Las <strong>marcas</strong> llevan “Ver web ↗”».
+  </div>
+
+  <div class="medido">
+    De propina, el buscador iba justo de tiempo: el catálogo pesaba <b>1.644 KB</b> y tardaba
+    <b>2,69 s</b>, con el tope de Jesús en 3 s. Una frase por alimento que ninguna pantalla leía
+    desde el 26-08 ocupaba <b>224 KB</b>. Fuera: <b>1.420 KB</b> y <b>2,61 s</b>.
+  </div>
+</div>
+
+<!-- ─────────────────────────────────────────────── -->
+<div class="bloque salto">
+  <p class="origen">Parte 5 · bloque B</p>
+  <h2>Solicitar un alimento (161 a 169)</h2>
+  <p class="intro">
+    El bloque con más obra nueva: el formulario se quedaba corto en casi todo lo que pedía el
+    documento.
+  </p>
+
+  <table>
+    <thead><tr><th>Nº</th><th>Estado</th><th>Qué pedía</th><th>Qué se hizo</th></tr></thead>
+    <tbody>
+      <tr><td class="n">161</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>Todo obligatorio, y el botón apagado hasta el final.</td>
+        <td>Antes solo se validaba el nombre y las fotos salían como «opcionales, pero ayudan». Ahora son obligatorias las dos, más los macros y el enlace. Y la validación se puso <strong>también en el servidor</strong>: una solicitud a medias ya no entra por ningún lado.</td></tr>
+      <tr><td class="n">162</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>Cuatro bloques, y cada uno mira a un sitio del envase.</td>
+        <td>Qué es · Los macros · Cómo viene · De dónde sale. Antes los números iban antes que las fotos.</td></tr>
+      <tr><td class="n">163</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>Las dos fotos y qué tiene que salir en cada una.</td>
+        <td>«Foto del reverso o lateral», con sus pies: «Que se vea el nombre» / «Que se vea el valor nutricional».</td></tr>
+      <tr><td class="n">164</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>«¿Por 100 g o por unidad?», y su peso.</td>
+        <td>Era una casilla; pasa a dos botones. Si es por unidad, el peso es obligatorio y el título de abajo lo repite: «Anota los macros de esa unidad de 125 g».</td></tr>
+      <tr><td class="n">165</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>Las latas: el peso no se pide dos veces.</td>
+        <td>Campo nuevo («¿Viene en lata o en conserva?») y el neto/escurrido solo se pregunta si dice que sí. Tocó el modelo del servidor y la pantalla del panel, que tenía que ver el dato nuevo.</td></tr>
+      <tr><td class="n">166</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>El enlace se queda y ahora sirve para dos cosas.</td>
+        <td>Es el mismo dato que alimenta el «Ver web ↗» del 152. Obligatorio, con la casilla «No tiene web» como salida para los genéricos.</td></tr>
+      <tr><td class="n">167</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>El botón, y los tres colores que hay que quitar.</td>
+        <td>«Enviar sugerencia» → «Solicitarlo», y de verde a naranja. El verde significa «resuelto» en el resto de la app.</td></tr>
+      <tr><td class="n">168</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>El aviso de arriba, con los plazos.</td>
+        <td>Entra el aviso con los plazos reales (viernes a las 10, corte el martes).</td></tr>
+      <tr><td class="n">169</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>«El equipo lo revisará» se cae entero.</td>
+        <td>Fuera. Y «de la etiqueta» → «del envase» en los dos sitios donde salía.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ─────────────────────────────────────────────── -->
+<div class="bloque">
+  <p class="origen">Parte 5 · bloque C</p>
+  <h2>La pantalla de Inicio (170 a 178)</h2>
+
+  <table>
+    <thead><tr><th>Nº</th><th>Estado</th><th>Qué pedía</th><th>Qué se hizo</th></tr></thead>
+    <tbody>
+      <tr><td class="n">170</td><td class="e"><span class="et ya">Ya estaba</span></td>
+        <td>Se queda abriendo en «Macros».</td>
+        <td>Ya abría ahí. Verificado y dejado por escrito.</td></tr>
+      <tr><td class="n">171</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>«Marca lo que te vayas comiendo».</td>
+        <td>Ponía «Marca lo que ya te has comido», que mira al pasado, mientras dentro de la pestaña ya decía lo contrario. Eran las dos mitades de la misma pantalla diciendo cosas distintas.</td></tr>
+      <tr><td class="n">172</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>Los números grandes, más grandes: 44 px y peso 850.</td>
+        <td>Y no se podía pintar: la app cargaba la letra en pesos sueltos hasta el 800, así que un 850 se redondeaba en silencio. Se pidió el rango completo y se comprobó en el navegador que la fuente de 850 existe de verdad. Se cayó un estiramiento que se había puesto el 25-08 para simularlo.</td></tr>
+      <tr><td class="n">173</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>Los números de las comidas, con letra: <code>32P · 19H · 6G</code>.</td>
+        <td>Revierte el punto 98 del 25-08, que las había quitado. Mirando la app, Jesús decide que manda la coherencia con el resto. Lo que no vuelve es el decimal.</td></tr>
+      <tr><td class="n">174</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>Los suplementos, con las comidas.</td>
+        <td><strong>Nació bloqueado y se desbloqueó el mismo día.</strong> Ver la página siguiente.</td></tr>
+      <tr><td class="n">175</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>Extras del día: «no estaba previsto».</td>
+        <td>Hecho.</td></tr>
+      <tr><td class="n">176</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>El texto de dentro de Extras, más pequeño.</td>
+        <td>Hecho.</td></tr>
+      <tr><td class="n">177</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>La frase del día, sin punto final.</td>
+        <td>El punto no estaba en el código: venía dentro del texto guardado. Se quita al pintar y no en la base, porque las frases las escribe gente y así no vuelve a colarse.</td></tr>
+      <tr><td class="n">178</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>Un descuadre: la grasa dice 40 aquí y 41 en Nutrición.</td>
+        <td>No era redondeo. La cabecera de Nutrición sumaba <em>toda</em> la grasa del día contra un objetivo que no cuenta la del entreno: creado y objetivo medían cosas distintas en la misma columna. El bueno era el de Inicio.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="medido">
+    El 178, reproducido antes y después: con el arreglo quitado, Nutrición decía <b>20</b> e Inicio
+    <b>10</b>; con él puesto, las dos dicen <b>10</b>. El comentario del código afirmaba que «el
+    peri no lleva grasa», y en producción hay <b>27 días guardados</b> que lo desmienten.
+  </div>
+</div>
+
+<!-- ─────────────────────────────────────────────── -->
+<div class="bloque salto">
+  <p class="origen">El punto 174</p>
+  <h2>El que nació bloqueado</h2>
+
+  <div class="dijo">
+    <p>«+ Creatina debajo de los macros de la comida 3.»</p>
+    <cite>Documento parte 5, punto 174</cite>
+  </div>
+
+  <p>
+    No era trabajo de pantalla: <strong>el dato no existía</strong>. Lo único guardado era el
+    «¿Cuándo?», un texto libre que escribe Jesús («Todos los días, con el desayuno»). No había
+    ningún campo que dijera «este suplemento va con la Comida 3», y sacarlo parseando el texto
+    estaba descartado por método. Era la pregunta que llevaba abierta desde la parte 3.
+  </p>
+
+  <p>
+    Se desbloqueó ese mismo día con una decisión de Francisco: <strong>manda lo que elija el coach
+    y, si no ha elegido, se deduce del texto</strong>. Así se ve desde el primer día y solo hay que
+    tocar lo que salga torcido.
+  </p>
+
+  <div class="medido">
+    Medido contra producción, sobre las <b>528 líneas</b> de suplemento vivas (23 textos distintos,
+    así que se puede contar exacto):<br>
+    <b>206</b> (39 %) caen solas en una comida · <b>235</b> (45 %) van con el entreno y no llevan
+    nada debajo, por diseño · <b>87</b> (16 %) el texto no dice comida.
+  </div>
+
+  <p>
+    La maqueta ponía la creatina en la Comida 3 y su «¿Cuándo?» dice «con el desayuno», que es la 1.
+    Esa discrepancia sigue sin resolver y es de Jesús: hay que decidir cuál manda.
+  </p>
+
+  <h3>Y por la tarde se rehízo entero</h3>
+  <p>
+    Se montó primero en el catálogo, donde la elección vale para todos los clientes a la vez.
+    Francisco lo probó y dijo que era confuso: <em>«debería poder cambiarse desde la ficha del
+    cliente, y además no con texto»</em>. Tenía razón, porque la deducción por texto tiene un filo:
+    la app busca las palabras <em>desayuno</em> y <em>cena</em>, y si el texto no nombra ninguna
+    comida no se queda sin sitio, se cae hacia atrás al texto del catálogo. O sea que reescribir el
+    «¿Cuándo?» de un cliente sirve para <em>moverlo</em>, nunca para <em>quitarlo</em>.
+  </p>
+  <p>
+    Ahora, en la ficha de cada cliente, cada suplemento lleva su desplegable — Automático · La
+    primera · La última · Comida 1 a 4 · En ninguna — y al lado la frase de <strong>dónde acaba
+    saliendo</strong>, calculada por el servidor: la misma que ve el cliente. No se calcula en el
+    navegador a propósito, porque ese mismo día se vio lo que pasa cuando el mismo dato lo calculan
+    dos sitios.
+  </p>
+</div>
+
+<!-- ═══════════════════ PARTE 6 ═══════════════════ -->
+<div class="bloque">
+  <p class="origen">Parte 6 · bloque A</p>
+  <h2>Suplementos: de dos caminos a tres (179 a 190)</h2>
+  <p class="intro">
+    El bloque grande de la parte 6. La pantalla pasa de dos caminos a tres, y los dos que había no
+    eran ninguno de los tres.
+  </p>
+
+  <table>
+    <thead><tr><th>Nº</th><th>Estado</th><th>Qué pedía</th><th>Qué se hizo</th></tr></thead>
+    <tbody>
+      <tr><td class="n">179</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>Tres estados, no uno.</td>
+        <td>Con pauta: solo la suya, <strong>sin la guía debajo</strong>. Con plan pero sin pauta: el aviso y la guía. Sin plan personalizado: la guía. El tercer caso caía antes en el mismo sitio por casualidad, porque el error del servidor se tragaba en silencio; ahora lo decide un dato.</td></tr>
+      <tr><td class="n">180</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>El nombre cambia con el estado.</td>
+        <td>«Mis suplementos» en los dos primeros, «Suplementación» en el tercero. Antes los tres se llamaban igual, «y en uno de los dos es mentira».</td></tr>
+      <tr><td class="n">181</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>El texto de «Mis suplementos».</td>
+        <td>Hecho.</td></tr>
+      <tr><td class="n">182</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>El texto de la guía.</td>
+        <td>Se caen dos párrafos: el que vende el Catálogo Premium dentro de lo que ya ha pagado y el que promete el plan personalizado. Los dos venían del servidor.</td></tr>
+      <tr><td class="n">183</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>El aviso del que está esperando.</td>
+        <td>«Te lo estamos preparando. Te avisamos en cuanto esté.» Sin el «empieza por los básicos»: si se lo vas a decir tú, no tiene sentido mandarle a empezar por su cuenta.</td></tr>
+      <tr><td class="n">184</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>Cada suplemento, en cuatro líneas: nombre · COMIDA N · Dosis · Cuándo · Comprar.</td>
+        <td>Y las etiquetas pierden la interrogación: «¿Cuánto?» → <strong>Dosis</strong>, «¿Cuándo?» → <strong>Cuándo</strong>, en ese orden, que es el inverso del que había.</td></tr>
+      <tr><td class="n">185</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>«Dónde encontrarlo» → «Comprar con descuento».</td>
+        <td>En los tres sitios donde salía.</td></tr>
+      <tr><td class="n">186</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>Alimentos va antes que Básicos.</td>
+        <td>Intercambiados en el servidor. Las frases de las categorías no se tocan (punto 189), aunque en la maqueta salgan cortadas.</td></tr>
+      <tr><td class="n">187</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>«El resto de la guía» se cae.</td>
+        <td>Borrarlo sin más habría hecho <em>desaparecer</em> lo que hubiera dentro, así que lo primero fue contarlo: <strong>2 fichas de 28</strong>. Se recolocaron con un script idempotente y con copia: Citrulina malato → Rendimiento; Crema RELIEF EFFECT → Descanso.</td></tr>
+      <tr><td class="n">188</td><td class="e"><span class="et ya">Ya estaba</span></td>
+        <td>El código, con lo que dura.</td>
+        <td>Solo había que asegurarse de que sale al final de las tres pantallas.</td></tr>
+      <tr><td class="n">189</td><td class="e"><span class="et ya">Ya estaba</span></td>
+        <td>Lo que no se toca.</td>
+        <td>Las siete categorías con sus frases, el Cuándo y el Dosis de cada suplemento, y las fotos de los botes. Intactos.</td></tr>
+      <tr><td class="n">190</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>Cómo se llega desde Inicio: «con el + Creatina debajo de la comida 3 ya hay por dónde, tocando ahí».</td>
+        <td>Obligó a partir la fila del Inicio: el «+ Creatina» estaba <em>dentro</em> del botón de la comida, que lleva a Nutrición. Un botón dentro de otro botón ni es HTML válido ni deja elegir destino.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="ojo">
+    <strong>El 184 pedía «el mismo color que en Inicio», y no lo era.</strong> La comida se puso en
+    un naranja que resultó ser <code>#FFA500</code>: el amarillo que el propio Jesús había señalado
+    en el punto 158 («ese amarillo no es de la casa»). En Inicio va en <code>#FF671F</code>. Ahora
+    son el mismo, y la comprobación lo mide.
+  </div>
+
+  <p>
+    Y la comida sale <strong>con su número</strong>, no con una palabra. El servidor da el hueco en
+    simbólico — «primera», «última» — porque quien sabe cuántas comidas tiene el día es la pantalla
+    que lo tiene delante, y Suplementos no lo tiene. Se resuelve pidiendo el número de comidas del
+    cliente. Sin ese dato se dice «Primera comida» / «Última comida», que es verdad siempre.
+  </p>
+</div>
+
+<!-- ─────────────────────────────────────────────── -->
+<div class="bloque">
+  <p class="origen">Parte 6 · bloques B y C</p>
+  <h2>La frase del modo y el color de las comidas (191 a 197)</h2>
+
+  <table>
+    <thead><tr><th>Nº</th><th>Estado</th><th>Qué pedía</th><th>Qué se hizo</th></tr></thead>
+    <tbody>
+      <tr><td class="n">191</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>La frase de Automático.</td>
+        <td>«Yo te ajusto las cantidades» → «Ajusta las cantidades de los alimentos a tus macros». Sale del singular y dice a qué ajusta.</td></tr>
+      <tr><td class="n">192</td><td class="e"><span class="et ya">Ya estaba</span></td>
+        <td>La de Manual ya está puesta y es la buena.</td>
+        <td>Verificada.</td></tr>
+      <tr><td class="n">193</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>La frase de Cuadrar.</td>
+        <td>«Ajusta las cantidades sin pasarse de tus macros», sin punto final.</td></tr>
+      <tr><td class="n">194</td><td class="e"><span class="et ya">Ya estaba</span></td>
+        <td>Ojo: las dos frases quedan casi iguales.</td>
+        <td>Es a propósito, y lo deja escrito para que nadie lo lea como un copiado. Nada que tocar.</td></tr>
+      <tr><td class="n">195</td><td class="e"><span class="et ya">Ya estaba</span></td>
+        <td>El punto 124 ya está hecho entero.</td>
+        <td>Verificado: pone «AJUSTE DE CANTIDADES» y la frase se ve en el móvil.</td></tr>
+      <tr><td class="n">196</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>«Sin crear» se queda, pero en gris y sin punto.</td>
+        <td>Y pedía una cosa más de la que parecía: ver abajo.</td></tr>
+      <tr><td class="n">197</td><td class="e"><span class="et ok">Hecho</span></td>
+        <td>Lo que ya está hecho se apaga, en vez de pintar lo que falta.</td>
+        <td>Mismo efecto que pedía el punto 117, sin gastar un color: la comida cuadrada baja de opacidad y se quita el naranja de «sin crear».</td></tr>
+    </tbody>
+  </table>
+
+  <h3>El 196 pedía más de lo que parecía</h3>
+  <p>
+    Dice, de pasada: «no es lo mismo que <em>faltan 11 de proteína</em>, que es un número y <strong>va
+    en blanco</strong>». O sea que no solo cambiaba «sin crear»: <strong>«faltan X» estaba en naranja
+    y tenía que estar en blanco</strong>. Y encaja con la regla del punto 76: verde si el macro está
+    resuelto, naranja si te has <em>pasado</em>, y sin color mientras vas por debajo. Ir corto no es
+    un error, es que no has terminado. Con el naranja puesto, la mitad de las comidas de cualquier
+    día a medio montar salían en color de aviso.
+  </p>
+  <p>
+    Los dos puntos corrigen a dos suyos anteriores, el 116 y el 117, escritos antes de cerrar la
+    regla del color. <strong>Resultado: en un día a medias no hay ni un color en pantalla</strong>,
+    que es exactamente lo que dice el pie de la maqueta.
+  </p>
+  <p>
+    Como el color pasa de dos casos a cuatro y lo leen tres pantallas — Inicio, la cabecera de
+    Nutrición y cada comida —, la decisión se sacó a un solo sitio. Antes cada una lo resolvía por su
+    cuenta y bastaba con olvidarse de una para que dijeran cosas distintas.
+  </p>
+</div>
+
+<!-- ─────────────────────────────────────────────── -->
+<div class="bloque salto">
+  <p class="origen">Parte 6 · lo que la maqueta enseñaba sin numerar</p>
+  <h2>Los siete cambios sin número</h2>
+  <p class="intro">
+    El documento dibuja cinco pantallas de Nutrición completas, y en ellas había cambios que no
+    estaban en ningún punto numerado. Como el documento dice que solo entra lo validado, están
+    validados. Se hicieron los siete.
+  </p>
+  <ul>
+    <li><strong>Los objetivos con letra</strong>: <code>Objetivo · 33P · 20H · 10G</code>. Revierte el punto 115, igual que el 173 revirtió el 98 para el Inicio.</li>
+    <li><strong>El día con su nombre</strong>: «Jueves, 27 de agosto» en vez de «Hoy», también hoy. Y se cayó un formato que ponía «27 De Agosto».</li>
+    <li><strong>«Nutrición»</strong> en vez de «Plan nutricional»: era el único sitio de la app con otro nombre.</li>
+    <li><strong>«Comidas del día» también en el móvil</strong>: estaba escondido, y encima de la lista hay tres números grandes, un pie y a veces un aviso; sin el rótulo, la lista empezaba sin que nada dijera que empezaba.</li>
+    <li><strong>Los Extras plegados, con su «+»</strong> — solo en Nutrición. En Inicio siguen abiertos: allí se apunta sobre la marcha y un toque de más es donde se pierde la gente. Y con algo apuntado se abre solo.</li>
+    <li><strong>El intra y el post, con su estado</strong>: estaban excluidos, y en una lista de seis tomas dos no decían en qué punto estaban.</li>
+    <li><strong>«+ Creatina» también en Nutrición</strong>. La regla salió a un sitio común porque ahora la pintan dos pantallas, y con la cuenta escrita dos veces una se quedaría vieja sin que nadie lo viera.</li>
+  </ul>
+</div>
+
+<!-- ─────────────────────────────────────────────── -->
+<div class="bloque">
+  <p class="origen">Las dos que hubo que decidir</p>
+  <h2>Manda el documento</h2>
+  <p class="intro">
+    Dos cosas de la parte 6 contradecían al vídeo que Jesús había grabado esa misma mañana. Se hizo
+    primero lo del vídeo y por la tarde Francisco zanjó: <em>«respeta el documento… manda el
+    documento»</em>. Se revirtieron las dos.
+  </p>
+
+  <h3>1 · El aviso de pasarse</h3>
+  <p>La maqueta de la parte 6 dice:</p>
+  <div class="dijo">
+    <p>«Este día se pasa de tus macros <strong>de ahora</strong> · Si tus macros han cambiado, te
+       reajustamos las cantidades sin quitarte nada» · botón «<strong>Cuadrar el día</strong>»</p>
+    <cite>Parte 6, dentro de la maqueta</cite>
+  </div>
+  <p>Y en el vídeo, leyendo esa misma frase en voz alta, dijo lo contrario:</p>
+  <div class="dijo">
+    <p>«Sería, se pasa de tus macros <strong>actuales</strong>… Y entonces pondríamos recuadrar el
+       día. No. Pondríamos <strong>reajustar</strong>.»</p>
+    <cite>Vídeo del 27 de agosto</cite>
+  </div>
+  <p>
+    Quedó lo del documento. Y el aviso de después también, que decía «Día reajustado»: si el botón
+    dice una palabra, lo que sale luego tiene que decir la misma. <strong>Sigue siendo la misma frase
+    con dos redacciones suyas del mismo día</strong>, así que hay que preguntárselo.
+  </p>
+
+  <h3>2 · El naranja de la cabecera</h3>
+  <p>
+    El pie de la maqueta dice «ni un color en toda la pantalla», así que por debajo del objetivo ya
+    no se pinta nada, ni en Nutrición ni en Inicio. Esto revierte una decisión del 26-08 y vuelve a
+    la regla del punto 76. Lo que distingue faltar de sobrar sigue siendo la longitud de la barra;
+    ahora, además, el color.
+  </p>
+</div>
+
+<!-- ─────────────────────────────────────────────── -->
+<div class="bloque salto">
+  <p class="origen">Lo que salió al hacerlo</p>
+  <h2>Lo que no estaba en ningún punto</h2>
+
+  <h3>Tres motores para el mismo número</h3>
+  <p>
+    Probando el punto 173, Francisco enseñó unas almendras cuya proteína aparecía y desaparecía
+    sola. Detrás había algo más grande: al cambiar una cantidad, ese número lo calculaban tres
+    sitios distintos. La calibración de Jesús va por escalones — hasta 20 g de frutos secos su
+    proteína no cuenta, de 20 a 40 la mitad, de 40 en adelante toda — y el navegador le aplicaba
+    encima una regla de tres.
+  </p>
+  <div class="medido">
+    Medido contra el catálogo entero: de los <b>462 alimentos</b> que se calibran, <b>62 daban un
+    número falso</b>. Reproducido en la app: bajar de 45 a 40 g enseñaba <b>9,2</b> cuando el motor
+    dice <b>4,6</b>.
+  </div>
+
+  <h3>El nombre que veía el cliente</h3>
+  <p>
+    Del vídeo: «Él solamente ve Aceite de krill. No tiene que ver Aceite de krill, tres perlas». La
+    letra pequeña que Jesús se escribe a sí mismo salía tal cual en la pantalla del cliente:
+    <strong>328 de 528 líneas</strong>, en <strong>97 de 100 clientes</strong>. Se arregló sin tocar
+    un solo dato — el panel y el cliente leen por puertas distintas —, así que sus nombres de
+    referencia siguen intactos donde los necesita.
+  </p>
+
+  <h3>Cuatro fallos más, encontrados probando</h3>
+  <ul>
+    <li><strong>Los gramos se movían de uno en uno</strong> mientras el servidor redondea a 5: el cliente no podía parar en un número que el servidor fuera a respetar.</li>
+    <li><strong>El «···» de la comida no hacía nada</strong>: sí lo hacía, pero la tarjeta se lo comía. De los 106 px que mide el menú se veían 11.</li>
+    <li><strong>La rutina no se abría en el iPhone</strong>: se pedía el fichero y luego se abría la ventana, y para entonces Safari ya la bloquea. Del toque a la ventana, 492 ms; ahora 4.</li>
+    <li><strong>Cinco tests que medían reglas derogadas</strong>: tres seguían con el mínimo de verduras en 50 g cuando Jesús lo subió a 100 el 15-08, y otro comprobaba la suplementación general dentro de una respuesta de la que él mismo la había mandado sacar.</li>
+  </ul>
+</div>
+
+<!-- ─────────────────────────────────────────────── -->
+<div class="bloque">
+  <p class="origen">Lo que sigue abierto</p>
+  <h2>Lo que espera una decisión</h2>
+  <p class="intro">Nada de esto es código a medias.</p>
+
+  <table>
+    <thead><tr><th>Qué</th><th>Por qué sigue abierto</th></tr></thead>
+    <tbody>
+      <tr><td><strong>La creatina</strong></td>
+        <td>Su ficha la deja en la Comida 1 y la maqueta del 174 la dibuja en la 3. Hay que decidir cuál manda.</td></tr>
+      <tr><td><strong>87 suplementos</strong></td>
+        <td>De las 528 líneas vivas, 87 no dicen a qué comida van ni se puede deducir del texto. Necesitan que Jesús las coloque.</td></tr>
+      <tr><td><strong>Los frutos secos</strong></td>
+        <td>Dos reglas suyas se contradicen: el caso 32 dice que su proteína no cuenta; la calibración progresiva dice que sí, por tramos. Es la raíz del número que cambiaba solo.</td></tr>
+      <tr><td><strong>«Qué te cuenta»</strong></td>
+        <td>El 147 lo resolvió para el buscador, pero pidió que se diga «en la propia línea del alimento», y a la línea de Nutrición no llega.</td></tr>
+      <tr><td><strong>Los dos mínimos de la maqueta</strong></td>
+        <td>El 148 escribe «Almendras desde 5 g» y «Lechuga desde 50 g», que son justo los dos que él cambió después: frutos secos a 10 g el 07-08 y verduras a 100 g el 15-08. La app se queda con 10 y 100, que es lo que decidió mirando la app.</td></tr>
+      <tr><td><strong>Los tres raros del 149</strong></td>
+        <td>«Media ciruela», «media nectarina», «media ensalada de la casa». Si no debían llevar mínimo de media unidad, es un dato y no una pantalla.</td></tr>
+      <tr><td><strong>El 144 dentro de Alimentos</strong></td>
+        <td>«¿Sigue sin estar? Puedes pedirlo desde Alimentos» dicho estando ya en Alimentos suena raro. Se hizo literal porque él dice «igual en los dos sitios».</td></tr>
+      <tr><td><strong>La Crema RELIEF EFFECT</strong></td>
+        <td>Es la única discutible de las dos recolocadas del 187. Está en Descanso; si la quiere en Salud, se cambia y se vuelve a correr el script.</td></tr>
+      <tr><td><strong>Cuadrar la comida</strong></td>
+        <td>Al cuadrar se manda solo esa comida, así que el servidor calibra sin saber qué frutos secos llevan las demás.</td></tr>
+      <tr><td><strong>El medio segundo</strong></td>
+        <td>El número ya no miente, pero sigue tardando en asentarse tras cambiar una cantidad.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<footer>
+  <p>
+    Los 54 puntos se comprobaron abriendo la app en el navegador con cuentas de prueba, no leyendo
+    el código. Los guiones que lo repiten están en <code>_guia/</code> y todos dejan la cuenta como
+    estaba al terminar. Todo está en producción y en el clon de pruebas.
+  </p>
+</footer>
