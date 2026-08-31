@@ -1464,42 +1464,74 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
         # conteste, se baja en proporción: NUNCA por el orden de la lista, que es lo que hacía
         # hasta hoy y por eso el mismo batido salía de dos maneras según quién estuviera antes.
         objetivo = _target(meal_key)
+
+        def _suelo_de(food):
+            # El import va aquí dentro a propósito: más abajo, la pasada de afinado hace
+            # `from calculator import get_food_config`, y eso convierte el nombre en local
+            # de toda la función, así que el de arriba deja de verse desde aquí.
+            from calculator import get_food_config as _config_del_alimento
+            cfg_s = _config_del_alimento(food)
+            return minimo_pesable(food, float(cfg_s.get("minimo", 5) or 5))
+
         aportes = []
         for it, food, _m in entradas:
             racion_a = float(food.get("racion") or 100)
+            es_ud = bool(food.get("unidades"))
             cant_g = float(it.get("cantidad_g") or 0)
-            cant_a = (cant_g / racion_a) if bool(food.get("unidades")) else cant_g
+            cant_a = (cant_g / racion_a) if es_ud else cant_g
             ma = macros_at_calma(food, cant_a)
+            # Y lo que pondría si se le bajara todo lo que se puede bajar. De aquí sale si la
+            # comida tiene arreglo bajando o si hay que quitar algo.
+            suelo_g = _suelo_de(food)
+            ms = macros_at_calma(food, (suelo_g / racion_a) if es_ud else suelo_g)
             aportes.append({
                 "alimento_id": int(food.get("id") or 0),
                 "nombre": food.get("nombre") or it.get("nombre"),
                 "cantidad_g": cant_g,
                 "macros": {"P": ma["proteinas"], "H": ma["hidratos"], "G": ma["grasas"]},
+                "suelo": {"P": ms["proteinas"], "H": ms["hidratos"], "G": ms["grasas"]},
                 "_food": food,
             })
         servido_ahora = {m: sum(a["macros"][m] for a in aportes) for m in ("P", "H", "G")}
         objetivo_m = {"P": objetivo["proteinas"], "H": objetivo["hidratos"],
                       "G": objetivo["grasas"]}
-        macro_sobra = de_donde_bajo.hay_que_preguntar(servido_ahora, objetivo_m, aportes)
+        toca = de_donde_bajo.hay_que_preguntar(servido_ahora, objetivo_m, aportes)
+        macro_sobra, tipo_pregunta = toca if toca else (None, None)
 
         fijos = None
         decision = None
-        if macro_sobra:
+        if macro_sobra and tipo_pregunta == "quitar":
+            # BAJANDO NO SE ARREGLA: aunque todo esté en su mínimo, ese macro se pasa. No hay
+            # nada que clavar; se cuadra como siempre (lo mejor que se pueda) y se devuelve la
+            # pregunta de qué quitar, que es la única que tiene salida. La app no quita nada
+            # por su cuenta: lo elige el cliente (regla del 08-08).
+            en_el_suelo = sum(a["suelo"][macro_sobra] for a in aportes)
+            sobra_en_el_suelo = en_el_suelo - objetivo_m[macro_sobra]
+            opciones = [{
+                "modo": "quitar",
+                "alimento_id": a["alimento_id"],
+                "nombre": a["nombre"],
+                "cantidad_ahora": round(a["cantidad_g"], 1),
+                "aporta": round(a["macros"][macro_sobra], 1),
+                # Lo que pone AUNQUE se baje al mínimo: es lo que de verdad se lleva quitarlo.
+                "aporta_en_el_minimo": round(a["suelo"][macro_sobra], 1),
+                "sobraria_aun": round(max(0.0, sobra_en_el_suelo - a["suelo"][macro_sobra]), 1),
+            } for a in de_donde_bajo.que_se_puede_quitar(aportes, macro_sobra)]
+            decision = {
+                "macro": macro_sobra,
+                "tipo": "quitar",
+                "sobra": round(sobra_en_el_suelo, 1),
+                "titulo": de_donde_bajo.titulo(macro_sobra, sobra_en_el_suelo, "quitar"),
+                "opciones": opciones,
+            }
+        elif macro_sobra:
             candidatos = de_donde_bajo.de_donde_se_puede_bajar(aportes, macro_sobra)
             objetivo_del_macro = objetivo_m[macro_sobra]
             sobra_total = servido_ahora[macro_sobra] - objetivo_del_macro
 
-            def _suelo(food):
-                # El import va aquí dentro a propósito: más abajo, la pasada de afinado hace
-                # `from calculator import get_food_config`, y eso convierte el nombre en local
-                # de toda la función, así que el de arriba deja de verse desde aquí.
-                from calculator import get_food_config as _config_del_alimento
-                cfg_s = _config_del_alimento(food)
-                return minimo_pesable(food, float(cfg_s.get("minimo", 5) or 5))
-
             def _pesable(food, cantidad):
                 """A una cantidad que se pueda pesar, sin bajar del suelo de ese alimento."""
-                suelo = _suelo(food)
+                suelo = _suelo_de(food)
                 return max(suelo, redondear_cantidad(food, max(suelo, cantidad), minimo_g=suelo))
 
             def _bajar_solo_de(elegido):
@@ -1554,6 +1586,7 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
                 })
                 decision = {
                     "macro": macro_sobra,
+                    "tipo": "bajar",
                     "sobra": round(sobra_total, 1),
                     "titulo": de_donde_bajo.titulo(macro_sobra, sobra_total),
                     "opciones": opciones,

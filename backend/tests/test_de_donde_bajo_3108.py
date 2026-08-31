@@ -73,38 +73,87 @@ def test_la_grasa_del_peri_no_cuenta():
     assert de_donde_bajo.macro_que_sobra(servido, objetivo) is None
 
 
+def _a(fid, nombre, gramos, macros, suelo):
+    """Un alimento como lo ve la regla: lo que pone AHORA y lo que pondria en su minimo."""
+    return {"alimento_id": fid, "nombre": nombre, "cantidad_g": gramos,
+            "macros": macros, "suelo": suelo}
+
+
 def test_con_una_sola_fuente_del_macro_no_se_pregunta():
     """Pollo con arroz: la proteina la pone el pollo. No hay nada que elegir."""
     aportes = [
-        {"alimento_id": POLLO, "nombre": "Pollo", "cantidad_g": 300,
-         "macros": {"P": 60, "H": 0, "G": 0}},
-        {"alimento_id": ARROZ, "nombre": "Arroz", "cantidad_g": 50,
-         "macros": {"P": 3.5, "H": 40, "G": 0.5}},
+        _a(POLLO, "Pollo", 300, {"P": 60, "H": 0, "G": 0}, {"P": 10, "H": 0, "G": 0}),
+        _a(ARROZ, "Arroz", 50, {"P": 3.5, "H": 40, "G": 0.5}, {"P": 1.4, "H": 16, "G": 0.2}),
     ]
     assert de_donde_bajo.hay_que_preguntar(
         {"P": 63.5, "H": 40, "G": 0.5}, {"P": 38, "H": 48, "G": 18}, aportes) is None
 
 
-def test_con_dos_fuentes_se_pregunta():
+def test_con_dos_fuentes_se_pregunta_de_donde_bajar():
     aportes = [
-        {"alimento_id": POLVO, "nombre": "Aislado", "cantidad_g": 60,
-         "macros": {"P": 52.8, "H": 0.7, "G": 1.2}},
-        {"alimento_id": QUESO, "nombre": "Queso", "cantidad_g": 300,
-         "macros": {"P": 30, "H": 12, "G": 0.3}},
+        _a(POLVO, "Aislado", 60, {"P": 52.8, "H": 0.7, "G": 1.2}, {"P": 4.4, "H": 0, "G": 0.1}),
+        _a(QUESO, "Queso", 300, {"P": 30, "H": 12, "G": 0.3}, {"P": 5, "H": 2, "G": 0.1}),
     ]
     assert de_donde_bajo.hay_que_preguntar(
-        {"P": 82.8, "H": 12.7, "G": 1.5}, {"P": 38, "H": 48, "G": 18}, aportes) == "P"
+        {"P": 82.8, "H": 12.7, "G": 1.5}, {"P": 38, "H": 48, "G": 18}, aportes) == ("P", "bajar")
 
 
-def test_un_alimento_que_pone_una_miseria_no_entra_en_la_pregunta():
-    """El arroz pone 7 P de 90: bajarlo no arregla la proteina y de paso carga los hidratos."""
+def test_un_alimento_que_no_devuelve_nada_al_bajarlo_no_entra_en_la_pregunta():
+    """El criterio es el MARGEN: lo que pone menos lo que pondria en su minimo. El arroz esta
+    casi en su minimo, asi que bajarlo no devuelve proteina y solo estorba en la lista."""
     aportes = [
-        {"alimento_id": POLLO, "nombre": "Pollo", "cantidad_g": 250, "macros": {"P": 50, "H": 0, "G": 0}},
-        {"alimento_id": 1667, "nombre": "Atun", "cantidad_g": 150, "macros": {"P": 33, "H": 0, "G": 6}},
-        {"alimento_id": ARROZ, "nombre": "Arroz", "cantidad_g": 100, "macros": {"P": 7, "H": 80, "G": 1}},
+        _a(POLLO, "Pollo", 250, {"P": 50, "H": 0, "G": 0}, {"P": 10, "H": 0, "G": 0}),
+        _a(1667, "Atun", 150, {"P": 33, "H": 0, "G": 6}, {"P": 4.4, "H": 0, "G": 0.8}),
+        _a(ARROZ, "Arroz", 30, {"P": 2.1, "H": 24, "G": 0.3}, {"P": 1.4, "H": 16, "G": 0.2}),
     ]
     nombres = [a["nombre"] for a in de_donde_bajo.de_donde_se_puede_bajar(aportes, "P")]
     assert nombres == ["Pollo", "Atun"], f"la lista de opciones sale {nombres}"
+
+
+def test_el_que_pone_la_mitad_del_macro_SI_entra_en_la_pregunta():
+    """LO QUE FALLABA. Con el corte del 15 % del total, en la comida de los catorce alimentos
+    el bacon ponia la mitad de la grasa y era el UNICO que pasaba: un solo candidato, y la
+    pregunta no salia justo cuando mas falta hacia."""
+    aportes = [
+        _a(2867, "Bacon", 100, {"P": 37, "H": 1.4, "G": 42}, {"P": 9.2, "H": 0.4, "G": 10.5}),
+        _a(2018, "Almendras", 20, {"P": 0, "H": 0, "G": 10.6}, {"P": 0, "H": 0, "G": 10.6}),
+        _a(1353, "Brochetas", 50, {"P": 7.7, "H": 0.3, "G": 5.2}, {"P": 7.7, "H": 0.3, "G": 5.2}),
+        _a(2652, "Carne picada", 100, {"P": 15.5, "H": 2, "G": 18}, {"P": 3.9, "H": 0.5, "G": 4.5}),
+    ]
+    nombres = [a["nombre"] for a in de_donde_bajo.de_donde_se_puede_bajar(aportes, "G")]
+    assert "Bacon" in nombres and "Carne picada" in nombres, nombres
+    assert len(nombres) >= 2, f"vuelve a salir un solo candidato: {nombres}"
+
+
+def test_si_ni_en_el_minimo_cabe_se_pregunta_QUE_QUITAR():
+    """La comida de Francisco: con todo al minimo siguen sobrando 38 g de grasa. Ahi «de donde
+    bajo» no ofrece ninguna salida y hay que preguntar que quitar."""
+    aportes = [
+        _a(2867, "Bacon", 100, {"P": 37, "H": 1.4, "G": 42}, {"P": 9.2, "H": 0.4, "G": 10.5}),
+        _a(2018, "Almendras", 20, {"P": 0, "H": 0, "G": 10.6}, {"P": 0, "H": 0, "G": 10.6}),
+        _a(4, "Aceite", 5, {"P": 0, "H": 0, "G": 5}, {"P": 0, "H": 0, "G": 5}),
+    ]
+    servido = {"P": 37, "H": 1.4, "G": 57.6}
+    objetivo = {"P": 47.5, "H": 72, "G": 12}
+    assert de_donde_bajo.bajar_no_llega(aportes, objetivo, "G") is True
+    assert de_donde_bajo.hay_que_preguntar(servido, objetivo, aportes) == ("G", "quitar")
+
+
+def test_quitar_lo_que_ya_no_pone_nada_no_se_ofrece():
+    """Si en su minimo un alimento no pone nada del macro, quitarlo no arregla nada."""
+    aportes = [
+        _a(2867, "Bacon", 100, {"P": 37, "H": 1.4, "G": 42}, {"P": 9.2, "H": 0.4, "G": 10.5}),
+        _a(110, "Calabacin", 100, {"P": 1.2, "H": 3.1, "G": 0.3}, {"P": 0, "H": 0, "G": 0}),
+    ]
+    nombres = [a["nombre"] for a in de_donde_bajo.que_se_puede_quitar(aportes, "G")]
+    assert nombres == ["Bacon"], nombres
+
+
+def test_la_pregunta_de_quitar_dice_POR_QUE():
+    """«Para que me dice que quite» (Francisco): sin el motivo, pedir que quites parece un
+    capricho de la app."""
+    t = de_donde_bajo.titulo("G", 38.2, "quitar")
+    assert t == "Aunque lo baje todo al mínimo, sobran 38,2 g de grasa. ¿Qué quito?"
 
 
 def test_el_factor_deja_a_los_candidatos_justo_en_el_objetivo():
@@ -171,6 +220,68 @@ def test_el_orden_de_la_lista_YA_NO_DECIDE(cabeceras_cliente):
 def test_una_comida_que_no_se_pasa_no_pregunta_nada(cabeceras_cliente):
     res = _refit(cabeceras_cliente, [_al(POLLO, "Pollo", 100), _al(ARROZ, "Arroz", 50)])
     assert not res.get("decisiones"), f"pregunta sin que sobre nada: {res.get('decisiones')}"
+
+
+# La comida de Francisco del 31-08, entera. Con todo a su minimo pesable da 50 g de grasa
+# contra un objetivo de 12: no se puede cuadrar bajando.
+LA_COMIDA_DE_LOS_CATORCE = [
+    (110, "Calabacin", 100), (642, "Solomillo de pavo", 50), (2828, "Arroz tres delicias", 240),
+    (2018, "Almendras", 20), (4, "Aceite", 5), (2906, "Arroz negro", 80),
+    (10003, "Filete de cerdo empanado", 25), (2875, "Albondigas pollo y pavo", 50),
+    (2959, "Albondigas de cerdo", 25), (3040, "Albondigas de pollo", 50),
+    (749, "Alas de pollo", 50), (2867, "Bacon", 100),
+    (1353, "Brochetas de pollo", 50), (2652, "Carne picada de cerdo", 25),
+]
+
+
+def _refit_c1(cabeceras, alimentos, ajuste=None):
+    """Igual que _refit pero en C1, que es la comida donde el objetivo es 47,5 / 72 / 12."""
+    cuerpo = dict(DIA, comidas={"C1": {"alimentos": alimentos}})
+    if ajuste:
+        cuerpo["ajuste"] = {"C1": ajuste}
+    r = requests.post(f"{API}/calculator/refit-diet", headers=cabeceras, json=cuerpo, timeout=90)
+    assert r.status_code == 200, f"refit-diet responde {r.status_code}: {r.text[:200]}"
+    return r.json()
+
+
+def test_la_comida_de_los_catorce_pregunta_que_quitar(cabeceras_cliente):
+    """LO QUE REPORTO FRANCISCO. Antes esta comida no preguntaba nada y acababa en «no se
+    puede cuadrar sin quitar nada: tendrias que quitar o bajar Almendras, que pone 10,6 g»
+    con 38 g de grasa de sobra."""
+    alimentos = [_al(i, n, g) for i, n, g in LA_COMIDA_DE_LOS_CATORCE]
+    d = _refit_c1(cabeceras_cliente, alimentos).get("decisiones", {}).get("C1")
+    assert d, "no pregunta nada, como antes"
+    assert d["tipo"] == "quitar", f"pregunta de bajar, y bajando no se arregla: {d['tipo']}"
+    assert d["macro"] == "G"
+    assert d["opciones"], "pregunta que quitar y no ofrece nada que quitar"
+    for o in d["opciones"]:
+        assert o["modo"] == "quitar"
+        # Lo que se lleva quitarlo es lo que pone EN SU MINIMO, no lo que pone ahora.
+        assert o["aporta_en_el_minimo"] > 0, o
+
+
+def test_quitando_lo_que_dice_la_pregunta_acaba_cuadrando(cabeceras_cliente):
+    """«Los macros tienen que quedar cuadrados, ese es el objetivo del boton.» Se contesta
+    siempre la primera opcion, como haria el bucle de la pantalla, y tiene que converger."""
+    alimentos = [_al(i, n, g) for i, n, g in LA_COMIDA_DE_LOS_CATORCE]
+    for vuelta in range(20):
+        res = _refit_c1(cabeceras_cliente, alimentos)
+        d = res.get("decisiones", {}).get("C1")
+        if not d:
+            break
+        if d["tipo"] == "quitar":
+            fuera = d["opciones"][0]["alimento_id"]
+            alimentos = [a for a in alimentos if a["alimento_id"] != fuera]
+        else:
+            res = _refit_c1(cabeceras_cliente, alimentos, d["opciones"][0])
+            alimentos = res["comidas"]["C1"]["alimentos"]
+    else:
+        pytest.fail("no converge: sigue preguntando despues de 20 vueltas")
+
+    desfase = res["desfases"]["C1"]
+    for m in ("P", "H", "G"):
+        assert abs(desfase[m]) <= de_donde_bajo.SOBRA_MINIMA, (
+            f"la comida no acaba cuadrada: {m} desfasado {desfase[m]} g")
 
 
 def test_lo_que_promete_la_pregunta_es_lo_que_sale(cabeceras_cliente):

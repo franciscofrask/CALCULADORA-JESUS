@@ -21,10 +21,25 @@ que sobra, y en cuánto se quedaría. Nada de «queda más espeso» ni «más l�
 sabe la textura de nada, y eso es justo lo que Jesús dice que no puede aprender. En un plato
 de pollo con arroz esa frase no significaría nada.
 
-A QUIÉN SE LE PREGUNTA. Solo cuando hay que BAJAR y hay DOS O MÁS sitios de donde bajarlo. Si
-solo un alimento pone ese macro no hay decisión que tomar: se baja y se dice. Y un alimento
-que pone una miseria del macro no entra en la pregunta (el arroz del ejemplo pone 7 P de 90:
-bajarlo no arregla la proteína y de paso te carga los hidratos).
+A QUIÉN SE LE PREGUNTA. Cuando hay que bajar y hay dos o más sitios de donde bajarlo. Si solo
+un alimento pone ese macro no hay decisión que tomar: se baja y se dice.
+
+Y HAY COMIDAS QUE NO SE PUEDEN CUADRAR BAJANDO (Francisco, 31-08-2026, probándolo).
+Una comida suya con catorce alimentos daba, CON TODO A SU MÍNIMO PESABLE, 57,9 P / 18,2 H /
+50,2 G contra un objetivo de 47,5 / 72 / 12: 38 g de grasa de sobra aunque no quede nada que
+bajar. Ahí preguntar «de dónde bajo» no ofrece ninguna salida, y la app se limitaba a decir
+«no se puede cuadrar sin quitar nada: tendrías que quitar o bajar Almendras, que pone 10,6 g»
+-- nombrando un alimento que ni siquiera resolvía el problema.
+
+Su frase: «para qué me dice que quite; también me debería preguntar qué quitar, los macros
+tienen que quedar cuadrados, ese es el objetivo del botón».
+
+Así que la pregunta tiene dos formas, y la elige la aritmética:
+  - si con todo en el suelo el macro CABE, se puede arreglar bajando  -> «¿de dónde bajo?»
+  - si ni así cabe, bajar no puede arreglarlo                         -> «¿qué quito?»
+Y se vuelve a preguntar hasta que la comida cuadre o el cliente lo deje. Esto NO rompe la
+regla del 08-08 («cuadrar no quita ingredientes; lo que el cliente ha puesto lo quita el
+cliente»): la app sigue sin quitar nada por su cuenta, lo quita él.
 
 Las cantidades las calcula `routes/calculator.py`, que es donde vive el dimensionado. Aquí
 están las reglas, para poder probarlas sin levantar nada.
@@ -36,9 +51,9 @@ NOMBRE_MACRO = {"P": "proteína", "H": "hidratos", "G": "grasa"}
 # decide si avisar de un desfase: si ahí no merece la pena decirlo, aquí no merece preguntarlo.
 SOBRA_MINIMA = 4.0
 
-# Un alimento entra en la pregunta si pone al menos esta parte del macro que hay en la comida.
-# Con menos, bajarlo no resuelve nada y solo estorba en la lista.
-PARTE_MINIMA = 0.15
+# Cuántas opciones se enseñan como mucho. Con catorce alimentos, listarlos todos no es una
+# pregunta: es un muro. Salen los que más ponen del macro, que son los que deciden.
+MAXIMO_OPCIONES = 5
 
 
 def _g(n):
@@ -66,33 +81,71 @@ def macro_que_sobra(servido, objetivo):
     return peor
 
 
+def _de(a, clave, macro):
+    return float((a.get(clave) or {}).get(macro, 0) or 0)
+
+
 def de_donde_se_puede_bajar(aportes, macro):
-    """Los alimentos que ponen bastante de ese macro como para que bajarlos sirva de algo.
+    """Los alimentos a los que bajarles la cantidad devuelve algo apreciable de ese macro.
 
-    `aportes` es la lista de lo que el cliente tiene AHORA en la comida:
-    [{"alimento_id": int, "nombre": str, "cantidad_g": float, "macros": {"P":..,"H":..,"G":..}}]
+    `aportes` es lo que el cliente tiene AHORA en la comida, con lo que pondría cada uno si se
+    le bajara a su mínimo pesable:
+    [{"alimento_id": int, "nombre": str, "cantidad_g": float,
+      "macros": {"P":..,"H":..,"G":..}, "suelo": {"P":..,"H":..,"G":..}}]
 
-    Salen ordenados de más a menos, que es el orden en que tiene sentido leerlos.
+    EL CRITERIO ES CUÁNTO PUEDE DEVOLVER, no cuánto pone. Antes entraba en la lista el que
+    pusiera al menos el 15 % del macro de la comida, y eso dejaba fuera la pregunta justo
+    cuando más falta hacía: en la comida de los catorce alimentos el bacon ponía la mitad de
+    la grasa, así que era el ÚNICO que pasaba el corte, se quedaba en un solo candidato y no
+    se preguntaba nada. Lo que importa es el margen: lo que pone ahora menos lo que pondría
+    en su mínimo. Si eso no llega a 4 g, bajarlo no cambia nada y solo estorba en la lista.
+
+    Salen ordenados de más a menos margen, que es el orden en que tiene sentido leerlos.
     """
-    total = sum(float((a.get("macros") or {}).get(macro, 0) or 0) for a in aportes)
-    if total <= 0:
-        return []
-    minimo = total * PARTE_MINIMA
     candidatos = [a for a in aportes
-                  if float((a.get("macros") or {}).get(macro, 0) or 0) >= minimo]
-    return sorted(candidatos,
-                  key=lambda a: float((a.get("macros") or {}).get(macro, 0) or 0),
-                  reverse=True)
+                  if _de(a, "macros", macro) - _de(a, "suelo", macro) >= SOBRA_MINIMA]
+    candidatos.sort(key=lambda a: _de(a, "macros", macro) - _de(a, "suelo", macro), reverse=True)
+    return candidatos[:MAXIMO_OPCIONES]
+
+
+def que_se_puede_quitar(aportes, macro):
+    """Los alimentos que siguen poniendo ese macro aunque estén en su mínimo.
+
+    Son los únicos que sirven cuando bajar ya no da más de sí: si un alimento en su suelo no
+    pone nada del macro, quitarlo no arregla nada.
+    """
+    candidatos = [a for a in aportes if _de(a, "suelo", macro) > 0.5]
+    candidatos.sort(key=lambda a: _de(a, "suelo", macro), reverse=True)
+    return candidatos[:MAXIMO_OPCIONES]
+
+
+def bajar_no_llega(aportes, objetivo, macro):
+    """¿Se pasa del objetivo AUNQUE todo esté en su mínimo pesable?
+
+    Si se pasa, ninguna respuesta a «de dónde bajo» puede cuadrar la comida: hay que quitar.
+    """
+    obj = float(objetivo.get(macro, 0) or 0)
+    if obj == float("inf"):
+        return False
+    en_el_suelo = sum(_de(a, "suelo", macro) for a in aportes)
+    return (en_el_suelo - obj) > SOBRA_MINIMA
 
 
 def hay_que_preguntar(servido, objetivo, aportes):
-    """¿Hay algo que bajar Y más de un sitio de donde bajarlo?"""
+    """Qué macro toca resolver y de qué forma: (macro, "bajar"|"quitar"), o None si nada.
+
+    None quiere decir «no hay nada que preguntar»: o no sobra, o solo hay un sitio de donde
+    bajarlo y con bajarlo se arregla, que es el caso en el que la app decide sola sin
+    quitarle a nadie una decisión.
+    """
     macro = macro_que_sobra(servido, objetivo)
     if not macro:
         return None
+    if bajar_no_llega(aportes, objetivo, macro):
+        return (macro, "quitar") if que_se_puede_quitar(aportes, macro) else None
     if len(de_donde_se_puede_bajar(aportes, macro)) < 2:
         return None
-    return macro
+    return (macro, "bajar")
 
 
 def factor_proporcional(sobra, aporte_de_los_candidatos):
@@ -107,9 +160,14 @@ def factor_proporcional(sobra, aporte_de_los_candidatos):
     return max(0.0, (aporte_de_los_candidatos - sobra) / aporte_de_los_candidatos)
 
 
-def titulo(macro, sobra):
-    """La pregunta. Sin adjetivos: el macro, los gramos y de dónde."""
-    return f"Sobra {NOMBRE_MACRO.get(macro, macro)}: hay que bajar {_g(sobra)} g. ¿De dónde?"
+def titulo(macro, sobra, tipo="bajar"):
+    """La pregunta. Sin adjetivos: el macro, los gramos y qué hay que decidir."""
+    nombre = NOMBRE_MACRO.get(macro, macro)
+    if tipo == "quitar":
+        # Se dice POR QUÉ no vale con bajar, o «¿qué quito?» parece un capricho de la app.
+        return (f"Aunque lo baje todo al mínimo, sobran {_g(sobra)} g de {nombre}. "
+                f"¿Qué quito?")
+    return f"Sobra {nombre}: hay que bajar {_g(sobra)} g. ¿De dónde?"
 
 
 def texto_de_la_opcion(nombre, cantidad_ahora, aporta, macro, queda_en, sobraria_aun):

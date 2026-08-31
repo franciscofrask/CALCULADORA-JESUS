@@ -2214,7 +2214,19 @@ const NutritionPage = () => {
     };
 
     const preguntarDeDondeBajo = async (decision) => {
-        const opciones = (decision.opciones || []).map((o) => (o.modo === 'proporcional'
+        const macro = NOMBRE_DEL_MACRO[decision.macro] || decision.macro;
+        const opciones = (decision.opciones || []).map((o) => (o.modo === 'quitar'
+            ? {
+                valor: `quitar-${o.alimento_id}`,
+                titulo: `${o.nombre} · ${num1(o.cantidad_ahora)} g`,
+                // Lo que importa aquí no es lo que pone ahora, sino lo que seguiría poniendo
+                // aunque se bajara al mínimo: eso es lo que de verdad se lleva quitarlo.
+                detalle: `${num1(o.aporta_en_el_minimo)} g de ${macro} aunque lo bajes al mínimo`
+                    + (o.sobraria_aun > 4
+                        ? ` → quitándolo aún sobrarían ${num1(o.sobraria_aun)}`
+                        : ' → quitándolo ya cuadra'),
+            }
+            : o.modo === 'proporcional'
             ? {
                 valor: 'proporcional',
                 titulo: 'De todos, en la misma proporción',
@@ -2227,20 +2239,25 @@ const NutritionPage = () => {
                 // uno es lo que pesa el alimento y otro lo que aporta. Va con el nombre del
                 // macro para que no haya duda.
                 titulo: `${o.nombre} · ${num1(o.cantidad_ahora)} g`,
-                detalle: `${num1(o.aporta)} g de ${NOMBRE_DEL_MACRO[decision.macro] || decision.macro}`
+                detalle: `${num1(o.aporta)} g de ${macro}`
                     + ` → se quedaría en ${num1(o.queda_en)} g`
                     + (o.sobraria_aun > 4 ? `, y aún sobrarían ${num1(o.sobraria_aun)}` : ''),
             }));
         const elegido = await elegir({
             title: decision.titulo,
-            description: 'Lo que elijas es lo único que baja: el resto se queda con los gramos que le pusiste.',
+            description: decision.tipo === 'quitar'
+                // Por qué se pregunta esto y no «de dónde bajo»: si no, parece un capricho.
+                ? 'Bajar las cantidades ya no da más de sí. Cuadrar no quita nada por su cuenta: eliges tú.'
+                : 'Lo que elijas es lo único que baja: el resto se queda con los gramos que le pusiste.',
             opciones,
             cancelLabel: 'Dejarlo como está',
         });
         if (!elegido) return null;
-        return elegido === 'proporcional'
-            ? { modo: 'proporcional' }
-            : { modo: 'solo', alimento_id: Number(elegido) };
+        if (elegido === 'proporcional') return { modo: 'proporcional' };
+        if (elegido.startsWith('quitar-')) {
+            return { modo: 'quitar', alimento_id: Number(elegido.slice(7)) };
+        }
+        return { modo: 'solo', alimento_id: Number(elegido) };
     };
 
     // Cuadrar una comida a demanda: re-ajusta sus alimentos a los macros de HOY, sin pasarse y
@@ -2261,35 +2278,61 @@ const NutritionPage = () => {
                 ? { alimentos: pendiente.alimentos || [] }
                 : (mealsData[mealKey] || { alimentos: [] });
             const huella = (dePartida.alimentos || []).map(a => a.alimento_id).sort().join(',');
-            const pedir = (ajuste) => api('/api/calculator/refit-diet', {
+            const pedir = (lista, ajuste) => api('/api/calculator/refit-diet', {
                 method: 'POST',
                 body: JSON.stringify({
                     fecha: currentDate,
                     tipo_dia: tipoDia, num_comidas: numComidas,
                     momento_entreno: momentoEntreno, opcion_peri: opcionPeri,
-                    comidas: { [mealKey]: dePartida },
+                    comidas: { [mealKey]: { ...dePartida, alimentos: lista } },
                     ...(ajuste ? { ajuste: { [mealKey]: ajuste } } : {}),
                 }),
             });
-            let res;
+
+            // SE PREGUNTA HASTA QUE CUADRE (Francisco, 31-08-2026).
+            //
+            // «Los macros tienen que quedar cuadrados, ese es el objetivo del botón.» Una
+            // sola pregunta no basta: al bajar la proteína puede seguir sobrando grasa, y hay
+            // comidas que no cuadran por mucho que se baje. Así que cada respuesta se aplica,
+            // se vuelve a mirar, y se vuelve a preguntar si queda algo. El tope de vueltas es
+            // un seguro, no un límite de diseño: cada respuesta quita sobra, así que la cosa
+            // converge sola; y «Dejarlo como está» corta en cualquier momento.
+            let alimentos = dePartida.alimentos || [];
+            let siguienteAjuste = silencioso ? eleccionGuardada(mealKey) : null;
             let elegido = null;
-            if (pendiente?.decision) {
-                elegido = await preguntarDeDondeBajo(pendiente.decision);
-                if (!elegido) return;   // cerrar sin elegir: se queda como está
-                res = await pedir(elegido);
-            } else {
-                const yaContestado = eleccionGuardada(mealKey);
-                elegido = silencioso ? yaContestado : null;
-                res = await pedir(elegido);
+            const quitados = [];
+            let res = null;
+            let hizoAlgo = false;
+
+            for (let vuelta = 0; vuelta < 20; vuelta++) {
+                const aplicando = siguienteAjuste;
+                res = await pedir(alimentos, aplicando);
+                if (aplicando) {
+                    elegido = aplicando;
+                    // Se materializa lo que ha salido para volver a mirar sobre eso.
+                    alimentos = res.comidas?.[mealKey]?.alimentos || alimentos;
+                    siguienteAjuste = null;
+                    hizoAlgo = true;
+                }
+                if (silencioso) break;
+                if (aplicando) continue;   // ¿queda algo por decidir con lo que ha quedado?
                 const decision = res.decisiones?.[mealKey];
-                if (decision && !silencioso) {
-                    elegido = await preguntarDeDondeBajo(decision);
-                    // Cerrar sin elegir es «déjalo como está»: no se toca la comida.
-                    if (!elegido) return;
-                    res = await pedir(elegido);
+                if (!decision) break;      // ya cuadra, o no hay nada que elegir
+                const respuesta = await preguntarDeDondeBajo(decision);
+                // Cerrar sin elegir es «déjalo como está»: si no se había tocado nada, ni se
+                // toca; si ya se habían quitado cosas, se guarda lo hecho hasta aquí.
+                if (!respuesta) { if (!hizoAlgo) return; break; }
+                if (respuesta.modo === 'quitar') {
+                    const fuera = alimentos.find(a => a.alimento_id === respuesta.alimento_id);
+                    if (fuera) quitados.push(fuera.nombre);
+                    alimentos = alimentos.filter(a => a.alimento_id !== respuesta.alimento_id);
+                    hizoAlgo = true;
+                } else {
+                    siguienteAjuste = respuesta;
                 }
             }
-            const refit = res.comidas?.[mealKey];
+
+            const refit = res?.comidas?.[mealKey];
             if (!refit) { if (!silencioso) toast.error('No se pudo cuadrar la comida'); return; }
             setMealsData(prev => ({
                 ...prev,
@@ -2299,6 +2342,11 @@ const NutritionPage = () => {
                     ...(elegido ? { bajar_de: { ...elegido, huella } } : {}),
                 },
             }));
+            if (quitados.length && !silencioso) {
+                toast.info(quitados.length === 1
+                    ? `Fuera ${quitados[0]}, como pediste.`
+                    : `Fuera ${quitados.length} alimentos, como pediste: ${quitados.join(', ')}.`);
+            }
             setDistribTargetsOverlay(null);   // pasa a mostrar los macros de hoy
             // Tras el recuadre automático del cruce de umbral, los macros del refit vienen
             // SIN la calibración del día encima: se fuerza una pasada más para que lo que
