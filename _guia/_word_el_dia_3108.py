@@ -157,17 +157,33 @@ PUNTOS = [
      "dice, y un «y 5 más» obliga a releerse la pantalla para saber cuáles.",
      [("A4_pie.png", 3.1, "Las ocho, con la de la suplementación dentro.")]),
 
-    ("El aviso de arriba, en verde",
-     "El check-in del día › «Si no le falta nada»",
-     "«El día, todo bien / No te queda nada por registrar». Y: «Hoy no sale nada. Si “El día, "
-     "todo bien” era un texto, este es su sitio: el mismo hueco, en verde.»",
-     "El hueco ya tenía un estado verde, pero decía «Dieta registrada» y solo salía si había "
-     "dieta montada. Ese candado existía por algo: un día al que solo le apuntaron «dos "
-     "cañas» tiene documento y ninguna comida, y decirle «dieta registrada» habría sido "
-     "mentira.\n\n"
-     "Con el texto nuevo el candado se cae, porque lo que se afirma ha cambiado: «no te queda "
-     "nada por registrar» es verdad no haya comidas pendientes, haya montado dieta o no.",
-     [("A5_el_dia_todo_bien.png", 3.0, "El mismo hueco, en verde y con dos renglones.")]),
+    ("El aviso de arriba, en sus dos estados",
+     "El check-in del día › «Si le faltan comidas» y «Si no le falta nada»",
+     "«Y el aviso de arriba, en sus dos estados. Hoy solo existe el de la izquierda: cuando "
+     "no le falta nada, ese hueco se queda vacío.» · «Si “El día, todo bien” era un texto, "
+     "este es su sitio: el mismo hueco, en verde.»",
+     "El primero ya existía y se queda igual, palabra por palabra: «Te quedan 2 comidas sin "
+     "registrar · Intra-entreno · Post-entreno · Puedes cerrarlas antes de seguir». Es "
+     "también el trozo que el documento llama «Lo primero que ve» y pone entre los que no se "
+     "tocan.\n\n"
+     "El segundo es el nuevo. El hueco ya tenía un estado verde, pero decía «Dieta "
+     "registrada» y solo salía si había dieta montada. Ese candado existía por algo: un día "
+     "al que solo le apuntaron «dos cañas» tiene documento y ninguna comida, y decirle «dieta "
+     "registrada» habría sido mentira. Con el texto nuevo el candado se cae, porque lo que se "
+     "afirma ha cambiado: «no te queda nada por registrar» es verdad no haya comidas "
+     "pendientes, haya montado dieta o no.",
+     [("A5b_comidas_sin_registrar.png", 3.1,
+       "Si le faltan comidas: montado un día con el intra y el post vacíos, la app los nombra."),
+      ("A5_el_dia_todo_bien.png", 3.0,
+       "Y si no le falta nada: el mismo hueco, en verde y con dos renglones.")]),
+
+    ("Las notas, suyas o compartidas",
+     "El check-in del día › «Las notas, suyas o compartidas»",
+     "«Esto es para tu diario. Lo puedes compartir con nosotros o quedártelo para ti», con la "
+     "casilla debajo. El cliente decide qué te enseña. Está bien resuelto.",
+     "De los tres trozos que el documento marca como «no se tocan», este es el segundo. Se "
+     "comprueba que sigue intacto: la frase, la casilla y el sitio, al final y abiertas.",
+     [("A7_las_notas.png", 3.1, "Con su frase y su casilla, sin tocar.")]),
 
     ("Contestar ya no pliega la tarjeta",
      "El check-in del día › consecuencia de «todas a la vista»",

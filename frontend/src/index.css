@@ -145,13 +145,28 @@
        Así que ahora va el valor de verdad. Y el `transform` se cae: el `scaleX(0.9)` estaba
        ahí para adelgazarlos y ahora trabajaría contra el peso nuevo, que es justo lo que se
        quiere ver. El tamaño lo pone quien lo usa (44 px), no esta clase. */
+    /* LOS NÚMEROS GRANDES. Esta regla ha ido y vuelto, así que queda escrita entera para
+       que la próxima vez no haya que reconstruirla:
+
+         hasta el 26-08   peso 700 y estirados: scaleY(1.12) scaleX(0.9)
+         27-08, punto 172 «los números grandes, más grandes»: 44 px y peso 850. Se quitó el
+                          estirado porque con 44/850 encima parecía que sobraba, y se cargó
+                          Inter en rango para que el 850 fuera un 850 de verdad y no un 800
+                          redondeado en silencio.
+         31-08, punto 81  «los números, más altos y menos gordos»: estirarlos a lo alto,
+                          estrecharlos y bajar el peso de 850 a 700.
+
+       O sea que el 81 devuelve la forma de antes y deja el tamaño del 172: 44 px, pero
+       altos y finos en vez de gordos. El estirado es el que ya estaba (12 % más alto, 10 %
+       más estrecho); lo que no vuelve es el peso, que baja de 850 a 700. */
     .numero-grande {
         display: inline-block;
-        font-weight: 850;
-        /* Inter se carga en rango (public/index.html): sin esto, un 850 en un navegador que
-           resuelva por pesos discretos cae al 800 y el cambio no se ve. */
-        font-variation-settings: 'wght' 850;
+        font-weight: 700;
+        /* Inter se carga en rango (public/index.html), así que el peso se pide también por
+           variación: si un día vuelve a subir, el número que se pida será el que salga. */
+        font-variation-settings: 'wght' 700;
         letter-spacing: -0.015em;
+        transform: scaleY(1.12) scaleX(0.9);
     }
 
     .heading-1 { @apply font-heading text-4xl md:text-5xl font-bold tracking-tight uppercase; }
