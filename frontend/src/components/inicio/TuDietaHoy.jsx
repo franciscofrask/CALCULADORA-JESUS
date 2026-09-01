@@ -112,7 +112,16 @@ const nombreComida = (k, unica) => (unica ? 'Comida única' : `Comida ${k.slice(
 const ORDEN_PERI = ['Intra', 'Post'];
 
 const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, suplementos }) => {
-    const [vista, setVista] = useState('macros');
+    // ABRE EN «LLEVAS», NO EN «MACROS» («Todo lo validado antes del 1 de septiembre», 1.1).
+    //
+    // Macros es el objetivo, y el objetivo no cambia en todo el día: entrar y ver 175 · 80 · 50
+    // no dice nada que el cliente no supiera al levantarse. Llevas es por dónde va hoy, que es
+    // lo que ha venido a mirar. La frase del documento: «entra y ve 146 · 69 · 49: por dónde
+    // va hoy, y lo que le queda».
+    //
+    // Sin nada marcado no salen tres ceros pelados: `nadaMarcado` hace que Llevas diga
+    // «Todavía no has marcado nada», que ya estaba resuelto de antes.
+    const [vista, setVista] = useState('llevas');
     // Las comidas ya marcadas se CONTRAEN («2 hechas · ocultas — Ver», punto 1 del doc
     // del 23-08): la lista enseña solo lo que queda por comer, y el «Ver» las despliega.
     const [verHechas, setVerHechas] = useState(false);
