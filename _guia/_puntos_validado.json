@@ -1,0 +1,946 @@
+[
+ {
+  "doc": "validado",
+  "seccion": "La pantalla de Inicio",
+  "sub": "Abre en Llevas , no en Macros.",
+  "titulo": "La pantalla de Inicio, entera",
+  "tipo": "comparacion",
+  "pie": "Peso 700, más altos y más estrechos. Lo demás, igual.",
+  "debe_verse": [
+   "domingo, 30 de agosto · día de entreno",
+   "Hola, Jesús",
+   "La frase del día",
+   "«Una buena planificación la noche de antes es la mejor inversión que puedes hacer en tu vida: compras tiempo»",
+   "Tu dieta hoy",
+   "Macros",
+   "Dieta",
+   "Llevas",
+   "Falta",
+   "Proteína",
+   "175",
+   "tu objetivo",
+   "Hidratos",
+   "tu objetivo"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "La pantalla de Inicio",
+  "sub": "Abre en Llevas , no en Macros.",
+  "titulo": "Abre en Macros, y quedó en Llevas",
+  "tipo": "comparacion",
+  "pie": "Entra y ve 146 · 69 · 49 : por dónde va hoy, y lo que le queda.",
+  "debe_verse": [
+   "Macros",
+   "Dieta",
+   "Llevas",
+   "Falta",
+   "Proteína",
+   "146",
+   "de 175",
+   "Hidratos",
+   "de 80",
+   "Grasa",
+   "ya lo tienes",
+   "4 comidas marcadas"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "La pantalla de Inicio",
+  "sub": "Abre en Llevas , no en Macros.",
+  "titulo": "Y así queda la pantalla al pulsar el +",
+  "tipo": "comparacion",
+  "pie": "Al pulsarlo, el cuadro se abre ahí mismo.",
+  "debe_verse": [
+   "domingo, 30 de agosto · día de entreno",
+   "Hola, Jesús",
+   "La frase del día",
+   "«Una buena planificación la noche de antes es la mejor inversión que puedes hacer en tu vida: compras tiempo»",
+   "Tu dieta hoy",
+   "Macros",
+   "Dieta",
+   "Llevas",
+   "Falta",
+   "Proteína",
+   "175",
+   "tu objetivo",
+   "Hidratos",
+   "tu objetivo"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Los Extras del día",
+  "sub": "Cerrado el 27 de agosto y rematado el 30.",
+  "titulo": "Extras del día — con el buscador delante",
+  "tipo": "comparacion",
+  "pie": "El buscador delante, la caja detrás, y dicho qué hace cada una. Tres frases: qué apuntar, cómo escribirlo y qué pasa con ello.",
+  "debe_verse": [
+   "Extras del día",
+   "Si comes algo que no está en tu dieta del día, ponlo aquí, por pequeño que sea.",
+   "Buscar el alimento…",
+   "o si no está",
+   "Escríbelo a mano. En cuanto pase, con la cantidad a ojo si no lo pesas.",
+   "Lo que pongas a mano no cuenta en tus macros , simplemente queda el registro. Lo que busques, sí."
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Los Extras del día",
+  "sub": "Cerrado el 27 de agosto y rematado el 30.",
+  "titulo": "Y así queda cuando ya ha apuntado algo",
+  "tipo": "comparacion",
+  "pie": "Con dos extras. El día ya cuenta con ellos.",
+  "debe_verse": [
+   "domingo, 30 de agosto · día de entreno",
+   "Hola, Jesús",
+   "La frase del día",
+   "«Una buena planificación la noche de antes es la mejor inversión que puedes hacer en tu vida: compras tiempo»",
+   "Tu dieta hoy",
+   "Macros",
+   "Dieta",
+   "Llevas",
+   "Falta",
+   "Proteína",
+   "175",
+   "tu objetivo",
+   "Hidratos",
+   "tu objetivo"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Los Extras del día",
+  "sub": "Cerrado el 27 de agosto y rematado el 30.",
+  "titulo": "Una comida por dentro",
+  "tipo": "comparacion",
+  "pie": "La frase en su voz. Lo del 33P contra 32,5P hay que decidirlo.",
+  "debe_verse": [
+   "Comida 1",
+   "Objetivo · 33P · 20H · 10G",
+   "Proteína",
+   "44,6",
+   "sobran 12,1",
+   "Hidratos",
+   "28,3",
+   "sobran 8,3",
+   "Grasa",
+   "sobran 9",
+   "Ajuste de cantidades",
+   "Automático",
+   "Manual",
+   "Ajusta las cantidades de los alimentos a tus macros"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Los números y el tramo",
+  "sub": null,
+  "titulo": "Los números, más altos y menos gordos",
+  "tipo": "comparacion",
+  "pie": "Peso 700, estirados a lo alto y estrechados. Ocupan menos ancho.",
+  "debe_verse": [
+   "Macros",
+   "Dieta",
+   "Llevas",
+   "Falta",
+   "Proteína",
+   "175",
+   "tu objetivo",
+   "Hidratos",
+   "tu objetivo",
+   "Grasa",
+   "tu objetivo",
+   "Los macros totales a los que tienes que llegar hoy. Debajo verás el desglose por comidas.",
+   "Perientreno incluido"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Los números y el tramo",
+  "sub": null,
+  "titulo": "Los números de Nutrición, como los de Inicio",
+  "tipo": "comparacion",
+  "pie": "44 px y el mismo estirado. Los dos sitios dicen lo mismo igual.",
+  "debe_verse": [
+   "Domingo, 30 de agosto",
+   "Entreno",
+   "Descanso",
+   "Proteína",
+   "146",
+   "faltan 29",
+   "Hidratos",
+   "faltan 11",
+   "Grasa",
+   "válido −1",
+   "Lo que llevas creado",
+   "ver detalle",
+   "C1 Intra Post C2 C3 C4"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Los números y el tramo",
+  "sub": null,
+  "titulo": "El tramo en el que está, marcado",
+  "tipo": "comparacion",
+  "pie": "El suyo en naranja. De un vistazo sabe que hoy no le cuenta.",
+  "debe_verse": [
+   "Macros reales 23 P · 4,8 H · 53,1 G",
+   "Su proteína, según lo que lleves de frutos secos y semillas en todo el día:",
+   "hasta 20 g nada",
+   "de 20 a 40 g la mitad",
+   "más de 40 g toda",
+   "Bloque 2 Los textos Cerrados el 30 de agosto. Palabra por palabra."
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Suplementos, rutina y errores",
+  "sub": null,
+  "titulo": "Suplementos: el nombre y lo del chat",
+  "tipo": "comparacion",
+  "pie": "Dice qué espera y quién lo está haciendo. Sin mandarle a ningún sitio.",
+  "debe_verse": [
+   "Mis suplementos",
+   "Todavía no tienes tu plan de suplementación personalizado",
+   "Estamos en ello, te avisamos en cuanto esté."
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Suplementos, rutina y errores",
+  "sub": null,
+  "titulo": "La rutina sin asignar también manda al chat",
+  "tipo": "comparacion",
+  "pie": "Para los 57 que esperan la suya. A los 26 de la del mes: «Todavía no está la rutina de este mes» , y la segunda línea igual.",
+  "debe_verse": [
+   "Rutina",
+   "Todavía no tienes tu rutina personalizada",
+   "Estamos en ello, te avisamos en cuanto esté."
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Suplementos, rutina y errores",
+  "sub": null,
+  "titulo": "«Tu plan no incluye rutina» — y debajo se la promete",
+  "tipo": "comparacion",
+  "pie": "Una sola cosa, y la verdadera: la del mes no está todavía.",
+  "debe_verse": [
+   "Rutina",
+   "Todavía no está la rutina de este mes",
+   "Estamos en ello, te avisamos en cuanto esté."
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Suplementos, rutina y errores",
+  "sub": null,
+  "titulo": "El aviso de cuando algo falla",
+  "tipo": "comparacion",
+  "pie": "«Esto parece cosa nuestra» . Y escribe por el chat , más directo.",
+  "debe_verse": [
+   "Rutina",
+   "No hemos podido cargar tu rutina",
+   "Esto parece cosa nuestra, no tuya. Inténtalo una vez más y, si la cosa sigue igual, escribe por el chat.",
+   "Volver a intentarlo"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Suplementos, rutina y errores",
+  "sub": null,
+  "titulo": "El texto de la guía de suplementos",
+  "tipo": "comparacion",
+  "pie": "«que yo más recomiendo con pautas exactas de uso… te recomiendo empezar». Le habla él, de tú a tú, y en una frase menos.",
+  "debe_verse": [
+   "Suplementación",
+   "Estos son los suplementos que yo más recomiendo con pautas exactas de uso. Están organizados por categorías según su función. En condiciones normales, te recomiendo empezar por los básicos."
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Suplementos, rutina y errores",
+  "sub": null,
+  "titulo": "El texto del código de FullGas",
+  "tipo": "comparacion",
+  "pie": "«activo mientras dure tu suscripción, con un 20 %»",
+  "debe_verse": [
+   "Tienes un código especial en FullGas, la empresa con la que llevo trabajando más de 15 años.",
+   "GALLEGOVIP",
+   "Lo tendrás activo mientras dure tu suscripción, con un 20 % en toda la web."
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Las dos frases intocables",
+  "sub": null,
+  "titulo": "Dos frases que marcaste como intocables, cambiadas",
+  "tipo": "comparacion",
+  "pie": "Las tres tuyas, las que diste por buenas.",
+  "debe_verse": [
+   "Almendras",
+   "Su proteína no te cuenta",
+   "Pollo",
+   "Te cuentan los tres",
+   "Lechuga",
+   "No te cuenta nada: come lo que quieras",
+   "Bloque 3 El día Cerrado el 31 de agosto."
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "El check-in del día",
+  "sub": "Nueve preguntas y las notas , todas a la vista. Sin peso y sin sensaciones generales del día.",
+  "titulo": "El cierre del día",
+  "tipo": "comparacion",
+  "pie": "Nueve preguntas y las notas. Entra la suplementación ; salen las sensaciones del día y el peso .",
+  "debe_verse": [
+   "Te quedan 2 comidas sin registrar",
+   "Intra-entreno · Post-entreno",
+   "Puedes cerrarlas antes de seguir",
+   "¿Entrenaste hoy?",
+   "¿Hiciste cardio?",
+   "¿Te moviste lo suficiente?",
+   "¿Tomaste la suplementación que tenías pautada?",
+   "¿Se te ha escapado algo más hoy? Si no lo pusiste en el apartado de extras, ponlo ahora",
+   "¿Cómo descansaste la noche de ayer?",
+   "Niveles de energía durante el día",
+   "Hambre / ansiedad con la dieta",
+   "Compartir con nosotros Te queda por contestar: ¿Entrenaste hoy? · ¿Hiciste cardio? · ¿Te moviste lo suficiente? · ¿Tomaste la suplementación? · ¿Se te ha escapado algo más hoy? · ¿Cómo descansaste la noche de ayer? · Niveles de energía · Hambre / ansiedad",
+   "Guardar"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "El check-in del día",
+  "sub": "Nueve preguntas y las notas , todas a la vista. Sin peso y sin sensaciones generales del día.",
+  "titulo": "El aviso de arriba, si le faltan comidas",
+  "tipo": "estado",
+  "pie": "Lo que ya sale hoy: «Te quedan 2 comidas sin registrar» .",
+  "debe_verse": [
+   "El aviso de arriba, si le faltan comidas",
+   "Te quedan 2 comidas sin registrar",
+   "Intra-entreno · Post-entreno",
+   "Puedes cerrarlas antes de seguir",
+   "Sensaciones generales del día"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "El check-in del día",
+  "sub": "Nueve preguntas y las notas , todas a la vista. Sin peso y sin sensaciones generales del día.",
+  "titulo": "Si no le falta nada nueva",
+  "tipo": "estado",
+  "pie": "«El día, todo bien · No te queda nada por registrar» , en verde. Hoy ese hueco se queda vacío.",
+  "debe_verse": [
+   "Si no le falta nada nueva",
+   "El día, todo bien",
+   "No te queda nada por registrar"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "El check-in del día",
+  "sub": "Nueve preguntas y las notas , todas a la vista. Sin peso y sin sensaciones generales del día.",
+  "titulo": "Las notas — se queda igual",
+  "tipo": "estado",
+  "pie": "«Esto es para tu diario. Lo puedes compartir con nosotros o quedártelo para ti» , con la casilla debajo. El cliente decide qué te enseña. Está bien resuelto.",
+  "debe_verse": [
+   "Las notas — se queda igual",
+   "Compartir con nosotros"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "El check-in del día",
+  "sub": "Nueve preguntas y las notas , todas a la vista. Sin peso y sin sensaciones generales del día.",
+  "titulo": "Antes de guardar, hoy",
+  "tipo": "estado",
+  "pie": "Nombra sensaciones , que ya no existe, y corta con «y 5 más» .",
+  "debe_verse": [
+   "Antes de guardar, hoy",
+   "Te queda por contestar: Sensaciones generales del día · ¿Entrenaste hoy? · ¿Hiciste cardio? y 5 más"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "El check-in del día",
+  "sub": "Nueve preguntas y las notas , todas a la vista. Sin peso y sin sensaciones generales del día.",
+  "titulo": "Antes de guardar, como queda",
+  "tipo": "estado",
+  "pie": "Las ocho enteras. El mecanismo no cambia: no le deja guardar a ciegas .",
+  "debe_verse": [
+   "Antes de guardar, como queda",
+   "Te queda por contestar: ¿Entrenaste hoy? · ¿Hiciste cardio? · ¿Te moviste lo suficiente? · ¿Tomaste la suplementación? · ¿Se te ha escapado algo más hoy? · ¿Cómo descansaste la noche de ayer? · Niveles de energía · Hambre / ansiedad"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Si no lo cierra",
+  "sub": null,
+  "titulo": "A la mañana siguiente, si ayer no lo cerró nueva",
+  "tipo": "estado",
+  "pie": "Lo nuevo. El día de ayer sigue abierto hasta las 15:00 . Es el único sitio donde se recupera un día: al día siguiente, con la cabeza fresca. A las tres se cierra y ya no vuelve.",
+  "debe_verse": [
+   "A la mañana siguiente, si ayer no lo cerró nueva",
+   "Ayer no cerraste el día",
+   "Puedes hacerlo hasta las 3 de la tarde",
+   "último registro: 23 de agosto, 11:41"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Si no lo cierra",
+  "sub": null,
+  "titulo": "Tras 2 días perdidos nueva",
+  "tipo": "estado",
+  "pie": "La misma línea, con su dato. No lo dejes hoy también es lo que hace el trabajo: le pide el de hoy, no le riñe por los de atrás.",
+  "debe_verse": [
+   "Tras 2 días perdidos nueva",
+   "¿Cómo fuiste hoy?",
+   "Llevas 2 días seguidos sin cerrar, no lo dejes hoy también"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Si no lo cierra",
+  "sub": null,
+  "titulo": "Tras 4 días perdidos nueva",
+  "tipo": "estado",
+  "pie": "Aquí se le dice lo que se pierde , y es verdad: cuando llegue su reporte, esos días van en blanco. Sin riña, que dos días antes le estabas animando.",
+  "debe_verse": [
+   "Tras 4 días perdidos nueva",
+   "Llevas 4 días sin cerrar",
+   "Retómalo hoy mismo: es de donde salen tus ajustes"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Si no lo cierra",
+  "sub": null,
+  "titulo": "Tras una semana nueva",
+  "tipo": "estado",
+  "pie": "Tu frase, sin el «hasta que vuelvas» : la línea no desaparece . Si se quitara, se queda sin el único sitio donde se le dice y no vuelve. Los días en blanco los recupera en su reporte . Y a la semana, ese cliente te salta a ti en el panel.",
+  "debe_verse": [
+   "Tras una semana nueva",
+   "Llevas una semana sin cerrar el día",
+   "Dejo de recordártelo. Si te está costando, dímelo y lo vemos"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "La configuración de los avisos",
+  "sub": "Siete interruptores y un selector de hora.",
+  "titulo": "Mi perfil · Avisos nueva",
+  "tipo": "estado",
+  "pie": "El cierre del día se puede apagar; el quincenal y el mensual no .",
+  "debe_verse": [
+   "Mi perfil · Avisos nueva",
+   "Mi perfil",
+   "Avisos y recordatorios",
+   "El cierre del día",
+   "Rellenar el cierre del día",
+   "A qué hora me sale 17:00 ▾",
+   "Recordármelo si me lo salto",
+   "La fila de la mañana sigue saliendo: es tu ventana para cerrar el día de ayer.",
+   "Puedes activarla a cualquier hora a partir de las 17:00 . Permanecerá activa hasta las 15:00 del día siguiente.",
+   "Los reportes",
+   "Recordatorio del reporte quincenal",
+   "Recordatorio del reporte mensual",
+   "El quincenal y el mensual no se pueden desactivar : son los que hacen tu ajuste. Aquí solo apagas los recordatorios.",
+   "El peso"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "La configuración de los avisos",
+  "sub": "Siete interruptores y un selector de hora.",
+  "titulo": "Al apagar el cierre nueva",
+  "tipo": "estado",
+  "pie": "«Si lo apagas, no podrás registrar tus datos del día, pero deberás rellenar las preguntas del reporte quincenal y del reporte mensual para poder recibir tus ajustes.»",
+  "debe_verse": [
+   "Al apagar el cierre nueva",
+   "Mi perfil",
+   "Avisos y recordatorios",
+   "El cierre del día",
+   "Rellenar el cierre del día",
+   "Si lo apagas, no podrás registrar tus datos del día , pero deberás rellenar las preguntas del reporte quincenal y del reporte mensual para poder recibir tus ajustes.",
+   "Puedes volver a activarlo cuando quieras.",
+   "Dejarlo como está Apagarlo",
+   "Bloque 4 El peso Un solo registro, tres puertas."
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "El campo y la fila de la mañana",
+  "sub": null,
+  "titulo": "El campo, en Mi evolución nueva",
+  "tipo": "estado",
+  "pie": "Abierto todo el año. Es el único sitio donde el peso se escribe.",
+  "debe_verse": [
+   "El campo, en Mi evolución nueva",
+   "Tu peso",
+   "Siempre abierto",
+   "0,0 kg Guardar",
+   "Registrarlo es opcional, sólo para ti. Te lo pediremos sólo para los reportes.",
+   "Último registro: 72,7 kg · 24 de agosto"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "El campo y la fila de la mañana",
+  "sub": null,
+  "titulo": "Miércoles por la mañana nueva",
+  "tipo": "estado",
+  "pie": "El día que toca la primera pesada. Al tocarla le abre el campo en Seguimiento — no le manda a buscarlo.",
+  "debe_verse": [
+   "Miércoles por la mañana nueva",
+   "Hoy toca pesarte",
+   "En ayunas y después de ir al baño"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "El campo y la fila de la mañana",
+  "sub": null,
+  "titulo": "Jueves por la mañana nueva",
+  "tipo": "estado",
+  "pie": "La segunda. Con esas dos, la media se hace sola y el reporte le sale ya resuelto.",
+  "debe_verse": [
+   "Jueves por la mañana nueva",
+   "Hoy toca pesarte",
+   "En ayunas y después de ir al baño"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "El campo y la fila de la mañana",
+  "sub": null,
+  "titulo": "Y a las 12:00 se apaga nueva",
+  "tipo": "estado",
+  "pie": "Después de comer ya no es un peso en ayunas. El campo sigue abierto en Seguimiento para el que quiera, pero la app deja de pedírselo.",
+  "debe_verse": [
+   "Y a las 12:00 se apaga nueva",
+   "Hoy toca pesarte",
+   "En ayunas y después de ir al baño"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Los avisos del peso",
+  "sub": null,
+  "titulo": "Martes · el primero nueva",
+  "tipo": "estado",
+  "pie": "Tu texto de hoy. Un día antes de que se abra el reporte, para que le dé tiempo a la primera pesada. Sin las dos no hay media, y la media es el dato que tú miras.",
+  "debe_verse": [
+   "Martes · el primero nueva",
+   "Esta semana toca reporte quincenal",
+   "Recuerda pesarte y registrar el dato. Mañana y el jueves, en ayunas y después de ir al baño."
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Los avisos del peso",
+  "sub": null,
+  "titulo": "Viernes · si le falta una pesada nueva",
+  "tipo": "estado",
+  "pie": "Tu texto , tal cual. Y en el Gold llega a tiempo: tú contestas antes de las tres.",
+  "debe_verse": [
+   "Viernes · si le falta una pesada nueva",
+   "Te falta una pesada",
+   "Si te pesas esta mañana antes de las 10, aún entra. Si no, me quedo con la que tengo."
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Los avisos del peso",
+  "sub": null,
+  "titulo": "Miércoles de la semana 1 nueva",
+  "tipo": "estado",
+  "pie": "Solo el primer ciclo. La semana 1 no tiene reporte.",
+  "debe_verse": [
+   "Miércoles de la semana 1 nueva",
+   "Esta semana no toca reporte",
+   "Solo el cierre del día, como siempre. De todas formas, algo que me gusta mucho es que registres tu peso semanal: te pesas dos días seguidos entre el miércoles y el viernes, los apuntas en Seguimiento y la media la hace la app de forma automática.",
+   "Bloque 5 El reporte quincenal Tres pantallas. Hoy no existe dentro de la app."
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Las tres pantallas",
+  "sub": "Con Son 3 pasos arriba en las tres, y el suyo marcado.",
+  "titulo": "Paso 1 · Confirmar nueva",
+  "tipo": "estado",
+  "pie": "Sus números, el peso semanal con la pareja marcada, las tres de sentir y los días que le falten. Dos botones: Modificar y Confirmar .",
+  "debe_verse": [
+   "Paso 1 · Confirmar nueva",
+   "Semana 2 · hasta mañana jueves a las ocho",
+   "Reporte quincenal",
+   "Son 3 pasos",
+   "1 Actualizar tus datos y confirmar que está bien",
+   "2 Escuchar tus sensaciones y dudas",
+   "3 Darte feedback directo y ajustes si procede",
+   "1 Actualizar tus datos",
+   "Sale de tu check-in. Si algo no cuadra o te falta, lo modificas al final.",
+   "Peso semanal",
+   "78,4 kg",
+   "78,6 Miércoles",
+   "78,2 Jueves",
+   "— Viernes"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Las tres pantallas",
+  "sub": "Con Son 3 pasos arriba en las tres, y el suyo marcado.",
+  "titulo": "Paso 2 · Contar nueva",
+  "tipo": "estado",
+  "pie": "Las dos escalas con los extremos escritos, las molestias y el campo libre.",
+  "debe_verse": [
+   "Paso 2 · Contar nueva",
+   "Semana 2 · hasta mañana jueves a las ocho",
+   "Reporte quincenal",
+   "Son 3 pasos",
+   "1 Actualizar tus datos y confirmar que está bien",
+   "2 Escuchar tus sensaciones y dudas",
+   "3 Darte feedback directo y ajustes si procede",
+   "2 Tus sensaciones y tus dudas",
+   "Sensaciones generales hasta ahora",
+   "0 1 2 3 4 5 6 7 8 9 10",
+   "0 · Muy malas, demasiado exigente para mí 10 · Genial, mejor imposible",
+   "¿Cuánto te está costando?",
+   "Valoración esfuerzo / resultados",
+   "0 1 2 3 4 5 6 7 8 9 10"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Las tres pantallas",
+  "sub": "Con Son 3 pasos arriba en las tres, y el suyo marcado.",
+  "titulo": "Paso 3 · Recibir nueva",
+  "tipo": "estado",
+  "pie": "«Este tercer paso es cosa nuestra. Recibirás respuesta antes del viernes a las 3, hora de España.»",
+  "debe_verse": [
+   "Paso 3 · Recibir nueva",
+   "Semana 2 · hasta mañana jueves a las ocho",
+   "Reporte quincenal",
+   "Son 3 pasos",
+   "1 Actualizar tus datos y confirmar que está bien",
+   "2 Escuchar tus sensaciones y dudas",
+   "3 Darte feedback directo y ajustes si procede",
+   "3 Tu feedback y tus ajustes",
+   "Este tercer paso es cosa nuestra.",
+   "Recibirás respuesta antes del viernes a las 3, hora de España ."
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Las dos versiones del paso 1",
+  "sub": null,
+  "titulo": "Con sus check-in nueva",
+  "tipo": "estado",
+  "pie": "Confirma. Y si le falta alguna pesada, la línea del peso se lo dice.",
+  "debe_verse": [
+   "Con sus check-in nueva",
+   "Semana 2 · hasta mañana jueves a las ocho",
+   "Reporte quincenal",
+   "Son 3 pasos",
+   "1 Actualizar tus datos y confirmar que está bien",
+   "2 Escuchar tus sensaciones y dudas",
+   "3 Darte feedback directo y ajustes si procede",
+   "1 Actualizar tus datos",
+   "Sale de tu check-in. Si algo no cuadra o te falta, lo modificas al final.",
+   "Peso semanal",
+   "78,4 kg",
+   "78,6 Miércoles",
+   "78,2 Jueves",
+   "— Viernes"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Las dos versiones del paso 1",
+  "sub": null,
+  "titulo": "Sin check-in suficientes nueva",
+  "tipo": "estado",
+  "pie": "Si perdió días y además el recordatorio del día siguiente: cinco estrellas y al paso 2.",
+  "debe_verse": [
+   "Sin check-in suficientes nueva",
+   "Semana 2 · hasta mañana jueves a las ocho",
+   "Reporte quincenal",
+   "Son 3 pasos",
+   "1 Actualizar tus datos y confirmar que está bien",
+   "2 Escuchar tus sensaciones y dudas",
+   "3 Darte feedback directo y ajustes si procede",
+   "1 Actualizar tus datos",
+   "Cinco preguntas y pasas al paso 2.",
+   "No tengo todos los datos de tus check-in diarios , así que te lo pregunto aquí.",
+   "¿En qué grado has cumplido la dieta?",
+   "¿Has entrenado todos los días que tocaba?",
+   "¿Has cumplido con el cardio que tenías pautado?",
+   "¿Has tomado la suplementación que te correspondía?"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "La tarjeta y los avisos",
+  "sub": null,
+  "titulo": "Pendiente",
+  "tipo": "estado",
+  "pie": "En naranja, con Empezar , y sin la frase de debajo : lo único que tiene que ver es que le toca. Y sin el «Esta semana» , que en algo quincenal miente la semana que no toca.",
+  "debe_verse": [
+   "Pendiente",
+   "Pendiente",
+   "Reporte quincenal",
+   "Empezar ›"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "La tarjeta y los avisos",
+  "sub": null,
+  "titulo": "Hecho",
+  "tipo": "estado",
+  "pie": "Al gris, y con tu frase . Aquí está lo importante: le das una hora . Hoy pone «Ya lo mandaste. Lo estamos mirando» , que no compromete a nada.",
+  "debe_verse": [
+   "Hecho",
+   "Hecho",
+   "Reporte quincenal",
+   "Respondiste a tiempo y ahora nos toca a nosotros. Te decimos algo antes del viernes a las tres de la tarde, hora de España.",
+   "Ver ›"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "La tarjeta y los avisos",
+  "sub": null,
+  "titulo": "Miércoles, a las 10:00 · cuando se abre nueva",
+  "tipo": "estado",
+  "pie": "El de la apertura. Le da el plazo y le empuja a hacerlo ya.",
+  "debe_verse": [
+   "Miércoles, a las 10:00 · cuando se abre nueva",
+   "Ya puedes rellenar el reporte quincenal",
+   "Tienes para hacerlo hasta mañana jueves a las ocho, pero mi consejo es que lo hagas cuanto antes. Son dos minutos."
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "La tarjeta y los avisos",
+  "sub": null,
+  "titulo": "Jueves por la mañana · el recordatorio nueva",
+  "tipo": "estado",
+  "pie": "El del último día. Le dice qué se pierde sin que el mensual parezca un castigo: el mensual le toca igual.",
+  "debe_verse": [
+   "Jueves por la mañana · el recordatorio nueva",
+   "Solo recordarte que tienes hasta hoy a las ocho",
+   "Si no lo haces, este ajuste se salta y el siguiente será en tu reporte mensual."
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "La tarjeta y los avisos",
+  "sub": null,
+  "titulo": "Jueves, de 20:00 a 24:00 nueva",
+  "tipo": "estado",
+  "pie": "En rojo, y sin riña. Le dice qué se ha perdido — el ajuste de esta quincena — y que el mensual le llega igual. Es tu frase del aviso del jueves, la misma.",
+  "debe_verse": [
+   "Jueves, de 20:00 a 24:00 nueva",
+   "Se te pasó el plazo del reporte quincenal",
+   "Este ajuste se salta. El siguiente va en tu reporte mensual."
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "La cola de Inicio",
+  "sub": "Cuando coinciden el reporte y el día. Nunca dos avisos: una lista y un orden.",
+  "titulo": "Un día cualquiera, desde las 17:00",
+  "tipo": "estado",
+  "pie": "Una línea, la del día.",
+  "debe_verse": [
+   "Un día cualquiera, desde las 17:00",
+   "¿Cómo fuiste hoy?",
+   "Para rellenar al final del día",
+   "último registro: 23 de agosto, 11:41"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "La cola de Inicio",
+  "sub": "Cuando coinciden el reporte y el día. Nunca dos avisos: una lista y un orden.",
+  "titulo": "Miércoles, desde las 10:00 nueva",
+  "tipo": "estado",
+  "pie": "El reporte entra arriba y empuja al check-in hacia abajo. Va primero porque tiene fecha de entrega ; el check-in solo tiene el día de hoy. Hasta las 17:00 el reporte está solo — la del día no aparece antes.",
+  "debe_verse": [
+   "Miércoles, desde las 10:00 nueva",
+   "Tu reporte quincenal",
+   "Tienes hasta mañana jueves a las ocho",
+   "¿Cómo fuiste hoy?",
+   "Para rellenar al final del día",
+   "último registro: 23 de agosto, 11:41"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "La cola de Inicio",
+  "sub": "Cuando coinciden el reporte y el día. Nunca dos avisos: una lista y un orden.",
+  "titulo": "Jueves a las 17:00, si aún no lo ha mandado nueva",
+  "tipo": "estado",
+  "pie": "El aviso del plazo no es un aviso aparte : es esta misma línea, cambiándole el texto. Así el jueves por la tarde sigue habiendo dos filas, no tres .",
+  "debe_verse": [
+   "Jueves a las 17:00, si aún no lo ha mandado nueva",
+   "Tu reporte quincenal",
+   "Solo recordarte que tienes hasta hoy a las ocho",
+   "¿Cómo fuiste hoy?",
+   "Para rellenar al final del día",
+   "último registro: 23 de agosto, 11:41"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "La cola de Inicio",
+  "sub": "Cuando coinciden el reporte y el día. Nunca dos avisos: una lista y un orden.",
+  "titulo": "En cuanto lo manda",
+  "tipo": "estado",
+  "pie": "El reporte desaparece de la lista y vuelve a quedar la del día, sola , como cualquier otro día.",
+  "debe_verse": [
+   "En cuanto lo manda",
+   "¿Cómo fuiste hoy?",
+   "Para rellenar al final del día",
+   "último registro: 23 de agosto, 11:41",
+   "Bloque 6 El ciclo, con sus horas Lo que Francisco necesita para programar los disparos."
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Semana a semana",
+  "sub": "«Quincenal» es como se llama, no cada cuánto llega. En un ciclo de cuatro semanas hay uno solo , en la semana 2.",
+  "titulo": "El aviso de que no toca reporte",
+  "tipo": "paso",
+  "pie": null,
+  "debe_verse": [
+   "El aviso de que no toca reporte",
+   "«Esta semana no toca reporte. Solo el cierre del día, como siempre. De todas formas, algo que me gusta mucho es que registres tu peso semanal: te pesas dos días seguidos entre el miércoles y el viernes, los apuntas en Seguimiento y la media la hace la app de forma automática.» Solo el primer ciclo.",
+   "Semana 2 · martes por la mañana"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Semana a semana",
+  "sub": "«Quincenal» es como se llama, no cada cuánto llega. En un ciclo de cuatro semanas hay uno solo , en la semana 2.",
+  "titulo": "El aviso del peso",
+  "tipo": "paso",
+  "pie": null,
+  "debe_verse": [
+   "El aviso del peso",
+   "«Esta semana toca reporte quincenal. Recuerda pesarte y registrar el dato. Mañana y el jueves, en ayunas y después de ir al baño.» Un día antes de que se abra el reporte, para que le dé tiempo a la primera pesada.",
+   "Semana 2 · miércoles y jueves hasta las 12:00"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Semana a semana",
+  "sub": "«Quincenal» es como se llama, no cada cuánto llega. En un ciclo de cuatro semanas hay uno solo , en la semana 2.",
+  "titulo": "La fila del peso en Inicio",
+  "tipo": "paso",
+  "pie": null,
+  "debe_verse": [
+   "La fila del peso en Inicio",
+   "«Hoy toca pesarte · En ayunas y después de ir al baño.» Al tocarla le abre el campo en Seguimiento. A las 12:00 se apaga: después ya no es un peso en ayunas.",
+   "Semana 2 · miércoles 10:00"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Semana a semana",
+  "sub": "«Quincenal» es como se llama, no cada cuánto llega. En un ciclo de cuatro semanas hay uno solo , en la semana 2.",
+  "titulo": "Se abre el quincenal",
+  "tipo": "paso",
+  "pie": null,
+  "debe_verse": [
+   "Se abre el quincenal",
+   "«Ya puedes rellenar el reporte quincenal. Tienes para hacerlo hasta mañana jueves a las ocho, pero mi consejo es que lo hagas cuanto antes. Son dos minutos.» Y la tarjeta se pone en Pendiente .",
+   "Semana 2 · jueves por la mañana"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Semana a semana",
+  "sub": "«Quincenal» es como se llama, no cada cuánto llega. En un ciclo de cuatro semanas hay uno solo , en la semana 2.",
+  "titulo": "El recordatorio del último día",
+  "tipo": "paso",
+  "pie": null,
+  "debe_verse": [
+   "El recordatorio del último día",
+   "«Solo recordarte que tienes hasta hoy a las ocho. Si no lo haces, este ajuste se salta y el siguiente será en tu reporte mensual.»",
+   "Semana 2 · jueves 20:00"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Semana a semana",
+  "sub": "«Quincenal» es como se llama, no cada cuánto llega. En un ciclo de cuatro semanas hay uno solo , en la semana 2.",
+  "titulo": "Cierra el quincenal",
+  "tipo": "paso",
+  "pie": null,
+  "debe_verse": [
+   "Cierra el quincenal",
+   "El que lo mandó ve Hecho : «Respondiste a tiempo y ahora nos toca a nosotros. Te decimos algo antes del viernes a las tres de la tarde, hora de España.» El que no, ve el fuera de plazo en rojo, que dura hasta medianoche.",
+   "Semana 2 · jueves 20:00 a viernes 10:00 el rescate"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Semana a semana",
+  "sub": "«Quincenal» es como se llama, no cada cuánto llega. En un ciclo de cuatro semanas hay uno solo , en la semana 2.",
+  "titulo": "Si le falta una pesada",
+  "tipo": "paso",
+  "pie": null,
+  "debe_verse": [
+   "Si le falta una pesada",
+   "«Te falta una pesada. Si te pesas esta mañana antes de las 10, aún entra. Si no, me quedo con la que tengo.» Solo a quien mandó el reporte y tiene una sola . Al pincharlo entra al quincenal, solo al peso.",
+   "Semana 2 · viernes de 10:00 a 13:00"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Semana a semana",
+  "sub": "«Quincenal» es como se llama, no cada cuánto llega. En un ciclo de cuatro semanas hay uno solo , en la semana 2.",
+  "titulo": "Tú ajustas",
+  "tipo": "paso",
+  "pie": null,
+  "debe_verse": [
+   "Tú ajustas",
+   "A las 10:00 se cierra todo. Miras el reporte contra sus check-in y pones los macros nuevos. Antes de las tres los tiene.",
+   "Semana 3 · viernes —"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Semana a semana",
+  "sub": "«Quincenal» es como se llama, no cada cuánto llega. En un ciclo de cuatro semanas hay uno solo , en la semana 2.",
+  "titulo": "Se abre el mensual",
+  "tipo": "paso",
+  "pie": null,
+  "debe_verse": [
+   "Se abre el mensual",
+   "Las fotos, el peso, el objetivo, el compromiso y las lesiones. Las fechas del peso de esta semana están sin cerrar — ver la duda de abajo.",
+   "Semana 4 · lunes —"
+  ]
+ },
+ {
+  "doc": "validado",
+  "seccion": "Semana a semana",
+  "sub": "«Quincenal» es como se llama, no cada cuánto llega. En un ciclo de cuatro semanas hay uno solo , en la semana 2.",
+  "titulo": "Vuelve el mensual",
+  "tipo": "paso",
+  "pie": null,
+  "debe_verse": [
+   "Vuelve el mensual",
+   "Como tarde. Y con él haces la revisión del ciclo: el informe y el vídeo.",
+   "Bloque 7 La regla de las voces Para todo texto que se escriba de aquí en adelante."
+  ]
+ }
+]

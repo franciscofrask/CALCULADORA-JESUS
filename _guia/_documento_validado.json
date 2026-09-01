@@ -1,0 +1,459 @@
+{
+ "titulo": "Todo lo validado antes del 1 de septiembre",
+ "bajada": [
+  "Las pantallas como tienen que quedar, en su última versión. Sin el «como está hoy», sin dudas y sin explicaciones de por qué: solo lo que hay que construir.",
+  "Este documento no se toca. Lo que no salga aquí es porque está pendiente de revisión en El mensual, los informes y lo que falta, o porque se descartó."
+ ],
+ "secciones": [
+  {
+   "titulo": "La pantalla de Inicio",
+   "sub": "Abre en Llevas, no en Macros.",
+   "items": [
+    {
+     "titulo": "La pantalla de Inicio, entera",
+     "tipo": "comparacion",
+     "pie": "Peso 700, más altos y más estrechos. Lo demás, igual.",
+     "notas": []
+    },
+    {
+     "titulo": "Abre en Macros, y quedó en Llevas",
+     "tipo": "comparacion",
+     "pie": "Entra y ve 146 · 69 · 49: por dónde va hoy, y lo que le queda.",
+     "notas": []
+    },
+    {
+     "titulo": "Y así queda la pantalla al pulsar el +",
+     "tipo": "comparacion",
+     "pie": "Al pulsarlo, el cuadro se abre ahí mismo.",
+     "notas": []
+    }
+   ]
+  },
+  {
+   "titulo": "Los Extras del día",
+   "sub": "Cerrado el 27 de agosto y rematado el 30.",
+   "items": [
+    {
+     "titulo": "Extras del día — con el buscador delante",
+     "tipo": "comparacion",
+     "pie": "El buscador delante, la caja detrás, y dicho qué hace cada una. Tres frases: qué apuntar, cómo escribirlo y qué pasa con ello.",
+     "notas": []
+    },
+    {
+     "titulo": "Y así queda cuando ya ha apuntado algo",
+     "tipo": "comparacion",
+     "pie": "Con dos extras. El día ya cuenta con ellos.",
+     "notas": []
+    },
+    {
+     "titulo": "Una comida por dentro",
+     "tipo": "comparacion",
+     "pie": "La frase en su voz. Lo del 33P contra 32,5P hay que decidirlo.",
+     "notas": []
+    }
+   ]
+  },
+  {
+   "titulo": "Los números y el tramo",
+   "sub": null,
+   "items": [
+    {
+     "titulo": "Los números, más altos y menos gordos",
+     "tipo": "comparacion",
+     "pie": "Peso 700, estirados a lo alto y estrechados. Ocupan menos ancho.",
+     "notas": []
+    },
+    {
+     "titulo": "Los números de Nutrición, como los de Inicio",
+     "tipo": "comparacion",
+     "pie": "44 px y el mismo estirado. Los dos sitios dicen lo mismo igual.",
+     "notas": []
+    },
+    {
+     "titulo": "El tramo en el que está, marcado",
+     "tipo": "comparacion",
+     "pie": "El suyo en naranja. De un vistazo sabe que hoy no le cuenta.",
+     "notas": []
+    }
+   ]
+  },
+  {
+   "titulo": "Suplementos, rutina y errores",
+   "sub": null,
+   "items": [
+    {
+     "titulo": "Suplementos: el nombre y lo del chat",
+     "tipo": "comparacion",
+     "pie": "Dice qué espera y quién lo está haciendo. Sin mandarle a ningún sitio.",
+     "notas": []
+    },
+    {
+     "titulo": "La rutina sin asignar también manda al chat",
+     "tipo": "comparacion",
+     "pie": "Para los 57 que esperan la suya. A los 26 de la del mes: «Todavía no está la rutina de este mes», y la segunda línea igual.",
+     "notas": []
+    },
+    {
+     "titulo": "«Tu plan no incluye rutina» — y debajo se la promete",
+     "tipo": "comparacion",
+     "pie": "Una sola cosa, y la verdadera: la del mes no está todavía.",
+     "notas": []
+    },
+    {
+     "titulo": "El aviso de cuando algo falla",
+     "tipo": "comparacion",
+     "pie": "«Esto parece cosa nuestra». Y escribe por el chat, más directo.",
+     "notas": []
+    },
+    {
+     "titulo": "El texto de la guía de suplementos",
+     "tipo": "comparacion",
+     "pie": "«que yo más recomiendo con pautas exactas de uso… te recomiendo empezar». Le habla él, de tú a tú, y en una frase menos.",
+     "notas": []
+    },
+    {
+     "titulo": "El texto del código de FullGas",
+     "tipo": "comparacion",
+     "pie": "«activo mientras dure tu suscripción, con un 20 %»",
+     "notas": []
+    }
+   ]
+  },
+  {
+   "titulo": "Las dos frases intocables",
+   "sub": null,
+   "items": [
+    {
+     "titulo": "Dos frases que marcaste como intocables, cambiadas",
+     "tipo": "comparacion",
+     "pie": "Las tres tuyas, las que diste por buenas.",
+     "notas": []
+    }
+   ]
+  },
+  {
+   "titulo": "El check-in del día",
+   "sub": "Nueve preguntas y las notas, todas a la vista. Sin peso y sin sensaciones generales del día.",
+   "items": [
+    {
+     "titulo": "El cierre del día",
+     "tipo": "comparacion",
+     "pie": "Nueve preguntas y las notas. Entra la suplementación; salen las sensaciones del día y el peso.",
+     "notas": []
+    },
+    {
+     "titulo": "El aviso de arriba, si le faltan comidas",
+     "tipo": "estado",
+     "pie": "Lo que ya sale hoy: «Te quedan 2 comidas sin registrar».",
+     "notas": []
+    },
+    {
+     "titulo": "Si no le falta nada nueva",
+     "tipo": "estado",
+     "pie": "«El día, todo bien · No te queda nada por registrar», en verde. Hoy ese hueco se queda vacío.",
+     "notas": []
+    },
+    {
+     "titulo": "Las notas — se queda igual",
+     "tipo": "estado",
+     "pie": "«Esto es para tu diario. Lo puedes compartir con nosotros o quedártelo para ti», con la casilla debajo. El cliente decide qué te enseña. Está bien resuelto.",
+     "notas": []
+    },
+    {
+     "titulo": "Antes de guardar, hoy",
+     "tipo": "estado",
+     "pie": "Nombra sensaciones, que ya no existe, y corta con «y 5 más».",
+     "notas": []
+    },
+    {
+     "titulo": "Antes de guardar, como queda",
+     "tipo": "estado",
+     "pie": "Las ocho enteras. El mecanismo no cambia: no le deja guardar a ciegas.",
+     "notas": []
+    }
+   ]
+  },
+  {
+   "titulo": "Si no lo cierra",
+   "sub": null,
+   "items": [
+    {
+     "titulo": "A la mañana siguiente, si ayer no lo cerró nueva",
+     "tipo": "estado",
+     "pie": "Lo nuevo. El día de ayer sigue abierto hasta las 15:00. Es el único sitio donde se recupera un día: al día siguiente, con la cabeza fresca. A las tres se cierra y ya no vuelve.",
+     "notas": []
+    },
+    {
+     "titulo": "Tras 2 días perdidos nueva",
+     "tipo": "estado",
+     "pie": "La misma línea, con su dato. No lo dejes hoy también es lo que hace el trabajo: le pide el de hoy, no le riñe por los de atrás.",
+     "notas": []
+    },
+    {
+     "titulo": "Tras 4 días perdidos nueva",
+     "tipo": "estado",
+     "pie": "Aquí se le dice lo que se pierde, y es verdad: cuando llegue su reporte, esos días van en blanco. Sin riña, que dos días antes le estabas animando.",
+     "notas": []
+    },
+    {
+     "titulo": "Tras una semana nueva",
+     "tipo": "estado",
+     "pie": "Tu frase, sin el «hasta que vuelvas»: la línea no desaparece. Si se quitara, se queda sin el único sitio donde se le dice y no vuelve. Los días en blanco los recupera en su reporte. Y a la semana, ese cliente te salta a ti en el panel.",
+     "notas": []
+    }
+   ]
+  },
+  {
+   "titulo": "La configuración de los avisos",
+   "sub": "Siete interruptores y un selector de hora.",
+   "items": [
+    {
+     "titulo": "Mi perfil · Avisos nueva",
+     "tipo": "estado",
+     "pie": "El cierre del día se puede apagar; el quincenal y el mensual no.",
+     "notas": []
+    },
+    {
+     "titulo": "Al apagar el cierre nueva",
+     "tipo": "estado",
+     "pie": "«Si lo apagas, no podrás registrar tus datos del día, pero deberás rellenar las preguntas del reporte quincenal y del reporte mensual para poder recibir tus ajustes.»",
+     "notas": []
+    }
+   ]
+  },
+  {
+   "titulo": "El campo y la fila de la mañana",
+   "sub": null,
+   "items": [
+    {
+     "titulo": "El campo, en Mi evolución nueva",
+     "tipo": "estado",
+     "pie": "Abierto todo el año. Es el único sitio donde el peso se escribe.",
+     "notas": []
+    },
+    {
+     "titulo": "Miércoles por la mañana nueva",
+     "tipo": "estado",
+     "pie": "El día que toca la primera pesada. Al tocarla le abre el campo en Seguimiento — no le manda a buscarlo.",
+     "notas": []
+    },
+    {
+     "titulo": "Jueves por la mañana nueva",
+     "tipo": "estado",
+     "pie": "La segunda. Con esas dos, la media se hace sola y el reporte le sale ya resuelto.",
+     "notas": []
+    },
+    {
+     "titulo": "Y a las 12:00 se apaga nueva",
+     "tipo": "estado",
+     "pie": "Después de comer ya no es un peso en ayunas. El campo sigue abierto en Seguimiento para el que quiera, pero la app deja de pedírselo.",
+     "notas": []
+    }
+   ]
+  },
+  {
+   "titulo": "Los avisos del peso",
+   "sub": null,
+   "items": [
+    {
+     "titulo": "Martes · el primero nueva",
+     "tipo": "estado",
+     "pie": "Tu texto de hoy. Un día antes de que se abra el reporte, para que le dé tiempo a la primera pesada. Sin las dos no hay media, y la media es el dato que tú miras.",
+     "notas": []
+    },
+    {
+     "titulo": "Viernes · si le falta una pesada nueva",
+     "tipo": "estado",
+     "pie": "Tu texto, tal cual. Y en el Gold llega a tiempo: tú contestas antes de las tres.",
+     "notas": []
+    },
+    {
+     "titulo": "Miércoles de la semana 1 nueva",
+     "tipo": "estado",
+     "pie": "Solo el primer ciclo. La semana 1 no tiene reporte.",
+     "notas": []
+    }
+   ]
+  },
+  {
+   "titulo": "Las tres pantallas",
+   "sub": "Con Son 3 pasos arriba en las tres, y el suyo marcado.",
+   "items": [
+    {
+     "titulo": "Paso 1 · Confirmar nueva",
+     "tipo": "estado",
+     "pie": "Sus números, el peso semanal con la pareja marcada, las tres de sentir y los días que le falten. Dos botones: Modificar y Confirmar.",
+     "notas": []
+    },
+    {
+     "titulo": "Paso 2 · Contar nueva",
+     "tipo": "estado",
+     "pie": "Las dos escalas con los extremos escritos, las molestias y el campo libre.",
+     "notas": []
+    },
+    {
+     "titulo": "Paso 3 · Recibir nueva",
+     "tipo": "estado",
+     "pie": "«Este tercer paso es cosa nuestra. Recibirás respuesta antes del viernes a las 3, hora de España.»",
+     "notas": []
+    }
+   ]
+  },
+  {
+   "titulo": "Las dos versiones del paso 1",
+   "sub": null,
+   "items": [
+    {
+     "titulo": "Con sus check-in nueva",
+     "tipo": "estado",
+     "pie": "Confirma. Y si le falta alguna pesada, la línea del peso se lo dice.",
+     "notas": []
+    },
+    {
+     "titulo": "Sin check-in suficientes nueva",
+     "tipo": "estado",
+     "pie": "Si perdió días y además el recordatorio del día siguiente: cinco estrellas y al paso 2.",
+     "notas": []
+    }
+   ]
+  },
+  {
+   "titulo": "La tarjeta y los avisos",
+   "sub": null,
+   "items": [
+    {
+     "titulo": "Pendiente",
+     "tipo": "estado",
+     "pie": "En naranja, con Empezar, y sin la frase de debajo: lo único que tiene que ver es que le toca. Y sin el «Esta semana», que en algo quincenal miente la semana que no toca.",
+     "notas": []
+    },
+    {
+     "titulo": "Hecho",
+     "tipo": "estado",
+     "pie": "Al gris, y con tu frase. Aquí está lo importante: le das una hora. Hoy pone «Ya lo mandaste. Lo estamos mirando», que no compromete a nada.",
+     "notas": []
+    },
+    {
+     "titulo": "Miércoles, a las 10:00 · cuando se abre nueva",
+     "tipo": "estado",
+     "pie": "El de la apertura. Le da el plazo y le empuja a hacerlo ya.",
+     "notas": []
+    },
+    {
+     "titulo": "Jueves por la mañana · el recordatorio nueva",
+     "tipo": "estado",
+     "pie": "El del último día. Le dice qué se pierde sin que el mensual parezca un castigo: el mensual le toca igual.",
+     "notas": []
+    },
+    {
+     "titulo": "Jueves, de 20:00 a 24:00 nueva",
+     "tipo": "estado",
+     "pie": "En rojo, y sin riña. Le dice qué se ha perdido — el ajuste de esta quincena — y que el mensual le llega igual. Es tu frase del aviso del jueves, la misma.",
+     "notas": []
+    }
+   ]
+  },
+  {
+   "titulo": "La cola de Inicio",
+   "sub": "Cuando coinciden el reporte y el día. Nunca dos avisos: una lista y un orden.",
+   "items": [
+    {
+     "titulo": "Un día cualquiera, desde las 17:00",
+     "tipo": "estado",
+     "pie": "Una línea, la del día.",
+     "notas": []
+    },
+    {
+     "titulo": "Miércoles, desde las 10:00 nueva",
+     "tipo": "estado",
+     "pie": "El reporte entra arriba y empuja al check-in hacia abajo. Va primero porque tiene fecha de entrega; el check-in solo tiene el día de hoy. Hasta las 17:00 el reporte está solo — la del día no aparece antes.",
+     "notas": []
+    },
+    {
+     "titulo": "Jueves a las 17:00, si aún no lo ha mandado nueva",
+     "tipo": "estado",
+     "pie": "El aviso del plazo no es un aviso aparte: es esta misma línea, cambiándole el texto. Así el jueves por la tarde sigue habiendo dos filas, no tres.",
+     "notas": []
+    },
+    {
+     "titulo": "En cuanto lo manda",
+     "tipo": "estado",
+     "pie": "El reporte desaparece de la lista y vuelve a quedar la del día, sola, como cualquier otro día.",
+     "notas": []
+    }
+   ]
+  },
+  {
+   "titulo": "Semana a semana",
+   "sub": "«Quincenal» es como se llama, no cada cuánto llega. En un ciclo de cuatro semanas hay uno solo, en la semana 2.",
+   "items": [
+    {
+     "titulo": "El aviso de que no toca reporte",
+     "tipo": "paso",
+     "pie": null,
+     "notas": []
+    },
+    {
+     "titulo": "El aviso del peso",
+     "tipo": "paso",
+     "pie": null,
+     "notas": []
+    },
+    {
+     "titulo": "La fila del peso en Inicio",
+     "tipo": "paso",
+     "pie": null,
+     "notas": []
+    },
+    {
+     "titulo": "Se abre el quincenal",
+     "tipo": "paso",
+     "pie": null,
+     "notas": []
+    },
+    {
+     "titulo": "El recordatorio del último día",
+     "tipo": "paso",
+     "pie": null,
+     "notas": []
+    },
+    {
+     "titulo": "Cierra el quincenal",
+     "tipo": "paso",
+     "pie": null,
+     "notas": []
+    },
+    {
+     "titulo": "Si le falta una pesada",
+     "tipo": "paso",
+     "pie": null,
+     "notas": []
+    },
+    {
+     "titulo": "Tú ajustas",
+     "tipo": "paso",
+     "pie": null,
+     "notas": []
+    },
+    {
+     "titulo": "Se abre el mensual",
+     "tipo": "paso",
+     "pie": null,
+     "notas": []
+    },
+    {
+     "titulo": "Vuelve el mensual",
+     "tipo": "paso",
+     "pie": null,
+     "notas": []
+    }
+   ]
+  },
+  {
+   "titulo": "Cuándo se dice yo, nosotros o nada",
+   "sub": null,
+   "items": []
+  }
+ ],
+ "cierre": "Todo lo de aquí está validado y cerrado antes del 1 de septiembre de 2026. Las pantallas son el HTML y el CSS reales de la app. Este documento no se toca."
+}
