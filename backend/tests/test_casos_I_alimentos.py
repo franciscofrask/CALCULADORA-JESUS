@@ -83,21 +83,27 @@ def test_60_alimentos_carga_en_menos_de_tres_segundos(listado_de_alimentos):
 def test_60_pinta_un_punado_de_fichas_no_trescientas():
     """«Pinta un puñado de fichas, no trescientas»: cuántas se montan al entrar.
 
-    El número está en el fuente (CAP_TELEFONO / CAP_ORDENADOR) porque es una decisión del
-    front, no un dato de la API.
+    El número está en el fuente (POR_TANDA) porque es una decisión del front, no un dato de
+    la API.
 
-    EL TELEFONO SUBIO DE 20 A 40 EL 31-08-2026 (Francisco: «el boton de carga es de 20 en 20
-    pero tiene que ser de 40 en 40»). Lo que este caso defiende no es el numero exacto sino
-    que no se pinten las trescientas de golpe -- los 69.711 px que se midieron --, asi que el
-    tope sube a 60 en los dos y sigue cazando una vuelta a pintarlo todo.
+    UNA SOLA TANDA, LA MISMA EN LOS DOS SITIOS (Francisco, 31-08-2026). Habia dos numeros,
+    `CAP_TELEFONO` a 20 y `CAP_ORDENADOR` a 40, y su frase fue «en telefono decia 20 y en
+    escritorio 40, ese era el fallo»: lo que estaba mal no era el numero sino que la pantalla
+    se portara distinto segun el aparato. Ahora es una constante, y este caso lo comprueba:
+    si vuelve a aparecer un numero por aparato, salta.
+
+    Lo que el caso defiende sigue siendo lo de siempre -- que no se pinten las trescientas de
+    golpe, los 69.711 px que se midieron --, asi que el tope se queda holgado en 60.
     """
     src = _fuente("pages", "FoodSearchPage.jsx")
 
-    tel = re.search(r"const CAP_TELEFONO\s*=\s*(\d+)", src)
-    orden = re.search(r"const CAP_ORDENADOR\s*=\s*(\d+)", src)
-    assert tel and orden, "la pantalla ya no dice cuántas fichas pinta de golpe"
-    assert int(tel.group(1)) <= 60, f"en el móvil pinta {tel.group(1)} fichas de golpe"
-    assert int(orden.group(1)) <= 60, f"en el ordenador pinta {orden.group(1)} fichas de golpe"
+    por_tanda = re.search(r"const POR_TANDA\s*=\s*(\d+)", src)
+    assert por_tanda, "la pantalla ya no dice cuántas fichas pinta de golpe"
+    assert int(por_tanda.group(1)) <= 60, (
+        f"pinta {por_tanda.group(1)} fichas de golpe")
+    assert "CAP_TELEFONO" not in src and "CAP_ORDENADOR" not in src, (
+        "vuelve a haber una tanda por aparato: era justo lo que dejó que el teléfono se "
+        "quedara en 20 mientras el ordenador iba a 40")
     # Y que de verdad corte la lista al pintar, no que el número esté ahí de adorno.
     assert "filtered.slice(0, aLaVista)" in src, (
         "el tope está declarado pero la lista se pinta entera")

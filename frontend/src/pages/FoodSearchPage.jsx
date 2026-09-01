@@ -4,7 +4,6 @@ import { useAuth } from '../context/AuthContext';
 import { descripcionCategoria, CATEGORIA_NOMBRES } from '../components/nutrition/calmaCategorias';
 import SuggestFoodModal from '../components/nutrition/SuggestFoodModal';
 import SinResultados from '../components/nutrition/SinResultados';
-import { useEsTelefono } from '../lib/esTelefono';
 import { num1 } from '../lib/numeros';
 // El día que está viviendo el cliente, el de SU reloj: es contra ese día contra el que se
 // mide lo que lleva comido (la regla de los relojes, lib/horaEspana).
@@ -80,18 +79,18 @@ const TODAS_CATEGORIAS = (() => {
  * «no hay más». Antes había un tope de 300 incluso pulsando y de ahí no se pasaba: con
  * 3.211 alimentos, «viendo 300» sin botón era un callejón (P39, doc 23-08). Fuera el tope.
  *
- * El teléfono empezó en veinte (11-08) y subió a cuarenta el 31-08 a petición de Francisco:
- * lo que hacía falta era el paginado, no que la tanda fuera corta, y con veinte hay que
- * pulsar el doble de veces para llegar al mismo sitio. En el ordenador ya eran cuarenta
- * (Jesús, 11-08: *«el paginado del móvil funciona igual de bien aquí; con más ancho, 40»*).
- * El problema de fondo -- que se descargan todos -- es el mismo en los dos y sigue ahí.
+ * CUARENTA, Y EL MISMO NÚMERO EN LOS DOS SITIOS (Francisco, 31-08-2026). El teléfono traía de
+ * veinte en veinte y el ordenador de cuarenta, y su frase fue *«en teléfono decía 20 y en
+ * escritorio 40, ese era el fallo»*: lo que estaba mal no era el número sino que la misma
+ * pantalla se portara distinto según el aparato. Con el paginado ya hecho, veinte solo obliga
+ * a pulsar el doble de veces para llegar al mismo sitio.
+ *
+ * Por eso es UNA constante y no dos con el mismo valor: dos números separados por un `if` es
+ * exactamente lo que dejó que se separaran, y volverían a separarse a la primera.
+ *
+ * El problema de fondo -- que se descargan todos -- sigue ahí, y es el mismo en los dos.
  */
-// CUARENTA TAMBIEN EN EL TELÉFONO (Francisco, 31-08-2026): «el botón de carga es de 20 en 20
-// pero tiene que ser de 40 en 40». Estaba en 20 desde el 11-08, cuando se metió el paginado
-// para no dejar la pantalla en 69.000 px de alto; con el paginado ya hecho, veinte se queda
-// corto y obliga a pulsar el doble de veces para llegar a lo mismo.
-const CAP_TELEFONO = 40;
-const CAP_ORDENADOR = 40;
+const POR_TANDA = 40;
 
 // SIN COLORES (punto 160 del 27-08). Aquí había una píldora por macro -- verde la proteína,
 // azul los hidratos, rojo la grasa -- y eso rompía la regla de color de la app, que está
@@ -384,7 +383,6 @@ const FoodSearchPage = () => {
 
     // Cuántos se ven ahora mismo. `deMas` vuelve a cero en cuanto cambia lo buscado: al
     // afinar la búsqueda se empieza otra vez por arriba, no por donde se quedó la anterior.
-    const enTelefono = useEsTelefono();
     const [deMas, setDeMas] = useState(0);
     useEffect(() => { setDeMas(0); }, [query, cats, opcion]);
 
@@ -406,7 +404,7 @@ const FoodSearchPage = () => {
         return [...list].sort((x, y) => (x.nombre || '').localeCompare(y.nombre || ''));
     }, [foods, query, cats, opcion]);
 
-    const porTanda = enTelefono ? CAP_TELEFONO : CAP_ORDENADOR;
+    const porTanda = POR_TANDA;
     const aLaVista = Math.min(porTanda + deMas, filtered.length);
 
     return (
