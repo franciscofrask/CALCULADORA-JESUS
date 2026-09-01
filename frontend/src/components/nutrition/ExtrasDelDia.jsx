@@ -161,6 +161,24 @@ const ExtrasDelDia = ({ api, fecha, extras = [], onAnadido, onQuitado, origen, p
     // Con algo apuntado se abre solo: la lista no se esconde detrás de un botón.
     const desplegado = abierto || extras.length > 0;
 
+    // LO QUE LLEVA EN EXTRAS, SUMADO Y APARTE (1-09).
+    //
+    // Un extra buscado en el catálogo trae sus macros; uno escrito a mano no tiene de dónde
+    // sacarlos. Aquí se suman los que los tienen, y se enseñan en su propia línea.
+    //
+    // APARTE, Y NO DENTRO DE «LLEVAS», a propósito. El documento del 1-09 pide que lo que se
+    // busque cuente; el punto 28 del 24-08 pide que los extras no toquen la dieta, y su
+    // motivo sigue siendo bueno: sumarlos al día encogía el «Falta» y la app acababa
+    // diciéndole que se saltara una comida por haberse comido una tarta. Las dos cosas caben
+    // si se separa CONTAR de DESCONTAR: el extra se mide, se ve y viaja al reporte, y lo que
+    // te queda de tu dieta no se mueve.
+    const enExtras = extras.reduce((acc, e) => ({
+        P: acc.P + (e.macros?.P || 0),
+        H: acc.H + (e.macros?.H || 0),
+        G: acc.G + (e.macros?.G || 0),
+    }), { P: 0, H: 0, G: 0 });
+    const lineaDeExtras = lineaMacros(enExtras);
+
     return (
         <section className="space-y-3" data-testid="extras-del-dia">
             {/* El texto de Jesús, literal (punto 30). Se ve SIEMPRE, no solo con la lista
@@ -206,6 +224,16 @@ const ExtrasDelDia = ({ api, fecha, extras = [], onAnadido, onQuitado, origen, p
                     </div>
                 );
             })}
+
+            {/* La suma de lo buscado, en su propia línea y con el «además» delante, que es lo
+                que dice que va POR ENCIMA de la dieta y no dentro. Sale solo si hay algo que
+                sumar: los extras escritos a mano no traen macros, y una línea a cero no
+                informa de nada. */}
+            {lineaDeExtras && (
+                <p className="text-xs text-muted-foreground" data-testid="extras-suma">
+                    Además de tu dieta, hoy llevas <span className="font-data text-foreground">{lineaDeExtras}</span> en extras.
+                </p>
+            )}
 
             <div className={`space-y-2 ${desplegado ? '' : 'hidden'}`}>
                 {/* EL BUSCADOR DELANTE, LA CAJA DETRÁS (punto 1.2 del documento del 1-09).
@@ -330,19 +358,18 @@ const ExtrasDelDia = ({ api, fecha, extras = [], onAnadido, onQuitado, origen, p
                     </button>
                 )}
 
-                {/* AQUÍ VA LA TERCERA FRASE DEL DOCUMENTO, Y TODAVÍA NO ESTÁ PUESTA.
-                    El punto 1.2 del 1-09 la escribe así: «Lo que pongas a mano no cuenta en
-                    tus macros, simplemente queda el registro. Lo que busques, sí.»
-                    La primera mitad es cierta hoy. La segunda NO: el extra del catálogo se
-                    guarda con sus macros, pero ninguna pantalla los suma. `TuDietaHoy` lo dice
-                    en su propio código -- «los extras NO se suman (punto 28 del doc del
-                    24-08) [...] si alguien vuelve a plantearlo, la respuesta es que no» --, y
-                    el motivo que da es serio: sumarlos encogía el «Falta» del resto del día y
-                    la app acababa diciéndole que se saltara una comida por haberse comido una
-                    tarta.
-                    Ponerla sin que sea verdad es peor que no ponerla, así que espera a que se
-                    decida si los extras del catálogo cuentan. En cuanto se decida, la frase
-                    entra aquí tal cual la escribió Jesús. */}
+                {/* LA TERCERA FRASE, TAL CUAL LA ESCRIBIÓ JESÚS (punto 1.2 del 1-09).
+                    Estuvo fuera hasta que fue verdad: hasta hoy el extra del catálogo se
+                    guardaba con sus macros y ninguna pantalla los sumaba, así que «lo que
+                    busques, sí» habría sido mentira. Ahora se suman en la línea de arriba,
+                    aparte de la dieta, y la frase dice exactamente lo que pasa: lo escrito a
+                    mano queda anotado, lo buscado queda medido. */}
+                {!elegido && (
+                    <p className="text-xs text-muted-foreground" data-testid="extras-que-cuenta">
+                        Lo que pongas a mano no cuenta en tus macros, simplemente queda el
+                        registro. Lo que busques, sí.
+                    </p>
+                )}
             </div>
         </section>
     );
