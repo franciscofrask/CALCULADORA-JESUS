@@ -1,0 +1,2653 @@
+[
+ {
+  "doc": "validado",
+  "bloque": "1 · Inicio y Nutrición",
+  "punto": "Abre en Llevas, no en Macros",
+  "dice": "«Entra y ve 146 · 69 · 49: por dónde va hoy, y lo que le queda.»",
+  "esperado_en": "frontend/src/components/inicio/TuDietaHoy.jsx",
+  "pruebas": [
+   {
+    "frase": "useState('llevas')",
+    "donde": [
+     [
+      "frontend/src/components/inicio/TuDietaHoy.jsx",
+      124,
+      "const [vista, setVista] = useState('llevas');"
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "1 · Inicio y Nutrición",
+  "punto": "Los números, peso 700 y estirados",
+  "dice": "«Peso 700, estirados a lo alto y estrechados. Ocupan menos ancho.»",
+  "esperado_en": "frontend/src/index.css · .numero-grande",
+  "pruebas": [
+   {
+    "frase": "scaleY(1.12) scaleX(0.9)",
+    "donde": [
+     [
+      "frontend/src/index.css",
+      143,
+      "un `transform: scaleY(1.12) scaleX(0.9)`. Jesús lo vuelve a pedir mirando la app: «40"
+     ],
+     [
+      "frontend/src/index.css",
+      151,
+      "hasta el 26-08   peso 700 y estirados: scaleY(1.12) scaleX(0.9)"
+     ],
+     [
+      "frontend/src/index.css",
+      169,
+      "transform: scaleY(1.12) scaleX(0.9);"
+     ]
+    ],
+    "veces": 3
+   },
+   {
+    "frase": "'wght' 700",
+    "donde": [
+     [
+      "frontend/src/index.css",
+      167,
+      "font-variation-settings: 'wght' 700;"
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "1 · Inicio y Nutrición",
+  "punto": "Los números de Nutrición, como los de Inicio",
+  "dice": "«44 px y el mismo estirado. Los dos sitios dicen lo mismo igual.»",
+  "esperado_en": "TuDietaHoy.jsx y DayHeader.jsx",
+  "pruebas": [
+   {
+    "frase": "numero-grande font-data leading-none text-[44px]",
+    "donde": [
+     [
+      "frontend/src/components/inicio/TuDietaHoy.jsx",
+      453,
+      "<p className=\"numero-grande font-data leading-none text-[44px] mt-1.5 text-foreground\">"
+     ],
+     [
+      "frontend/src/components/nutrition/DayHeader.jsx",
+      193,
+      "<p className=\"numero-grande font-data leading-none text-[44px] mt-1.5 text-foreground\">"
+     ]
+    ],
+    "veces": 2
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "1 · Inicio y Nutrición",
+  "punto": "El tramo de frutos secos, marcado",
+  "dice": "«El suyo en naranja. De un vistazo sabe que hoy no le cuenta.»",
+  "esperado_en": "frontend/src/pages/FoodSearchPage.jsx",
+  "pruebas": [
+   {
+    "frase": "tramo-suyo-",
+    "donde": [
+     [
+      "frontend/src/pages/FoodSearchPage.jsx",
+      306,
+      "data-testid={suyo ? `tramo-suyo-${food.id}` : undefined}"
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "aria-current",
+    "donde": [
+     [
+      "frontend/src/pages/FoodSearchPage.jsx",
+      296,
+      "`aria-current` porque un color no es un dato: quien no lo"
+     ],
+     [
+      "frontend/src/pages/FoodSearchPage.jsx",
+      305,
+      "<p key={t.hasta} aria-current={suyo ? 'true' : undefined}"
+     ]
+    ],
+    "veces": 2
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "1 · Inicio y Nutrición",
+  "punto": "Extras: el buscador delante",
+  "dice": "«Si comes algo que no está en tu dieta del día, ponlo aquí, por pequeño que sea.»",
+  "esperado_en": "frontend/src/components/nutrition/ExtrasDelDia.jsx",
+  "pruebas": [
+   {
+    "frase": "ponlo aquí, por pequeño que sea",
+    "donde": [
+     [
+      "frontend/src/components/nutrition/ExtrasDelDia.jsx",
+      194,
+      "Si comes algo que no está en tu dieta del día, ponlo aquí, por pequeño que sea."
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "1 · Inicio y Nutrición",
+  "punto": "Extras: «o si no está»",
+  "dice": "El separador entre el buscador y la caja de texto.",
+  "esperado_en": "frontend/src/components/nutrition/ExtrasDelDia.jsx",
+  "pruebas": [
+   {
+    "frase": "o si no está",
+    "donde": [
+     [
+      "frontend/src/components/nutrition/ExtrasDelDia.jsx",
+      312,
+      "o si no está"
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "1 · Inicio y Nutrición",
+  "punto": "Extras: qué pasa con lo que escribe a mano",
+  "dice": "«Lo que pongas a mano no cuenta en tus macros, simplemente queda el registro. Lo que busques, sí.»",
+  "esperado_en": "frontend/src/components/nutrition/ExtrasDelDia.jsx",
+  "pruebas": [
+   {
+    "frase": "no cuenta en tus macros",
+    "donde": [
+     [
+      "frontend/src/components/nutrition/ExtrasDelDia.jsx",
+      369,
+      "Lo que pongas a mano no cuenta en tus macros, simplemente queda el"
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "Lo que busques, sí",
+    "donde": [
+     [
+      "frontend/src/components/nutrition/ExtrasDelDia.jsx",
+      370,
+      "registro. Lo que busques, sí."
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "1 · Inicio y Nutrición",
+  "punto": "Extras: el día ya cuenta con ellos",
+  "dice": "«Con dos extras. El día ya cuenta con ellos.»",
+  "esperado_en": "frontend/src/components/nutrition/ExtrasDelDia.jsx",
+  "pruebas": [
+   {
+    "frase": "en extras",
+    "donde": [
+     [
+      "frontend/src/components/nutrition/ExtrasDelDia.jsx",
+      234,
+      "Además de tu dieta, hoy llevas <span className=\"font-data text-foreground\">{lineaDeExtras}</span> en extras."
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "1 · Inicio y Nutrición",
+  "punto": "La comida por dentro, en su voz",
+  "dice": "«Te ajusto las cantidades sin pasarme de tus macros.»",
+  "esperado_en": "frontend/src",
+  "pruebas": [
+   {
+    "frase": "Te ajusto las cantidades sin pasarme de tus macros",
+    "donde": [
+     [
+      "frontend/src/components/nutrition/MealCard.jsx",
+      1024,
+      "«Te ajusto las cantidades sin pasarme de tus macros.», con"
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "2 · Los textos",
+  "punto": "Suplementos: el nombre y sin mandar al chat",
+  "dice": "«Todavía no tienes tu plan de suplementación personalizado / Estamos en ello, te avisamos en cuanto esté.»",
+  "esperado_en": "frontend/src",
+  "pruebas": [
+   {
+    "frase": "plan de suplementación personalizado",
+    "donde": [
+     [
+      "frontend/src/pages/SupplementsPage.jsx",
+      340,
+      "guía básica. En unos días recibirás tu plan de suplementación personalizado»,"
+     ],
+     [
+      "frontend/src/pages/SupplementsPage.jsx",
+      413,
+      "<p className=\"font-bold text-foreground mb-1\">¿Quieres tu plan de suplementación personalizado?</p>"
+     ],
+     [
+      "frontend/src/pages/SupplementsPage.jsx",
+      552,
+      "«Tu plan de suplementación personalizado» y no «suplementación» a secas:"
+     ]
+    ],
+    "veces": 4
+   },
+   {
+    "frase": "Estamos en ello, te avisamos en cuanto esté",
+    "donde": [
+     [
+      "frontend/src/pages/RoutinePage.jsx",
+      542,
+      "<p className=\"text-muted-foreground text-sm\">Estamos en ello, te avisamos en cuanto esté.</p>"
+     ],
+     [
+      "frontend/src/pages/RoutinePage.jsx",
+      549,
+      "<p className=\"text-muted-foreground text-sm\">Estamos en ello, te avisamos en cuanto esté.</p>"
+     ],
+     [
+      "frontend/src/pages/RoutinePage.jsx",
+      576,
+      "Estamos en ello, te avisamos en cuanto esté."
+     ]
+    ],
+    "veces": 4
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "2 · Los textos",
+  "punto": "Rutina sin asignar",
+  "dice": "«Todavía no tienes tu rutina personalizada / Estamos en ello, te avisamos en cuanto esté.»",
+  "esperado_en": "frontend/src",
+  "pruebas": [
+   {
+    "frase": "tu rutina personalizada",
+    "donde": [
+     [
+      "frontend/src/pages/RoutinePage.jsx",
+      548,
+      "<h2 className=\"font-heading text-xl font-bold uppercase text-foreground mb-2\">Todavía no tienes tu rutina personalizada</h2>"
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "2 · Los textos",
+  "punto": "La rutina del mes que no está",
+  "dice": "«Todavía no está la rutina de este mes»",
+  "esperado_en": "frontend/src",
+  "pruebas": [
+   {
+    "frase": "la rutina de este mes",
+    "donde": [
+     [
+      "backend/routes/routines.py",
+      1476,
+      "\"\"\"El PDF marcado como la rutina de este mes, o None si el equipo no ha subido ninguno."
+     ],
+     [
+      "frontend/src/pages/RoutinePage.jsx",
+      574,
+      "<h2 className=\"font-heading text-xl font-bold uppercase text-foreground mb-2\">Todavía no está la rutina de este mes</h2>"
+     ]
+    ],
+    "veces": 2
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "2 · Los textos",
+  "punto": "El aviso de cuando algo falla",
+  "dice": "«Esto parece cosa nuestra, no tuya. Inténtalo una vez más y, si la cosa sigue igual, escribe por el chat.»",
+  "esperado_en": "frontend/src",
+  "pruebas": [
+   {
+    "frase": "Esto parece cosa nuestra",
+    "donde": [
+     [
+      "frontend/src/pages/RoutinePage.jsx",
+      509,
+      "Esto parece cosa nuestra, no tuya. Inténtalo una vez más y, si la cosa sigue igual, escribe por el chat."
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "escribe por el chat",
+    "donde": [
+     [
+      "frontend/src/pages/RoutinePage.jsx",
+      509,
+      "Esto parece cosa nuestra, no tuya. Inténtalo una vez más y, si la cosa sigue igual, escribe por el chat."
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "2 · Los textos",
+  "punto": "El texto de la guía de suplementos",
+  "dice": "«Estos son los suplementos que yo más recomiendo con pautas exactas de uso… te recomiendo empezar por los básicos.»",
+  "esperado_en": "frontend/src",
+  "pruebas": [
+   {
+    "frase": "te recomiendo empezar por los básicos",
+    "donde": [
+     [
+      "backend/core/guia_suplementacion.py",
+      61,
+      "\"En condiciones normales, te recomiendo empezar por los básicos.\""
+     ],
+     [
+      "frontend/src/pages/SupplementsPage.jsx",
+      270,
+      "+ 'En condiciones normales, te recomiendo empezar por los básicos.';"
+     ]
+    ],
+    "veces": 2
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "2 · Los textos",
+  "punto": "El texto del código de FullGas",
+  "dice": "«Lo tendrás activo mientras dure tu suscripción, con un 20 % en toda la web.»",
+  "esperado_en": "frontend/src",
+  "pruebas": [
+   {
+    "frase": "mientras dure tu suscripción",
+    "donde": [
+     [
+      "backend/core/guia_suplementacion.py",
+      77,
+      "\"nota\": \"Activo mientras dure tu suscripción.\","
+     ],
+     [
+      "frontend/src/pages/SupplementsPage.jsx",
+      235,
+      "{/* «Activo TODO EL TIEMPO, mientras dure tu suscripción» decía las dos cosas: que"
+     ],
+     [
+      "frontend/src/pages/SupplementsPage.jsx",
+      240,
+      "Lo tendrás activo mientras dure tu suscripción, con un 20 % en toda la web."
+     ]
+    ],
+    "veces": 3
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "2 · Los textos",
+  "punto": "Las tres frases intocables",
+  "dice": "«Su proteína no te cuenta» · «Te cuentan los tres» · «No te cuenta nada: come lo que quieras»",
+  "esperado_en": "frontend/src + backend",
+  "pruebas": [
+   {
+    "frase": "Su proteína no te cuenta",
+    "donde": [
+     [
+      "backend/routes/calculator.py",
+      486,
+      "Y con esto desaparece la coletilla «Su proteína no te cuenta»: el «solo» ya lo dice, y es"
+     ],
+     [
+      "frontend/src/components/nutrition/ContadorFamilia.jsx",
+      45,
+      "Su proteína no te cuenta"
+     ]
+    ],
+    "veces": 2
+   },
+   {
+    "frase": "Te cuentan los tres",
+    "donde": [
+     [
+      "backend/routes/calculator.py",
+      470,
+      "- «Te cuentan los tres»       lleva los tres y le cuentan los tres. Es la frase de"
+     ],
+     [
+      "backend/routes/calculator.py",
+      498,
+      "# los tres macros y le cuentan los tres, y ahi «Te cuentan los tres» es exacta; solo"
+     ],
+     [
+      "backend/routes/calculator.py",
+      502,
+      "return \"Te cuentan los tres\""
+     ]
+    ],
+    "veces": 3
+   },
+   {
+    "frase": "No te cuenta nada",
+    "donde": [
+     [
+      "backend/routes/calculator.py",
+      478,
+      "- «No te cuenta nada»         las verduras libres y los zero."
+     ],
+     [
+      "backend/routes/calculator.py",
+      493,
+      "return \"No te cuenta nada\""
+     ],
+     [
+      "frontend/src/pages/FoodSearchPage.jsx",
+      244,
+      "«No te cuenta nada   Come lo que quieras» --, que se leen como dos avisos"
+     ]
+    ],
+    "veces": 3
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "3 · El día",
+  "punto": "El cierre: entra la suplementación",
+  "dice": "«¿Tomaste la suplementación que tenías pautada?»",
+  "esperado_en": "frontend/src/pages/CheckInsPage.jsx",
+  "pruebas": [
+   {
+    "frase": "¿Tomaste la suplementación que tenías pautada?",
+    "donde": [
+     [
+      "frontend/src/pages/CheckInsPage.jsx",
+      683,
+      "titulo: '¿Tomaste la suplementación que tenías pautada?',"
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "3 · El día",
+  "punto": "El cierre: salen las sensaciones del día y el peso",
+  "dice": "«Nueve preguntas y las notas. Salen las sensaciones del día y el peso.»",
+  "esperado_en": "frontend/src/pages/CheckInsPage.jsx",
+  "pruebas": [
+   {
+    "frase": "Sensaciones generales",
+    "donde": [
+     [
+      "backend/models/common.py",
+      305,
+      "# «Sensaciones generales del día», con estrellas. CAMPO NUEVO Y NO `mood`, a propósito:"
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "3 · El día",
+  "punto": "Extras: «si no lo pusiste, ponlo ahora»",
+  "dice": "«Si no lo pusiste en el apartado de extras, ponlo ahora»",
+  "esperado_en": "frontend/src/pages/CheckInsPage.jsx",
+  "pruebas": [
+   {
+    "frase": "Si no lo pusiste en el apartado de extras",
+    "donde": [
+     [
+      "frontend/src/pages/CheckInsPage.jsx",
+      701,
+      "ayuda: 'Si no lo pusiste en el apartado de extras, ponlo ahora',"
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "3 · El día",
+  "punto": "Si no le falta nada: el día, todo bien",
+  "dice": "«El día, todo bien · No te queda nada por registrar», en verde.",
+  "esperado_en": "frontend/src/pages/CheckInsPage.jsx",
+  "pruebas": [
+   {
+    "frase": "El día, todo bien",
+    "donde": [
+     [
+      "frontend/src/pages/CheckInsPage.jsx",
+      787,
+      "// registrada». Con «El día, todo bien» ya no hace falta: ver el aviso más abajo."
+     ],
+     [
+      "frontend/src/pages/CheckInsPage.jsx",
+      876,
+      "<p className=\"text-sm font-bold text-foreground\">El día, todo bien</p>"
+     ],
+     [
+      "frontend/src/pages/CheckInsPage.jsx",
+      984,
+      "// «El día, todo bien» y le basta con las comidas pendientes.)"
+     ]
+    ],
+    "veces": 3
+   },
+   {
+    "frase": "No te queda nada por registrar",
+    "donde": [
+     [
+      "frontend/src/pages/CheckInsPage.jsx",
+      877,
+      "<p className=\"text-sm text-foreground/60 mt-0.5\">No te queda nada por registrar</p>"
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "3 · El día",
+  "punto": "Antes de guardar: las ocho enteras",
+  "dice": "Sin cortar con «y 5 más».",
+  "esperado_en": "frontend/src/pages/CheckInsPage.jsx",
+  "pruebas": [
+   {
+    "frase": "Te queda por contestar",
+    "donde": [
+     [
+      "frontend/src/pages/CheckInsPage.jsx",
+      957,
+      "Te queda por contestar: {faltan.join(' · ')}"
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "3 · El día",
+  "punto": "Ayer no cerraste el día",
+  "dice": "«Ayer no cerraste el día · Puedes hacerlo hasta las 3 de la tarde»",
+  "esperado_en": "frontend/src",
+  "pruebas": [
+   {
+    "frase": "Ayer no cerraste el día",
+    "donde": [
+     [
+      "backend/core/ventana_del_dia.py",
+      106,
+      "return {\"titulo\": \"Ayer no cerraste el día\","
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "hasta las 3 de la tarde",
+    "donde": [
+     [
+      "backend/core/ventana_del_dia.py",
+      107,
+      "\"detalle\": \"Puedes hacerlo hasta las 3 de la tarde\"}"
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "3 · El día",
+  "punto": "Tras 2 días perdidos",
+  "dice": "«Llevas 2 días seguidos sin cerrar, no lo dejes hoy también»",
+  "esperado_en": "frontend/src + backend",
+  "pruebas": [
+   {
+    "frase": "no lo dejes hoy también",
+    "donde": [
+     [
+      "backend/core/ventana_del_dia.py",
+      122,
+      "\"detalle\": f\"Llevas {racha} días seguidos sin cerrar, no lo dejes hoy también\"}"
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "3 · El día",
+  "punto": "Tras 4 días perdidos",
+  "dice": "«Retómalo hoy mismo: es de donde salen tus ajustes»",
+  "esperado_en": "frontend/src + backend",
+  "pruebas": [
+   {
+    "frase": "es de donde salen tus ajustes",
+    "donde": [
+     [
+      "backend/core/ventana_del_dia.py",
+      117,
+      "\"detalle\": \"Retómalo hoy mismo: es de donde salen tus ajustes\"}"
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "3 · El día",
+  "punto": "Tras una semana",
+  "dice": "«Dejo de recordártelo. Si te está costando, dímelo y lo vemos»",
+  "esperado_en": "frontend/src + backend",
+  "pruebas": [
+   {
+    "frase": "Dejo de recordártelo",
+    "donde": [
+     [
+      "backend/core/ventana_del_dia.py",
+      112,
+      "\"detalle\": \"Dejo de recordártelo. Si te está costando, dímelo y lo vemos\"}"
+     ],
+     [
+      "frontend/src/pages/ClientDashboard.jsx",
+      398,
+      "-- «Dejo de recordártelo. Si te está costando, dímelo y lo vemos» -- seguía"
+     ]
+    ],
+    "veces": 2
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "4 · Avisos y peso",
+  "punto": "Los siete interruptores y la hora",
+  "dice": "«Siete interruptores y un selector de hora.»",
+  "esperado_en": "frontend/src",
+  "pruebas": [
+   {
+    "frase": "Rellenar el cierre del día",
+    "donde": [
+     [
+      "frontend/src/pages/ProfilePage.jsx",
+      226,
+      "title: 'Rellenar el cierre del día',"
+     ],
+     [
+      "frontend/src/pages/ProfilePage.jsx",
+      731,
+      "titulo=\"Rellenar el cierre del día\""
+     ]
+    ],
+    "veces": 2
+   },
+   {
+    "frase": "Recordármelo si me lo salto",
+    "donde": [
+     [
+      "frontend/src/pages/ProfilePage.jsx",
+      757,
+      "titulo=\"Recordármelo si me lo salto\""
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "4 · Avisos y peso",
+  "punto": "El quincenal y el mensual no se apagan",
+  "dice": "«El quincenal y el mensual no se pueden desactivar: son los que hacen tu ajuste.»",
+  "esperado_en": "frontend/src",
+  "pruebas": [
+   {
+    "frase": "no se pueden desactivar",
+    "donde": [
+     [
+      "frontend/src/pages/ProfilePage.jsx",
+      789,
+      "El quincenal y el mensual no se pueden desactivar: son los que"
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "4 · Avisos y peso",
+  "punto": "Al apagar el cierre del día",
+  "dice": "«Si lo apagas, no podrás registrar tus datos del día, pero deberás rellenar las preguntas del reporte quincenal y del reporte mensual…»",
+  "esperado_en": "frontend/src",
+  "pruebas": [
+   {
+    "frase": "no podrás registrar tus datos del día",
+    "donde": [
+     [
+      "frontend/src/pages/ProfilePage.jsx",
+      227,
+      "description: 'Si lo apagas, no podrás registrar tus datos del día, pero deberás '"
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "4 · Avisos y peso",
+  "punto": "El campo del peso, abierto todo el año",
+  "dice": "«Registrarlo es opcional, sólo para ti. Te lo pediremos sólo para los reportes.»",
+  "esperado_en": "frontend/src",
+  "pruebas": [
+   {
+    "frase": "sólo para ti",
+    "donde": [
+     [
+      "frontend/src/pages/CheckInsPage.jsx",
+      915,
+      "Registrarlo es opcional, sólo para ti. Te lo pediremos sólo para los reportes"
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "4 · Avisos y peso",
+  "punto": "La fila de la mañana",
+  "dice": "«Hoy toca pesarte · En ayunas y después de ir al baño», y a las 12:00 se apaga.",
+  "esperado_en": "backend/core/avisos_cliente.py",
+  "pruebas": [
+   {
+    "frase": "toca pesarte",
+    "donde": [
+     [
+      "backend/core/avisos_cliente.py",
+      935,
+      "\"titulo\": \"Hoy toca pesarte y mañana también.\","
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "4 · Avisos y peso",
+  "punto": "El aviso del martes",
+  "dice": "«Esta semana toca reporte quincenal. Recuerda pesarte y registrar el dato…»",
+  "esperado_en": "backend",
+  "pruebas": [],
+  "faltan": [
+   "Esta semana toca reporte quincenal"
+  ],
+  "estado": "abierto"
+ },
+ {
+  "doc": "validado",
+  "bloque": "4 · Avisos y peso",
+  "punto": "El aviso de la pesada que falta",
+  "dice": "«Te falta una pesada. Si te pesas esta mañana antes de las 10, aún entra.»",
+  "esperado_en": "backend",
+  "pruebas": [],
+  "faltan": [
+   "Te falta una pesada"
+  ],
+  "estado": "abierto"
+ },
+ {
+  "doc": "validado",
+  "bloque": "4 · Avisos y peso",
+  "punto": "La semana sin reporte",
+  "dice": "«Esta semana no toca reporte. Solo el cierre del día, como siempre.»",
+  "esperado_en": "backend",
+  "pruebas": [
+   {
+    "frase": "Esta semana no toca reporte",
+    "donde": [
+     [
+      "backend/routes/reports.py",
+      54,
+      "raise HTTPException(status_code=403, detail=\"Esta semana no toca reporte. Te avisaremos cuando abra la ventana.\")"
+     ],
+     [
+      "frontend/src/pages/ReportsPage.jsx",
+      56,
+      "Esta semana no toca reporte. Te avisaremos cuando abra la ventana."
+     ]
+    ],
+    "veces": 2
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "validado",
+  "bloque": "5 · El quincenal",
+  "punto": "Son 3 pasos",
+  "dice": "«Con Son 3 pasos arriba en las tres, y el suyo marcado.»",
+  "esperado_en": "frontend/src/components/reports",
+  "pruebas": [],
+  "faltan": [
+   "Son 3 pasos"
+  ],
+  "estado": "abierto"
+ },
+ {
+  "doc": "validado",
+  "bloque": "5 · El quincenal",
+  "punto": "Paso 1 · Actualizar tus datos",
+  "dice": "«Sale de tu check-in. Si algo no cuadra o te falta, lo modificas al final.»",
+  "esperado_en": "frontend/src/components/reports",
+  "pruebas": [],
+  "faltan": [
+   "Sale de tu check-in"
+  ],
+  "estado": "abierto"
+ },
+ {
+  "doc": "validado",
+  "bloque": "5 · El quincenal",
+  "punto": "Paso 2 · Tus sensaciones y tus dudas",
+  "dice": "«¿Algún ejercicio que te dé molestias o alguna máquina que no tengas?»",
+  "esperado_en": "frontend/src/components/reports",
+  "pruebas": [],
+  "faltan": [
+   "alguna máquina que no tengas"
+  ],
+  "estado": "abierto"
+ },
+ {
+  "doc": "validado",
+  "bloque": "5 · El quincenal",
+  "punto": "Paso 3 · Este tercer paso es cosa nuestra",
+  "dice": "«Recibirás respuesta antes del viernes a las 3, hora de España.»",
+  "esperado_en": "frontend/src/components/reports",
+  "pruebas": [],
+  "faltan": [
+   "Este tercer paso es cosa nuestra"
+  ],
+  "estado": "abierto"
+ },
+ {
+  "doc": "validado",
+  "bloque": "5 · El quincenal",
+  "punto": "Las dos versiones del paso 1",
+  "dice": "«No tengo todos los datos de tus check-in diarios, así que te lo pregunto aquí.»",
+  "esperado_en": "frontend/src/components/reports",
+  "pruebas": [],
+  "faltan": [
+   "No tengo todos los datos de tus check-in"
+  ],
+  "estado": "abierto"
+ },
+ {
+  "doc": "validado",
+  "bloque": "5 · El quincenal",
+  "punto": "La tarjeta en Hecho",
+  "dice": "«Respondiste a tiempo y ahora nos toca a nosotros. Te decimos algo antes del viernes a las tres…»",
+  "esperado_en": "frontend/src",
+  "pruebas": [],
+  "faltan": [
+   "Respondiste a tiempo"
+  ],
+  "estado": "abierto"
+ },
+ {
+  "doc": "validado",
+  "bloque": "5 · El quincenal",
+  "punto": "El aviso de la apertura",
+  "dice": "«Ya puedes rellenar el reporte quincenal. Tienes para hacerlo hasta mañana jueves a las ocho…»",
+  "esperado_en": "backend",
+  "pruebas": [],
+  "faltan": [
+   "Ya puedes rellenar el reporte quincenal"
+  ],
+  "estado": "abierto"
+ },
+ {
+  "doc": "validado",
+  "bloque": "5 · El quincenal",
+  "punto": "El recordatorio del último día",
+  "dice": "«Solo recordarte que tienes hasta hoy a las ocho…»",
+  "esperado_en": "backend",
+  "pruebas": [],
+  "faltan": [
+   "Solo recordarte que tienes hasta hoy"
+  ],
+  "estado": "abierto"
+ },
+ {
+  "doc": "validado",
+  "bloque": "5 · El quincenal",
+  "punto": "El fuera de plazo",
+  "dice": "«Se te pasó el plazo del reporte quincenal. Este ajuste se salta.»",
+  "esperado_en": "backend",
+  "pruebas": [],
+  "faltan": [
+   "Se te pasó el plazo"
+  ],
+  "estado": "abierto"
+ },
+ {
+  "doc": "validado",
+  "bloque": "5 · El quincenal",
+  "punto": "La cola de Inicio",
+  "dice": "«Nunca dos avisos: una lista y un orden.» El reporte arriba, el check-in debajo.",
+  "esperado_en": "frontend/src/pages/ClientDashboard.jsx",
+  "pruebas": [
+   {
+    "frase": "reporte-${r.tipo}",
+    "donde": [
+     [
+      "frontend/src/pages/ClientDashboard.jsx",
+      772,
+      "id: `reporte-${r.tipo}`, icono: FileText, titulo: r.tipo_label,"
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "mensual",
+  "bloque": "Los cuatro pasos",
+  "punto": "La cabecera «Son 4 pasos»",
+  "dice": "«Con Son 4 pasos en la cabecera de las cuatro, y el suyo marcado.»",
+  "esperado_en": "frontend/src/components/reports/PasosDelMensual.jsx",
+  "pruebas": [
+   {
+    "frase": "Son 4 pasos",
+    "donde": [
+     [
+      "frontend/src/components/reports/PasosDelMensual.jsx",
+      4,
+      "* Del documento «El reporte mensual» (1-09-2026): «Con Son 4 pasos en la cabecera de las"
+     ],
+     [
+      "frontend/src/components/reports/PasosDelMensual.jsx",
+      54,
+      "Son 4 pasos"
+     ]
+    ],
+    "veces": 2
+   },
+   {
+    "frase": "Actualizar tus datos y confirmar que están bien",
+    "donde": [
+     [
+      "frontend/src/components/reports/FormularioReporte.jsx",
+      126,
+      "// «Actualizar tus datos y confirmar que están bien»). El peso de la semana ya"
+     ],
+     [
+      "frontend/src/components/reports/PasosDelMensual.jsx",
+      19,
+      "'Actualizar tus datos y confirmar que están bien',"
+     ]
+    ],
+    "veces": 2
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "mensual",
+  "bloque": "Paso 1",
+  "punto": "El subtítulo del paso 1",
+  "dice": "«Sale de tus check-in. Si algo no cuadra o te falta, lo arreglas al final.»",
+  "esperado_en": "frontend/src/components/reports/FormularioReporte.jsx",
+  "pruebas": [
+   {
+    "frase": "Sale de tus check-in. Si algo no cuadra o te falta, lo arreglas al final",
+    "donde": [
+     [
+      "backend/core/actividad_mensual.py",
+      7,
+      "«Sale de tus check-in. Si algo no cuadra o te falta, lo arreglas al final.»"
+     ],
+     [
+      "backend/core/datos_reporte.py",
+      539,
+      "# «Sale de tus check-in. Si algo no cuadra o te falta, lo arreglas al final.»"
+     ],
+     [
+      "frontend/src/components/reports/FormularioReporte.jsx",
+      413,
+      "sub=\"Sale de tus check-in. Si algo no cuadra o te falta, lo arreglas al final.\" />"
+     ]
+    ],
+    "veces": 4
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "mensual",
+  "bloque": "Paso 1",
+  "punto": "El selector de periodo",
+  "dice": "«El selector de arriba cambia el bloque entero, no solo el peso.» 28 días / desde que empezaste.",
+  "esperado_en": "frontend/src/components/reports/MensualPaso1.jsx",
+  "pruebas": [
+   {
+    "frase": "Desde tu último reporte",
+    "donde": [
+     [
+      "backend/core/datos_reporte.py",
+      542,
+      "# -- «Desde tu último reporte» (28 días) o «Desde que empezaste» --, no solo el peso."
+     ],
+     [
+      "backend/routes/reports.py",
+      730,
+      "- `ultimo`    los 28 días del mensual («Desde tu último reporte»)."
+     ],
+     [
+      "frontend/src/components/reports/InformeDelMes.jsx",
+      283,
+      "<Fila que=\"Desde tu último reporte\" valor={peso.cambio_label} />"
+     ]
+    ],
+    "veces": 5
+   },
+   {
+    "frase": "Desde que empezaste",
+    "donde": [
+     [
+      "backend/core/datos_reporte.py",
+      542,
+      "# -- «Desde tu último reporte» (28 días) o «Desde que empezaste» --, no solo el peso."
+     ],
+     [
+      "backend/routes/reports.py",
+      731,
+      "- `principio` desde que arrancó («Desde que empezaste»)."
+     ],
+     [
+      "frontend/src/components/reports/InformeDelMes.jsx",
+      288,
+      "<Fila que=\"Desde que empezaste\" valor={peso.desde_el_principio_label} />"
+     ]
+    ],
+    "veces": 5
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "mensual",
+  "bloque": "Paso 1",
+  "punto": "El peso, con el círculo de su quincenal",
+  "dice": "«El círculo es el peso de tu quincenal» y «Los círculos son tus reportes anteriores».",
+  "esperado_en": "backend/core/datos_reporte.py",
+  "pruebas": [
+   {
+    "frase": "El círculo es el peso de tu quincenal",
+    "donde": [
+     [
+      "backend/core/datos_reporte.py",
+      575,
+      "- En los 28 días: «El círculo es el peso de tu quincenal». Uno solo, el del reporte"
+     ],
+     [
+      "backend/core/datos_reporte.py",
+      603,
+      "\"nota\": \"El círculo es el peso de tu quincenal.\"}"
+     ]
+    ],
+    "veces": 2
+   },
+   {
+    "frase": "Los círculos son tus reportes anteriores",
+    "donde": [
+     [
+      "backend/core/datos_reporte.py",
+      577,
+      "- En el programa entero: «Los círculos son tus reportes anteriores. El primero es tu"
+     ],
+     [
+      "backend/core/datos_reporte.py",
+      615,
+      "\"nota\": \"Los círculos son tus reportes anteriores. El primero es tu cuestionario inicial.\"}"
+     ]
+    ],
+    "veces": 2
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "mensual",
+  "bloque": "Paso 1",
+  "punto": "Lo que has hecho: las seis filas",
+  "dice": "Dietas guardadas · Días que comiste de más · Entrenos · Cardio · Movimiento · Suplementación",
+  "esperado_en": "backend/core/actividad_mensual.py",
+  "pruebas": [
+   {
+    "frase": "Dietas guardadas",
+    "donde": [
+     [
+      "backend/core/actividad_mensual.py",
+      15,
+      "Dietas guardadas 22 de 28 · Días que comiste de más 6 · Entrenos 13 de 16"
+     ],
+     [
+      "backend/core/actividad_mensual.py",
+      97,
+      "pon(\"dietas\", \"Dietas guardadas\", f\"{int(dieta.get('dias_registrados') or 0)} de {dias}\")"
+     ]
+    ],
+    "veces": 2
+   },
+   {
+    "frase": "Días que comiste de más",
+    "donde": [
+     [
+      "backend/core/actividad_mensual.py",
+      15,
+      "Dietas guardadas 22 de 28 · Días que comiste de más 6 · Entrenos 13 de 16"
+     ],
+     [
+      "backend/core/actividad_mensual.py",
+      103,
+      "pon(\"extras\", \"Días que comiste de más\", str(int(extras)))"
+     ]
+    ],
+    "veces": 2
+   },
+   {
+    "frase": "Movimiento",
+    "donde": [
+     [
+      "backend/core/actividad_mensual.py",
+      16,
+      "Cardio 7 de 12 · Movimiento 16 igual · 5 más · 7 menos · Suplementación 21 de 28"
+     ],
+     [
+      "backend/core/actividad_mensual.py",
+      125,
+      "pon(\"movimiento\", \"Movimiento\", \" · \".join(trozos))"
+     ],
+     [
+      "frontend/src/pages/CheckInsPage.jsx",
+      128,
+      "pon('Movimiento', MOVIMIENTO_VALOR[c.movimiento]);"
+     ]
+    ],
+    "veces": 3
+   },
+   {
+    "frase": "Suplementación",
+    "donde": [
+     [
+      "backend/_doc2.py",
+      260,
+      "P, F = \"App del cliente\", \"Suplementación\""
+     ],
+     [
+      "backend/agent_loop.py",
+      310,
+      "- LOS SUPLEMENTOS NO LOS PAUTAS TÚ. Si te pregunta por vitaminas o por cualquier otro suplemento, no le recomiendes ninguno ni le des dosis ni horarios: los suy"
+     ],
+     [
+      "backend/core/actividad_mensual.py",
+      16,
+      "Cardio 7 de 12 · Movimiento 16 igual · 5 más · 7 menos · Suplementación 21 de 28"
+     ]
+    ],
+    "veces": 28
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "mensual",
+  "bloque": "Paso 1",
+  "punto": "Y cómo te has sentido",
+  "dice": "Descanso · Energía · Hambre / ansiedad, con su media y su línea.",
+  "esperado_en": "backend/core/actividad_mensual.py",
+  "pruebas": [
+   {
+    "frase": "Hambre / ansiedad",
+    "donde": [
+     [
+      "backend/core/actividad_mensual.py",
+      19,
+      "Descanso 2,9 · Energía 3,1 · Hambre / ansiedad 3,6"
+     ],
+     [
+      "backend/core/actividad_mensual.py",
+      35,
+      "# campo con el que se guardan. «Hambre / ansiedad» va con las barras porque así se lee en"
+     ],
+     [
+      "backend/core/actividad_mensual.py",
+      40,
+      "(\"hambre\", \"Hambre / ansiedad\", \"hunger_anxiety\"),"
+     ]
+    ],
+    "veces": 4
+   },
+   {
+    "frase": "Solo de estos",
+    "donde": [
+     [
+      "backend/core/actividad_mensual.py",
+      163,
+      "\"\"\"«Solo de estos 28 días. Lo de antes ya está cerrado.»"
+     ],
+     [
+      "backend/core/actividad_mensual.py",
+      170,
+      "return f\"Solo de estos {dias} días. Lo de antes ya está cerrado.\""
+     ]
+    ],
+    "veces": 2
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "mensual",
+  "bloque": "Paso 1",
+  "punto": "Los huecos, con sus dos respuestas",
+  "dice": "«Te dejaste 3 entrenos sin registrar» [No entrené / Sí entrené, pero no lo marqué] · «Y 4 días de dieta»",
+  "esperado_en": "backend/core/actividad_mensual.py",
+  "pruebas": [
+   {
+    "frase": "sin registrar",
+    "donde": [
+     [
+      "backend/core/actividad_mensual.py",
+      21,
+      "Te dejaste 3 entrenos sin registrar.   [No entrené] [Sí entrené, pero no lo marqué]"
+     ],
+     [
+      "backend/core/actividad_mensual.py",
+      183,
+      "Te dejaste 3 entrenos sin registrar.  [No entrené] [Sí entrené, pero no lo marqué]"
+     ],
+     [
+      "backend/core/actividad_mensual.py",
+      202,
+      "f\"{_plural(entrenos, 'entreno', 'entrenos')} sin registrar.\"),"
+     ]
+    ],
+    "veces": 14
+   },
+   {
+    "frase": "No entrené",
+    "donde": [
+     [
+      "backend/core/actividad_mensual.py",
+      21,
+      "Te dejaste 3 entrenos sin registrar.   [No entrené] [Sí entrené, pero no lo marqué]"
+     ],
+     [
+      "backend/core/actividad_mensual.py",
+      183,
+      "Te dejaste 3 entrenos sin registrar.  [No entrené] [Sí entrené, pero no lo marqué]"
+     ],
+     [
+      "backend/core/actividad_mensual.py",
+      204,
+      "{\"value\": NO_LO_HICE, \"label\": \"No entrené\"},"
+     ]
+    ],
+    "veces": 6
+   },
+   {
+    "frase": "Sí entrené, pero no lo marqué",
+    "donde": [
+     [
+      "backend/core/actividad_mensual.py",
+      21,
+      "Te dejaste 3 entrenos sin registrar.   [No entrené] [Sí entrené, pero no lo marqué]"
+     ],
+     [
+      "backend/core/actividad_mensual.py",
+      183,
+      "Te dejaste 3 entrenos sin registrar.  [No entrené] [Sí entrené, pero no lo marqué]"
+     ],
+     [
+      "backend/core/actividad_mensual.py",
+      205,
+      "{\"value\": SI_PERO_NO_APUNTE, \"label\": \"Sí entrené, pero no lo marqué\"},"
+     ]
+    ],
+    "veces": 3
+   },
+   {
+    "frase": "No la cumplí",
+    "donde": [
+     [
+      "backend/core/actividad_mensual.py",
+      22,
+      "Y 4 días de dieta.                     [No la cumplí] [Sí, pero no la guardé]"
+     ],
+     [
+      "backend/core/actividad_mensual.py",
+      184,
+      "Y 4 días de dieta.                    [No la cumplí] [Sí, pero no la guardé]"
+     ],
+     [
+      "backend/core/actividad_mensual.py",
+      218,
+      "{\"value\": NO_LO_HICE, \"label\": \"No la cumplí\"},"
+     ]
+    ],
+    "veces": 3
+   },
+   {
+    "frase": "Sí, pero no la guardé",
+    "donde": [
+     [
+      "backend/core/actividad_mensual.py",
+      22,
+      "Y 4 días de dieta.                     [No la cumplí] [Sí, pero no la guardé]"
+     ],
+     [
+      "backend/core/actividad_mensual.py",
+      184,
+      "Y 4 días de dieta.                    [No la cumplí] [Sí, pero no la guardé]"
+     ],
+     [
+      "backend/core/actividad_mensual.py",
+      219,
+      "{\"value\": SI_PERO_NO_APUNTE, \"label\": \"Sí, pero no la guardé\"},"
+     ]
+    ],
+    "veces": 3
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "mensual",
+  "bloque": "Paso 1",
+  "punto": "Modificar y Confirmar",
+  "dice": "Los dos botones del paso 1.",
+  "esperado_en": "frontend/src/components/reports/MensualPaso1.jsx",
+  "pruebas": [
+   {
+    "frase": "Modificar",
+    "donde": [
+     [
+      "frontend/src/components/reports/MensualPaso1.jsx",
+      18,
+      "* «Modificar» es el «lo arreglas al final» del subtítulo: abre el peso (y el % de grasa el"
+     ],
+     [
+      "frontend/src/components/reports/MensualPaso1.jsx",
+      305,
+      "{modificando ? 'Ya está' : 'Modificar'}"
+     ]
+    ],
+    "veces": 2
+   },
+   {
+    "frase": "Confirmar",
+    "donde": [
+     [
+      "frontend/src/components/reports/FormularioReporte.jsx",
+      420,
+      "onConfirmar={confirmarPaso1} />"
+     ],
+     [
+      "frontend/src/components/reports/MensualPaso1.jsx",
+      99,
+      "onHueco, onConfirmar }) => {"
+     ],
+     [
+      "frontend/src/components/reports/MensualPaso1.jsx",
+      107,
+      "// 24-08). En ese caso, «Confirmar» sin nada que confirmar solo daría un aviso rojo:"
+     ]
+    ],
+    "veces": 12
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "mensual",
+  "bloque": "Paso 2",
+  "punto": "¿Cuánto te ha costado la dieta?",
+  "dice": "Una pregunta con cuatro salidas, no dos preguntas.",
+  "esperado_en": "frontend/src/components/reports/ReporteMensual.jsx",
+  "pruebas": [
+   {
+    "frase": "¿Cuánto te ha costado la dieta?",
+    "donde": [
+     [
+      "frontend/src/components/reports/ReporteMensual.jsx",
+      153,
+      "<Opciones testid=\"dieta-dificultad\" pregunta=\"¿Cuánto te ha costado la dieta?\""
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "Nada, comiendo así es facilísimo",
+    "donde": [
+     [
+      "frontend/src/components/reports/ReporteMensual.jsx",
+      66,
+      "label: 'Nada, comiendo así es facilísimo' },"
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "Sí, baja mis macros porque no llego por mucho que me esfuerce",
+    "donde": [
+     [
+      "frontend/src/components/reports/ReporteMensual.jsx",
+      72,
+      "label: 'Sí, baja mis macros porque no llego por mucho que me esfuerce' },"
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "mensual",
+  "bloque": "Paso 2",
+  "punto": "La condicional del cardio",
+  "dice": "«Si te bajo el número de sesiones, ¿sería viable para que cumplieras?» Solo si falló.",
+  "esperado_en": "frontend/src/components/reports/ReporteMensual.jsx",
+  "pruebas": [
+   {
+    "frase": "¿sería viable para que cumplieras?",
+    "donde": [
+     [
+      "frontend/src/components/reports/ReporteMensual.jsx",
+      372,
+      "pregunta=\"Si te bajo el número de sesiones, ¿sería viable para que cumplieras?\""
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "Quítamelo, no lo voy a hacer",
+    "donde": [
+     [
+      "backend/models/common.py",
+      157,
+      "# pregunta si se las bajo, y una de las salidas es «Quítamelo, no lo voy a hacer». No"
+     ],
+     [
+      "frontend/src/components/reports/ReporteMensual.jsx",
+      377,
+      "{ value: 'quitar', label: 'Quítamelo, no lo voy a hacer' },"
+     ]
+    ],
+    "veces": 2
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "mensual",
+  "bloque": "Paso 2",
+  "punto": "La condicional de la suplementación",
+  "dice": "«No tomaste la suplementación N días de los 28.» Solo si falló.",
+  "esperado_en": "frontend/src/components/reports/ReporteMensual.jsx",
+  "pruebas": [
+   {
+    "frase": "No tomaste la suplementación",
+    "donde": [
+     [
+      "frontend/src/components/reports/ReporteMensual.jsx",
+      389,
+      "No tomaste la suplementación {diasSinSuplementacion}{' '}"
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "Se me olvidaba",
+    "donde": [
+     [
+      "frontend/src/components/reports/ReporteMensual.jsx",
+      407,
+      "{ value: 'se_me_olvidaba', label: 'Se me olvidaba' },"
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "No quiero seguir tomándola",
+    "donde": [
+     [
+      "frontend/src/components/reports/ReporteMensual.jsx",
+      410,
+      "{ value: 'no_quiero_seguir', label: 'No quiero seguir tomándola' },"
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "mensual",
+  "bloque": "Paso 2",
+  "punto": "Los ejercicios que dan molestias",
+  "dice": "«Estos son los que me diste. Quita los que ya no y añade los nuevos»",
+  "esperado_en": "frontend/src/components/reports/ReporteMensual.jsx",
+  "pruebas": [
+   {
+    "frase": "Quita los que ya no y añade los nuevos",
+    "donde": [
+     [
+      "frontend/src/components/reports/ReporteMensual.jsx",
+      583,
+      "etiqueta=\"Estos son los que me diste. Quita los que ya no y añade los nuevos\""
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "mensual",
+  "bloque": "Paso 2",
+  "punto": "¿Y máquinas que no tienes?",
+  "dice": "«Actualiza aquí tu listado: si ha entrado alguna nueva, dímelo»",
+  "esperado_en": "frontend/src/components/reports/ReporteMensual.jsx",
+  "pruebas": [
+   {
+    "frase": "¿Y máquinas que no tienes?",
+    "donde": [
+     [
+      "frontend/src/components/reports/ReporteMensual.jsx",
+      444,
+      "<Bloque titulo=\"¿Y máquinas que no tienes?\""
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "si ha entrado alguna nueva, dímelo",
+    "donde": [
+     [
+      "backend/routes/reports.py",
+      232,
+      "# 1-09 dice «Actualiza aquí tu listado: si ha entrado alguna nueva, dímelo», y eso solo"
+     ],
+     [
+      "frontend/src/components/reports/ReporteMensual.jsx",
+      445,
+      "sub=\"Actualiza aquí tu listado: si ha entrado alguna nueva, dímelo\""
+     ]
+    ],
+    "veces": 2
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "mensual",
+  "bloque": "Paso 2",
+  "punto": "El grado de compromiso",
+  "dice": "«Ahora hablo de ti, de si has dado todo o te quedas con la sensación de haber fallado»",
+  "esperado_en": "frontend/src/components/reports/ReporteMensual.jsx",
+  "pruebas": [
+   {
+    "frase": "grado de compromiso con el programa",
+    "donde": [
+     [
+      "frontend/src/components/reports/ReporteMensual.jsx",
+      460,
+      "pregunta=\"¿Cómo consideras que ha sido tu grado de compromiso con el programa hasta el momento?\""
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "Mi compromiso es máximo",
+    "donde": [
+     [
+      "frontend/src/components/reports/ReporteMensual.jsx",
+      464,
+      "{ value: 'maximo', label: 'Mi compromiso es máximo, dentro de mis posibilidades estoy dando lo mejor de mí' },"
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "No he sido capaz de llevarlo a cabo",
+    "donde": [
+     [
+      "frontend/src/components/reports/ReporteMensual.jsx",
+      467,
+      "{ value: 'no_he_podido', label: 'No he sido capaz de llevarlo a cabo, demasiado exigente para lo que puedo dar a día de hoy' },"
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "mensual",
+  "bloque": "Paso 2",
+  "punto": "Las expectativas, de 0 a 10",
+  "dice": "«0 · No, esperaba más» / «10 · Genial, mejor imposible»",
+  "esperado_en": "frontend/src/components/reports/ReporteMensual.jsx",
+  "pruebas": [
+   {
+    "frase": "¿el programa está cumpliendo tus expectativas?",
+    "donde": [
+     [
+      "frontend/src/components/reports/ReporteMensual.jsx",
+      470,
+      "pregunta=\"En líneas generales, ¿el programa está cumpliendo tus expectativas?\""
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "Genial, mejor imposible",
+    "donde": [
+     [
+      "frontend/src/components/reports/ReporteMensual.jsx",
+      472,
+      "minLabel=\"0 · No, esperaba más\" maxLabel=\"10 · Genial, mejor imposible\" />"
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "mensual",
+  "bloque": "Paso 2",
+  "punto": "Dudas o lo que quieras contarme",
+  "dice": "«Ahora es el momento y el lugar»",
+  "esperado_en": "frontend/src/components/reports/ReporteMensual.jsx",
+  "pruebas": [
+   {
+    "frase": "Dudas o lo que quieras contarme",
+    "donde": [
+     [
+      "frontend/src/components/reports/ReporteMensual.jsx",
+      511,
+      "<Bloque titulo=\"Dudas o lo que quieras contarme\" testid=\"mensual-libre\">"
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "Ahora es el momento y el lugar",
+    "donde": [
+     [
+      "frontend/src/components/reports/ReporteMensual.jsx",
+      512,
+      "<TextoLibre testid=\"notes-textarea\" ayuda=\"Ahora es el momento y el lugar\""
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "mensual",
+  "bloque": "Paso 3",
+  "punto": "Las fotos y su porqué",
+  "dice": "«Relajado, siempre en el mismo sitio y con la misma luz que las anteriores. Es lo único que me deja comparar.»",
+  "esperado_en": "frontend/src/components/reports/MensualPaso3.jsx",
+  "pruebas": [
+   {
+    "frase": "Es lo único que me deja comparar",
+    "donde": [
+     [
+      "frontend/src/components/reports/MensualPaso3.jsx",
+      46,
+      "luz que las anteriores</b>. Es lo único que me deja comparar."
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "mensual",
+  "bloque": "Paso 3",
+  "punto": "El metro y el vídeo",
+  "dice": "«Con el metro pegado y sin apretar. Aquí tienes el vídeo de cómo se toman.»",
+  "esperado_en": "frontend/src/components/reports/MensualPaso3.jsx",
+  "pruebas": [
+   {
+    "frase": "Con el metro pegado y sin apretar",
+    "donde": [
+     [
+      "frontend/src/components/reports/MensualPaso3.jsx",
+      64,
+      "Con el metro pegado y sin apretar.{' '}"
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "Aquí tienes el vídeo",
+    "donde": [
+     [
+      "frontend/src/components/reports/MensualPaso3.jsx",
+      67,
+      "<b className=\"text-foreground\">Aquí tienes el vídeo</b> de cómo se toman."
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "mensual",
+  "bloque": "Paso 3",
+  "punto": "Adónde van a parar",
+  "dice": "«Las fotos y las medidas van a Mi evolución, con las de los meses anteriores.»",
+  "esperado_en": "frontend/src/components/reports/MensualPaso3.jsx",
+  "pruebas": [
+   {
+    "frase": "van a",
+    "donde": [
+     [
+      "backend/_marcar_cuentas_prueba.py",
+      10,
+      "no van aquí: a esos ya los saca el filtro por rol."
+     ],
+     [
+      "backend/_medir_guarnicion.py",
+      7,
+      "que importa no es que cambien las cantidades -- van a cambiar -- sino:"
+     ],
+     [
+      "backend/_migrar_calma_raw.py",
+      5,
+      "Motivacion: los formularios/cuestionarios de la app van a cambiar, asi que NO reescribimos"
+     ]
+    ],
+    "veces": 70
+   },
+   {
+    "frase": "Mi evolución",
+    "donde": [
+     [
+      "frontend/src/components/reports/MensualPaso3.jsx",
+      13,
+      "*   - y adónde van a parar: «Las fotos y las medidas van a Mi evolución, con las de los"
+     ],
+     [
+      "frontend/src/components/reports/MensualPaso3.jsx",
+      125,
+      "Las fotos y las medidas van a <b className=\"text-foreground\">Mi evolución</b>, con"
+     ]
+    ],
+    "veces": 2
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "mensual",
+  "bloque": "Paso 3",
+  "punto": "Las medidas, con la del mes pasado al lado",
+  "dice": "«el mes pasado 127»",
+  "esperado_en": "frontend/src/components/reports/MensualPaso3.jsx",
+  "pruebas": [
+   {
+    "frase": "el mes pasado",
+    "donde": [
+     [
+      "backend/_sync_reportes_medidas.py",
+      87,
+      "#     es que el numero sea exacto sino que se pueda comparar con el del mes pasado. Si el"
+     ],
+     [
+      "backend/core/informe_del_mes.py",
+      244,
+      "\"titulo_cambio\": (f\"{_con_signo(total)} este mes\" if total else \"Igual que el mes pasado\"),"
+     ],
+     [
+      "backend/core/informe_del_mes.py",
+      258,
+      "\"\"\"«Las diez, contra el mes pasado y contra su primera toma.»"
+     ]
+    ],
+    "veces": 26
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "mensual",
+  "bloque": "Paso 4",
+  "punto": "Ya lo tienes · Tu informe del mes",
+  "dice": "«Te lo entrego ya. Es un análisis objetivo que sale de toda la información…»",
+  "esperado_en": "frontend/src/components/reports/MensualPaso4.jsx",
+  "pruebas": [
+   {
+    "frase": "Tu informe del mes",
+    "donde": [
+     [
+      "frontend/src/components/reports/MensualPaso4.jsx",
+      47,
+      "<p className=\"text-base font-bold text-foreground\">Tu informe del mes</p>"
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "análisis objetivo",
+    "donde": [
+     [
+      "frontend/src/components/reports/MensualPaso4.jsx",
+      49,
+      "Te lo entrego ya. Es un <b>análisis objetivo</b> que sale de toda la"
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "Ver mi informe",
+    "donde": [
+     [
+      "frontend/src/components/reports/MensualPaso4.jsx",
+      60,
+      "Ver mi informe"
+     ],
+     [
+      "frontend/src/pages/ReportsPage.jsx",
+      548,
+      "// «Ver mi informe ›» del paso 4: abre el informe con el mismo"
+     ],
+     [
+      "frontend/src/pages/ReportsPage.jsx",
+      651,
+      "{informeAbierto === report.id ? 'Ocultar mi informe' : 'Ver mi informe del mes'}"
+     ]
+    ],
+    "veces": 3
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "mensual",
+  "bloque": "Paso 4",
+  "punto": "Nuevo programa y feedback",
+  "dice": "«Analizamos tus respuestas, comparamos fotos y métricas y, a partir de ahí, ajustamos tus macros…»",
+  "esperado_en": "frontend/src/components/reports/MensualPaso4.jsx",
+  "pruebas": [
+   {
+    "frase": "Analizamos tus respuestas",
+    "donde": [
+     [
+      "frontend/src/components/reports/MensualPaso4.jsx",
+      75,
+      "Analizamos tus respuestas, comparamos fotos y métricas y, a partir de ahí,"
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "para las próximas 4 semanas",
+    "donde": [
+     [
+      "frontend/src/components/reports/MensualPaso4.jsx",
+      77,
+      "para las próximas 4 semanas."
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "mensual",
+  "bloque": "Paso 4",
+  "punto": "Y mientras tanto, mírate",
+  "dice": "El cierre del paso 4.",
+  "esperado_en": "frontend/src/components/reports/MensualPaso4.jsx",
+  "pruebas": [
+   {
+    "frase": "Y mientras tanto, mírate",
+    "donde": [
+     [
+      "frontend/src/components/reports/MensualPaso4.jsx",
+      86,
+      "Y mientras tanto, mírate"
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "mensual",
+  "bloque": "Sin check-in",
+  "punto": "Las cinco preguntas con estrellas",
+  "dice": "«No tengo todos los datos de tus check-in diarios, así que te lo pregunto aquí.»",
+  "esperado_en": "frontend/src/components/reports",
+  "pruebas": [],
+  "faltan": [
+   "No tengo todos los datos de tus check-in"
+  ],
+  "estado": "abierto"
+ },
+ {
+  "doc": "informe",
+  "bloque": "Cuándo llega",
+  "punto": "Se entrega al enviar",
+  "dice": "«Se le entrega al enviar, con el hueco del feedback vacío.»",
+  "esperado_en": "backend/routes/reports.py",
+  "pruebas": [
+   {
+    "frase": "EL INFORME SE ENTREGA AL ENVIAR",
+    "donde": [
+     [
+      "backend/routes/reports.py",
+      998,
+      "# EL INFORME SE ENTREGA AL ENVIAR (documento «El informe del mes», 1-09-2026):"
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "informe",
+  "bloque": "1 · Dónde estás",
+  "punto": "Su objetivo y su semana",
+  "dice": "«Su objetivo y en qué semana del ciclo va, de cuántas.»",
+  "esperado_en": "backend/core/informe_del_mes.py",
+  "pruebas": [
+   {
+    "frase": "Bajar grasa",
+    "donde": [
+     [
+      "backend/core/informe_del_mes.py",
+      31,
+      "\"definicion\": \"Bajar grasa\","
+     ],
+     [
+      "backend/core/informe_del_mes.py",
+      104,
+      "\"\"\"«TU OBJETIVO Bajar grasa · TU CICLO Semana 8 de 12»."
+     ]
+    ],
+    "veces": 2
+   },
+   {
+    "frase": "Ganar músculo",
+    "donde": [
+     [
+      "backend/core/informe_del_mes.py",
+      32,
+      "\"volumen\": \"Ganar músculo\","
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "Semana",
+    "donde": [
+     [
+      "backend/_contrastar_suplementos.py",
+      7,
+      "detalladas que la web. Lo que allí es prosa («Semanas 2 y 3: 1 y 1, Semanas 4 y 5:"
+     ],
+     [
+      "backend/_doc2.py",
+      205,
+      "ft(\"notes-textarea\", \"Semana muy productiva, buena adherencia en entreno y nutrición.\")"
+     ],
+     [
+      "backend/_importar_guia_web.py",
+      72,
+      "\"Semana 2: 2 y 1\\nSemana 3 y 4: 2 y 2\"},"
+     ]
+    ],
+    "veces": 93
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "informe",
+  "bloque": "2 · Tu feedback",
+  "punto": "El hueco, en gris y con la hora",
+  "dice": "«En estos momentos estamos revisando tu reporte mensual. Antes del viernes a las 15:00 te mandamos todo.»",
+  "esperado_en": "backend/core/informe_del_mes.py",
+  "pruebas": [
+   {
+    "frase": "En estos momentos estamos revisando tu reporte mensual",
+    "donde": [
+     [
+      "backend/core/informe_del_mes.py",
+      144,
+      "\"aviso\": (f\"En estos momentos estamos revisando tu reporte mensual. \""
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "informe",
+  "bloque": "2 · Tu feedback",
+  "punto": "Y luego tu texto firmado",
+  "dice": "El bloque de Jesús arriba, con su firma y la fecha.",
+  "esperado_en": "backend/core/informe_del_mes.py",
+  "pruebas": [
+   {
+    "frase": "iniciales",
+    "donde": [
+     [
+      "backend/_descargar_fotos_activos.py",
+      59,
+      "for tipo in (\"iniciales\", \"mensuales\"):"
+     ],
+     [
+      "backend/_fase0_datos.py",
+      45,
+      "# xiquitin83@hotmail.com (Jose luis Garcia Banuls) NO entra: comparte iniciales y ano con el"
+     ],
+     [
+      "backend/_sync_fotos.py",
+      170,
+      "if tipo not in (\"iniciales\", \"mensuales\"):"
+     ]
+    ],
+    "veces": 17
+   },
+   {
+    "frase": "firma",
+    "donde": [
+     [
+      "backend/_cosechar_menus.py",
+      41,
+      "es_desayuno, es_peri, firma, pasa_el_filtro, personas_distintas, recontar,"
+     ],
+     [
+      "backend/_cosechar_menus.py",
+      71,
+      "def id_de_firma(sig) -> str:"
+     ],
+     [
+      "backend/_cosechar_menus.py",
+      100,
+      "sig = firma(a[\"alimento_id\"] for a in d.get(\"alimentos\") or [])"
+     ]
+    ],
+    "veces": 365
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "informe",
+  "bloque": "3 · Tu peso",
+  "punto": "Con qué empezó el mes y con cuál lo acaba",
+  "dice": "«Empezaste el mes en · Lo acabas en · Cuando empezaste pesabas · Desde que empezaste»",
+  "esperado_en": "frontend/src/components/reports/InformeDelMes.jsx",
+  "pruebas": [
+   {
+    "frase": "Empezaste el mes en",
+    "donde": [
+     [
+      "frontend/src/components/reports/InformeDelMes.jsx",
+      281,
+      "<Fila primera que=\"Empezaste el mes en\" valor={peso.empezaste_label} />"
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "Lo acabas en",
+    "donde": [
+     [
+      "frontend/src/components/reports/InformeDelMes.jsx",
+      282,
+      "<Fila que=\"Lo acabas en\" valor={peso.acabas_label} />"
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "Cuando empezaste pesabas",
+    "donde": [
+     [
+      "frontend/src/components/reports/InformeDelMes.jsx",
+      285,
+      "<Fila que=\"Cuando empezaste pesabas\" valor={peso.al_empezar_label} />"
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "informe",
+  "bloque": "3 · Tu peso",
+  "punto": "El porcentaje que ha bajado cada semana",
+  "dice": "«Porcentaje del peso total que has ido bajando por semana.»",
+  "esperado_en": "frontend/src/components/reports/InformeDelMes.jsx",
+  "pruebas": [
+   {
+    "frase": "Porcentaje del peso total que has ido bajando por semana",
+    "donde": [
+     [
+      "backend/core/informe_del_mes.py",
+      162,
+      "\"\"\"«Porcentaje del peso total que has ido bajando por semana»: 10 · 32 · 36 · 22."
+     ],
+     [
+      "frontend/src/components/reports/InformeDelMes.jsx",
+      294,
+      "Porcentaje del peso total que has ido bajando por semana."
+     ]
+    ],
+    "veces": 2
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "informe",
+  "bloque": "4 · Tus medidas",
+  "punto": "Las diez, contra el mes pasado y la primera toma",
+  "dice": "«DIEZ TOMAS · MES ANT. · 1ª TOMA»",
+  "esperado_en": "frontend/src/components/reports/InformeDelMes.jsx",
+  "pruebas": [
+   {
+    "frase": "Diez tomas",
+    "donde": [
+     [
+      "frontend/src/components/reports/InformeDelMes.jsx",
+      312,
+      "Diez tomas"
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "Mes ant.",
+    "donde": [
+     [
+      "frontend/src/components/reports/InformeDelMes.jsx",
+      314,
+      "<span className=\"text-[13px] text-muted-foreground text-right\">Mes ant.</span>"
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "1ª toma",
+    "donde": [
+     [
+      "frontend/src/components/reports/InformeDelMes.jsx",
+      315,
+      "<span className=\"text-[13px] text-muted-foreground text-right\">1ª toma</span>"
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "informe",
+  "bloque": "5 · Grasa",
+  "punto": "Cada 12 semanas, y cuándo se midió",
+  "dice": "«Se mide al final de cada ciclo, cada 12 semanas. La última medición: 18 %, el 4 de junio.»",
+  "esperado_en": "backend/core/informe_del_mes.py",
+  "pruebas": [
+   {
+    "frase": "Se mide al final de cada ciclo",
+    "donde": [
+     [
+      "backend/core/informe_del_mes.py",
+      305,
+      "\"\"\"«Se mide al final de cada ciclo, cada 12 semanas. La última medición: 18 %, el 4 de junio.»"
+     ],
+     [
+      "backend/core/informe_del_mes.py",
+      313,
+      "\"explicacion\": f\"Se mide al final de cada ciclo, cada {cada_semanas} semanas.\"}"
+     ],
+     [
+      "backend/core/informe_del_mes.py",
+      320,
+      "\"explicacion\": f\"Se mide al final de cada ciclo, cada {cada_semanas} semanas.\","
+     ]
+    ],
+    "veces": 3
+   },
+   {
+    "frase": "La última medición",
+    "donde": [
+     [
+      "backend/core/informe_del_mes.py",
+      305,
+      "\"\"\"«Se mide al final de cada ciclo, cada 12 semanas. La última medición: 18 %, el 4 de junio.»"
+     ],
+     [
+      "backend/core/informe_del_mes.py",
+      321,
+      "\"ultima\": (f\"La última medición: {_num(valor)} %\""
+     ]
+    ],
+    "veces": 2
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "informe",
+  "bloque": "6 · Tus fotos",
+  "punto": "Dos, y las elige él",
+  "dice": "Pestañas de pose (frente, espaldas, perfil) y dos selectores de fecha.",
+  "esperado_en": "frontend/src/components/reports/InformeDelMes.jsx",
+  "pruebas": [
+   {
+    "frase": "informe-pose-",
+    "donde": [
+     [
+      "frontend/src/components/reports/InformeDelMes.jsx",
+      168,
+      "onClick={() => setPose(v)} data-testid={`informe-pose-${v}`}"
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "informe-foto-",
+    "donde": [
+     [
+      "frontend/src/components/reports/InformeDelMes.jsx",
+      183,
+      "data-testid={`informe-foto-${lado}`}"
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "informe",
+  "bloque": "7 · Lo que has hecho",
+  "punto": "Dietas, entrenos, cardios y suplementación",
+  "dice": "«Dietas completas · Cuadradas al 100 % · Comiste de más · Entrenos hechos / Perdidos · Cardios hechos / Perdidos · Suplementación sí / no»",
+  "esperado_en": "backend/core/informe_del_mes.py",
+  "pruebas": [
+   {
+    "frase": "Dietas completas",
+    "donde": [
+     [
+      "backend/core/informe_del_mes.py",
+      356,
+      "pon(\"dietas\", \"Dietas completas\", int(dieta.get(\"dias_registrados\") or 0),"
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "Cuadradas al 100 %",
+    "donde": [
+     [
+      "backend/core/informe_del_mes.py",
+      358,
+      "pon(\"cuadradas\", \"Cuadradas al 100 %\", int(dieta.get(\"dias_cuadrados\") or 0),"
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "Entrenos hechos",
+    "donde": [
+     [
+      "backend/core/informe_del_mes.py",
+      364,
+      "pon(\"entrenos\", \"Entrenos hechos\", hechos,"
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "Cardios hechos",
+    "donde": [
+     [
+      "backend/core/informe_del_mes.py",
+      370,
+      "pon(\"cardios\", \"Cardios hechos\", hechas,"
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "Suplementación sí",
+    "donde": [
+     [
+      "backend/core/informe_del_mes.py",
+      376,
+      "pon(\"suplementacion\", \"Suplementación sí\", si, \"no\", max(0, int(sup[\"de\"]) - si))"
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "informe",
+  "bloque": "8 · Tu día tipo",
+  "punto": "La combinación que más repite en cada comida",
+  "dice": "«La combinación que más repites en cada comida, y cuántos días.»",
+  "esperado_en": "frontend/src/components/reports/InformeDelMes.jsx",
+  "pruebas": [
+   {
+    "frase": "La combinación que más repites en cada comida",
+    "donde": [
+     [
+      "backend/core/informe_del_mes.py",
+      409,
+      "\"\"\"«La combinación que más repites en cada comida, y cuántos días.»"
+     ],
+     [
+      "frontend/src/components/reports/InformeDelMes.jsx",
+      372,
+      "La combinación que más repites en cada comida, y cuántos días."
+     ]
+    ],
+    "veces": 2
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "informe",
+  "bloque": "8 · Tu día tipo",
+  "punto": "Cuando cambia casi cada día",
+  "dice": "«Cambia casi cada día · 17 combinaciones distintas»",
+  "esperado_en": "backend/core/informe_del_mes.py",
+  "pruebas": [
+   {
+    "frase": "Cambia casi cada día",
+    "donde": [
+     [
+      "backend/core/informe_del_mes.py",
+      450,
+      "\"texto\": \"Cambia casi cada día\","
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "combinaciones distintas",
+    "donde": [
+     [
+      "backend/_cosechar_menus.py",
+      86,
+      "print(f\"combinaciones distintas montadas por la gente: {len(acc)}\")"
+     ],
+     [
+      "backend/core/informe_del_mes.py",
+      417,
+      "combinaciones distintas siempre. Las cantidades que se enseñan son las más repetidas de"
+     ],
+     [
+      "backend/core/informe_del_mes.py",
+      451,
+      "\"cuantos\": (f\"{distintas} combinaciones distintas\" if distintas != 1"
+     ]
+    ],
+    "veces": 3
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "informe",
+  "bloque": "9 · Preferencias",
+  "punto": "Sus tres de cada, con las veces",
+  "dice": "«Tus fuentes de proteína, hidratos y grasas preferidas, y las veces que las has puesto este mes.»",
+  "esperado_en": "frontend/src/components/reports/InformeDelMes.jsx",
+  "pruebas": [
+   {
+    "frase": "las veces que las has puesto",
+    "donde": [
+     [
+      "frontend/src/components/reports/InformeDelMes.jsx",
+      398,
+      "<b className=\"text-foreground\">las veces que las has puesto</b> este mes."
+     ]
+    ],
+    "veces": 1
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "informe",
+  "bloque": "10 · Extras",
+  "punto": "Lo que apuntó y qué día",
+  "dice": "«Seis días, y cinco cayeron en fin de semana. Lo que apuntaste:»",
+  "esperado_en": "backend/core/informe_del_mes.py",
+  "pruebas": [
+   {
+    "frase": "cayeron en fin de semana",
+    "donde": [
+     [
+      "backend/core/informe_del_mes.py",
+      559,
+      "\"\"\"«Seis días, y cinco cayeron en fin de semana. Lo que apuntaste: ...»"
+     ]
+    ],
+    "veces": 1
+   },
+   {
+    "frase": "Lo que apuntaste",
+    "donde": [
+     [
+      "backend/core/informe_del_mes.py",
+      559,
+      "\"\"\"«Seis días, y cinco cayeron en fin de semana. Lo que apuntaste: ...»"
+     ],
+     [
+      "backend/core/informe_del_mes.py",
+      597,
+      "\"titulo\": f\"{titulo}. Lo que apuntaste:\", \"lista\": lista}"
+     ]
+    ],
+    "veces": 2
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ },
+ {
+  "doc": "informe",
+  "bloque": "Regla",
+  "punto": "El informe no le pide nada",
+  "dice": "«Lo único que puede tocar son los selectores de las fotos y el botón de guardar su desayuno como plantilla.»",
+  "esperado_en": "frontend/src/components/reports/InformeDelMes.jsx",
+  "pruebas": [
+   {
+    "frase": "El informe no le pide nada",
+    "donde": [
+     [
+      "backend/core/informe_del_mes.py",
+      17,
+      "«El informe no le pide nada.»"
+     ],
+     [
+      "frontend/src/components/reports/InformeDelMes.jsx",
+      12,
+      "*   1. «El informe no le pide nada.» Lo único que se puede tocar son los selectores de las"
+     ]
+    ],
+    "veces": 2
+   }
+  ],
+  "faltan": [],
+  "estado": "cerrado"
+ }
+]

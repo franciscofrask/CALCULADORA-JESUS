@@ -1,0 +1,1235 @@
+<title>Los tres documentos, punto por punto</title>
+<style>
+  :root {
+    --tinta:      #17130F;
+    --tinta-2:    #5A5049;
+    --papel:      #FBF8F5;
+    --papel-2:    #F2EDE7;
+    --linea:      #E2D9D0;
+    --marca:      #FF671F;
+    --verde:      #1E7A4B;
+    --ambar:      #A9660A;
+    --rojo:       #BE3227;
+    --sans: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, ui-serif, serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --tinta: #F4EFE9; --tinta-2: #A79C93; --papel: #14110E; --papel-2: #1D1915;
+      --linea: #322B25; --verde: #4FBF87; --ambar: #E0A045; --rojo: #F0736A;
+    }
+  }
+  :root[data-theme="dark"] {
+    --tinta: #F4EFE9; --tinta-2: #A79C93; --papel: #14110E; --papel-2: #1D1915;
+    --linea: #322B25; --verde: #4FBF87; --ambar: #E0A045; --rojo: #F0736A;
+  }
+  :root[data-theme="light"] {
+    --tinta: #17130F; --tinta-2: #5A5049; --papel: #FBF8F5; --papel-2: #F2EDE7;
+    --linea: #E2D9D0; --verde: #1E7A4B; --ambar: #A9660A; --rojo: #BE3227;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--papel); color: var(--tinta);
+    font-family: var(--sans); font-size: 16px; line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .envoltorio { max-width: 1080px; margin: 0 auto; padding: 0 20px 96px; }
+
+  /* ── Cabecera ───────────────────────────────────────────── */
+  .portada { padding: 64px 0 40px; border-bottom: 2px solid var(--tinta); }
+  .kicker {
+    font-size: 12px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--marca); margin: 0 0 12px;
+  }
+  h1 {
+    font-size: clamp(34px, 6vw, 58px); line-height: .98; margin: 0 0 16px;
+    font-weight: 800; letter-spacing: -.02em; text-wrap: balance;
+  }
+  .entradilla {
+    font-family: var(--serif); font-size: 19px; line-height: 1.5;
+    max-width: 60ch; color: var(--tinta-2); margin: 0;
+  }
+
+  .totales { display: flex; flex-wrap: wrap; gap: 8px 28px; margin: 28px 0 0; }
+  .total b {
+    display: block; font-size: 40px; line-height: 1; font-weight: 800;
+    font-variant-numeric: tabular-nums; letter-spacing: -.02em;
+  }
+  .total span {
+    font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--tinta-2);
+  }
+  .total.cerrado b { color: var(--verde); }
+  .total.parcial b { color: var(--ambar); }
+  .total.abierto b { color: var(--rojo); }
+
+  /* ── Filtros ────────────────────────────────────────────── */
+  .filtros {
+    position: sticky; top: 0; z-index: 5; display: flex; gap: 8px; flex-wrap: wrap;
+    padding: 14px 0; background: color-mix(in srgb, var(--papel) 92%, transparent);
+    backdrop-filter: blur(8px); border-bottom: 1px solid var(--linea);
+  }
+  .filtros button {
+    font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+    padding: 6px 14px; border-radius: 999px; border: 1px solid var(--linea);
+    background: transparent; color: var(--tinta-2);
+  }
+  .filtros button[aria-pressed="true"] {
+    background: var(--tinta); color: var(--papel); border-color: var(--tinta);
+  }
+  .filtros button:focus-visible { outline: 2px solid var(--marca); outline-offset: 2px; }
+
+  /* ── Documento ──────────────────────────────────────────── */
+  .doc { padding-top: 56px; }
+  .doc-head { margin-bottom: 8px; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 12px; color: var(--tinta-2);
+    margin: 0 0 6px; letter-spacing: -.01em;
+  }
+  .doc h2 {
+    font-size: clamp(26px, 4vw, 36px); font-weight: 800; letter-spacing: -.02em;
+    margin: 0 0 8px; text-wrap: balance;
+  }
+  .bajada { font-family: var(--serif); color: var(--tinta-2); margin: 0 0 16px; max-width: 62ch; }
+  .marcador { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .m {
+    font-size: 12px; font-weight: 600; padding: 4px 11px; border-radius: 999px;
+    border: 1px solid var(--linea);
+  }
+  .m b { font-variant-numeric: tabular-nums; }
+  .m-cerrado { color: var(--verde); border-color: color-mix(in srgb, var(--verde) 40%, transparent); }
+  .m-parcial { color: var(--ambar); border-color: color-mix(in srgb, var(--ambar) 40%, transparent); }
+  .m-abierto { color: var(--rojo); border-color: color-mix(in srgb, var(--rojo) 40%, transparent); }
+  .meta { font-size: 13px; color: var(--tinta-2); margin: 0; }
+  .meta-item + .meta-item::before { content: ""; }
+  .meta code { font-family: var(--mono); font-size: 12px; }
+
+  .bloque { margin-top: 34px; }
+  .bloque > h3 {
+    font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--marca); margin: 0 0 4px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--linea);
+  }
+
+  /* ── Punto ──────────────────────────────────────────────── */
+  .punto {
+    display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 12px 32px;
+    padding: 20px 0; border-bottom: 1px solid var(--linea);
+  }
+  .punto h4 { font-size: 16px; font-weight: 700; margin: 0 0 4px; letter-spacing: -.01em; }
+  .dice {
+    font-family: var(--serif); font-style: italic; color: var(--tinta-2);
+    margin: 0; font-size: 15px; line-height: 1.5;
+  }
+  .col-prueba { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
+  .chip {
+    font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+    padding: 3px 10px; border-radius: 4px; color: var(--papel);
+  }
+  .chip-cerrado { background: var(--verde); }
+  .chip-parcial { background: var(--ambar); }
+  .chip-abierto { background: var(--rojo); }
+
+  .pruebas { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; width: 100%; }
+  .pruebas li {
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.45;
+    background: var(--papel-2); border-left: 2px solid var(--linea);
+    padding: 7px 10px; border-radius: 0 4px 4px 0; overflow-x: auto;
+  }
+  .ruta { display: block; color: var(--marca); }
+  .ruta b { font-weight: 700; }
+  .codigo { display: block; color: var(--tinta-2); white-space: pre; }
+  .hueco { font-family: var(--sans); color: var(--rojo); border-left-color: var(--rojo); }
+  .nota { font-size: 14px; color: var(--tinta-2); margin: 0; max-width: 62ch; }
+  .nota code { font-family: var(--mono); font-size: 12.5px; }
+
+  .punto[hidden] { display: none; }
+
+  @media (max-width: 720px) {
+    .punto { grid-template-columns: 1fr; gap: 10px; }
+    .portada { padding-top: 40px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="envoltorio">
+  <header class="portada">
+    <p class="kicker">12EN12 · repaso del 1 de septiembre</p>
+    <h1>Los tres documentos, punto por punto</h1>
+    <p class="entradilla">
+      Cada punto de los tres documentos de Jesús, con la prueba de que está hecho: el
+      fichero y la línea donde vive su frase. Lo que no está, dice por qué.
+    </p>
+    <div class="totales">
+      <div class="total"><b>82</b><span>puntos</span></div>
+      <div class="total cerrado"><b>65</b><span>cerrados</span></div>
+      <div class="total parcial"><b>6</b><span>a medias</span></div>
+      <div class="total abierto"><b>11</b><span>abiertos</span></div>
+    </div>
+  </header>
+
+  <nav class="filtros" aria-label="Filtrar por estado">
+    <button type="button" data-f="todo" aria-pressed="true">Todos</button>
+    <button type="button" data-f="cerrado" aria-pressed="false">Cerrados</button>
+    <button type="button" data-f="parcial" aria-pressed="false">A medias</button>
+    <button type="button" data-f="abierto" aria-pressed="false">Abiertos</button>
+  </nav>
+
+  
+    <section class="doc" id="validado">
+      <header class="doc-head">
+        <p class="eyebrow">claude.ai/code/artifact/6b67e80c</p>
+        <h2>Todo lo validado antes del 1 de septiembre</h2>
+        <p class="bajada">Lo cerrado y validado con Jesús antes del 1 de septiembre. Dieciséis secciones en seis bloques.</p>
+        <div class="marcador">
+          <span class="m m-cerrado"><b>27</b> cerrados</span>
+          <span class="m m-parcial"><b>6</b> a medias</span>
+          <span class="m m-abierto"><b>10</b> abiertos</span>
+        </div>
+        <p class="meta"><span class="meta-item">Commits: <code>21fcd91</code> <code>25c198f</code> <code>7a26372</code> <code>e5c7d8f</code> <code>4f441f6</code> <code>e45a6af</code> <code>de2757e</code> <code>8fe06f3</code> <code>ce13047</code></span></p>
+      </header>
+      
+      <section class="bloque">
+        <h3>1 · Inicio y Nutrición</h3>
+        
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Abre en Llevas, no en Macros</h4>
+            <p class="dice">«Entra y ve 146 · 69 · 49: por dónde va hoy, y lo que le queda.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/components/inicio/TuDietaHoy.jsx<b>:124</b></span><span class="codigo">const [vista, setVista] = useState(&#x27;llevas&#x27;);</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Los números, peso 700 y estirados</h4>
+            <p class="dice">«Peso 700, estirados a lo alto y estrechados. Ocupan menos ancho.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/index.css<b>:143</b></span><span class="codigo">un `transform: scaleY(1.12) scaleX(0.9)`. Jesús lo vuelve a pedir mirando la app: «40</span></li><li><span class="ruta">frontend/src/index.css<b>:151</b></span><span class="codigo">hasta el 26-08   peso 700 y estirados: scaleY(1.12) scaleX(0.9)</span></li><li><span class="ruta">frontend/src/index.css<b>:167</b></span><span class="codigo">font-variation-settings: &#x27;wght&#x27; 700;</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Los números de Nutrición, como los de Inicio</h4>
+            <p class="dice">«44 px y el mismo estirado. Los dos sitios dicen lo mismo igual.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/components/inicio/TuDietaHoy.jsx<b>:453</b></span><span class="codigo">&lt;p className=&quot;numero-grande font-data leading-none text-[44px] mt-1.5 text-foreground&quot;&gt;</span></li><li><span class="ruta">frontend/src/components/nutrition/DayHeader.jsx<b>:193</b></span><span class="codigo">&lt;p className=&quot;numero-grande font-data leading-none text-[44px] mt-1.5 text-foreground&quot;&gt;</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>El tramo de frutos secos, marcado</h4>
+            <p class="dice">«El suyo en naranja. De un vistazo sabe que hoy no le cuenta.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/pages/FoodSearchPage.jsx<b>:306</b></span><span class="codigo">data-testid={suyo ? `tramo-suyo-${food.id}` : undefined}</span></li><li><span class="ruta">frontend/src/pages/FoodSearchPage.jsx<b>:296</b></span><span class="codigo">`aria-current` porque un color no es un dato: quien no lo</span></li><li><span class="ruta">frontend/src/pages/FoodSearchPage.jsx<b>:305</b></span><span class="codigo">&lt;p key={t.hasta} aria-current={suyo ? &#x27;true&#x27; : undefined}</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Extras: el buscador delante</h4>
+            <p class="dice">«Si comes algo que no está en tu dieta del día, ponlo aquí, por pequeño que sea.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/components/nutrition/ExtrasDelDia.jsx<b>:194</b></span><span class="codigo">Si comes algo que no está en tu dieta del día, ponlo aquí, por pequeño que sea.</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Extras: «o si no está»</h4>
+            <p class="dice">El separador entre el buscador y la caja de texto.</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/components/nutrition/ExtrasDelDia.jsx<b>:312</b></span><span class="codigo">o si no está</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Extras: qué pasa con lo que escribe a mano</h4>
+            <p class="dice">«Lo que pongas a mano no cuenta en tus macros, simplemente queda el registro. Lo que busques, sí.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/components/nutrition/ExtrasDelDia.jsx<b>:369</b></span><span class="codigo">Lo que pongas a mano no cuenta en tus macros, simplemente queda el</span></li><li><span class="ruta">frontend/src/components/nutrition/ExtrasDelDia.jsx<b>:370</b></span><span class="codigo">registro. Lo que busques, sí.</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Extras: el día ya cuenta con ellos</h4>
+            <p class="dice">«Con dos extras. El día ya cuenta con ellos.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/components/nutrition/ExtrasDelDia.jsx<b>:234</b></span><span class="codigo">Además de tu dieta, hoy llevas &lt;span className=&quot;font-data text-foreground&quot;&gt;{lineaDeExtras}&lt;/span&gt; en extras.</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>La comida por dentro, en su voz</h4>
+            <p class="dice">«Te ajusto las cantidades sin pasarme de tus macros.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/components/nutrition/MealCard.jsx<b>:1024</b></span><span class="codigo">«Te ajusto las cantidades sin pasarme de tus macros.», con</span></li></ul>
+            
+          </div>
+        </article>
+      </section>
+      <section class="bloque">
+        <h3>2 · Los textos</h3>
+        
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Suplementos: el nombre y sin mandar al chat</h4>
+            <p class="dice">«Todavía no tienes tu plan de suplementación personalizado / Estamos en ello, te avisamos en cuanto esté.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/pages/SupplementsPage.jsx<b>:340</b></span><span class="codigo">guía básica. En unos días recibirás tu plan de suplementación personalizado»,</span></li><li><span class="ruta">frontend/src/pages/SupplementsPage.jsx<b>:413</b></span><span class="codigo">&lt;p className=&quot;font-bold text-foreground mb-1&quot;&gt;¿Quieres tu plan de suplementación personalizado?&lt;/p&gt;</span></li><li><span class="ruta">frontend/src/pages/RoutinePage.jsx<b>:542</b></span><span class="codigo">&lt;p className=&quot;text-muted-foreground text-sm&quot;&gt;Estamos en ello, te avisamos en cuanto esté.&lt;/p&gt;</span></li><li><span class="ruta">frontend/src/pages/RoutinePage.jsx<b>:549</b></span><span class="codigo">&lt;p className=&quot;text-muted-foreground text-sm&quot;&gt;Estamos en ello, te avisamos en cuanto esté.&lt;/p&gt;</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Rutina sin asignar</h4>
+            <p class="dice">«Todavía no tienes tu rutina personalizada / Estamos en ello, te avisamos en cuanto esté.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/pages/RoutinePage.jsx<b>:548</b></span><span class="codigo">&lt;h2 className=&quot;font-heading text-xl font-bold uppercase text-foreground mb-2&quot;&gt;Todavía no tienes tu rutina personalizada&lt;</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>La rutina del mes que no está</h4>
+            <p class="dice">«Todavía no está la rutina de este mes»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">backend/routes/routines.py<b>:1476</b></span><span class="codigo">&quot;&quot;&quot;El PDF marcado como la rutina de este mes, o None si el equipo no ha subido ninguno.</span></li><li><span class="ruta">frontend/src/pages/RoutinePage.jsx<b>:574</b></span><span class="codigo">&lt;h2 className=&quot;font-heading text-xl font-bold uppercase text-foreground mb-2&quot;&gt;Todavía no está la rutina de este mes&lt;/h2&gt;</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>El aviso de cuando algo falla</h4>
+            <p class="dice">«Esto parece cosa nuestra, no tuya. Inténtalo una vez más y, si la cosa sigue igual, escribe por el chat.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/pages/RoutinePage.jsx<b>:509</b></span><span class="codigo">Esto parece cosa nuestra, no tuya. Inténtalo una vez más y, si la cosa sigue igual, escribe por el chat.</span></li><li><span class="ruta">frontend/src/pages/RoutinePage.jsx<b>:509</b></span><span class="codigo">Esto parece cosa nuestra, no tuya. Inténtalo una vez más y, si la cosa sigue igual, escribe por el chat.</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>El texto de la guía de suplementos</h4>
+            <p class="dice">«Estos son los suplementos que yo más recomiendo con pautas exactas de uso… te recomiendo empezar por los básicos.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">backend/core/guia_suplementacion.py<b>:61</b></span><span class="codigo">&quot;En condiciones normales, te recomiendo empezar por los básicos.&quot;</span></li><li><span class="ruta">frontend/src/pages/SupplementsPage.jsx<b>:270</b></span><span class="codigo">+ &#x27;En condiciones normales, te recomiendo empezar por los básicos.&#x27;;</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>El texto del código de FullGas</h4>
+            <p class="dice">«Lo tendrás activo mientras dure tu suscripción, con un 20 % en toda la web.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">backend/core/guia_suplementacion.py<b>:77</b></span><span class="codigo">&quot;nota&quot;: &quot;Activo mientras dure tu suscripción.&quot;,</span></li><li><span class="ruta">frontend/src/pages/SupplementsPage.jsx<b>:235</b></span><span class="codigo">{/* «Activo TODO EL TIEMPO, mientras dure tu suscripción» decía las dos cosas: que</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Las tres frases intocables</h4>
+            <p class="dice">«Su proteína no te cuenta» · «Te cuentan los tres» · «No te cuenta nada: come lo que quieras»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">backend/routes/calculator.py<b>:486</b></span><span class="codigo">Y con esto desaparece la coletilla «Su proteína no te cuenta»: el «solo» ya lo dice, y es</span></li><li><span class="ruta">frontend/src/components/nutrition/ContadorFamilia.jsx<b>:45</b></span><span class="codigo">Su proteína no te cuenta</span></li><li><span class="ruta">backend/routes/calculator.py<b>:470</b></span><span class="codigo">- «Te cuentan los tres»       lleva los tres y le cuentan los tres. Es la frase de</span></li><li><span class="ruta">backend/routes/calculator.py<b>:498</b></span><span class="codigo"># los tres macros y le cuentan los tres, y ahi «Te cuentan los tres» es exacta; solo</span></li><li><span class="ruta">backend/routes/calculator.py<b>:478</b></span><span class="codigo">- «No te cuenta nada»         las verduras libres y los zero.</span></li><li><span class="ruta">backend/routes/calculator.py<b>:493</b></span><span class="codigo">return &quot;No te cuenta nada&quot;</span></li></ul>
+            
+          </div>
+        </article>
+      </section>
+      <section class="bloque">
+        <h3>3 · El día</h3>
+        
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>El cierre: entra la suplementación</h4>
+            <p class="dice">«¿Tomaste la suplementación que tenías pautada?»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/pages/CheckInsPage.jsx<b>:683</b></span><span class="codigo">titulo: &#x27;¿Tomaste la suplementación que tenías pautada?&#x27;,</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="parcial">
+          <div class="col-que">
+            <h4>El cierre: salen las sensaciones del día y el peso</h4>
+            <p class="dice">«Nueve preguntas y las notas. Salen las sensaciones del día y el peso.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-parcial">A medias</span>
+            <ul class="pruebas"><li><span class="ruta">backend/models/common.py<b>:305</b></span><span class="codigo"># «Sensaciones generales del día», con estrellas. CAMPO NUEVO Y NO `mood`, a propósito:</span></li></ul>
+            <p class="nota">Las sensaciones generales SÍ salieron: en la pantalla no queda ni una mención (solo un comentario del modelo y del test diciendo que se fue). El peso NO: sigue en el cierre, en <code>CheckInsPage.jsx:909-944</code>, con su campo y su selector de día.</p>
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Extras: «si no lo pusiste, ponlo ahora»</h4>
+            <p class="dice">«Si no lo pusiste en el apartado de extras, ponlo ahora»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/pages/CheckInsPage.jsx<b>:701</b></span><span class="codigo">ayuda: &#x27;Si no lo pusiste en el apartado de extras, ponlo ahora&#x27;,</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Si no le falta nada: el día, todo bien</h4>
+            <p class="dice">«El día, todo bien · No te queda nada por registrar», en verde.</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/pages/CheckInsPage.jsx<b>:787</b></span><span class="codigo">// registrada». Con «El día, todo bien» ya no hace falta: ver el aviso más abajo.</span></li><li><span class="ruta">frontend/src/pages/CheckInsPage.jsx<b>:876</b></span><span class="codigo">&lt;p className=&quot;text-sm font-bold text-foreground&quot;&gt;El día, todo bien&lt;/p&gt;</span></li><li><span class="ruta">frontend/src/pages/CheckInsPage.jsx<b>:877</b></span><span class="codigo">&lt;p className=&quot;text-sm text-foreground/60 mt-0.5&quot;&gt;No te queda nada por registrar&lt;/p&gt;</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Antes de guardar: las ocho enteras</h4>
+            <p class="dice">Sin cortar con «y 5 más».</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/pages/CheckInsPage.jsx<b>:957</b></span><span class="codigo">Te queda por contestar: {faltan.join(&#x27; · &#x27;)}</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Ayer no cerraste el día</h4>
+            <p class="dice">«Ayer no cerraste el día · Puedes hacerlo hasta las 3 de la tarde»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">backend/core/ventana_del_dia.py<b>:106</b></span><span class="codigo">return {&quot;titulo&quot;: &quot;Ayer no cerraste el día&quot;,</span></li><li><span class="ruta">backend/core/ventana_del_dia.py<b>:107</b></span><span class="codigo">&quot;detalle&quot;: &quot;Puedes hacerlo hasta las 3 de la tarde&quot;}</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Tras 2 días perdidos</h4>
+            <p class="dice">«Llevas 2 días seguidos sin cerrar, no lo dejes hoy también»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">backend/core/ventana_del_dia.py<b>:122</b></span><span class="codigo">&quot;detalle&quot;: f&quot;Llevas {racha} días seguidos sin cerrar, no lo dejes hoy también&quot;}</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Tras 4 días perdidos</h4>
+            <p class="dice">«Retómalo hoy mismo: es de donde salen tus ajustes»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">backend/core/ventana_del_dia.py<b>:117</b></span><span class="codigo">&quot;detalle&quot;: &quot;Retómalo hoy mismo: es de donde salen tus ajustes&quot;}</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Tras una semana</h4>
+            <p class="dice">«Dejo de recordártelo. Si te está costando, dímelo y lo vemos»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">backend/core/ventana_del_dia.py<b>:112</b></span><span class="codigo">&quot;detalle&quot;: &quot;Dejo de recordártelo. Si te está costando, dímelo y lo vemos&quot;}</span></li><li><span class="ruta">frontend/src/pages/ClientDashboard.jsx<b>:398</b></span><span class="codigo">-- «Dejo de recordártelo. Si te está costando, dímelo y lo vemos» -- seguía</span></li></ul>
+            
+          </div>
+        </article>
+      </section>
+      <section class="bloque">
+        <h3>4 · Avisos y peso</h3>
+        
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Los siete interruptores y la hora</h4>
+            <p class="dice">«Siete interruptores y un selector de hora.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/pages/ProfilePage.jsx<b>:226</b></span><span class="codigo">title: &#x27;Rellenar el cierre del día&#x27;,</span></li><li><span class="ruta">frontend/src/pages/ProfilePage.jsx<b>:731</b></span><span class="codigo">titulo=&quot;Rellenar el cierre del día&quot;</span></li><li><span class="ruta">frontend/src/pages/ProfilePage.jsx<b>:757</b></span><span class="codigo">titulo=&quot;Recordármelo si me lo salto&quot;</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>El quincenal y el mensual no se apagan</h4>
+            <p class="dice">«El quincenal y el mensual no se pueden desactivar: son los que hacen tu ajuste.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/pages/ProfilePage.jsx<b>:789</b></span><span class="codigo">El quincenal y el mensual no se pueden desactivar: son los que</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Al apagar el cierre del día</h4>
+            <p class="dice">«Si lo apagas, no podrás registrar tus datos del día, pero deberás rellenar las preguntas del reporte quincenal y del reporte mensual…»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/pages/ProfilePage.jsx<b>:227</b></span><span class="codigo">description: &#x27;Si lo apagas, no podrás registrar tus datos del día, pero deberás &#x27;</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="abierto">
+          <div class="col-que">
+            <h4>El campo del peso, abierto todo el año</h4>
+            <p class="dice">«Registrarlo es opcional, sólo para ti. Te lo pediremos sólo para los reportes.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-abierto">Abierto</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/pages/CheckInsPage.jsx<b>:915</b></span><span class="codigo">Registrarlo es opcional, sólo para ti. Te lo pediremos sólo para los reportes</span></li></ul>
+            <p class="nota">El texto está escrito palabra por palabra, pero en el sitio equivocado: vive en el cierre del día (<code>CheckInsPage.jsx:915</code>) y el documento lo quiere en Mi evolución, «el único sitio donde el peso se escribe». <code>TusFotosYMetricas.jsx</code> no tiene campo de peso: sube fotos, medidas y grasa.</p>
+          </div>
+        </article>
+        <article class="punto" data-estado="parcial">
+          <div class="col-que">
+            <h4>La fila de la mañana</h4>
+            <p class="dice">«Hoy toca pesarte · En ayunas y después de ir al baño», y a las 12:00 se apaga.</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-parcial">A medias</span>
+            <ul class="pruebas"><li><span class="ruta">backend/core/avisos_cliente.py<b>:935</b></span><span class="codigo">&quot;titulo&quot;: &quot;Hoy toca pesarte y mañana también.&quot;,</span></li></ul>
+            <p class="nota">El aviso existe y en sus días (miércoles y jueves, <code>avisos_cliente.py:930-966</code>), pero con el texto viejo: «Hoy toca pesarte y mañana también». Falta «En ayunas y después de ir al baño», la fila en Inicio y el apagado a las 12:00.</p>
+          </div>
+        </article>
+        <article class="punto" data-estado="abierto">
+          <div class="col-que">
+            <h4>El aviso del martes</h4>
+            <p class="dice">«Esta semana toca reporte quincenal. Recuerda pesarte y registrar el dato…»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-abierto">Abierto</span>
+            <ul class="pruebas"><li class="hueco">No aparece en el código.</li></ul>
+            <p class="nota">Hoy el primero es el del miércoles. El documento lo adelanta al martes «para que le dé tiempo a la primera pesada», y con otro texto.</p>
+          </div>
+        </article>
+        <article class="punto" data-estado="abierto">
+          <div class="col-que">
+            <h4>El aviso de la pesada que falta</h4>
+            <p class="dice">«Te falta una pesada. Si te pesas esta mañana antes de las 10, aún entra.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-abierto">Abierto</span>
+            <ul class="pruebas"><li class="hueco">No aparece en el código.</li></ul>
+            <p class="nota">No existe. Es el del viernes: «Si te pesas esta mañana antes de las 10, aún entra. Si no, me quedo con la que tengo».</p>
+          </div>
+        </article>
+        <article class="punto" data-estado="abierto">
+          <div class="col-que">
+            <h4>La semana sin reporte</h4>
+            <p class="dice">«Esta semana no toca reporte. Solo el cierre del día, como siempre.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-abierto">Abierto</span>
+            <ul class="pruebas"><li><span class="ruta">backend/routes/reports.py<b>:54</b></span><span class="codigo">raise HTTPException(status_code=403, detail=&quot;Esta semana no toca reporte. Te avisaremos cuando abra la ventana.&quot;)</span></li><li><span class="ruta">frontend/src/pages/ReportsPage.jsx<b>:56</b></span><span class="codigo">Esta semana no toca reporte. Te avisaremos cuando abra la ventana.</span></li></ul>
+            <p class="nota">No existe el aviso de la semana 1.</p>
+          </div>
+        </article>
+      </section>
+      <section class="bloque">
+        <h3>5 · El quincenal</h3>
+        
+        <article class="punto" data-estado="abierto">
+          <div class="col-que">
+            <h4>Son 3 pasos</h4>
+            <p class="dice">«Con Son 3 pasos arriba en las tres, y el suyo marcado.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-abierto">Abierto</span>
+            <ul class="pruebas"><li class="hueco">No aparece en el código.</li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="abierto">
+          <div class="col-que">
+            <h4>Paso 1 · Actualizar tus datos</h4>
+            <p class="dice">«Sale de tu check-in. Si algo no cuadra o te falta, lo modificas al final.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-abierto">Abierto</span>
+            <ul class="pruebas"><li class="hueco">No aparece en el código.</li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="abierto">
+          <div class="col-que">
+            <h4>Paso 2 · Tus sensaciones y tus dudas</h4>
+            <p class="dice">«¿Algún ejercicio que te dé molestias o alguna máquina que no tengas?»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-abierto">Abierto</span>
+            <ul class="pruebas"><li class="hueco">No aparece en el código.</li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="abierto">
+          <div class="col-que">
+            <h4>Paso 3 · Este tercer paso es cosa nuestra</h4>
+            <p class="dice">«Recibirás respuesta antes del viernes a las 3, hora de España.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-abierto">Abierto</span>
+            <ul class="pruebas"><li class="hueco">No aparece en el código.</li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="abierto">
+          <div class="col-que">
+            <h4>Las dos versiones del paso 1</h4>
+            <p class="dice">«No tengo todos los datos de tus check-in diarios, así que te lo pregunto aquí.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-abierto">Abierto</span>
+            <ul class="pruebas"><li class="hueco">No aparece en el código.</li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="parcial">
+          <div class="col-que">
+            <h4>La tarjeta en Hecho</h4>
+            <p class="dice">«Respondiste a tiempo y ahora nos toca a nosotros. Te decimos algo antes del viernes a las tres…»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-parcial">A medias</span>
+            <ul class="pruebas"></ul>
+            <p class="nota">La tarjeta existe y cambia a «Ya lo mandaste. Lo estamos mirando». El documento pide la hora: «Te decimos algo antes del viernes a las tres de la tarde».</p>
+          </div>
+        </article>
+        <article class="punto" data-estado="parcial">
+          <div class="col-que">
+            <h4>El aviso de la apertura</h4>
+            <p class="dice">«Ya puedes rellenar el reporte quincenal. Tienes para hacerlo hasta mañana jueves a las ocho…»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-parcial">A medias</span>
+            <ul class="pruebas"></ul>
+            <p class="nota">El aviso existe (<code>avisos_cliente.py:670</code>) con el texto viejo: «Tu reporte quincenal está abierto». Falta el plazo y el empujón: «Tienes para hacerlo hasta mañana jueves a las ocho… Son dos minutos».</p>
+          </div>
+        </article>
+        <article class="punto" data-estado="parcial">
+          <div class="col-que">
+            <h4>El recordatorio del último día</h4>
+            <p class="dice">«Solo recordarte que tienes hasta hoy a las ocho…»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-parcial">A medias</span>
+            <ul class="pruebas"></ul>
+            <p class="nota">Existe como «Último día para tu quincenal» (<code>avisos_cliente.py:686</code>). Falta decirle qué se pierde: «este ajuste se salta y el siguiente será en tu reporte mensual».</p>
+          </div>
+        </article>
+        <article class="punto" data-estado="abierto">
+          <div class="col-que">
+            <h4>El fuera de plazo</h4>
+            <p class="dice">«Se te pasó el plazo del reporte quincenal. Este ajuste se salta.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-abierto">Abierto</span>
+            <ul class="pruebas"><li class="hueco">No aparece en el código.</li></ul>
+            <p class="nota">No existe. Es el del jueves de 20:00 a 24:00, en rojo y sin riña.</p>
+          </div>
+        </article>
+        <article class="punto" data-estado="parcial">
+          <div class="col-que">
+            <h4>La cola de Inicio</h4>
+            <p class="dice">«Nunca dos avisos: una lista y un orden.» El reporte arriba, el check-in debajo.</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-parcial">A medias</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/pages/ClientDashboard.jsx<b>:772</b></span><span class="codigo">id: `reporte-${r.tipo}`, icono: FileText, titulo: r.tipo_label,</span></li></ul>
+            <p class="nota">El reporte SÍ entra en la cola (<code>ClientDashboard.jsx:766</code>), pero el ÚLTIMO: detrás del cierre del día, del perfil, de los alimentos preferentes y de los datos que falten. El documento lo quiere arriba, «porque tiene fecha de entrega».</p>
+          </div>
+        </article>
+      </section>
+    </section>
+    <section class="doc" id="mensual">
+      <header class="doc-head">
+        <p class="eyebrow">claude.ai/code/artifact/3b60d286</p>
+        <h2>El reporte mensual</h2>
+        <p class="bajada">Los cuatro pasos del reporte que el cliente manda, y sus dos variantes.</p>
+        <div class="marcador">
+          <span class="m m-cerrado"><b>23</b> cerrados</span>
+          <span class="m m-parcial"><b>0</b> a medias</span>
+          <span class="m m-abierto"><b>1</b> abiertos</span>
+        </div>
+        <p class="meta"><span class="meta-item"><b>27</b> pruebas en <span class="ruta">backend/tests/test_paso1_mensual_0109.py</span></span> · <span class="meta-item">Commits: <code>fffd19c</code></span></p>
+      </header>
+      
+      <section class="bloque">
+        <h3>Los cuatro pasos</h3>
+        
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>La cabecera «Son 4 pasos»</h4>
+            <p class="dice">«Con Son 4 pasos en la cabecera de las cuatro, y el suyo marcado.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/components/reports/PasosDelMensual.jsx<b>:4</b></span><span class="codigo">* Del documento «El reporte mensual» (1-09-2026): «Con Son 4 pasos en la cabecera de las</span></li><li><span class="ruta">frontend/src/components/reports/PasosDelMensual.jsx<b>:54</b></span><span class="codigo">Son 4 pasos</span></li><li><span class="ruta">frontend/src/components/reports/FormularioReporte.jsx<b>:126</b></span><span class="codigo">// «Actualizar tus datos y confirmar que están bien»). El peso de la semana ya</span></li><li><span class="ruta">frontend/src/components/reports/PasosDelMensual.jsx<b>:19</b></span><span class="codigo">&#x27;Actualizar tus datos y confirmar que están bien&#x27;,</span></li></ul>
+            
+          </div>
+        </article>
+      </section>
+      <section class="bloque">
+        <h3>Paso 1</h3>
+        
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>El subtítulo del paso 1</h4>
+            <p class="dice">«Sale de tus check-in. Si algo no cuadra o te falta, lo arreglas al final.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">backend/core/actividad_mensual.py<b>:7</b></span><span class="codigo">«Sale de tus check-in. Si algo no cuadra o te falta, lo arreglas al final.»</span></li><li><span class="ruta">backend/core/datos_reporte.py<b>:539</b></span><span class="codigo"># «Sale de tus check-in. Si algo no cuadra o te falta, lo arreglas al final.»</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>El selector de periodo</h4>
+            <p class="dice">«El selector de arriba cambia el bloque entero, no solo el peso.» 28 días / desde que empezaste.</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">backend/core/datos_reporte.py<b>:542</b></span><span class="codigo"># -- «Desde tu último reporte» (28 días) o «Desde que empezaste» --, no solo el peso.</span></li><li><span class="ruta">backend/routes/reports.py<b>:730</b></span><span class="codigo">- `ultimo`    los 28 días del mensual («Desde tu último reporte»).</span></li><li><span class="ruta">backend/core/datos_reporte.py<b>:542</b></span><span class="codigo"># -- «Desde tu último reporte» (28 días) o «Desde que empezaste» --, no solo el peso.</span></li><li><span class="ruta">backend/routes/reports.py<b>:731</b></span><span class="codigo">- `principio` desde que arrancó («Desde que empezaste»).</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>El peso, con el círculo de su quincenal</h4>
+            <p class="dice">«El círculo es el peso de tu quincenal» y «Los círculos son tus reportes anteriores».</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">backend/core/datos_reporte.py<b>:575</b></span><span class="codigo">- En los 28 días: «El círculo es el peso de tu quincenal». Uno solo, el del reporte</span></li><li><span class="ruta">backend/core/datos_reporte.py<b>:603</b></span><span class="codigo">&quot;nota&quot;: &quot;El círculo es el peso de tu quincenal.&quot;}</span></li><li><span class="ruta">backend/core/datos_reporte.py<b>:577</b></span><span class="codigo">- En el programa entero: «Los círculos son tus reportes anteriores. El primero es tu</span></li><li><span class="ruta">backend/core/datos_reporte.py<b>:615</b></span><span class="codigo">&quot;nota&quot;: &quot;Los círculos son tus reportes anteriores. El primero es tu cuestionario inicial.&quot;}</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Lo que has hecho: las seis filas</h4>
+            <p class="dice">Dietas guardadas · Días que comiste de más · Entrenos · Cardio · Movimiento · Suplementación</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">backend/core/actividad_mensual.py<b>:15</b></span><span class="codigo">Dietas guardadas 22 de 28 · Días que comiste de más 6 · Entrenos 13 de 16</span></li><li><span class="ruta">backend/core/actividad_mensual.py<b>:97</b></span><span class="codigo">pon(&quot;dietas&quot;, &quot;Dietas guardadas&quot;, f&quot;{int(dieta.get(&#x27;dias_registrados&#x27;) or 0)} de {dias}&quot;)</span></li><li><span class="ruta">backend/core/actividad_mensual.py<b>:15</b></span><span class="codigo">Dietas guardadas 22 de 28 · Días que comiste de más 6 · Entrenos 13 de 16</span></li><li><span class="ruta">backend/core/actividad_mensual.py<b>:103</b></span><span class="codigo">pon(&quot;extras&quot;, &quot;Días que comiste de más&quot;, str(int(extras)))</span></li><li><span class="ruta">backend/core/actividad_mensual.py<b>:16</b></span><span class="codigo">Cardio 7 de 12 · Movimiento 16 igual · 5 más · 7 menos · Suplementación 21 de 28</span></li><li><span class="ruta">backend/core/actividad_mensual.py<b>:125</b></span><span class="codigo">pon(&quot;movimiento&quot;, &quot;Movimiento&quot;, &quot; · &quot;.join(trozos))</span></li><li><span class="ruta">backend/_doc2.py<b>:260</b></span><span class="codigo">P, F = &quot;App del cliente&quot;, &quot;Suplementación&quot;</span></li><li><span class="ruta">backend/agent_loop.py<b>:310</b></span><span class="codigo">- LOS SUPLEMENTOS NO LOS PAUTAS TÚ. Si te pregunta por vitaminas o por cualquier otro suplemento, no le recomiendes ning</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Y cómo te has sentido</h4>
+            <p class="dice">Descanso · Energía · Hambre / ansiedad, con su media y su línea.</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">backend/core/actividad_mensual.py<b>:19</b></span><span class="codigo">Descanso 2,9 · Energía 3,1 · Hambre / ansiedad 3,6</span></li><li><span class="ruta">backend/core/actividad_mensual.py<b>:35</b></span><span class="codigo"># campo con el que se guardan. «Hambre / ansiedad» va con las barras porque así se lee en</span></li><li><span class="ruta">backend/core/actividad_mensual.py<b>:163</b></span><span class="codigo">&quot;&quot;&quot;«Solo de estos 28 días. Lo de antes ya está cerrado.»</span></li><li><span class="ruta">backend/core/actividad_mensual.py<b>:170</b></span><span class="codigo">return f&quot;Solo de estos {dias} días. Lo de antes ya está cerrado.&quot;</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Los huecos, con sus dos respuestas</h4>
+            <p class="dice">«Te dejaste 3 entrenos sin registrar» [No entrené / Sí entrené, pero no lo marqué] · «Y 4 días de dieta»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">backend/core/actividad_mensual.py<b>:21</b></span><span class="codigo">Te dejaste 3 entrenos sin registrar.   [No entrené] [Sí entrené, pero no lo marqué]</span></li><li><span class="ruta">backend/core/actividad_mensual.py<b>:183</b></span><span class="codigo">Te dejaste 3 entrenos sin registrar.  [No entrené] [Sí entrené, pero no lo marqué]</span></li><li><span class="ruta">backend/core/actividad_mensual.py<b>:21</b></span><span class="codigo">Te dejaste 3 entrenos sin registrar.   [No entrené] [Sí entrené, pero no lo marqué]</span></li><li><span class="ruta">backend/core/actividad_mensual.py<b>:183</b></span><span class="codigo">Te dejaste 3 entrenos sin registrar.  [No entrené] [Sí entrené, pero no lo marqué]</span></li><li><span class="ruta">backend/core/actividad_mensual.py<b>:21</b></span><span class="codigo">Te dejaste 3 entrenos sin registrar.   [No entrené] [Sí entrené, pero no lo marqué]</span></li><li><span class="ruta">backend/core/actividad_mensual.py<b>:183</b></span><span class="codigo">Te dejaste 3 entrenos sin registrar.  [No entrené] [Sí entrené, pero no lo marqué]</span></li><li><span class="ruta">backend/core/actividad_mensual.py<b>:22</b></span><span class="codigo">Y 4 días de dieta.                     [No la cumplí] [Sí, pero no la guardé]</span></li><li><span class="ruta">backend/core/actividad_mensual.py<b>:184</b></span><span class="codigo">Y 4 días de dieta.                    [No la cumplí] [Sí, pero no la guardé]</span></li><li><span class="ruta">backend/core/actividad_mensual.py<b>:22</b></span><span class="codigo">Y 4 días de dieta.                     [No la cumplí] [Sí, pero no la guardé]</span></li><li><span class="ruta">backend/core/actividad_mensual.py<b>:184</b></span><span class="codigo">Y 4 días de dieta.                    [No la cumplí] [Sí, pero no la guardé]</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Modificar y Confirmar</h4>
+            <p class="dice">Los dos botones del paso 1.</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/components/reports/MensualPaso1.jsx<b>:18</b></span><span class="codigo">* «Modificar» es el «lo arreglas al final» del subtítulo: abre el peso (y el % de grasa el</span></li><li><span class="ruta">frontend/src/components/reports/MensualPaso1.jsx<b>:305</b></span><span class="codigo">{modificando ? &#x27;Ya está&#x27; : &#x27;Modificar&#x27;}</span></li><li><span class="ruta">frontend/src/components/reports/FormularioReporte.jsx<b>:420</b></span><span class="codigo">onConfirmar={confirmarPaso1} /&gt;</span></li><li><span class="ruta">frontend/src/components/reports/MensualPaso1.jsx<b>:99</b></span><span class="codigo">onHueco, onConfirmar }) =&gt; {</span></li></ul>
+            
+          </div>
+        </article>
+      </section>
+      <section class="bloque">
+        <h3>Paso 2</h3>
+        
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>¿Cuánto te ha costado la dieta?</h4>
+            <p class="dice">Una pregunta con cuatro salidas, no dos preguntas.</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/components/reports/ReporteMensual.jsx<b>:153</b></span><span class="codigo">&lt;Opciones testid=&quot;dieta-dificultad&quot; pregunta=&quot;¿Cuánto te ha costado la dieta?&quot;</span></li><li><span class="ruta">frontend/src/components/reports/ReporteMensual.jsx<b>:66</b></span><span class="codigo">label: &#x27;Nada, comiendo así es facilísimo&#x27; },</span></li><li><span class="ruta">frontend/src/components/reports/ReporteMensual.jsx<b>:72</b></span><span class="codigo">label: &#x27;Sí, baja mis macros porque no llego por mucho que me esfuerce&#x27; },</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>La condicional del cardio</h4>
+            <p class="dice">«Si te bajo el número de sesiones, ¿sería viable para que cumplieras?» Solo si falló.</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/components/reports/ReporteMensual.jsx<b>:372</b></span><span class="codigo">pregunta=&quot;Si te bajo el número de sesiones, ¿sería viable para que cumplieras?&quot;</span></li><li><span class="ruta">backend/models/common.py<b>:157</b></span><span class="codigo"># pregunta si se las bajo, y una de las salidas es «Quítamelo, no lo voy a hacer». No</span></li><li><span class="ruta">frontend/src/components/reports/ReporteMensual.jsx<b>:377</b></span><span class="codigo">{ value: &#x27;quitar&#x27;, label: &#x27;Quítamelo, no lo voy a hacer&#x27; },</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>La condicional de la suplementación</h4>
+            <p class="dice">«No tomaste la suplementación N días de los 28.» Solo si falló.</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/components/reports/ReporteMensual.jsx<b>:389</b></span><span class="codigo">No tomaste la suplementación {diasSinSuplementacion}{&#x27; &#x27;}</span></li><li><span class="ruta">frontend/src/components/reports/ReporteMensual.jsx<b>:407</b></span><span class="codigo">{ value: &#x27;se_me_olvidaba&#x27;, label: &#x27;Se me olvidaba&#x27; },</span></li><li><span class="ruta">frontend/src/components/reports/ReporteMensual.jsx<b>:410</b></span><span class="codigo">{ value: &#x27;no_quiero_seguir&#x27;, label: &#x27;No quiero seguir tomándola&#x27; },</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Los ejercicios que dan molestias</h4>
+            <p class="dice">«Estos son los que me diste. Quita los que ya no y añade los nuevos»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/components/reports/ReporteMensual.jsx<b>:583</b></span><span class="codigo">etiqueta=&quot;Estos son los que me diste. Quita los que ya no y añade los nuevos&quot;</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>¿Y máquinas que no tienes?</h4>
+            <p class="dice">«Actualiza aquí tu listado: si ha entrado alguna nueva, dímelo»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/components/reports/ReporteMensual.jsx<b>:444</b></span><span class="codigo">&lt;Bloque titulo=&quot;¿Y máquinas que no tienes?&quot;</span></li><li><span class="ruta">backend/routes/reports.py<b>:232</b></span><span class="codigo"># 1-09 dice «Actualiza aquí tu listado: si ha entrado alguna nueva, dímelo», y eso solo</span></li><li><span class="ruta">frontend/src/components/reports/ReporteMensual.jsx<b>:445</b></span><span class="codigo">sub=&quot;Actualiza aquí tu listado: si ha entrado alguna nueva, dímelo&quot;</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>El grado de compromiso</h4>
+            <p class="dice">«Ahora hablo de ti, de si has dado todo o te quedas con la sensación de haber fallado»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/components/reports/ReporteMensual.jsx<b>:460</b></span><span class="codigo">pregunta=&quot;¿Cómo consideras que ha sido tu grado de compromiso con el programa hasta el momento?&quot;</span></li><li><span class="ruta">frontend/src/components/reports/ReporteMensual.jsx<b>:464</b></span><span class="codigo">{ value: &#x27;maximo&#x27;, label: &#x27;Mi compromiso es máximo, dentro de mis posibilidades estoy dando lo mejor de mí&#x27; },</span></li><li><span class="ruta">frontend/src/components/reports/ReporteMensual.jsx<b>:467</b></span><span class="codigo">{ value: &#x27;no_he_podido&#x27;, label: &#x27;No he sido capaz de llevarlo a cabo, demasiado exigente para lo que puedo dar a día de </span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Las expectativas, de 0 a 10</h4>
+            <p class="dice">«0 · No, esperaba más» / «10 · Genial, mejor imposible»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/components/reports/ReporteMensual.jsx<b>:470</b></span><span class="codigo">pregunta=&quot;En líneas generales, ¿el programa está cumpliendo tus expectativas?&quot;</span></li><li><span class="ruta">frontend/src/components/reports/ReporteMensual.jsx<b>:472</b></span><span class="codigo">minLabel=&quot;0 · No, esperaba más&quot; maxLabel=&quot;10 · Genial, mejor imposible&quot; /&gt;</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Dudas o lo que quieras contarme</h4>
+            <p class="dice">«Ahora es el momento y el lugar»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/components/reports/ReporteMensual.jsx<b>:511</b></span><span class="codigo">&lt;Bloque titulo=&quot;Dudas o lo que quieras contarme&quot; testid=&quot;mensual-libre&quot;&gt;</span></li><li><span class="ruta">frontend/src/components/reports/ReporteMensual.jsx<b>:512</b></span><span class="codigo">&lt;TextoLibre testid=&quot;notes-textarea&quot; ayuda=&quot;Ahora es el momento y el lugar&quot;</span></li></ul>
+            
+          </div>
+        </article>
+      </section>
+      <section class="bloque">
+        <h3>Paso 3</h3>
+        
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Las fotos y su porqué</h4>
+            <p class="dice">«Relajado, siempre en el mismo sitio y con la misma luz que las anteriores. Es lo único que me deja comparar.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/components/reports/MensualPaso3.jsx<b>:46</b></span><span class="codigo">luz que las anteriores&lt;/b&gt;. Es lo único que me deja comparar.</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>El metro y el vídeo</h4>
+            <p class="dice">«Con el metro pegado y sin apretar. Aquí tienes el vídeo de cómo se toman.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/components/reports/MensualPaso3.jsx<b>:64</b></span><span class="codigo">Con el metro pegado y sin apretar.{&#x27; &#x27;}</span></li><li><span class="ruta">frontend/src/components/reports/MensualPaso3.jsx<b>:67</b></span><span class="codigo">&lt;b className=&quot;text-foreground&quot;&gt;Aquí tienes el vídeo&lt;/b&gt; de cómo se toman.</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Adónde van a parar</h4>
+            <p class="dice">«Las fotos y las medidas van a Mi evolución, con las de los meses anteriores.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">backend/_marcar_cuentas_prueba.py<b>:10</b></span><span class="codigo">no van aquí: a esos ya los saca el filtro por rol.</span></li><li><span class="ruta">backend/_medir_guarnicion.py<b>:7</b></span><span class="codigo">que importa no es que cambien las cantidades -- van a cambiar -- sino:</span></li><li><span class="ruta">frontend/src/components/reports/MensualPaso3.jsx<b>:13</b></span><span class="codigo">*   - y adónde van a parar: «Las fotos y las medidas van a Mi evolución, con las de los</span></li><li><span class="ruta">frontend/src/components/reports/MensualPaso3.jsx<b>:125</b></span><span class="codigo">Las fotos y las medidas van a &lt;b className=&quot;text-foreground&quot;&gt;Mi evolución&lt;/b&gt;, con</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Las medidas, con la del mes pasado al lado</h4>
+            <p class="dice">«el mes pasado 127»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">backend/_sync_reportes_medidas.py<b>:87</b></span><span class="codigo">#     es que el numero sea exacto sino que se pueda comparar con el del mes pasado. Si el</span></li><li><span class="ruta">backend/core/informe_del_mes.py<b>:244</b></span><span class="codigo">&quot;titulo_cambio&quot;: (f&quot;{_con_signo(total)} este mes&quot; if total else &quot;Igual que el mes pasado&quot;),</span></li></ul>
+            
+          </div>
+        </article>
+      </section>
+      <section class="bloque">
+        <h3>Paso 4</h3>
+        
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Ya lo tienes · Tu informe del mes</h4>
+            <p class="dice">«Te lo entrego ya. Es un análisis objetivo que sale de toda la información…»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/components/reports/MensualPaso4.jsx<b>:47</b></span><span class="codigo">&lt;p className=&quot;text-base font-bold text-foreground&quot;&gt;Tu informe del mes&lt;/p&gt;</span></li><li><span class="ruta">frontend/src/components/reports/MensualPaso4.jsx<b>:49</b></span><span class="codigo">Te lo entrego ya. Es un &lt;b&gt;análisis objetivo&lt;/b&gt; que sale de toda la</span></li><li><span class="ruta">frontend/src/components/reports/MensualPaso4.jsx<b>:60</b></span><span class="codigo">Ver mi informe</span></li><li><span class="ruta">frontend/src/pages/ReportsPage.jsx<b>:548</b></span><span class="codigo">// «Ver mi informe ›» del paso 4: abre el informe con el mismo</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Nuevo programa y feedback</h4>
+            <p class="dice">«Analizamos tus respuestas, comparamos fotos y métricas y, a partir de ahí, ajustamos tus macros…»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/components/reports/MensualPaso4.jsx<b>:75</b></span><span class="codigo">Analizamos tus respuestas, comparamos fotos y métricas y, a partir de ahí,</span></li><li><span class="ruta">frontend/src/components/reports/MensualPaso4.jsx<b>:77</b></span><span class="codigo">para las próximas 4 semanas.</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Y mientras tanto, mírate</h4>
+            <p class="dice">El cierre del paso 4.</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/components/reports/MensualPaso4.jsx<b>:86</b></span><span class="codigo">Y mientras tanto, mírate</span></li></ul>
+            
+          </div>
+        </article>
+      </section>
+      <section class="bloque">
+        <h3>Sin check-in</h3>
+        
+        <article class="punto" data-estado="abierto">
+          <div class="col-que">
+            <h4>Las cinco preguntas con estrellas</h4>
+            <p class="dice">«No tengo todos los datos de tus check-in diarios, así que te lo pregunto aquí.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-abierto">Abierto</span>
+            <ul class="pruebas"><li class="hueco">No aparece en el código.</li></ul>
+            
+          </div>
+        </article>
+      </section>
+    </section>
+    <section class="doc" id="informe">
+      <header class="doc-head">
+        <p class="eyebrow">claude.ai/code/artifact/2f5f6de3</p>
+        <h2>El informe del mes</h2>
+        <p class="bajada">Los diez bloques de lo que recibe al mandarlo, en sus dos estados.</p>
+        <div class="marcador">
+          <span class="m m-cerrado"><b>15</b> cerrados</span>
+          <span class="m m-parcial"><b>0</b> a medias</span>
+          <span class="m m-abierto"><b>0</b> abiertos</span>
+        </div>
+        <p class="meta"><span class="meta-item"><b>36</b> pruebas en <span class="ruta">backend/tests/test_informe_del_mes_0109.py</span></span> · <span class="meta-item">Commits: <code>1b231dc</code></span></p>
+      </header>
+      
+      <section class="bloque">
+        <h3>Cuándo llega</h3>
+        
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Se entrega al enviar</h4>
+            <p class="dice">«Se le entrega al enviar, con el hueco del feedback vacío.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">backend/routes/reports.py<b>:998</b></span><span class="codigo"># EL INFORME SE ENTREGA AL ENVIAR (documento «El informe del mes», 1-09-2026):</span></li></ul>
+            
+          </div>
+        </article>
+      </section>
+      <section class="bloque">
+        <h3>1 · Dónde estás</h3>
+        
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Su objetivo y su semana</h4>
+            <p class="dice">«Su objetivo y en qué semana del ciclo va, de cuántas.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">backend/core/informe_del_mes.py<b>:31</b></span><span class="codigo">&quot;definicion&quot;: &quot;Bajar grasa&quot;,</span></li><li><span class="ruta">backend/core/informe_del_mes.py<b>:104</b></span><span class="codigo">&quot;&quot;&quot;«TU OBJETIVO Bajar grasa · TU CICLO Semana 8 de 12».</span></li><li><span class="ruta">backend/core/informe_del_mes.py<b>:32</b></span><span class="codigo">&quot;volumen&quot;: &quot;Ganar músculo&quot;,</span></li><li><span class="ruta">backend/_contrastar_suplementos.py<b>:7</b></span><span class="codigo">detalladas que la web. Lo que allí es prosa («Semanas 2 y 3: 1 y 1, Semanas 4 y 5:</span></li><li><span class="ruta">backend/_doc2.py<b>:205</b></span><span class="codigo">ft(&quot;notes-textarea&quot;, &quot;Semana muy productiva, buena adherencia en entreno y nutrición.&quot;)</span></li></ul>
+            
+          </div>
+        </article>
+      </section>
+      <section class="bloque">
+        <h3>2 · Tu feedback</h3>
+        
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>El hueco, en gris y con la hora</h4>
+            <p class="dice">«En estos momentos estamos revisando tu reporte mensual. Antes del viernes a las 15:00 te mandamos todo.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">backend/core/informe_del_mes.py<b>:144</b></span><span class="codigo">&quot;aviso&quot;: (f&quot;En estos momentos estamos revisando tu reporte mensual. &quot;</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Y luego tu texto firmado</h4>
+            <p class="dice">El bloque de Jesús arriba, con su firma y la fecha.</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">backend/_descargar_fotos_activos.py<b>:59</b></span><span class="codigo">for tipo in (&quot;iniciales&quot;, &quot;mensuales&quot;):</span></li><li><span class="ruta">backend/_fase0_datos.py<b>:45</b></span><span class="codigo"># xiquitin83@hotmail.com (Jose luis Garcia Banuls) NO entra: comparte iniciales y ano con el</span></li><li><span class="ruta">backend/_cosechar_menus.py<b>:41</b></span><span class="codigo">es_desayuno, es_peri, firma, pasa_el_filtro, personas_distintas, recontar,</span></li><li><span class="ruta">backend/_cosechar_menus.py<b>:71</b></span><span class="codigo">def id_de_firma(sig) -&gt; str:</span></li></ul>
+            
+          </div>
+        </article>
+      </section>
+      <section class="bloque">
+        <h3>3 · Tu peso</h3>
+        
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Con qué empezó el mes y con cuál lo acaba</h4>
+            <p class="dice">«Empezaste el mes en · Lo acabas en · Cuando empezaste pesabas · Desde que empezaste»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/components/reports/InformeDelMes.jsx<b>:281</b></span><span class="codigo">&lt;Fila primera que=&quot;Empezaste el mes en&quot; valor={peso.empezaste_label} /&gt;</span></li><li><span class="ruta">frontend/src/components/reports/InformeDelMes.jsx<b>:282</b></span><span class="codigo">&lt;Fila que=&quot;Lo acabas en&quot; valor={peso.acabas_label} /&gt;</span></li><li><span class="ruta">frontend/src/components/reports/InformeDelMes.jsx<b>:285</b></span><span class="codigo">&lt;Fila que=&quot;Cuando empezaste pesabas&quot; valor={peso.al_empezar_label} /&gt;</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>El porcentaje que ha bajado cada semana</h4>
+            <p class="dice">«Porcentaje del peso total que has ido bajando por semana.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">backend/core/informe_del_mes.py<b>:162</b></span><span class="codigo">&quot;&quot;&quot;«Porcentaje del peso total que has ido bajando por semana»: 10 · 32 · 36 · 22.</span></li><li><span class="ruta">frontend/src/components/reports/InformeDelMes.jsx<b>:294</b></span><span class="codigo">Porcentaje del peso total que has ido bajando por semana.</span></li></ul>
+            
+          </div>
+        </article>
+      </section>
+      <section class="bloque">
+        <h3>4 · Tus medidas</h3>
+        
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Las diez, contra el mes pasado y la primera toma</h4>
+            <p class="dice">«DIEZ TOMAS · MES ANT. · 1ª TOMA»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/components/reports/InformeDelMes.jsx<b>:312</b></span><span class="codigo">Diez tomas</span></li><li><span class="ruta">frontend/src/components/reports/InformeDelMes.jsx<b>:314</b></span><span class="codigo">&lt;span className=&quot;text-[13px] text-muted-foreground text-right&quot;&gt;Mes ant.&lt;/span&gt;</span></li><li><span class="ruta">frontend/src/components/reports/InformeDelMes.jsx<b>:315</b></span><span class="codigo">&lt;span className=&quot;text-[13px] text-muted-foreground text-right&quot;&gt;1ª toma&lt;/span&gt;</span></li></ul>
+            
+          </div>
+        </article>
+      </section>
+      <section class="bloque">
+        <h3>5 · Grasa</h3>
+        
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Cada 12 semanas, y cuándo se midió</h4>
+            <p class="dice">«Se mide al final de cada ciclo, cada 12 semanas. La última medición: 18 %, el 4 de junio.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">backend/core/informe_del_mes.py<b>:305</b></span><span class="codigo">&quot;&quot;&quot;«Se mide al final de cada ciclo, cada 12 semanas. La última medición: 18 %, el 4 de junio.»</span></li><li><span class="ruta">backend/core/informe_del_mes.py<b>:313</b></span><span class="codigo">&quot;explicacion&quot;: f&quot;Se mide al final de cada ciclo, cada {cada_semanas} semanas.&quot;}</span></li><li><span class="ruta">backend/core/informe_del_mes.py<b>:305</b></span><span class="codigo">&quot;&quot;&quot;«Se mide al final de cada ciclo, cada 12 semanas. La última medición: 18 %, el 4 de junio.»</span></li><li><span class="ruta">backend/core/informe_del_mes.py<b>:321</b></span><span class="codigo">&quot;ultima&quot;: (f&quot;La última medición: {_num(valor)} %&quot;</span></li></ul>
+            
+          </div>
+        </article>
+      </section>
+      <section class="bloque">
+        <h3>6 · Tus fotos</h3>
+        
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Dos, y las elige él</h4>
+            <p class="dice">Pestañas de pose (frente, espaldas, perfil) y dos selectores de fecha.</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/components/reports/InformeDelMes.jsx<b>:168</b></span><span class="codigo">onClick={() =&gt; setPose(v)} data-testid={`informe-pose-${v}`}</span></li><li><span class="ruta">frontend/src/components/reports/InformeDelMes.jsx<b>:183</b></span><span class="codigo">data-testid={`informe-foto-${lado}`}</span></li></ul>
+            
+          </div>
+        </article>
+      </section>
+      <section class="bloque">
+        <h3>7 · Lo que has hecho</h3>
+        
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Dietas, entrenos, cardios y suplementación</h4>
+            <p class="dice">«Dietas completas · Cuadradas al 100 % · Comiste de más · Entrenos hechos / Perdidos · Cardios hechos / Perdidos · Suplementación sí / no»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">backend/core/informe_del_mes.py<b>:356</b></span><span class="codigo">pon(&quot;dietas&quot;, &quot;Dietas completas&quot;, int(dieta.get(&quot;dias_registrados&quot;) or 0),</span></li><li><span class="ruta">backend/core/informe_del_mes.py<b>:358</b></span><span class="codigo">pon(&quot;cuadradas&quot;, &quot;Cuadradas al 100 %&quot;, int(dieta.get(&quot;dias_cuadrados&quot;) or 0),</span></li><li><span class="ruta">backend/core/informe_del_mes.py<b>:364</b></span><span class="codigo">pon(&quot;entrenos&quot;, &quot;Entrenos hechos&quot;, hechos,</span></li><li><span class="ruta">backend/core/informe_del_mes.py<b>:370</b></span><span class="codigo">pon(&quot;cardios&quot;, &quot;Cardios hechos&quot;, hechas,</span></li><li><span class="ruta">backend/core/informe_del_mes.py<b>:376</b></span><span class="codigo">pon(&quot;suplementacion&quot;, &quot;Suplementación sí&quot;, si, &quot;no&quot;, max(0, int(sup[&quot;de&quot;]) - si))</span></li></ul>
+            
+          </div>
+        </article>
+      </section>
+      <section class="bloque">
+        <h3>8 · Tu día tipo</h3>
+        
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>La combinación que más repite en cada comida</h4>
+            <p class="dice">«La combinación que más repites en cada comida, y cuántos días.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">backend/core/informe_del_mes.py<b>:409</b></span><span class="codigo">&quot;&quot;&quot;«La combinación que más repites en cada comida, y cuántos días.»</span></li><li><span class="ruta">frontend/src/components/reports/InformeDelMes.jsx<b>:372</b></span><span class="codigo">La combinación que más repites en cada comida, y cuántos días.</span></li></ul>
+            
+          </div>
+        </article>
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Cuando cambia casi cada día</h4>
+            <p class="dice">«Cambia casi cada día · 17 combinaciones distintas»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">backend/core/informe_del_mes.py<b>:450</b></span><span class="codigo">&quot;texto&quot;: &quot;Cambia casi cada día&quot;,</span></li><li><span class="ruta">backend/_cosechar_menus.py<b>:86</b></span><span class="codigo">print(f&quot;combinaciones distintas montadas por la gente: {len(acc)}&quot;)</span></li><li><span class="ruta">backend/core/informe_del_mes.py<b>:417</b></span><span class="codigo">combinaciones distintas siempre. Las cantidades que se enseñan son las más repetidas de</span></li></ul>
+            
+          </div>
+        </article>
+      </section>
+      <section class="bloque">
+        <h3>9 · Preferencias</h3>
+        
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Sus tres de cada, con las veces</h4>
+            <p class="dice">«Tus fuentes de proteína, hidratos y grasas preferidas, y las veces que las has puesto este mes.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">frontend/src/components/reports/InformeDelMes.jsx<b>:398</b></span><span class="codigo">&lt;b className=&quot;text-foreground&quot;&gt;las veces que las has puesto&lt;/b&gt; este mes.</span></li></ul>
+            
+          </div>
+        </article>
+      </section>
+      <section class="bloque">
+        <h3>10 · Extras</h3>
+        
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>Lo que apuntó y qué día</h4>
+            <p class="dice">«Seis días, y cinco cayeron en fin de semana. Lo que apuntaste:»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">backend/core/informe_del_mes.py<b>:559</b></span><span class="codigo">&quot;&quot;&quot;«Seis días, y cinco cayeron en fin de semana. Lo que apuntaste: ...»</span></li><li><span class="ruta">backend/core/informe_del_mes.py<b>:559</b></span><span class="codigo">&quot;&quot;&quot;«Seis días, y cinco cayeron en fin de semana. Lo que apuntaste: ...»</span></li><li><span class="ruta">backend/core/informe_del_mes.py<b>:597</b></span><span class="codigo">&quot;titulo&quot;: f&quot;{titulo}. Lo que apuntaste:&quot;, &quot;lista&quot;: lista}</span></li></ul>
+            
+          </div>
+        </article>
+      </section>
+      <section class="bloque">
+        <h3>Regla</h3>
+        
+        <article class="punto" data-estado="cerrado">
+          <div class="col-que">
+            <h4>El informe no le pide nada</h4>
+            <p class="dice">«Lo único que puede tocar son los selectores de las fotos y el botón de guardar su desayuno como plantilla.»</p>
+          </div>
+          <div class="col-prueba">
+            <span class="chip chip-cerrado">Cerrado</span>
+            <ul class="pruebas"><li><span class="ruta">backend/core/informe_del_mes.py<b>:17</b></span><span class="codigo">«El informe no le pide nada.»</span></li><li><span class="ruta">frontend/src/components/reports/InformeDelMes.jsx<b>:12</b></span><span class="codigo">*   1. «El informe no le pide nada.» Lo único que se puede tocar son los selectores de las</span></li></ul>
+            
+          </div>
+        </article>
+      </section>
+    </section>
+</div>
+
+<script>
+  const botones = document.querySelectorAll('.filtros button');
+  botones.forEach((b) => b.addEventListener('click', () => {
+    const f = b.dataset.f;
+    botones.forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
+    document.querySelectorAll('.punto').forEach((p) => {
+      p.hidden = f !== 'todo' && p.dataset.estado !== f;
+    });
+    // Un bloque sin ningun punto visible sobra: si no, quedan rotulos sueltos.
+    document.querySelectorAll('.bloque').forEach((s) => {
+      s.hidden = !s.querySelector('.punto:not([hidden])');
+    });
+    document.querySelectorAll('.doc').forEach((s) => {
+      s.hidden = !s.querySelector('.punto:not([hidden])');
+    });
+  }));
+</script>
