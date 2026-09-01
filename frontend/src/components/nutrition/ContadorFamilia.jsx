@@ -37,9 +37,12 @@ export const ContadorFamilia = ({ bloque, gramos, proteinaCuenta = true, protein
     // nada que recorrer porque no va a cambiar coma lo que coma. Y esto sí se dice desde el
     // primer gramo, sin esperar al acumulado del día, porque no depende de él.
     if (!proteinaCuenta) {
+        // CON MAYÚSCULA, como la escribió Jesús («Todo lo validado antes del 1 de septiembre»,
+        // punto 2.10: es una de las frases que dio por buenas). Va sola en su línea, así que
+        // no es la continuación de nada.
         return (
             <div className="mt-0.5 text-[11px] text-muted-foreground" data-testid={`contador-${bloque}`}>
-                su proteína no te cuenta
+                Su proteína no te cuenta
             </div>
         );
     }

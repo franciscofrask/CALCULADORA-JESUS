@@ -239,10 +239,18 @@ const FoodRow = ({ food, acumDelDia }) => {
                 5.5g hidratos / 5.5g grasas para ser sugerido», que es el filtro del tercio
                 dicho al revés y en lenguaje de programador, justo en la pantalla donde alguien
                 viene a entender por qué la app le cuenta unas cosas y otras no (Jesús, 11-08). */}
+            {/* UNA SOLA FRASE EN LOS QUE NO CUENTAN NADA («Todo lo validado antes del 1 de
+                septiembre», 2.10). Aquí salían dos trozos sueltos con un hueco en medio --
+                «No te cuenta nada   Come lo que quieras» --, que se leen como dos avisos
+                distintos. Jesús lo dio por bueno con dos puntos y en una sola frase: «No te
+                cuenta nada: come lo que quieras». Donde SÍ hay macros no cambia nada: ahí el
+                segundo trozo son los números, y esos no son la continuación de la frase. */}
             <p className="text-xs mt-1 flex flex-wrap items-baseline gap-x-2" data-testid={`cuenta-${food.id}`}>
-                <span className="text-brand-orange">{food.que_te_cuenta}</span>
+                <span className="text-brand-orange">
+                    {food.que_te_cuenta}{food.tiene_macros ? '' : ':'}
+                </span>
                 <span className="text-foreground font-data">
-                    {food.tiene_macros ? lineaDeMacros(food) : loQueQuieras}
+                    {food.tiene_macros ? lineaDeMacros(food) : loQueQuieras.toLowerCase()}
                 </span>
             </p>
 

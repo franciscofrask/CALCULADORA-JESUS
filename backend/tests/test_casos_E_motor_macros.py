@@ -337,6 +337,12 @@ class TestCaso34LaVerduraLibre:
         la pantalla, porque de un liquido dice «Bebe lo que quieras» y eso es cosa de como se
         escribe, no del motor.
 
+        Y DESDE EL 1-09 SE LEEN COMO UNA SOLA FRASE: «No te cuenta nada: come lo que quieras»
+        («Todo lo validado antes del 1 de septiembre», punto 2.10). Partidas y separadas por
+        un hueco se leian como dos avisos distintos. El cambio es de la PANTALLA -- los dos
+        puntos y la minuscula --; el motor sigue devolviendo «No te cuenta nada» a secas, que
+        es lo que comprueba este caso.
+
         Y son 100 g, no los 50 de la maqueta. El punto 148 saca los minimos de CALMA, y el de
         las verduras es uno de los dos que Jesus cambio despues: video 3 del 15-08, «los
         vegetales siempre que sugiera 100 gramos, no 50 por defecto». Manda lo que decidio
