@@ -162,6 +162,12 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
         "energia_motivo": data.energia_motivo,
         "valoracion_resultado": data.valoracion_resultado,
         "motivacion": data.motivacion,
+        # Las del documento «El reporte mensual» (1-09): el compromiso (que habla de él,
+        # no del programa), las expectativas de 0 a 10 y las máquinas que no tiene.
+        "compromiso": data.compromiso,
+        "expectativas": data.expectativas,
+        "maquinas_no_disponibles": data.maquinas_no_disponibles or None,
+        "suplementacion_motivo": data.suplementacion_motivo,
         "sugerencias": (data.sugerencias or "").strip() or None,
         "trainer_feedback": None,
         "created_at": datetime.now(timezone.utc).isoformat()
@@ -221,6 +227,14 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
              "ejercicios_vetados": l.ejercicios, "actualizado": dia_reporte}
             for l in data.lesiones
         ]
+
+    # LAS MÁQUINAS QUE NO TIENE, TAMBIÉN AL PERFIL, y por el mismo motivo: el documento del
+    # 1-09 dice «Actualiza aquí tu listado: si ha entrado alguna nueva, dímelo», y eso solo
+    # se puede pedir si el mes que viene sale con lo que dejó puesto. Es un listado, no una
+    # respuesta: se pisa entero, porque quitar una máquina es tan válido como añadirla.
+    if data.maquinas_no_disponibles is not None:
+        set_perfil["maquinas_no_disponibles"] = [
+            m.strip() for m in data.maquinas_no_disponibles if str(m).strip()]
     await db.client_profiles.update_one({"id": profile["id"]}, {"$set": set_perfil})
     # Y el perfil que se lleva el informe es el de DESPUÉS: si acaba de cambiar de fase,
     # la foto de "inicio de fase" es la de ahora, no la de la fase que deja atrás.
@@ -297,6 +311,14 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
         "Antes del sábado tienes tu informe completo con mi feedback y tus ajustes. Te aviso por aquí."
         if lleva_feedback and report.get("tipo") == "mensual" else
         "Antes del viernes tienes tus ajustes nuevos. Te aviso por aquí.")
+    # EL DÍA, SUELTO, PARA EL PASO 4 DEL MENSUAL (documento del 1-09). Esa pantalla lo
+    # necesita dos veces: en el rótulo («ANTES DEL PRÓXIMO SÁBADO») y en la línea del
+    # final. Sale de aquí y no se deduce del mensaje para que las tres frases no puedan
+    # decir días distintos: la promesa se escribe en un solo sitio.
+    respuesta["promesa_dia"] = (
+        "domingo" if report.get("tipo") == "semanal" else
+        "sábado" if lleva_feedback and report.get("tipo") == "mensual" else
+        "viernes")
     return respuesta
 
 
@@ -694,6 +716,45 @@ async def get_formulario_del_reporte(tipo: Optional[str] = None, user=Depends(ge
         # Si ya lo aplazó este mes, para que la casilla salga marcada y no lo aplace dos veces.
         "aplazado_hasta": perfil.get("reporte_aplazado_hasta"),
     }
+
+
+@router.get("/mensual/paso1")
+async def get_paso1_del_mensual(periodo: str = "ultimo", user=Depends(get_current_user)):
+    """EL PASO 1 DEL MENSUAL, con su selector de periodo (documento del 1-09).
+
+    «El selector de arriba cambia el bloque entero, no solo el peso.» Por eso esto es una
+    ruta propia y no un trozo de `/formulario`: el cliente lo cambia con el reporte ya
+    abierto y tiene que volver el peso, la actividad y las sensaciones del otro tramo.
+
+    `periodo`:
+      - `ultimo`    los 28 días del mensual («Desde tu último reporte»).
+      - `principio` desde que arrancó («Desde que empezaste»).
+
+    Los huecos solo viajan en `ultimo`: son siempre de los últimos 28 y no cambian al
+    mirar el programa entero.
+    """
+    from core.datos_reporte import datos_del_paso1
+
+    perfil = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not perfil:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+
+    desde_el_principio = periodo == "principio"
+    if desde_el_principio:
+        d1 = hoy_madrid()
+        # El arranque, con el mismo criterio que el resto: sin él no hay «desde que
+        # empezaste» que valga y se cae al mes de siempre en vez de inventarse una fecha.
+        d0 = d1 - timedelta(days=DIAS_DEL_PERIODO["mensual"] - 1)
+        arranque = perfil.get("arranque_lunes") or perfil.get("created_at")
+        if arranque:
+            try:
+                d0 = min(d0, datetime.fromisoformat(str(arranque).replace("Z", "+00:00")).date())
+            except (ValueError, TypeError):
+                pass
+    else:
+        d0, d1 = _periodo_del_reporte(perfil, "mensual")
+
+    return await datos_del_paso1(perfil, d0, d1, desde_el_principio=desde_el_principio)
 
 
 @router.post("/aplazar")

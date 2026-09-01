@@ -16,6 +16,10 @@ import { toast } from 'sonner';
 import { Send } from 'lucide-react';
 import ReporteQuincenal from './ReporteQuincenal';
 import ReporteMensual from './ReporteMensual';
+import MensualPaso1 from './MensualPaso1';
+import MensualPaso3 from './MensualPaso3';
+import MensualPaso4 from './MensualPaso4';
+import { CabeceraDelMensual, RotuloDelPaso } from './PasosDelMensual';
 import RevisaAntesDeEnviar from './RevisaAntesDeEnviar';
 import { MEDIDAS } from '../../lib/medidas';
 import { revisarPeso } from '../../lib/pesoValido';
@@ -45,7 +49,8 @@ const valoresIniciales = (objetivoActual) => ({
     sensaciones: null,
     // Semanal (doc 21-08): qué le altera la rutina la semana que viene.
     semana_proxima: '',
-    // Mensual
+    // Mensual · los huecos del paso 1, que es lo único que se contesta ahí.
+    huecos_paso1: {},
     dieta_dificultad: '',
     viabilidad_ajuste: '',
     entreno: { confirmacion: {}, estrellas: null, nota: '', regularidad: '',
@@ -55,9 +60,18 @@ const valoresIniciales = (objetivoActual) => ({
     lesion_nueva: '',
     cardio_proximo_mes: '',
     suplementacion: { respuesta: '', detalle: '' },
+    // El motivo de no haberla tomado, que solo se pregunta si dejó días (doc 1-09).
+    suplementacion_motivo: '',
     energia_motivo: '',
     valoracion_resultado: null,
     motivacion: null,
+    // Las del documento del 1-09: el compromiso (habla de él), las expectativas de 0 a 10
+    // y las máquinas que no tiene. `objetivo_cambio` no viaja: solo decide si se le
+    // pregunta cuál es el nuevo objetivo.
+    compromiso: '',
+    expectativas: null,
+    maquinas_no_disponibles: [],
+    objetivo_cambio: '',
     proximo_objetivo: '',
     notes: '',
     sugerencias: '',
@@ -68,12 +82,20 @@ const valoresIniciales = (objetivoActual) => ({
 });
 
 const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfilCliente,
-                            onEnviado }) => {
+                            onEnviado, onVerInforme }) => {
     const { confirm } = useConfirm();
     const [cargando, setCargando] = useState(true);
     const [ficha, setFicha] = useState(null);          // lo que manda el servidor
     const [valores, setValores] = useState(() => valoresIniciales(perfilCliente?.goal));
     const [paso, setPaso] = useState('form');          // form | resumen | enviado
+    // EL MENSUAL VA POR PASOS (documento del 1-09): 1 sus datos, 2 sus respuestas, 3 fotos
+    // y medidas, y el 4 es la entrega, que solo se ve después de mandarlo. El quincenal no
+    // los usa: son cuatro preguntas que caben en una pantalla.
+    const [pasoMensual, setPasoMensual] = useState(1);
+    // El informe, si de verdad está publicado, para el paso 4. Sin esto la pantalla le
+    // diría «ya lo tienes» sin nada que abrir.
+    const [informeListo, setInformeListo] = useState(null);
+    const [promesaDia, setPromesaDia] = useState(null);
     const [enviando, setEnviando] = useState(false);
     const [aplazado, setAplazado] = useState(false);
     // El aplazamiento en dos pasos (doc 19-08): «No puedo esta semana» abre la línea
@@ -100,7 +122,21 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
                 zona: l.zona, desde: l.desde, estado_mes: '',
                 ejercicios: l.ejercicios_vetados || [],
             }));
-            setValores(v => ({ ...v, lesiones: abiertas }));
+            // EL PESO, YA PUESTO, PARA PODER CONFIRMARLO (paso 1 del doc del 1-09:
+            // «Actualizar tus datos y confirmar que están bien»). El peso de la semana ya
+            // lo calcula el servidor; si el cliente no lo toca, confirma ese.
+            //
+            // Menos en la rama «ultimo», donde la casilla se deja vacía A PROPÓSITO (punto
+            // 34 del doc del 24-08): ese peso no es de esta semana, así que rellenarlo
+            // sería darle por bueno un número viejo sin que nadie lo mire.
+            const ps = r.data?.datos?.peso_semanal;
+            const puesto = ps && ps.regla !== 'ultimo' && ps.valor != null
+                ? String(ps.valor).replace('.', ',') : '';
+            // Y las máquinas que no tiene, con lo que dejó la última vez: el documento dice
+            // «actualiza aquí tu listado», y para eso el listado tiene que estar.
+            const maquinas = r.data?.datos?.maquinas || [];
+            setValores(v => ({ ...v, lesiones: abiertas, weight: v.weight || puesto,
+                               maquinas_no_disponibles: maquinas }));
         } catch (e) {
             console.error('No se pudo cargar el formulario del reporte', e);
             toast.error('No hemos podido preparar tu reporte. Inténtalo en un momento.');
@@ -138,8 +174,8 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
         }
     };
 
-    /** Lo que no se puede mandar a medias. Devuelve true si se puede seguir. */
-    const revisar = async () => {
+    /** El peso: obligatorio, dentro de rango y sin saltos raros sin confirmar. */
+    const revisarElPeso = async () => {
         if (!valores.weight) { toast.error('El peso es obligatorio'); return false; }
         const chequeo = revisarPeso(valores.weight, prev?.weight);
         if (!chequeo.ok) { toast.error(chequeo.error); return false; }
@@ -148,16 +184,23 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
             description: chequeo.confirmar,
             confirmLabel: 'Sí, es correcto', cancelLabel: 'Lo corrijo',
         })) return false;
-        if (esMensual) {
-            const faltan = MEDIDAS.filter(m => !valores.measurements[m.key]);
-            if (faltan.length) {
-                toast.error(faltan.length === 1
-                    ? `Te falta una medida: ${faltan[0].label.toLowerCase()}`
-                    : `Te faltan ${faltan.length} medidas, y van todas: empieza por ${faltan[0].label.toLowerCase()}`);
-                return false;
-            }
-        }
         return true;
+    };
+
+    /** Las diez medidas, y van todas: media tabla no se puede comparar con el mes pasado. */
+    const revisarLasMedidas = () => {
+        const faltan = MEDIDAS.filter(m => !valores.measurements[m.key]);
+        if (!faltan.length) return true;
+        toast.error(faltan.length === 1
+            ? `Te falta una medida: ${faltan[0].label.toLowerCase()}`
+            : `Te faltan ${faltan.length} medidas, y van todas: empieza por ${faltan[0].label.toLowerCase()}`);
+        return false;
+    };
+
+    /** Lo que no se puede mandar a medias. Devuelve true si se puede seguir. */
+    const revisar = async () => {
+        if (!await revisarElPeso()) return false;
+        return esMensual ? revisarLasMedidas() : true;
     };
 
     /** Del formulario al resumen: se cuentan las fotos para poder decir "las tres". */
@@ -210,9 +253,16 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
                     ? { respuesta: valores.suplementacion.respuesta,
                         detalle: valores.suplementacion.detalle || null }
                     : null,
+                suplementacion_motivo: valores.suplementacion_motivo || null,
                 energia_motivo: valores.energia_motivo || null,
                 valoracion_resultado: valores.valoracion_resultado,
                 motivacion: valores.motivacion,
+                // Las tres del documento del 1-09. Las máquinas viajan aunque la lista esté
+                // vacía: vaciarla es una respuesta («ya no me falta ninguna») y mandarla a
+                // null dejaría en el perfil las del mes pasado.
+                compromiso: valores.compromiso || null,
+                expectativas: valores.expectativas,
+                maquinas_no_disponibles: esMensual ? (valores.maquinas_no_disponibles || []) : null,
                 proximo_objetivo: valores.proximo_objetivo || null,
                 notes: valores.notes || null,
                 sugerencias: valores.sugerencias || null,
@@ -220,6 +270,16 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
             const r = await api.post('/reports', payload);
             setMensajeFinal(r.data?.mensaje_envio
                 || 'Antes del viernes tienes tus ajustes nuevos. Te aviso por aquí.');
+            setPromesaDia(r.data?.promesa_dia || null);
+            // ¿Le sale ya su informe? El paso 4 se lo ofrece SOLO si de verdad puede
+            // abrirlo: mientras esté pendiente de revisión, el servidor se lo niega (T9),
+            // y una tarjeta que dice «ya lo tienes» sin nada detrás es peor que no ponerla.
+            if (esMensual && r.data?.id) {
+                try {
+                    await api.get(`/reports/${r.data.id}/informe`);
+                    setInformeListo(r.data.id);
+                } catch { setInformeListo(null); }
+            }
             setPaso('enviado');
             window.scrollTo({ top: 0, behavior: 'smooth' });
             if (onEnviado) onEnviado();
@@ -243,7 +303,16 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
     if (!ficha) return null;
 
     // ── Enviado. Lo que pasa ahora, con fecha: "antes del viernes", no "en breve" ──
+    //
+    // En el mensual eso ya no es una tarjeta: es el PASO 4, «Entregarte el plan nuevo con
+    // el informe y darte feedback», que es el paso que justifica los otros tres.
     if (paso === 'enviado') {
+        if (esMensual) {
+            return (
+                <MensualPaso4 plazo={plazo} promesaDia={promesaDia}
+                    informeId={informeListo} onVerInforme={onVerInforme} />
+            );
+        }
         return (
             <div className="bg-card border border-border rounded-2xl p-6 text-center space-y-2"
                 data-testid="reporte-enviado">
@@ -263,18 +332,18 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
         );
     }
 
-    return (
-        <div className="space-y-4">
-            {esMensual ? (
-                <ReporteMensual
-                    datos={ficha.datos} perfil={ficha.perfil} bloques={bloques}
-                    valores={valores} set={set} setEntreno={setEntreno} plazo={plazo}
-                    api={api} token={token} prev={prev} />
-            ) : (
-                <ReporteQuincenal datos={ficha.datos} valores={valores} set={set} plazo={plazo} bloques={bloques}
-                    titulo={TITULOS_REPORTE[ficha?.tipo] || 'Tu reporte'} />
-            )}
+    /** Del paso 1 al 2: lo que se confirma ahí es el peso, así que se revisa ahí. */
+    const confirmarPaso1 = async () => {
+        if (!await revisarElPeso()) return;
+        setPasoMensual(2);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+    const irAPaso = (n) => { setPasoMensual(n); window.scrollTo({ top: 0, behavior: 'smooth' }); };
 
+    // «No puedo esta semana» sale UNA vez, no en cada paso: es una decisión sobre el
+    // reporte entero, y repetirla tres veces la convierte en una salida a mano.
+    const bloqueAplazar = (
+        <>
             {/* ── «NO PUEDO ESTA SEMANA», ABAJO (doc 19-08) ── En los dos reportes. Lo
                 pide él y se le concede: no depende de que no conteste un correo. Al
                 pulsarlo, la línea opcional de «¿Quieres decirme algo?», que es lo que su
@@ -312,16 +381,90 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
                     </div>
                 </div>
             )}
+        </>
+    );
 
-            {/* El mensual pasa por el resumen; el quincenal son cuatro preguntas que caben
-                en una pantalla y se manda directo (T7 acaba en «Enviar reporte»). */}
-            <button type="button" onClick={esMensual ? irAlResumen : enviar} disabled={enviando}
-                data-testid={esMensual ? 'revisar-y-enviar' : 'submit-report-btn'}
-                className="w-full py-3 rounded-xl font-bold text-sm uppercase tracking-wider text-white flex items-center justify-center gap-2 transition-all disabled:opacity-40"
-                style={{ backgroundColor: ORANGE }}>
-                <Send className="w-4 h-4" />
-                {enviando ? 'Enviando...' : esMensual ? 'Revisar y enviar' : 'Enviar reporte'}
-            </button>
+    // ── EL QUINCENAL: cuatro preguntas, una pantalla y a enviar (T7) ──
+    if (!esMensual) {
+        return (
+            <div className="space-y-4">
+                <ReporteQuincenal datos={ficha.datos} valores={valores} set={set} plazo={plazo}
+                    bloques={bloques} titulo={TITULOS_REPORTE[ficha?.tipo] || 'Tu reporte'} />
+                {bloqueAplazar}
+                <button type="button" onClick={enviar} disabled={enviando}
+                    data-testid="submit-report-btn"
+                    className="w-full py-3 rounded-xl font-bold text-sm uppercase tracking-wider text-white flex items-center justify-center gap-2 transition-all disabled:opacity-40"
+                    style={{ backgroundColor: ORANGE }}>
+                    <Send className="w-4 h-4" />
+                    {enviando ? 'Enviando...' : 'Enviar reporte'}
+                </button>
+            </div>
+        );
+    }
+
+    // ── EL MENSUAL: los cuatro pasos del documento del 1-09 ──
+    return (
+        <div className="space-y-4">
+            <CabeceraDelMensual paso={pasoMensual} plazo={plazo} />
+
+            {pasoMensual === 1 && (
+                <>
+                    <RotuloDelPaso paso={1}
+                        sub="Sale de tus check-in. Si algo no cuadra o te falta, lo arreglas al final." />
+                    <MensualPaso1
+                        api={api} valores={valores} set={set}
+                        pideGrasa={bloques.includes('grasa')} grasa={ficha.datos?.grasa}
+                        huecosRespuestas={valores.huecos_paso1}
+                        onHueco={(tipo, v) => set('huecos_paso1',
+                            { ...(valores.huecos_paso1 || {}), [tipo]: v })}
+                        onConfirmar={confirmarPaso1} />
+                    {bloqueAplazar}
+                </>
+            )}
+
+            {pasoMensual === 2 && (
+                <>
+                    <RotuloDelPaso paso={2} />
+                    <ReporteMensual
+                        datos={ficha.datos} perfil={ficha.perfil} bloques={bloques}
+                        valores={valores} set={set} setEntreno={setEntreno} />
+                    <div className="flex gap-2">
+                        <button type="button" onClick={() => irAPaso(1)} data-testid="mensual-atras"
+                            className="rounded-xl px-4 py-3 text-sm font-bold border border-border bg-card text-foreground/70 hover:border-foreground/30 transition-colors">
+                            Atrás
+                        </button>
+                        <button type="button" onClick={() => irAPaso(3)} data-testid="mensual-siguiente"
+                            className="flex-1 rounded-xl py-3 text-sm font-bold text-white uppercase tracking-wider"
+                            style={{ backgroundColor: ORANGE }}>
+                            Siguiente
+                        </button>
+                    </div>
+                </>
+            )}
+
+            {pasoMensual === 3 && (
+                <>
+                    <RotuloDelPaso paso={3} sub="Lo último, y es lo que más me dice a mí." />
+                    <MensualPaso3 api={api} token={token} valores={valores} set={set}
+                        prev={prev} plazo={plazo} />
+                    <div className="flex gap-2">
+                        <button type="button" onClick={() => irAPaso(2)} data-testid="mensual-atras"
+                            className="rounded-xl px-4 py-3 text-sm font-bold border border-border bg-card text-foreground/70 hover:border-foreground/30 transition-colors">
+                            Atrás
+                        </button>
+                        {/* El botón dice «Enviar reporte», como en el documento. Antes de
+                            mandarlo de verdad se le enseña el resumen: sigue siendo el
+                            último sitio donde puede ver lo que va a mandar. */}
+                        <button type="button" onClick={irAlResumen} disabled={enviando}
+                            data-testid="revisar-y-enviar"
+                            className="flex-1 rounded-xl py-3 text-sm font-bold text-white uppercase tracking-wider flex items-center justify-center gap-2 disabled:opacity-40"
+                            style={{ backgroundColor: ORANGE }}>
+                            <Send className="w-4 h-4" />
+                            Enviar reporte
+                        </button>
+                    </div>
+                </>
+            )}
         </div>
     );
 };
@@ -340,10 +483,25 @@ const huecosParaElServidor = (ficha, valores) => {
         return { entrenamiento: valores.entreno_huecos === 'si_no_lo_apunte'
             ? 'si_pero_no_apunte' : 'no_lo_hice' };
     }
-    const respuestas = Object.values(valores.entreno?.confirmacion || {}).filter(Boolean);
-    if (!respuestas.length) return {};
-    return { entrenamiento: respuestas.includes('si_no_lo_apunte')
-        ? 'si_pero_no_apunte' : 'no_lo_hice' };
+    // LOS DEL PASO 1 MANDAN (documento del 1-09). Ahí es donde se le enseñan los huecos y
+    // donde contesta, y además son los dos: el de entrenos y el de la dieta, que antes no
+    // se preguntaba en el mensual. Los valores ya vienen como los entiende el servidor.
+    const salida = {};
+    const p1 = valores.huecos_paso1 || {};
+    if (p1.entreno) salida.entrenamiento = p1.entreno;
+    if (p1.dieta) salida.dieta = p1.dieta;
+
+    // La confirmación día a día del bloque del entreno sigue existiendo para el perfil
+    // «con_rutina», y se respeta si el paso 1 no trajo respuesta: es más fina, porque va
+    // por fechas concretas.
+    if (!salida.entrenamiento) {
+        const respuestas = Object.values(valores.entreno?.confirmacion || {}).filter(Boolean);
+        if (respuestas.length) {
+            salida.entrenamiento = respuestas.includes('si_no_lo_apunte')
+                ? 'si_pero_no_apunte' : 'no_lo_hice';
+        }
+    }
+    return salida;
 };
 
 /** Solo lo que se le ha llegado a preguntar: un plan sin rutina no manda estrellas. */

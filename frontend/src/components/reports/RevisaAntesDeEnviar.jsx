@@ -26,8 +26,19 @@ const DIFICULTAD = {
 const AJUSTE = {
     me_adapto: 'me adapto', necesito_mas: 'necesito comer más', necesito_menos: 'necesito comer menos',
 };
-const CARDIO = { mismas: 'las mismas sesiones', mas: 'más sesiones', menos: 'menos sesiones' };
+const CARDIO = { mismas: 'las mismas sesiones', mas: 'más sesiones', menos: 'menos sesiones',
+                 quitar: 'quítamelo' };
 const SUPLEMENTOS = { todos: 'todos', alguno_no: 'alguno no', ninguno: 'ninguno' };
+// El motivo de no haberla tomado y el grado de compromiso, del documento del 1-09.
+const SUPLE_MOTIVO = {
+    se_me_olvidaba: 'se me olvidaba', se_me_acabo: 'se me acabó',
+    no_me_sentaba_bien: 'no me sentaba bien', no_quiero_seguir: 'no quiero seguir',
+};
+const COMPROMISO = {
+    maximo: 'máximo', bastante_bien: 'bastante bien, podría mejorar',
+    circunstancias: 'por circunstancias, este mes a por todas',
+    no_he_podido: 'no he sido capaz',
+};
 const ENERGIA = {
     duermo_poco: 'duermo poco', estres_trabajo: 'estrés del trabajo',
     como_poco: 'como poco', no_lo_se: 'no lo sé',
@@ -148,18 +159,42 @@ const RevisaAntesDeEnviar = ({ valores, datos, bloques, perfil, prev, enviando, 
                         extra={cardio.previstas ? CARDIO[valores.cardio_proximo_mes] : null} />
                 )}
 
-                <Renglon testid="rev-suplementacion" que="Suplementación"
-                    valor={SUPLEMENTOS[valores.suplementacion?.respuesta]}
-                    extra={valores.suplementacion?.detalle ? valores.suplementacion.detalle.trim().slice(0, 40) : null} />
+                {/* La suplementación solo se resume si se le llegó a preguntar: desde el
+                    documento del 1-09 solo sale cuando dejó días sin tomarla. */}
+                {(valores.suplementacion?.respuesta || valores.suplementacion_motivo) && (
+                    <Renglon testid="rev-suplementacion" que="Suplementación"
+                        valor={SUPLE_MOTIVO[valores.suplementacion_motivo]
+                            || SUPLEMENTOS[valores.suplementacion?.respuesta]}
+                        extra={valores.suplementacion?.detalle ? valores.suplementacion.detalle.trim().slice(0, 40) : null} />
+                )}
+
+                {/* Las máquinas que no tiene: se dicen contadas, que la lista puede ser
+                    larga y aquí lo que interesa es que no se le ha olvidado. */}
+                {(valores.maquinas_no_disponibles || []).length > 0 && (
+                    <Renglon testid="rev-maquinas" que="Máquinas que no tienes"
+                        valor={enumerar((valores.maquinas_no_disponibles || []).slice(0, 3))}
+                        extra={valores.maquinas_no_disponibles.length > 3
+                            ? `y ${valores.maquinas_no_disponibles.length - 3} más` : null} />
+                )}
 
                 {/* La energía solo se resume si se le llegó a preguntar. */}
                 {lleva('energia') && (
                     <Renglon testid="rev-energia" que="Energía" valor="baja" extra={ENERGIA[valores.energia_motivo]} />
                 )}
 
-                <Renglon testid="rev-valoracion" que="Cómo lo valoras" valor={estrellas(valores.valoracion_resultado)} />
-                <Renglon testid="rev-motivacion" que="Motivación" valor={estrellas(valores.motivacion)} />
-                <Renglon testid="rev-objetivo" que="Próximo objetivo"
+                {/* El compromiso y las expectativas sustituyen a las dos estrellas de antes
+                    (doc 1-09). Las estrellas siguen resumiéndose si vienen puestas, que es
+                    lo que pasa al reabrir un reporte de los de antes. */}
+                <Renglon testid="rev-compromiso" que="Tu compromiso" valor={COMPROMISO[valores.compromiso]} />
+                <Renglon testid="rev-expectativas" que="Expectativas"
+                    valor={valores.expectativas != null ? `${valores.expectativas} de 10` : null} />
+                {valores.valoracion_resultado != null && (
+                    <Renglon testid="rev-valoracion" que="Cómo lo valoras" valor={estrellas(valores.valoracion_resultado)} />
+                )}
+                {valores.motivacion != null && (
+                    <Renglon testid="rev-motivacion" que="Motivación" valor={estrellas(valores.motivacion)} />
+                )}
+                <Renglon testid="rev-objetivo" que="Tu objetivo ahora"
                     valor={OBJETIVO[valores.proximo_objetivo]}
                     extra={valores.proximo_objetivo && valores.proximo_objetivo === valores.objetivo_actual ? 'no cambia' : null} />
                 <Renglon testid="rev-notas" que="Notas" valor={(valores.notes || '').trim() ? 'escritas' : null} />

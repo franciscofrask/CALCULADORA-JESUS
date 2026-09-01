@@ -48,6 +48,17 @@ def cliente_con_reporte(mongo):
     datos = r.json()
     uid = datos["user"]["id"]
     perfil = mongo.client_profiles.find_one({"user_id": uid})
+    # CON PLAN ACTIVO, O NO ENTRA A NINGUNA PANTALLA.
+    #
+    # Desde el 29-08 hay candado de plan (`core/candado_de_plan.py`): sin plan, cualquier
+    # ruta de cliente devuelve 402 «Necesitas un plan activo para usar la aplicación». Este
+    # fixture registraba un usuario recien hecho y nada mas, asi que los tres tests de aqui
+    # se quedaron en rojo pidiendo `/reports` como alguien que todavia no es cliente. Lo que
+    # se prueba aqui son las respuestas de Calma, no el candado: se le da un plan y ya.
+    mongo.client_profiles.update_one(
+        {"id": perfil["id"]},
+        {"$set": {"plan": "nivel2", "status": "active",
+                  "access_until": "2099-01-01T00:00:00+00:00"}})
     reporte = {
         "id": str(uuid.uuid4()),
         "client_id": perfil["id"],

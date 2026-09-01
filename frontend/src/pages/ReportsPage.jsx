@@ -544,7 +544,10 @@ const ReportsPage = () => {
                             }}
                             prev={prev}
                             perfilCliente={profile}
-                            onEnviado={fetchData} />
+                            onEnviado={fetchData}
+                            // «Ver mi informe ›» del paso 4: abre el informe con el mismo
+                            // camino que el historial, no con una pantalla aparte.
+                            onVerInforme={verInforme} />
                     ) : (
                         // Ventana cerrada o ya mandado: el formulario no se pinta en gris
                         // detrás de un cartel (punto 4.18). Lo que sí sigue estando son las

@@ -153,7 +153,10 @@ class ReportCreate(BaseModel):
     # MENSUAL · 06 lesiones y 07 cardio (solo quien los lleve en su plan)
     lesiones: Optional[List[LesionDelReporte]] = None
     lesion_nueva: Optional[str] = Field(None, max_length=4000)
-    cardio_proximo_mes: Optional[str] = Field(None, pattern="^(mismas|mas|menos)$")
+    # `quitar` es del documento «El reporte mensual» (1-09): cuando falló sesiones se le
+    # pregunta si se las bajo, y una de las salidas es «Quítamelo, no lo voy a hacer». No
+    # es lo mismo que «menos»: uno pide menos cardio y el otro pide que no haya.
+    cardio_proximo_mes: Optional[str] = Field(None, pattern="^(mismas|mas|menos|quitar)$")
     # MENSUAL · 08 suplementación
     suplementacion: Optional[SuplementacionDelReporte] = None
     # MENSUAL · 09 energía (solo si la lleva baja: el bloque ni se enseña si va bien)
@@ -162,6 +165,30 @@ class ReportCreate(BaseModel):
     # MENSUAL · 10 cómo lo valoras
     valoracion_resultado: Optional[int] = Field(None, ge=1, le=5)
     motivacion: Optional[int] = Field(None, ge=1, le=5)
+
+    # ── LO QUE AÑADE EL DOCUMENTO «EL REPORTE MENSUAL» (1-09-2026) ────────────
+    #
+    # Tres preguntas del paso 2 que no tenían dónde caer:
+    #
+    #  - `compromiso` no es «cómo valoras el resultado». El documento lo dice en la ayuda
+    #    de la pregunta: «Ahora hablo de ti, de si has dado todo o te quedas con la
+    #    sensación de haber fallado». Una habla del programa y la otra de la persona, y por
+    #    eso son campos distintos aunque las dos se contesten en la misma pantalla.
+    #  - `expectativas` es de 0 a 10, no de 1 a 5: es la escala que dibuja la maqueta, con
+    #    sus dos extremos escritos («0 · No, esperaba más» y «10 · Genial, mejor
+    #    imposible»). El cero es una respuesta, así que `ge=0`.
+    #  - `maquinas_no_disponibles` es la lista que decide qué ejercicios se le pueden
+    #    poner. Vive aquí y no dentro de `lesiones` porque no tiene nada que ver con una
+    #    molestia: es el gimnasio al que va.
+    compromiso: Optional[str] = Field(
+        None, pattern="^(maximo|bastante_bien|circunstancias|no_he_podido)$")
+    expectativas: Optional[int] = Field(None, ge=0, le=10)
+    maquinas_no_disponibles: Optional[List[str]] = None
+    # El motivo de no haber tomado la suplementación, cuando se le pregunta porque falló
+    # días. `suplementacion.detalle` sigue siendo el texto libre; esto es la respuesta
+    # cerrada, que es la que se puede contar.
+    suplementacion_motivo: Optional[str] = Field(
+        None, pattern="^(se_me_olvidaba|se_me_acabo|no_me_sentaba_bien|no_quiero_seguir)$")
     # MENSUAL · 13 sugerencias (opcional, y es para nosotros)
     sugerencias: Optional[str] = Field(None, max_length=4000)
 
@@ -226,6 +253,11 @@ class ReportResponse(BaseModel):
     energia_motivo: Optional[str] = None
     valoracion_resultado: Optional[int] = None
     motivacion: Optional[int] = None
+    # Las tres del documento del 1-09 (ver `ReportCreate`).
+    compromiso: Optional[str] = None
+    expectativas: Optional[int] = None
+    maquinas_no_disponibles: Optional[List[str]] = None
+    suplementacion_motivo: Optional[str] = None
     sugerencias: Optional[str] = None
     # El informe que se monta al enviar (T9): mientras esté "pendiente_revision" el
     # cliente no lo ve; pasa a "entregado" cuando el coach lo publica.

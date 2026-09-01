@@ -314,7 +314,7 @@ async def datos_de_los_cierres(perfil: Dict[str, Any], d0: date, d1: date) -> Di
     cierres = await db.checkins.find(
         {"client_id": perfil.get("id"), "type": "daily",
          "created_at": {"$gte": d0.isoformat(), "$lte": d1.isoformat() + "T23:59:59"}},
-        {"_id": 0, "energy": 1, "movimiento": 1},
+        {"_id": 0, "energy": 1, "movimiento": 1, "suplementos": 1},
     ).to_list(200)
 
     energias = [float(c["energy"]) for c in cierres
@@ -322,6 +322,18 @@ async def datos_de_los_cierres(perfil: Dict[str, Any], d0: date, d1: date) -> Di
     media = round(sum(energias) / len(energias), 1) if energias else None
     dias_bajos = sum(1 for e in energias if e < 3)
     movio_menos = sum(1 for c in cierres if c.get("movimiento") == "menos")
+
+    # LOS DÍAS DE SUPLEMENTACIÓN, PARA SABER SI HAY QUE PREGUNTARLE.
+    #
+    # En el documento del 1-09 la pregunta de suplementos es CONDICIONAL: «Las dos del
+    # centro solo salen si falló». Sin este recuento no se puede decidir, y se le acababa
+    # preguntando todos los meses «¿estás tomando la que te pauté?» a quien la toma todos
+    # los días y ya lo ha marcado noche a noche.
+    from core.actividad_mensual import cierres_del_periodo
+    from core.plan_access import plan_grants_feature
+    contados = cierres_del_periodo(
+        cierres, len(_dias(d0, d1)),
+        tiene_suplementacion=plan_grants_feature(perfil.get("plan"), "suplementacion"))
 
     return {
         "cierres": len(cierres),
@@ -331,6 +343,7 @@ async def datos_de_los_cierres(perfil: Dict[str, Any], d0: date, d1: date) -> Di
         # bloque no sale: preguntarle por una energía que no ha marcado no lleva a nada.
         "energia_baja": media is not None and media < 3,
         "dias_movio_menos": movio_menos,
+        "suplementacion": contados["suplementacion"],
         "dias_periodo": len(_dias(d0, d1)),
     }
 
@@ -404,4 +417,149 @@ async def datos_del_reporte(perfil: Dict[str, Any], tipo: str,
     datos["dieta"] = await datos_dieta(perfil, d0, d1)
     datos["cierres"] = await datos_de_los_cierres(perfil, d0, d1)
     datos["lesiones"] = lesiones_del_perfil(perfil)
+    # «Estos son los que me diste»: las máquinas que dijo que no tiene, para que el mes que
+    # viene salgan puestas y solo tenga que corregir lo que haya cambiado (doc 1-09).
+    datos["maquinas"] = [m for m in (perfil.get("maquinas_no_disponibles") or [])
+                         if str(m).strip()]
     return datos
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EL PASO 1 DEL MENSUAL (documento «El reporte mensual», 1-09-2026)
+#
+# «Sale de tus check-in. Si algo no cuadra o te falta, lo arreglas al final.»
+#
+# El paso 1 no pregunta: enseña. Y lo que enseña cambia entero con el selector de arriba
+# -- «Desde tu último reporte» (28 días) o «Desde que empezaste» --, no solo el peso.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def serie_de_pesos(perfil: Dict[str, Any], d0: Optional[date] = None,
+                   d1: Optional[date] = None) -> List[Dict[str, Any]]:
+    """Los pesajes del cliente, saneados y en orden, acotados al periodo si se pide.
+
+    Sale de `client_profiles.pesos`, que es LA fuente del peso: la misma que pintan Mis
+    macros y Evolución desde el 17-08. Coger el `weight` de cada reporte daba dos curvas
+    distintas para el mismo cliente el mismo día.
+    """
+    from core.series_cliente import sanea_peso
+
+    desde = d0.isoformat() if d0 else None
+    hasta = d1.isoformat() if d1 else None
+    puntos: List[Dict[str, Any]] = []
+    for p in (perfil.get("pesos") or []):
+        fecha, valor = str(p.get("fecha") or "")[:10], sanea_peso(p.get("valor"))
+        if not fecha or valor is None:
+            continue
+        if (desde and fecha < desde) or (hasta and fecha > hasta):
+            continue
+        puntos.append({"fecha": fecha, "valor": valor})
+    puntos.sort(key=lambda x: x["fecha"])
+    return puntos
+
+
+async def _circulos_del_peso(perfil: Dict[str, Any], d0: date, d1: date,
+                             desde_el_principio: bool) -> Dict[str, Any]:
+    """Los círculos de la curva y la frase que los explica.
+
+    Dos lecturas distintas, y son del documento:
+
+      - En los 28 días: «El círculo es el peso de tu quincenal». Uno solo, el del reporte
+        intermedio, que es el único punto marcado de ese tramo.
+      - En el programa entero: «Los círculos son tus reportes anteriores. El primero es tu
+        cuestionario inicial».
+
+    SIN REPORTES NO HAY CÍRCULOS NI FRASE. Explicar unos puntos que no están es peor que
+    no decir nada: al que manda su primer mensual la curva le sale limpia y sin pie.
+    """
+    reportes = await db.reports.find(
+        {"client_id": perfil.get("id"),
+         "created_at": {"$gte": d0.isoformat(), "$lte": d1.isoformat() + "T23:59:59"}},
+        {"_id": 0, "tipo": 1, "weight": 1, "created_at": 1},
+    ).sort("created_at", 1).to_list(200)
+
+    from core.series_cliente import sanea_peso
+    puntos = [{"fecha": str(r.get("created_at") or "")[:10],
+               "valor": sanea_peso(r.get("weight")),
+               "que_es": "reporte"}
+              for r in reportes]
+    puntos = [p for p in puntos if p["fecha"] and p["valor"] is not None]
+
+    if not desde_el_principio:
+        # El quincenal del tramo. Si mandó más de uno, el último: es «tu quincenal», el que
+        # tiene en la cabeza cuando abre el mensual.
+        quincenales = [p for p, r in zip(puntos, reportes) if r.get("tipo") == "quincenal"]
+        if not quincenales:
+            return {"circulos": [], "nota": None}
+        return {"circulos": quincenales[-1:],
+                "nota": "El círculo es el peso de tu quincenal."}
+
+    if not puntos:
+        return {"circulos": [], "nota": None}
+
+    # El primer círculo es el cuestionario inicial: el pesaje más antiguo de su serie, que
+    # es el que dejó al darse de alta. No hay campo «peso inicial» en ninguna parte; el
+    # panel lo saca igual, del primer punto de la curva (`routes/admin.py`).
+    serie = serie_de_pesos(perfil)
+    if serie and serie[0]["fecha"] < puntos[0]["fecha"]:
+        puntos.insert(0, {**serie[0], "que_es": "cuestionario"})
+    return {"circulos": puntos,
+            "nota": "Los círculos son tus reportes anteriores. El primero es tu cuestionario inicial."}
+
+
+async def datos_del_paso1(perfil: Dict[str, Any], d0: date, d1: date,
+                          desde_el_principio: bool = False) -> Dict[str, Any]:
+    """Todo el paso 1 para un periodo: el peso, lo que ha hecho, cómo se ha sentido y los huecos.
+
+    LOS HUECOS NO VIAJAN EN EL PERIODO LARGO, y no es un olvido: «Los huecos no cambian:
+    esos son siempre de los últimos 28». Van a `None` para que quien pinta sepa que tiene
+    que conservar los que ya tenía en vez de vaciar el bloque.
+    """
+    from core.actividad_mensual import (cierres_del_periodo, filas_de_actividad,
+                                        huecos_del_paso1, pie_de_las_sensaciones,
+                                        sensaciones_del_periodo, titulo_de_actividad)
+    from core.plan_access import plan_grants_feature
+
+    dias = len(_dias(d0, d1))
+
+    cierres_crudos = await db.checkins.find(
+        {"client_id": perfil.get("id"), "type": "daily",
+         "created_at": {"$gte": d0.isoformat(), "$lte": d1.isoformat() + "T23:59:59"}},
+        {"_id": 0, "extras_respuesta": 1, "movimiento": 1, "suplementos": 1,
+         "descanso": 1, "energy": 1, "hunger_anxiety": 1},
+    ).to_list(400)
+
+    dieta = await datos_dieta(perfil, d0, d1)
+    entreno = await datos_entreno(perfil, d0, d1)
+    cierres = cierres_del_periodo(
+        cierres_crudos, dias,
+        tiene_suplementacion=plan_grants_feature(perfil.get("plan"), "suplementacion"))
+
+    pesos = serie_de_pesos(perfil, d0, d1)
+    circulos = await _circulos_del_peso(perfil, d0, d1, desde_el_principio)
+
+    return {
+        "periodo": {"desde": d0.isoformat(), "hasta": d1.isoformat(), "dias": dias,
+                    "desde_el_principio": desde_el_principio},
+        "peso": {
+            "serie": pesos,
+            "actual": pesos[-1]["valor"] if pesos else None,
+            "primero": pesos[0]["valor"] if pesos else None,
+            # La diferencia solo con dos pesajes distintos: con uno solo, «−0,0 kg» es
+            # decirle que no ha cambiado cuando lo que pasa es que no se ha pesado.
+            "diferencia": (round(pesos[-1]["valor"] - pesos[0]["valor"], 1)
+                           if len(pesos) > 1 else None),
+            **circulos,
+        },
+        "actividad": {
+            "titulo": titulo_de_actividad(dias, desde_el_principio),
+            "filas": filas_de_actividad(dieta, entreno, cierres),
+        },
+        "sensaciones": {
+            "filas": sensaciones_del_periodo(cierres),
+            "pie": pie_de_las_sensaciones(desde_el_principio, dias),
+        },
+        "huecos": (None if desde_el_principio else huecos_del_paso1(
+            entrenos_sin_registrar=len(entreno.get("sin_registrar") or []),
+            dias_sin_dieta=max(0, dias - int(dieta.get("dias_registrados") or 0)),
+        )),
+    }

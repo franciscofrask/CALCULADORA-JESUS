@@ -1,27 +1,25 @@
 /**
- * EL REPORTE MENSUAL (T8 del doc 16-08). Orden nuevo, y distinto por plan.
+ * PASO 2 DEL MENSUAL · TUS SENSACIONES Y TUS DUDAS (T8 del doc 16-08, repartido en pasos
+ * por el documento «El reporte mensual» del 1-09-2026).
  *
- * Tres cosas cambian respecto al de antes:
+ * Aquí vive lo que se le PREGUNTA. Lo que se le enseña está en el paso 1 y lo que se le
+ * pide medir, en el paso 3.
  *
- *  1. EL PESO, LAS MEDIDAS Y LAS FOTOS VAN AL PRINCIPIO. Estaban debajo del botón de
- *     enviar -- las fotos, literalmente después de enviar --, así que lo que más cuesta
- *     de todo el reporte era lo último que veía, cuando ya lo había dado por terminado.
- *  2. CADA BLOQUE EMPIEZA POR EL DATO. "Este mes has registrado 25 de 28 días" y solo
+ * Las tres ideas de T8 siguen mandando dentro del paso:
+ *
+ *  1. CADA BLOQUE EMPIEZA POR EL DATO. "Este mes has registrado 25 de 28 días" y solo
  *     entonces la pregunta que no se puede deducir: "¿te ha costado seguirla?".
- *  3. NO ES EL MISMO PARA LOS TRES. Lesiones y cardio son de quien lleva entrenador
+ *  2. NO ES EL MISMO PARA LOS TRES. Lesiones y cardio son de quien lleva entrenador
  *     detrás; el que no lleva rutina en su plan tiene en su lugar la rutina del mes.
+ *  3. Se caen los deslizadores de sueño, energía y estrés. El sueño se pregunta en el
+ *     cierre del día, y la energía solo aquí si la lleva baja.
  *
- * La numeración de los bloques la calcula el formulario, no está escrita a mano: quien
- * no lleva lesiones ni cardio tiene once bloques y su suplementación es la 06, no la 08.
- *
- * Se caen los deslizadores de sueño, energía y estrés. El sueño se pregunta ahora en el
- * cierre del día, y la energía solo se pregunta aquí si la lleva baja.
+ * LOS BLOQUES YA NO VAN NUMERADOS. Los números son ahora de los cuatro pasos, y tener dos
+ * numeraciones a la vez -- «paso 2» y dentro «06 Lesiones» -- es contar dos veces cosas
+ * distintas. Qué bloques salen lo sigue decidiendo el servidor con `bloques`.
  */
 import React from 'react';
-import { Bloque, Dato, DosBotones, Estrellas, EstrellasMedia, Opciones, TextoLibre, enumerarFechas, kg } from './piezas';
-import TresFotos from './TresFotos';
-import { MEDIDAS, VIDEO_MEDIDAS, valorAnterior, diferencia } from '../../lib/medidas';
-import { PESO_MIN, PESO_MAX } from '../../lib/pesoValido';
+import { Bloque, Dato, DosBotones, Estrellas, EstrellasMedia, Opciones, TextoLibre, enumerarFechas } from './piezas';
 
 const ORANGE = '#FF671F';
 
@@ -52,153 +50,91 @@ const fraseDeLosMacros = (dieta) => {
 // Cuantos dias sin confirmar se enseñan de entrada: los demas, detras de «ver mas».
 const DIAS_A_LA_VISTA = 2;
 
-const ReporteMensual = ({ datos, perfil, bloques, valores, set, setEntreno, plazo,
-                          api, token, prev }) => {
+/**
+ * «¿CUÁNTO TE HA COSTADO LA DIETA?», las cuatro del documento del 1-09.
+ *
+ * Cada opción lleva dentro las dos respuestas que antes se preguntaban por separado: lo
+ * que le ha costado (`dieta_dificultad`) y hacia dónde tendría que ir el ajuste
+ * (`viabilidad_ajuste`). Se guardan las dos, así que nada de lo que ya lee esos campos
+ * -- el panel, el informe, el histórico -- se entera del cambio.
+ *
+ * En la primera, «me_adapto» no es un invento: quien dice que comer así le resulta
+ * facilísimo se adapta a lo que le pongas, que es exactamente lo que significa ese valor.
+ */
+const COSTE_DE_LA_DIETA = [
+    { value: 'nada', dificultad: 'nada', viabilidad: 'me_adapto',
+      label: 'Nada, comiendo así es facilísimo' },
+    { value: 'me_cuesta', dificultad: 'algun_dia', viabilidad: 'me_adapto',
+      label: 'Me cuesta, pero no fallo. Podría adaptarme a un nuevo ajuste de macros sin problema' },
+    { value: 'necesito_mas', dificultad: 'bastante', viabilidad: 'necesito_mas',
+      label: 'Sí, o me pones más comida o no me veo capaz de aguantar, aún a riesgo de evolucionar más despacio' },
+    { value: 'necesito_menos', dificultad: 'bastante', viabilidad: 'necesito_menos',
+      label: 'Sí, baja mis macros porque no llego por mucho que me esfuerce' },
+];
+
+/** Cuál de las cuatro está marcada, leyendo los dos campos que se guardan. */
+const costeDeLaDieta = (valores) => (COSTE_DE_LA_DIETA.find(
+    o => o.dificultad === valores.dieta_dificultad
+        && o.viabilidad === valores.viabilidad_ajuste) || {}).value || '';
+
+/** El objetivo que tiene puesto, dicho como se dice. */
+const FRASE_DEL_OBJETIVO = {
+    definicion: 'Bajar mis niveles de grasa al máximo',
+    volumen: 'Ganar la máxima masa muscular',
+    mantenimiento: 'Mantener lo que he conseguido',
+};
+
+/**
+ * LA ESCALA DE 0 A 10, con sus dos extremos escritos.
+ *
+ * De 0 a 10 y no de 1 a 5 con estrellas: es la de la maqueta, y el cero es una respuesta
+ * («No, esperaba más»), no la ausencia de respuesta. Por eso se compara con `!= null` en
+ * vez de mirar si el número es verdadero, que dejaría el cero sin poder marcarse.
+ */
+const Escala0a10 = ({ pregunta, valor, onChange, minLabel, maxLabel, testid }) => (
+    <div data-testid={testid}>
+        {pregunta && <p className="text-sm text-foreground mb-2">{pregunta}</p>}
+        <div className="flex gap-1">
+            {Array.from({ length: 11 }, (_, n) => {
+                const puesto = valor === n;
+                return (
+                    <button key={n} type="button" data-testid={`${testid}-${n}`}
+                        onClick={() => onChange(puesto ? null : n)}
+                        className={`flex-1 min-w-0 h-9 rounded-lg border text-[13px] font-bold tabular-nums transition-all ${
+                            puesto ? 'border-[#FF671F] bg-[#FF671F] text-white'
+                                   : 'border-border bg-muted text-foreground/60 hover:border-foreground/30'}`}>
+                        {n}
+                    </button>
+                );
+            })}
+        </div>
+        <div className="flex justify-between gap-4 mt-1.5">
+            <span className="text-[11px] text-muted-foreground">{minLabel}</span>
+            <span className="text-[11px] text-muted-foreground text-right">{maxLabel}</span>
+        </div>
+    </div>
+);
+
+const ReporteMensual = ({ datos, perfil, bloques, valores, set, setEntreno }) => {
     const dieta = datos?.dieta || {};
     const entreno = datos?.entreno || {};
     const cardio = entreno.cardio || {};
-    // Los días de entreno sin confirmar se enseñan de dos en dos (ver el bloque 05).
+    // Los días de entreno sin confirmar se enseñan de dos en dos (ver el bloque del entreno).
     const [verTodosLosDias, setVerTodosLosDias] = React.useState(false);
     const cierres = datos?.cierres || {};
-    const peso = datos?.peso_ultimo;
     const lesiones = datos?.lesiones || [];
+    // Los días que no tomó la suplementación, que es lo que decide si se le pregunta.
+    // Sin el bloque de suplementos en su plan no hay `de` y no se pregunta nada.
+    const suplementacion = cierres.suplementacion || {};
+    const diasSinSuplementacion = suplementacion.de
+        ? Math.max(0, suplementacion.de - (suplementacion.cumplidos || 0)) : 0;
 
-    // "01", "02"... en el orden que le toca a ESTE cliente.
-    const numero = (clave) => {
-        const i = (bloques || []).indexOf(clave);
-        return i < 0 ? null : String(i + 1).padStart(2, '0');
-    };
     const lleva = (clave) => (bloques || []).includes(clave);
-
-    const medidaSet = (key, v) => set('measurements', { ...valores.measurements, [key]: v });
 
     return (
         <div className="space-y-4" data-testid="reporte-mensual">
-            {/* ── LA CABECERA, IGUAL PARA LOS TRES ── */}
-            <div>
-                {plazo?.semana != null && (
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                        Semana {plazo.semana} de tu ciclo
-                    </p>
-                )}
-                <h2 className="text-xl font-bold text-foreground" style={{ fontFamily: 'Barlow Condensed', letterSpacing: '0.03em' }}>
-                    Tu reporte mensual
-                </h2>
-                <p className="text-[15px] text-muted-foreground">Tus fotos, tus medidas y unas preguntas.</p>
-                {plazo?.cierre && (
-                    <p className="text-[13px] mt-1" style={{ color: ORANGE }} data-testid="mensual-plazo">
-                        Hasta el {plazo.cierre}{plazo.queda ? ` · ${plazo.queda}` : ''}
-                    </p>
-                )}
-            </div>
-
-            {/* ── 01 · TU PESO ── */}
-            <Bloque numero={numero('peso')} titulo="Tu peso" testid="mensual-peso">
-                <div className="flex items-center gap-2">
-                    <input
-                        type="number" step="0.1" min={PESO_MIN} max={PESO_MAX} inputMode="decimal"
-                        value={valores.weight} onChange={(e) => set('weight', e.target.value)}
-                        placeholder="—" data-testid="weight-input"
-                        className="flex-1 min-w-0 bg-muted border border-input rounded-xl px-3 py-3 text-foreground text-2xl font-bold placeholder-foreground/20 focus:outline-none focus:border-[#FF671F] transition-colors"
-                    />
-                    <span className="text-lg text-foreground/40 font-bold">kg</span>
-                </div>
-                {peso && (
-                    <p className="text-[13px] text-muted-foreground">
-                        Último registro: {kg(peso.valor)}, el {peso.fecha_label}
-                    </p>
-                )}
-            </Bloque>
-
-            {/* ── EL % DE GRASA · solo cada 12 semanas ──
-                La pantalla donde se lo pedimos la primera vez se lo promete al pie, y no
-                había ningún sitio donde volviera a pedirse: el dato se quedaba con la edad
-                que tuviera y con él se calculan los macros. Sale detrás del peso, que es
-                cuando está mirándose los números, y solo el mes que toca. */}
-            {lleva('grasa') && (
-                <Bloque numero={numero('grasa')} titulo="Tu porcentaje de grasa"
-                    sub="Toca repetirlo: se estima cada 12 semanas." testid="mensual-grasa">
-                    <div className="flex items-center gap-2">
-                        <input
-                            type="number" step="0.5" min="3" max="70" inputMode="decimal"
-                            value={valores.body_fat ?? ''} onChange={(e) => set('body_fat', e.target.value)}
-                            placeholder="—" data-testid="body-fat-input"
-                            className="flex-1 min-w-0 bg-muted border border-input rounded-xl px-3 py-3 text-foreground text-2xl font-bold placeholder-foreground/20 focus:outline-none focus:border-[#FF671F] transition-colors"
-                        />
-                        <span className="text-lg text-foreground/40 font-bold">%</span>
-                    </div>
-                    {datos?.grasa?.valor != null && (
-                        <p className="text-[13px] text-muted-foreground">
-                            El último fue {datos.grasa.valor} %
-                            {datos.grasa.semanas != null && `, hace ${datos.grasa.semanas} semanas`}.
-                            Con las fotos de referencia de tu perfil.
-                        </p>
-                    )}
-                </Bloque>
-            )}
-
-            {/* ── 02 · TUS MEDIDAS · con la del mes pasado al lado ── */}
-            <Bloque numero={numero('medidas')} titulo="Tus medidas" sub="Las diez, en centímetros."
-                testid="medidas">
-                <p className="text-[13px] text-muted-foreground -mt-1">
-                    Si te puede medir alguien, y siempre el mismo, mejor.
-                </p>
-                {/* El vídeo delante: lo que hace que el error de medir se repita igual cada
-                    mes, que es lo que permite comparar. */}
-                <details className="rounded-xl overflow-hidden border border-border">
-                    <summary className="cursor-pointer select-none px-3 py-2 text-[13px] font-bold uppercase tracking-wider text-foreground/70">
-                        Cómo medir los perímetros
-                    </summary>
-                    <div className="bg-black" style={{ aspectRatio: '16 / 9' }}>
-                        <iframe src={VIDEO_MEDIDAS} title="Cómo medir los perímetros"
-                            allow="fullscreen; picture-in-picture" data-testid="video-medidas"
-                            className="w-full h-full border-0" />
-                    </div>
-                </details>
-
-                <div className="space-y-2">
-                    {MEDIDAS.map(({ key, label }) => {
-                        const antes = valorAnterior(prev?.measurements, key);
-                        const dif = diferencia(valores.measurements[key], antes);
-                        return (
-                            <div key={key} className="grid grid-cols-[1fr_5rem_4.5rem] gap-2 items-center">
-                                <label className="text-sm text-foreground/80">{label}</label>
-                                <input
-                                    type="number" step="0.1" inputMode="decimal"
-                                    value={valores.measurements[key] ?? ''}
-                                    onChange={(e) => medidaSet(key, e.target.value)}
-                                    placeholder="—" data-testid={`medida-${key}`}
-                                    className="h-10 px-2 rounded-lg bg-muted text-center text-base font-bold outline-none focus:ring-2 focus:ring-brand"
-                                />
-                                {/* A la derecha, la del mes pasado, "para que sepa si va bien":
-                                    en cuanto escribe, la diferencia. */}
-                                <span className="text-[11px] text-right tabular-nums">
-                                    {dif ? (
-                                        <span className={dif.signo === 0 ? 'text-foreground/40'
-                                            : dif.signo > 0 ? 'text-blue-500' : 'text-emerald-500'}>
-                                            {dif.texto}
-                                        </span>
-                                    ) : antes != null ? (
-                                        <span className="text-foreground/30">{String(antes).replace('.', ',')}</span>
-                                    ) : null}
-                                </span>
-                            </div>
-                        );
-                    })}
-                </div>
-            </Bloque>
-
-            {/* ── 03 · TUS FOTOS ── */}
-            <Bloque numero={numero('fotos')} titulo="Tus fotos"
-                sub="De frente, de espaldas y de perfil. Relajado." testid="mensual-fotos">
-                <p className="text-[13px] text-muted-foreground -mt-1">
-                    Recuerda hacértelas siempre en las mismas buenas condiciones en que te hiciste las primeras.
-                </p>
-                <TresFotos api={api} token={token} esMensual />
-            </Bloque>
-
-            {/* ── 04 · TU DIETA · el dato primero ── */}
-            <Bloque numero={numero('dieta')} titulo="Tu dieta" testid="mensual-dieta">
+            {/* ── TU DIETA · el dato primero ── */}
+            <Bloque titulo="Tu dieta" testid="mensual-dieta">
                 {dieta.dias_periodo > 0 && (
                     <Dato testid="dato-dieta"
                         encabezado="ESTE MES HAS REGISTRADO"
@@ -206,29 +142,30 @@ const ReporteMensual = ({ datos, perfil, bloques, valores, set, setEntreno, plaz
                         pct={dieta.pct}
                         nota={fraseDeLosMacros(dieta)} />
                 )}
-                <Opciones testid="dieta-dificultad" pregunta="¿Te ha costado seguirla?"
-                    valor={valores.dieta_dificultad} onChange={(v) => set('dieta_dificultad', v)}
-                    columnas={2}
-                    opciones={[
-                        { value: 'nada', label: 'Nada, la llevo bien' },
-                        { value: 'algun_dia', label: 'Algún día suelto' },
-                        { value: 'bastante', label: 'Bastante' },
-                        { value: 'no_he_podido', label: 'No he podido' },
-                    ]} />
-                <Opciones testid="viabilidad-ajuste" pregunta="¿Podrías con un ajuste nuevo?"
-                    valor={valores.viabilidad_ajuste} onChange={(v) => set('viabilidad_ajuste', v)}
-                    opciones={[
-                        { value: 'me_adapto', label: 'Me adapto a lo que me pongas' },
-                        { value: 'necesito_mas', label: 'Necesito comer más para poder cumplir' },
-                        { value: 'necesito_menos', label: 'Necesito comer menos para poder cumplir' },
-                    ]} />
+                {/* UNA PREGUNTA, NO DOS (documento del 1-09). Antes se preguntaba «¿te ha
+                    costado seguirla?» y después «¿podrías con un ajuste nuevo?», y las dos
+                    juntas se contestaban mal: el que decía «bastante» y «me adapto» dejaba
+                    al entrenador sin saber si tenía que subirle o bajarle la comida.
+
+                    Las cuatro opciones del documento llevan las dos respuestas dentro, y
+                    por eso siguen guardándose los dos campos: el panel y el informe leen
+                    `dieta_dificultad` y `viabilidad_ajuste`, y ninguno se entera. */}
+                <Opciones testid="dieta-dificultad" pregunta="¿Cuánto te ha costado la dieta?"
+                    ayuda="Lo que te ha costado a ti, no lo que hayas cumplido"
+                    valor={costeDeLaDieta(valores)}
+                    onChange={(v) => {
+                        const o = COSTE_DE_LA_DIETA.find(x => x.value === v);
+                        set('dieta_dificultad', o ? o.dificultad : '');
+                        set('viabilidad_ajuste', o ? o.viabilidad : '');
+                    }}
+                    opciones={COSTE_DE_LA_DIETA} />
             </Bloque>
 
-            {/* ── 05 · TU ENTRENO · aquí es donde se separan los tres.
+            {/* ── TU ENTRENO · aquí es donde se separan los tres.
                 Si no lleva rutina cargada, el servidor no manda este bloque: no habría ni
                 dato que enseñar ni pregunta que hacer (regla 3 del doc). ── */}
             {lleva('entreno') && (
-            <Bloque numero={numero('entreno')} titulo="Tu entreno" testid="mensual-entreno">
+            <Bloque titulo="Tu entreno" testid="mensual-entreno">
                 {entreno.previstos > 0 && perfil !== 'sin_rutina' && (
                     <Dato testid="dato-entreno"
                         encabezado="ESTE MES HAS ENTRENADO"
@@ -365,9 +302,9 @@ const ReporteMensual = ({ datos, perfil, bloques, valores, set, setEntreno, plaz
             </Bloque>
             )}
 
-            {/* ── 06 · LESIONES Y MOLESTIAS · solo quien lo lleva en su plan ── */}
+            {/* ── LESIONES Y MOLESTIAS · solo quien lo lleva en su plan ── */}
             {lleva('lesiones') && (
-                <Bloque numero={numero('lesiones')} titulo="Lesiones y molestias" testid="mensual-lesiones">
+                <Bloque titulo="Lesiones y molestias" testid="mensual-lesiones">
                     {lesiones.length > 0 && (
                         <>
                             <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -415,53 +352,77 @@ const ReporteMensual = ({ datos, perfil, bloques, valores, set, setEntreno, plaz
                 </Bloque>
             )}
 
-            {/* ── 07 · TU CARDIO · solo quien lo lleva en su plan ── */}
-            {lleva('cardio') && (
-                <Bloque numero={numero('cardio')} titulo="Tu cardio" testid="mensual-cardio">
-                    {cardio.previstas > 0 && (
-                        <Dato testid="dato-cardio" encabezado="ESTE MES HAS HECHO"
-                            cifra={`${cardio.hechas} de ${cardio.previstas} ${cardio.previstas === 1 ? 'sesión' : 'sesiones'}`}
-                            pct={cardio.pct} />
-                    )}
+            {/* ── TU CARDIO · solo quien lo lleva en su plan ── */}
+            {/* SOLO SI FALLÓ SESIONES («las dos del centro solo salen si falló», doc 1-09).
+                Al que las hizo todas no se le pregunta nada: ya está contestado en el paso
+                1, donde lee «Cardio 12 de 12». Antes se le preguntaba igual, todos los
+                meses, y la respuesta más honrada era no tocar nada. */}
+            {lleva('cardio') && cardio.previstas > 0 && cardio.hechas < cardio.previstas && (
+                <Bloque titulo="Tu cardio" testid="mensual-cardio">
+                    <p className="text-sm text-foreground">
+                        Hiciste {cardio.hechas} {cardio.hechas === 1 ? 'sesión' : 'sesiones'} de
+                        cardio de las {cardio.previstas} programadas.
+                    </p>
                     {cierres.dias_movio_menos > 0 && (
-                        <p className="text-[13px] text-muted-foreground">
-                            Te moviste menos de lo habitual {cierres.dias_movio_menos} días de los {cierres.dias_periodo}
+                        <p className="text-[13px] text-muted-foreground -mt-1">
+                            Y te moviste menos de lo habitual {cierres.dias_movio_menos} días de los {cierres.dias_periodo}.
                         </p>
                     )}
-                    <Opciones testid="cardio-proximo" pregunta="De cara al mes que viene"
+                    <Opciones testid="cardio-proximo"
+                        pregunta="Si te bajo el número de sesiones, ¿sería viable para que cumplieras?"
                         valor={valores.cardio_proximo_mes} onChange={(v) => set('cardio_proximo_mes', v)}
                         opciones={[
-                            { value: 'mismas', label: 'Puedo con las mismas sesiones' },
-                            { value: 'mas', label: 'Puedo con más sesiones' },
-                            { value: 'menos', label: 'Necesito menos sesiones' },
+                            { value: 'mismas', label: 'No, mantenme las mismas: este mes cumplo' },
+                            { value: 'menos', label: 'Sí, bájamelas y las cumplo' },
+                            { value: 'quitar', label: 'Quítamelo, no lo voy a hacer' },
                         ]} />
                 </Bloque>
             )}
 
             {/* ── TU SUPLEMENTACIÓN · los tres ── */}
-            <Bloque numero={numero('suplementacion')} titulo="Tu suplementación" testid="mensual-suplementacion">
-                <Opciones testid="suplementacion" pregunta="¿Estás tomando la que te pauté?"
-                    columnas={3}
-                    valor={valores.suplementacion.respuesta}
-                    onChange={(v) => set('suplementacion', { ...valores.suplementacion, respuesta: v })}
-                    opciones={[
-                        { value: 'todos', label: 'Todos' },
-                        { value: 'alguno_no', label: 'Alguno no' },
-                        { value: 'ninguno', label: 'Ninguno' },
-                    ]} />
-                {['alguno_no', 'ninguno'].includes(valores.suplementacion.respuesta) && (
-                    <TextoLibre testid="suplementacion-detalle" etiqueta="¿Cuál y por qué?"
-                        ayuda="Y si quieres que te lo quite."
-                        valor={valores.suplementacion.detalle}
-                        onChange={(v) => set('suplementacion', { ...valores.suplementacion, detalle: v })} />
-                )}
-            </Bloque>
+            {/* LA OTRA CONDICIONAL: solo si dejó días sin tomarla. El dato sale de sus
+                cierres, así que preguntarle «¿estás tomando la que te pauté?» al que la ha
+                marcado 28 noches seguidas es pedirle que repita lo que ya dijo. */}
+            {diasSinSuplementacion > 0 && (
+                <Bloque titulo="Tu suplementación" testid="mensual-suplementacion">
+                    <p className="text-sm text-foreground">
+                        No tomaste la suplementación {diasSinSuplementacion}{' '}
+                        {diasSinSuplementacion === 1 ? 'día' : 'días'} de
+                        los {suplementacion.de}.
+                    </p>
+                    <Opciones testid="suplementacion"
+                        ayuda="Indica el motivo y si tienes previsto tomarla el mes que viene o te la quito"
+                        valor={valores.suplementacion_motivo}
+                        onChange={(v) => {
+                            set('suplementacion_motivo', v);
+                            // El campo de siempre se sigue rellenando: el panel y el informe
+                            // leen `suplementacion.respuesta`, y quien deja días sin tomarla
+                            // es «alguno no» salvo que diga que la deja del todo.
+                            set('suplementacion', {
+                                ...valores.suplementacion,
+                                respuesta: !v ? '' : v === 'no_quiero_seguir' ? 'ninguno' : 'alguno_no',
+                            });
+                        }}
+                        opciones={[
+                            { value: 'se_me_olvidaba', label: 'Se me olvidaba' },
+                            { value: 'se_me_acabo', label: 'Se me acabó' },
+                            { value: 'no_me_sentaba_bien', label: 'No me sentaba bien' },
+                            { value: 'no_quiero_seguir', label: 'No quiero seguir tomándola' },
+                        ]} />
+                    {valores.suplementacion_motivo && (
+                        <TextoLibre testid="suplementacion-detalle" etiqueta="¿Cuál?"
+                            ayuda="Si es solo uno de ellos, dime cuál."
+                            valor={valores.suplementacion.detalle}
+                            onChange={(v) => set('suplementacion', { ...valores.suplementacion, detalle: v })} />
+                    )}
+                </Bloque>
+            )}
 
             {/* ── TU ENERGÍA · SOLO si la lleva baja. Si va bien, el bloque no aparece, y
                 el servidor ya lo ha quitado de la lista para que no quede un hueco en la
                 numeración ── */}
             {lleva('energia') && (
-                <Bloque numero={numero('energia')} titulo="Tu energía" testid="mensual-energia">
+                <Bloque titulo="Tu energía" testid="mensual-energia">
                     <Dato testid="dato-energia" encabezado="POR TUS CIERRES DEL DÍA"
                         cifra={`Llevas ${cierres.dias_energia_baja} ${cierres.dias_energia_baja === 1 ? 'día' : 'días'} marcando la energía por debajo de 3.`} />
                     <Opciones testid="energia-motivo" pregunta="¿A qué crees que se debe?" columnas={4}
@@ -475,45 +436,85 @@ const ReporteMensual = ({ datos, perfil, bloques, valores, set, setEntreno, plaz
                 </Bloque>
             )}
 
-            {/* ── CÓMO LO VALORAS · las dos preguntas nuevas ── */}
-            <Bloque numero={numero('valoracion')} titulo="Cómo lo valoras" testid="mensual-valoracion">
-                <div>
-                    <p className="text-sm text-foreground mb-2">
-                        ¿Cómo valoras el resultado teniendo en cuenta el esfuerzo que has invertido?
-                    </p>
-                    <Estrellas testid="valoracion" valor={valores.valoracion_resultado}
-                        onChange={(v) => set('valoracion_resultado', v)} />
-                </div>
-                <div>
-                    <p className="text-sm text-foreground mb-2">
-                        Y de cara al mes que viene, ¿cómo estás de motivación y de ganas?
-                    </p>
-                    <Estrellas testid="motivacion" valor={valores.motivacion}
-                        onChange={(v) => set('motivacion', v)} />
-                </div>
+            {/* ── LAS MÁQUINAS QUE NO TIENE ──
+                Nueva del documento del 1-09, y es la mitad que faltaba de las molestias: sin
+                saber a qué gimnasio va, la rutina del mes puede salir con ejercicios que no
+                puede hacer aunque no le duela nada. Sale con lo que dejó el mes pasado, para
+                que solo tenga que corregir lo que haya cambiado. */}
+            <Bloque titulo="¿Y máquinas que no tienes?"
+                sub="Actualiza aquí tu listado: si ha entrado alguna nueva, dímelo"
+                testid="mensual-maquinas">
+                <ListaDeEtiquetas testid="maquinas"
+                    lista={valores.maquinas_no_disponibles || []}
+                    onChange={(v) => set('maquinas_no_disponibles', v)}
+                    etiqueta={null} ejemplo="Prensa horizontal" anadir="+ Añadir máquina" />
             </Bloque>
 
-            {/* ── TU PRÓXIMO OBJETIVO · es el que dispara el cambio de fase ── */}
-            <Bloque numero={numero('objetivo')} titulo="Tu próximo objetivo"
-                sub="De cara a las próximas 4 semanas. Puede ser el mismo o puedes cambiar (piénsalo bien)."
-                testid="mensual-objetivo">
-                <Opciones testid="proximo-objetivo" columnas={3}
-                    valor={valores.proximo_objetivo} onChange={(v) => set('proximo_objetivo', v)}
+            {/* ── EL COMPROMISO Y LAS EXPECTATIVAS ──
+                Sustituyen a las dos estrellas de «Cómo lo valoras». No es el mismo par de
+                preguntas con otra escala: la primera habla DE ÉL («si has dado todo o te
+                quedas con la sensación de haber fallado») y la segunda DEL PROGRAMA. Antes
+                las dos preguntaban por el resultado y por las ganas, que es otra cosa. */}
+            <Bloque titulo="Cómo lo valoras" testid="mensual-valoracion">
+                <Opciones testid="compromiso"
+                    pregunta="¿Cómo consideras que ha sido tu grado de compromiso con el programa hasta el momento?"
+                    ayuda="Ahora hablo de ti, de si has dado todo o te quedas con la sensación de haber fallado"
+                    valor={valores.compromiso} onChange={(v) => set('compromiso', v)}
                     opciones={[
-                        { value: 'definicion', label: 'Definición' },
-                        { value: 'volumen', label: 'Volumen' },
-                        { value: 'mantenimiento', label: 'Mantenimiento' },
+                        { value: 'maximo', label: 'Mi compromiso es máximo, dentro de mis posibilidades estoy dando lo mejor de mí' },
+                        { value: 'bastante_bien', label: 'He cumplido bastante bien, pero podría haberlo hecho mejor' },
+                        { value: 'circunstancias', label: 'Por circunstancias no he podido hacer bien las cosas, pero asumo mi responsabilidad y las próximas 4 semanas voy a por todas' },
+                        { value: 'no_he_podido', label: 'No he sido capaz de llevarlo a cabo, demasiado exigente para lo que puedo dar a día de hoy' },
                     ]} />
+                <Escala0a10 testid="expectativas"
+                    pregunta="En líneas generales, ¿el programa está cumpliendo tus expectativas?"
+                    valor={valores.expectativas} onChange={(v) => set('expectativas', v)}
+                    minLabel="0 · No, esperaba más" maxLabel="10 · Genial, mejor imposible" />
             </Bloque>
 
-            {/* ── LO QUE QUIERAS CONTARME ── */}
-            <Bloque numero={numero('libre')} titulo="Lo que quieras contarme" testid="mensual-libre">
-                <TextoLibre testid="notes-textarea" etiqueta="¿Alguna dificultad o algún logro de este mes?"
+            {/* ── TU OBJETIVO AHORA · es el que dispara el cambio de fase ──
+                El documento le enseña primero el que tiene y solo le pregunta si ha
+                cambiado. Es la regla de siempre (primero el dato, luego la pregunta) y
+                además evita que cambie de fase sin querer al pasar por encima: para
+                cambiarlo hay que decir «Sí» a propósito. */}
+            <Bloque titulo="Tu objetivo ahora" testid="mensual-objetivo">
+                {valores.objetivo_actual && (
+                    <Dato testid="dato-objetivo" encabezado="TU OBJETIVO AHORA"
+                        cifra={FRASE_DEL_OBJETIVO[valores.objetivo_actual] || valores.objetivo_actual} />
+                )}
+                <div>
+                    <p className="text-sm text-foreground">¿Ha cambiado en algo respecto al mes pasado?</p>
+                    <p className="text-[13px] text-muted-foreground mb-2">Si dices que sí, te pregunto cuál</p>
+                </div>
+                <DosBotones testid="objetivo-cambio"
+                    valor={valores.objetivo_cambio}
+                    onChange={(v) => {
+                        set('objetivo_cambio', v);
+                        // Con «No» se manda el que ya tenía: el servidor compara contra su
+                        // fase y no cambia nada, pero el reporte queda diciendo cuál era.
+                        set('proximo_objetivo', v === 'no' ? (valores.objetivo_actual || '') : '');
+                    }}
+                    opciones={[{ value: 'si', label: 'Sí' }, { value: 'no', label: 'No' }]} />
+                {valores.objetivo_cambio === 'si' && (
+                    <Opciones testid="proximo-objetivo" columnas={3}
+                        pregunta="¿Cuál es ahora?"
+                        valor={valores.proximo_objetivo} onChange={(v) => set('proximo_objetivo', v)}
+                        opciones={[
+                            { value: 'definicion', label: 'Definición' },
+                            { value: 'volumen', label: 'Volumen' },
+                            { value: 'mantenimiento', label: 'Mantenimiento' },
+                        ]} />
+                )}
+            </Bloque>
+
+            {/* ── DUDAS O LO QUE QUIERAS CONTARME ── */}
+            <Bloque titulo="Dudas o lo que quieras contarme" testid="mensual-libre">
+                <TextoLibre testid="notes-textarea" ayuda="Ahora es el momento y el lugar"
                     valor={valores.notes} onChange={(v) => set('notes', v)} filas={4} />
             </Bloque>
 
             {/* ── SUGERENCIAS · nueva, y opcional ── */}
-            <Bloque numero={numero('sugerencias')} titulo="Sugerencias" sub="Opcional."
+            <Bloque titulo="Sugerencias" sub="Opcional."
                 testid="mensual-sugerencias">
                 <TextoLibre testid="sugerencias" etiqueta="¿Qué nos sugieres para mejorar la aplicación?"
                     valor={valores.sugerencias} onChange={(v) => set('sugerencias', v)} />
@@ -523,12 +524,14 @@ const ReporteMensual = ({ datos, perfil, bloques, valores, set, setEntreno, plaz
 };
 
 /**
- * "Ejercicios que no puedes hacer": los que ya dijo, más los que añada.
+ * UNA LISTA DE ETIQUETAS QUITABLES: las que ya dijo, más las que añada.
  *
- * Es la mitad útil de una lesión. Saber que le duele el hombro no cambia nada; saber que
- * no puede hacer press militar sí cambia la rutina del mes que viene.
+ * Se usa dos veces, y las dos salen del documento del 1-09 con la misma forma: los
+ * ejercicios que le dan molestias y las máquinas que no tiene. En los dos casos la lista
+ * llega con lo de la última vez -- «Estos son los que me diste. Quita los que ya no y
+ * añade los nuevos» -- y lo que se guarda es la lista entera, no lo que cambió.
  */
-const EjerciciosVetados = ({ lista, onChange, testid }) => {
+const ListaDeEtiquetas = ({ lista, onChange, testid, etiqueta, ejemplo, anadir: textoAnadir }) => {
     const [nuevo, setNuevo] = React.useState('');
     const [escribiendo, setEscribiendo] = React.useState(false);
 
@@ -542,7 +545,7 @@ const EjerciciosVetados = ({ lista, onChange, testid }) => {
 
     return (
         <div data-testid={testid}>
-            <p className="text-[13px] text-muted-foreground mb-1.5">Ejercicios que no puedes hacer</p>
+            {etiqueta && <p className="text-[13px] text-muted-foreground mb-1.5">{etiqueta}</p>}
             <div className="flex flex-wrap items-center gap-1.5">
                 {(lista || []).map((e, i) => (
                     <button key={`${e}-${i}`} type="button"
@@ -556,17 +559,29 @@ const EjerciciosVetados = ({ lista, onChange, testid }) => {
                     <input autoFocus value={nuevo} onChange={(e) => setNuevo(e.target.value)}
                         onBlur={anadir}
                         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); anadir(); } }}
-                        data-testid={`${testid}-input`} placeholder="Press militar"
+                        data-testid={`${testid}-input`} placeholder={ejemplo}
                         className="px-2.5 py-1 rounded-lg bg-card border border-input text-[13px] text-foreground outline-none focus:border-[#FF671F]" />
                 ) : (
                     <button type="button" onClick={() => setEscribiendo(true)} data-testid={`${testid}-anadir`}
                         className="px-2.5 py-1 rounded-lg border border-dashed border-border text-[13px] text-muted-foreground hover:text-foreground">
-                        + añadir
+                        {textoAnadir}
                     </button>
                 )}
             </div>
         </div>
     );
 };
+
+/**
+ * "Ejercicios que te dan molestias": los que ya dijo, más los que añada.
+ *
+ * Es la mitad útil de una lesión. Saber que le duele el hombro no cambia nada; saber que
+ * no puede hacer press militar sí cambia la rutina del mes que viene.
+ */
+const EjerciciosVetados = ({ lista, onChange, testid }) => (
+    <ListaDeEtiquetas lista={lista} onChange={onChange} testid={testid}
+        etiqueta="Estos son los que me diste. Quita los que ya no y añade los nuevos"
+        ejemplo="Press militar" anadir="+ Añadir ejercicio" />
+);
 
 export default ReporteMensual;

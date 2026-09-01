@@ -27,8 +27,18 @@ HACE_UN_MES = "2026-07-02T10:00:00+00:00"
 HOY = "2026-08-02T10:00:00+00:00"
 
 
-class TestSinFotosNoHayInforme:
-    """La condicion mas dura del documento."""
+class TestElInformeSaleSiempre:
+    """EL INFORME SALE AUNQUE NO HAYA FOTOS (bloque 9, P41; commit 9bfd6f2).
+
+    Esta clase decia lo contrario -- «sin fotos no se genera», que era la condicion dura
+    de la especificacion del 31-07 -- y se quedo asi cuando la regla se quito a proposito
+    el 23-08: «montar_informe arma los ocho apartados con lo que haya y la foto lo
+    completa; el apartado de fotos dice que faltan y ofrece subirlas, sin esconder el
+    resto». O sea, dos assert en rojo defendiendo una decision derogada.
+
+    Se corrige aqui, contra la regla que hay: lo que no puede pasar es que el cliente que
+    no subio fotos se quede sin ninguna de las otras siete cosas que le dice el informe.
+    """
 
     def _montar(self, photos):
         return montar_informe(
@@ -39,13 +49,13 @@ class TestSinFotosNoHayInforme:
             macros_comidos={}, macros_nuevos=None,
             explicacion_equipo=None, la_escribe_el_equipo=False)
 
-    def test_sin_fotos_no_se_genera(self):
+    def test_sin_fotos_se_genera_igual(self):
         r = self._montar([])
-        assert r["generado"] is False
-        assert r["motivo"] == "sin_fotos"
+        assert r["generado"] is True
+        assert not r.get("motivo")
 
-    def test_fotos_a_none_tampoco(self):
-        assert self._montar(None)["generado"] is False
+    def test_fotos_a_none_tambien(self):
+        assert self._montar(None)["generado"] is True
 
     def test_con_fotos_si(self):
         assert self._montar(["frente.jpg"])["generado"] is True
