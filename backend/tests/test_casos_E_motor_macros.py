@@ -291,15 +291,22 @@ class TestCaso33LaLecheEntera:
         assert frase(LECHE) == "cuenta los tres macros"
 
     def test_el_buscador_dice_que_cuentan_los_tres(self, catalogo):
-        """«Te cuenta todo» desde el 27-08 (punto 147).
+        """Y vuelve a decirlo, que es lo que este caso pedia desde el principio (1-09).
 
-        Decia «Te cuentan los tres», y del huevo eso es falso: tiene proteina y grasa, no
-        tiene hidratos, y las dos le cuentan. La frase compara con lo que el alimento TIENE,
-        no con tres siempre, asi que la leche y el huevo dicen lo mismo y los dos aciertan.
+        La frase es de Jesus y la marca como suya en «Todo lo validado antes del 1 de
+        septiembre», punto 2.10. El 27-08 (punto 147) se cambio entera por «Te cuenta todo»
+        con un motivo bueno: del huevo, «los tres» es falso, porque tiene proteina y grasa y
+        no tiene hidratos.
+
+        Lo que fallaba no era la frase, era aplicarla a todos. Medido contra el catalogo, de
+        3.219 fichas hay 1.218 que llevan los tres macros y le cuentan los tres, y ahi «Te
+        cuentan los tres» es exacta. Asi que se dice donde es verdad --la leche entera es el
+        caso-- y donde no llega a tres se queda «Te cuenta todo», que no miente en ninguna:
+        el huevo lo sigue diciendo, y la pechuga de pollo (20 P / 0 H / 0 G) tambien.
         """
         ficha = catalogo.get(LECHE["id"])
         assert ficha, "La leche entera (id 358) ya no esta en el catalogo"
-        assert ficha["que_te_cuenta"] == "Te cuenta todo"
+        assert ficha["que_te_cuenta"] == "Te cuentan los tres"
 
 
 # ═════════════════════════════════════════════════════════════════════════════

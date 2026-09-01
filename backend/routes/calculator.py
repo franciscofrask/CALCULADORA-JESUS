@@ -467,10 +467,12 @@ def _que_te_cuenta(orig: dict, eff: dict, se_calibra: bool = False) -> str:
     LAS CUATRO FORMAS (punto 147 del 27-08). Se comparan los macros que CUENTAN con los que
     el alimento TIENE, no con los tres siempre:
 
-      - «Te cuenta todo»            le cuentan todos los que lleva. El huevo entra aqui:
-                                    tiene proteina y grasa, no tiene hidratos, y las dos
-                                    cuentan. Antes esto decia «Te cuentan los tres», que del
-                                    huevo es sencillamente falso.
+      - «Te cuentan los tres»       lleva los tres y le cuentan los tres. Es la frase de
+                                    Jesus, y vuelve el 1-09 («Todo lo validado antes del 1 de
+                                    septiembre», punto 2.10, donde la marca como suya).
+      - «Te cuenta todo»            le cuentan todos los que lleva, pero no son tres. El
+                                    huevo entra aqui: tiene proteina y grasa, no tiene
+                                    hidratos, y las dos cuentan.
       - «Te cuenta solo la grasa»   lleva mas de uno y solo le cuenta ese.
       - «Te cuenta la proteína y la grasa»   lleva los tres y le cuentan dos.
       - «No te cuenta nada»         las verduras libres y los zero.
@@ -490,6 +492,14 @@ def _que_te_cuenta(orig: dict, eff: dict, se_calibra: bool = False) -> str:
     if not cuentan:
         return "No te cuenta nada"
     if len(cuentan) == len(tiene):
+        # LA FRASE DE JESUS, DONDE ES VERDAD (1-09). El 27-08 se cambio entera por «Te cuenta
+        # todo» porque «los tres» del huevo es falso, y era cierto. Pero medido contra el
+        # catalogo, su frase no es incorrecta: es incompleta. De 3.219 fichas, 1.267 llevan
+        # los tres macros y le cuentan los tres, y ahi «Te cuentan los tres» es exacta; solo
+        # falla en las 344 que no llegan a tres. Asi que se dice donde es verdad y en las
+        # demas se queda «Te cuenta todo», que no miente en ninguna.
+        if len(cuentan) == 3:
+            return "Te cuentan los tres"
         return "Te cuenta todo"
     if len(cuentan) == 1:
         solo = "" if se_calibra else "solo "
