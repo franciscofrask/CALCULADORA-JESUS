@@ -2387,13 +2387,19 @@ const NutritionPage = () => {
             const d = res.desfases?.[mealKey];
             const falla = d && ['P', 'H', 'G'].filter(m => Math.abs(d[m]) > 4);
             const nombre = { P: 'proteína', H: 'hidratos', G: 'grasa' };
-            // Cuando el redondeo a cantidades pesables mueve algo, se dice: los macros no
-            // salen clavados y el cliente tiene derecho a saber por qué (Jesús, 15-08,
-            // fallo 29: «5 g de aguacate es media cucharadita, nadie pesa eso»).
-            const notaRedondeo = d?.redondeado
-                // Reescrito por el punto 9 del 23-08 (y acortado por Francisco).
-                ? ' Cantidades redondeadas para pesarlas fácil: los macros pueden variar unos gramos.'
-                : '';
+            // AQUÍ IBA LA COLETILLA DEL REDONDEO, Y SE HA IDO (Francisco, 31-08-2026): «quita
+            // el texto intermedio, cantidades redondeadas para pesarlas fácil, no tiene
+            // sentido».
+            //
+            // Nació de un motivo bueno (Jesús, 15-08, fallo 29: «5 g de aguacate es media
+            // cucharadita, nadie pesa eso»), se reescribió en el punto 9 del 23-08 y el propio
+            // Francisco ya la había acortado una vez. Pero salía pegada a «Comida cuadrada a
+            // tus macros», que es la buena noticia, y la dejaba en un «cuadrada, pero...» que
+            // no lleva a ninguna parte: el cliente no puede hacer nada con esa frase.
+            //
+            // Lo que la frase explicaba sigue estando donde se puede usar: las cantidades ya
+            // salen en números pesables, y cuando de verdad no cuadra se dice por cuánto y de
+            // qué (el aviso de abajo).
             if (silencioso) return;
             if (nEx) {
                 toast.warning(`Comida cuadrada. ${nEx === 1 ? 'Un alimento ya no está' : `${nEx} alimentos ya no están`} en el catálogo y se quitó.`);
@@ -2411,10 +2417,10 @@ const NutritionPage = () => {
                         ? ` Para cuadrarlo te falta añadir algo con ${nombre[s.macro]}.`
                         : '';
                 toast.warning(
-                    `No se puede cuadrar sin quitar nada: ${texto}.${comoArreglarlo} No se ha quitado ninguno.${notaRedondeo}`,
+                    `No se puede cuadrar sin quitar nada: ${texto}.${comoArreglarlo} No se ha quitado ninguno.`,
                     { duration: 9000 });
             } else {
-                toast.success(`Comida cuadrada a tus macros.${notaRedondeo}`);
+                toast.success('Comida cuadrada a tus macros.');
             }
         } catch { toast.error('No se pudo cuadrar la comida'); }
     };

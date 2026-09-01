@@ -111,10 +111,28 @@ const estadoDeLaComida = (status, target, served, cuantosAlimentos, esPeri = fal
                 color: null,
             });
         }
-        // Sin desvíos que nombrar (pasa cuando lo que se pasa no llega a «excederse»): se
-        // dice la palabra a secas, como antes.
+        // «FALTAN» A SECAS NO DICE NADA (Francisco, 31-08-2026): «dice faltan, pero no dice el
+        // qué».
+        //
+        // Aquí se ponía la palabra sola cuando ningún macro llegaba a salirse de su margen. Y
+        // eso pasa porque hay DOS criterios midiendo lo mismo: `getMealStatus` resta los
+        // valores exactos y esto resta los que se ven (objetivo al medio gramo, servido a la
+        // décima, regla del 17-08). En el borde se contradicen: con un objetivo de 32,6 g de
+        // proteína el medio gramo lo baja a 32,5, y un desvío de 4,0 -- que para el estado ya
+        // es «falta» -- se queda en 3,9 y aquí no entra. La comida decía «faltan» y no había
+        // nada que enseñar.
+        //
+        // Se nombra igualmente el que más lejos esté, aunque no llegue al margen. Un número
+        // pequeño al lado de la palabra es siempre mejor que la palabra sola: dice de qué va
+        // y deja ver que es poco. La causa de fondo -- las dos restas -- queda apuntada.
         if (!partes.length) {
-            partes.push(status === 'sobra' ? { texto: 'sobran', color: 'pasado' } : { texto: 'faltan', color: null });
+            const peor = desvios.slice().sort((a, b) => Math.abs(b.d) - Math.abs(a.d))[0];
+            const cuanto = peor ? num1(Math.abs(peor.d)) : null;
+            partes.push(status === 'sobra'
+                ? { texto: cuanto ? `sobran ${cuanto} de ${NOMBRE_MACRO[peor.k]}` : 'sobran',
+                    color: 'pasado' }
+                : { texto: cuanto ? `faltan ${cuanto} de ${NOMBRE_MACRO[peor.k]}` : 'faltan',
+                    color: null });
         }
         return { partes, texto: partes.map((p) => p.texto).join('\n'), color: partes[0].color };
     }

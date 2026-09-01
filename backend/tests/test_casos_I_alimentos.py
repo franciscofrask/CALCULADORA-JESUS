@@ -85,13 +85,18 @@ def test_60_pinta_un_punado_de_fichas_no_trescientas():
 
     El número está en el fuente (CAP_TELEFONO / CAP_ORDENADOR) porque es una decisión del
     front, no un dato de la API.
+
+    EL TELEFONO SUBIO DE 20 A 40 EL 31-08-2026 (Francisco: «el boton de carga es de 20 en 20
+    pero tiene que ser de 40 en 40»). Lo que este caso defiende no es el numero exacto sino
+    que no se pinten las trescientas de golpe -- los 69.711 px que se midieron --, asi que el
+    tope sube a 60 en los dos y sigue cazando una vuelta a pintarlo todo.
     """
     src = _fuente("pages", "FoodSearchPage.jsx")
 
     tel = re.search(r"const CAP_TELEFONO\s*=\s*(\d+)", src)
     orden = re.search(r"const CAP_ORDENADOR\s*=\s*(\d+)", src)
     assert tel and orden, "la pantalla ya no dice cuántas fichas pinta de golpe"
-    assert int(tel.group(1)) <= 30, f"en el móvil pinta {tel.group(1)} fichas de golpe"
+    assert int(tel.group(1)) <= 60, f"en el móvil pinta {tel.group(1)} fichas de golpe"
     assert int(orden.group(1)) <= 60, f"en el ordenador pinta {orden.group(1)} fichas de golpe"
     # Y que de verdad corte la lista al pintar, no que el número esté ahí de adorno.
     assert "filtered.slice(0, aLaVista)" in src, (

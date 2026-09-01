@@ -75,18 +75,22 @@ const TODAS_CATEGORIAS = (() => {
  * quedaba en **69.711 px, ochenta y dos pantallas de móvil**. Nadie recorre 300 alimentos
  * por orden alfabético con el pulgar, y mientras tanto el teléfono los tiene todos montados.
  *
- * Veinte y un botón para traer más. No se quita nada -- pulsando se llega hasta el final
+ * Cuarenta y un botón para traer más. No se quita nada -- pulsando se llega hasta el final
  * de la lista -- y se dice cuántos hay, que es lo que evita que un recorte se lea como
  * «no hay más». Antes había un tope de 300 incluso pulsando y de ahí no se pasaba: con
  * 3.211 alimentos, «viendo 300» sin botón era un callejón (P39, doc 23-08). Fuera el tope.
  *
- * En el ordenador, cuarenta: caben dos columnas y la pantalla es más alta, así que el
- * primer golpe de vista da más sin volver a los 69.000 px. Esto era solo del teléfono
- * porque el encargo era no tocar el escritorio, y allí seguían los 300 de una vez
+ * El teléfono empezó en veinte (11-08) y subió a cuarenta el 31-08 a petición de Francisco:
+ * lo que hacía falta era el paginado, no que la tanda fuera corta, y con veinte hay que
+ * pulsar el doble de veces para llegar al mismo sitio. En el ordenador ya eran cuarenta
  * (Jesús, 11-08: *«el paginado del móvil funciona igual de bien aquí; con más ancho, 40»*).
  * El problema de fondo -- que se descargan todos -- es el mismo en los dos y sigue ahí.
  */
-const CAP_TELEFONO = 20;
+// CUARENTA TAMBIEN EN EL TELÉFONO (Francisco, 31-08-2026): «el botón de carga es de 20 en 20
+// pero tiene que ser de 40 en 40». Estaba en 20 desde el 11-08, cuando se metió el paginado
+// para no dejar la pantalla en 69.000 px de alto; con el paginado ya hecho, veinte se queda
+// corto y obliga a pulsar el doble de veces para llegar a lo mismo.
+const CAP_TELEFONO = 40;
 const CAP_ORDENADOR = 40;
 
 // SIN COLORES (punto 160 del 27-08). Aquí había una píldora por macro -- verde la proteína,
