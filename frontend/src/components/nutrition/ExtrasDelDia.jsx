@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Search, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
 import { num1 } from '../../lib/numeros';
 
@@ -62,11 +63,68 @@ const detalleDelExtra = (e) => [
  * un toque de más entre «me he comido algo» y apuntarlo es justo donde se pierde la gente.
  * Con algo ya apuntado se abre solo: la lista tiene que verse sin buscarla.
  */
+//: Los que se cuentan por piezas: ahí la cantidad son unidades y no gramos.
+const esPorUnidad = (food) => Boolean(food?.por_unidad ?? food?.unidades);
+
 const ExtrasDelDia = ({ api, fecha, extras = [], onAnadido, onQuitado, origen, plegable = false }) => {
     const [texto, setTexto] = useState('');
     const [guardando, setGuardando] = useState(false);
     const [quitando, setQuitando] = useState(null);
     const [abierto, setAbierto] = useState(!plegable);
+    // ── El buscador, que vuelve (punto 1.2 del documento del 1-09) ───────────
+    const [query, setQuery] = useState('');
+    const [resultados, setResultados] = useState([]);
+    const [buscando, setBuscando] = useState(false);
+    const [elegido, setElegido] = useState(null);
+    const [cantidad, setCantidad] = useState('');
+
+    // Con su respiro de 300 ms, como el resto de buscadores de la casa.
+    useEffect(() => {
+        if (elegido) return undefined;
+        const q = query.trim();
+        if (q.length < 2) { setResultados([]); setBuscando(false); return undefined; }
+        setBuscando(true);
+        const t = setTimeout(() => {
+            api.get('/calculator/search', { params: { q, limit: 30 } })
+                .then((r) => { setResultados(r.data?.alimentos || []); setBuscando(false); })
+                .catch((err) => {
+                    console.error('[extras] no se pudo buscar en el catálogo', err);
+                    setResultados([]); setBuscando(false);
+                });
+        }, 300);
+        return () => clearTimeout(t);
+    }, [query, elegido, api]);
+
+    const soltarLaBusqueda = () => {
+        setQuery(''); setResultados([]); setElegido(null); setCantidad('');
+    };
+
+    const elegir = (food) => {
+        setElegido(food);
+        // Un arranque razonable que el cliente corrige: 1 unidad, o 100 g.
+        setCantidad(esPorUnidad(food) ? '1' : '100');
+    };
+
+    const apuntarDelCatalogo = async () => {
+        const valor = parseFloat(String(cantidad).replace(',', '.'));
+        if (!valor || valor <= 0) { toast.error('Dime cuánto ha sido.'); return; }
+        if (guardando) return;
+        setGuardando(true);
+        try {
+            const cuerpo = esPorUnidad(elegido)
+                ? { alimento_id: elegido.id, unidades: valor }
+                : { alimento_id: elegido.id, cantidad_g: valor };
+            const r = await api.post(`/diets/${fecha}/extras`,
+                origen ? { ...cuerpo, origen } : cuerpo);
+            onAnadido?.(r.data.extra);
+            soltarLaBusqueda();
+        } catch (err) {
+            console.error('[extras] no se pudo apuntar el extra', err);
+            toast.error('No se pudo apuntar el extra. Prueba otra vez.');
+        } finally {
+            setGuardando(false);
+        }
+    };
 
     const apuntar = async () => {
         const limpio = texto.trim();
@@ -115,7 +173,7 @@ const ExtrasDelDia = ({ api, fecha, extras = [], onAnadido, onQuitado, origen, p
                 <div className="min-w-0">
                     <p className="caption">Extras del día</p>
                     <p className="text-sm text-muted-foreground mt-1">
-                        Si comes algo que no estaba previsto en tu dieta, ponlo aquí en cuanto pase.
+                        Si comes algo que no está en tu dieta del día, ponlo aquí, por pequeño que sea.
                     </p>
                 </div>
                 {plegable && !desplegado && (
@@ -150,6 +208,83 @@ const ExtrasDelDia = ({ api, fecha, extras = [], onAnadido, onQuitado, origen, p
             })}
 
             <div className={`space-y-2 ${desplegado ? '' : 'hidden'}`}>
+                {/* EL BUSCADOR DELANTE, LA CAJA DETRÁS (punto 1.2 del documento del 1-09).
+                    El 24-08 se quitó el catálogo de aquí y quedó solo el texto libre, con un
+                    motivo bueno: eran cuatro pasos para apuntar un pincho de tortilla, y en
+                    toda la base había UN extra apuntado. Pero el texto libre no cuenta macros
+                    -- no hay ficha de la que sacarlos --, así que quien se come algo que SÍ
+                    está en el catálogo no tenía forma de que contara.
+                    Vuelven los dos, en el orden del documento: primero buscarlo, y si no está,
+                    escribirlo. Cada uno dice lo que hace en la frase de abajo. */}
+                {!elegido && (
+                    <div className="relative">
+                        <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                        <Input value={query} onChange={(ev) => setQuery(ev.target.value)}
+                            placeholder="Buscar el alimento…"
+                            aria-label="Buscar el alimento en el catálogo"
+                            className="pl-10 rounded-xl bg-muted border-0"
+                            data-testid="extras-buscar" />
+                    </div>
+                )}
+
+                {/* Los resultados, cortos: es una lista para reconocer lo que se ha comido,
+                    no para elegir el mejor encaje de macros (eso es el buscador de la dieta). */}
+                {!elegido && query.trim().length >= 2 && (
+                    <div className="max-h-56 overflow-y-auto space-y-1" data-testid="extras-resultados">
+                        {buscando && <p className="text-xs text-muted-foreground px-1">Buscando…</p>}
+                        {!buscando && resultados.length === 0 && (
+                            <p className="text-xs text-muted-foreground px-1">
+                                Eso no está en el catálogo. Escríbelo aquí abajo.
+                            </p>
+                        )}
+                        {resultados.map((food) => (
+                            <button key={food.id} onClick={() => elegir(food)}
+                                data-testid={`extras-elegir-${food.id}`}
+                                className="w-full text-left rounded-lg border border-border px-3 py-2 hover:border-brand/50 transition-colors">
+                                <span className="block text-sm text-foreground">{food.nombre}</span>
+                                <span className="block text-xs text-muted-foreground">
+                                    por {esPorUnidad(food) ? 'unidad' : '100 g'}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                {/* Elegido uno, lo único que falta es cuánto. */}
+                {elegido && (
+                    <div className="surface p-3 space-y-2" data-testid="extras-cuanto">
+                        <p className="text-sm font-bold text-foreground">{elegido.nombre}</p>
+                        <div className="flex items-center gap-2">
+                            <Input type="number" inputMode="decimal" min="0"
+                                step={esPorUnidad(elegido) ? '0.5' : '5'}
+                                value={cantidad} onChange={(ev) => setCantidad(ev.target.value)}
+                                aria-label={esPorUnidad(elegido) ? 'Cuántas unidades' : 'Cuántos gramos'}
+                                className="rounded-xl bg-muted border-0"
+                                data-testid="extras-cantidad" />
+                            <span className="text-sm text-muted-foreground shrink-0">
+                                {esPorUnidad(elegido) ? 'ud' : 'g'}
+                            </span>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={soltarLaBusqueda} data-testid="extras-otro"
+                                className="flex-1 h-11 rounded-xl border border-border text-sm text-muted-foreground">
+                                Buscar otro
+                            </button>
+                            <button onClick={apuntarDelCatalogo} disabled={guardando}
+                                data-testid="extras-apuntar-catalogo"
+                                className="flex-1 h-11 rounded-xl bg-brand text-white font-bold text-sm disabled:opacity-60">
+                                {guardando ? 'Apuntando…' : 'Apuntarlo'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {!elegido && (
+                    <p className="text-xs text-muted-foreground text-center" data-testid="extras-o-si-no">
+                        o si no está
+                    </p>
+                )}
+
                 {/* El «a ojo» va DENTRO del campo (punto 31), que es donde lo lee justo
                     cuando va a escribir, y no gasta una línea de la pantalla. Tres filas
                     porque en un móvil de 390 px el gris ocupa tres líneas y con dos se
@@ -161,7 +296,7 @@ const ExtrasDelDia = ({ api, fecha, extras = [], onAnadido, onQuitado, origen, p
                     onKeyDown={(ev) => {
                         if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); apuntar(); }
                     }}
-                    placeholder="Con la cantidad aproximada a ojo si no lo pesas, pero ponlo todo."
+                    placeholder="Escríbelo a mano. En cuanto pase, con la cantidad a ojo si no lo pesas."
                     /* El campo no tiene etiqueta encima (el rótulo es el del bloque), así que
                        el nombre para quien lo lee con voz sale de aquí. */
                     aria-label="Apunta un extra del día"
@@ -194,6 +329,20 @@ const ExtrasDelDia = ({ api, fecha, extras = [], onAnadido, onQuitado, origen, p
                         {guardando ? 'Apuntando...' : 'Apuntarlo'}
                     </button>
                 )}
+
+                {/* AQUÍ VA LA TERCERA FRASE DEL DOCUMENTO, Y TODAVÍA NO ESTÁ PUESTA.
+                    El punto 1.2 del 1-09 la escribe así: «Lo que pongas a mano no cuenta en
+                    tus macros, simplemente queda el registro. Lo que busques, sí.»
+                    La primera mitad es cierta hoy. La segunda NO: el extra del catálogo se
+                    guarda con sus macros, pero ninguna pantalla los suma. `TuDietaHoy` lo dice
+                    en su propio código -- «los extras NO se suman (punto 28 del doc del
+                    24-08) [...] si alguien vuelve a plantearlo, la respuesta es que no» --, y
+                    el motivo que da es serio: sumarlos encogía el «Falta» del resto del día y
+                    la app acababa diciéndole que se saltara una comida por haberse comido una
+                    tarta.
+                    Ponerla sin que sea verdad es peor que no ponerla, así que espera a que se
+                    decida si los extras del catálogo cuentan. En cuanto se decida, la frase
+                    entra aquí tal cual la escribió Jesús. */}
             </div>
         </section>
     );
