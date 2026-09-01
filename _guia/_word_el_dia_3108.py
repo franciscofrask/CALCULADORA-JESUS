@@ -471,6 +471,57 @@ PUNTOS = [
        "Sin filtro: Aldelís, Aldi, Frial, La Selva, Lidl, Hacendado…"),
       ("_generico/2_con_generico.png", 3.0,
        "Con «Genérico» encendido, y el texto ya escrito: ni una marca.")]),
+
+    ("El aviso de «Comida cuadrada» arrastraba una coletilla que no sirve",
+     "No está en el documento: lo pidió Francisco el 31-08 por la noche",
+     "«Quita el texto intermedio, cantidades redondeadas para pesarlas fácil, quita esa parte, "
+     "no tiene sentido.»",
+     "Decía: «Comida cuadrada a tus macros. Cantidades redondeadas para pesarlas fácil: los "
+     "macros pueden variar unos gramos.» Ahora dice solo lo primero.\n\n"
+     "La frase nació de un motivo bueno (Jesús, 15-08, fallo 29: «5 g de aguacate es media "
+     "cucharadita, nadie pesa eso»), se reescribió en el punto 9 del 23-08 y el propio "
+     "Francisco ya la había acortado una vez. El problema es dónde acabó: pegada a la buena "
+     "noticia, convirtiéndola en un «cuadrada, pero...» con el que el cliente no puede hacer "
+     "nada.\n\n"
+     "Lo que explicaba no se pierde: las cantidades ya salen en números pesables, y cuando de "
+     "verdad no cuadra se sigue diciendo por cuánto y de qué.",
+     None),
+
+    ("«Faltan» sin decir de qué",
+     "No está en el documento: lo vio Francisco el 31-08 en la lista de comidas",
+     "«Si ves en la comida 3 y 4 dice faltan, pero no dice el qué.»",
+     "La causa es que hay DOS criterios midiendo lo mismo. El estado de la comida resta los "
+     "valores exactos; el rótulo de la tarjeta resta los que se VEN, con el objetivo al medio "
+     "gramo y lo servido a la décima, que es la regla del 17-08 para que la resta cuadre con "
+     "los números de al lado.\n\n"
+     "En el borde se contradicen: con un objetivo de 32,6 g de proteína el medio gramo lo baja "
+     "a 32,5, y un desvío de 4,0 (que para el estado ya es «falta») se queda en 3,9 y no entra "
+     "en la lista de lo que se nombra. Quedaba la palabra sola.\n\n"
+     "Ahora se nombra igualmente el macro que más lejos esté, aunque no llegue al margen: un "
+     "número pequeño al lado de la palabra dice de qué va y deja ver que es poco.\n\n"
+     "Lo que NO está arreglado, y queda escrito para no darlo por cerrado: las dos restas "
+     "siguen siendo dos. Cuadrarlas toca el color y el estado de media app.",
+     [("_tres_del_3108b/1_estados.png", 2.6,
+       "Cada comida dice de qué: «sobran 8 de hidratos / faltan 12 de grasa».")]),
+
+    ("Alimentos traía de 20 en 20 en el teléfono y de 40 en 40 en el ordenador",
+     "No está en el documento: lo pidió Francisco el 31-08 por la noche",
+     "«En teléfono la pantalla de alimentos tiene el botón de carga de 20 en 20 pero tiene que "
+     "ser de 40 en 40.» Y precisando después: «en teléfono decía 20 y en escritorio 40, ese "
+     "era el fallo».",
+     "O sea que lo que estaba mal no era el número sino que la misma pantalla se portara "
+     "distinto según el aparato.\n\n"
+     "Subir el teléfono a 40 lo tapaba, pero dejaba en pie el «si es teléfono A, si no B», que "
+     "es exactamente lo que permitió que se separaran. Dos números con un condicional en medio "
+     "vuelven a separarse a la primera. Ahora es una sola constante, y la prueba del caso 60 "
+     "salta si vuelve a aparecer una tanda por aparato.\n\n"
+     "El teléfono estaba en 20 desde el 11-08, cuando se metió el paginado para que la "
+     "pantalla dejara de medir 69.711 px de alto. Lo que hacía falta era el paginado, no que "
+     "la tanda fuera corta.",
+     [("_tres_del_3108b/3_alimentos_telefono.png", 2.4,
+       "En el teléfono: 40 al entrar y «Ver 40 más»."),
+      ("_tres_del_3108b/3_alimentos_escritorio.png", 5.6,
+       "Y en el ordenador, lo mismo.")]),
 ]
 
 
