@@ -425,6 +425,115 @@ async def datos_del_reporte(perfil: Dict[str, Any], tipo: str,
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# LO QUE COMIÓ, DÍA A DÍA (documento «El informe del mes», 1-09-2026)
+#
+# Tres bloques del informe salen del mismo sitio, sus dietas guardadas: el día tipo, las
+# preferencias de alimentos y los extras. Se leen de una vez porque son la misma consulta.
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def comidas_y_extras_del_periodo(perfil: Dict[str, Any], d0: date,
+                                       d1: date) -> Dict[str, Any]:
+    """Las comidas aplanadas y los extras, listos para `core.informe_del_mes`.
+
+    Devuelve `{"comidas": [...], "usos": [...], "extras": [...]}`:
+
+      - `comidas`  una por comida y día, con sus alimentos y cantidades. De aquí sale «tu
+                   día tipo».
+      - `usos`     una por alimento y día, con sus macros. De aquí salen las preferencias.
+      - `extras`   lo que apuntó fuera de la dieta, con su fecha.
+
+    LOS DÍAS VACÍOS NO CUENTAN. Nutrición crea el documento del día al abrirlo, así que la
+    base tiene dietas sin una sola comida dentro: contarlas diría que su día tipo es no
+    comer nada.
+    """
+    from meal_moment import PERI, momento_de_comida
+
+    dietas = await db.diets.find(
+        {"user_id": perfil.get("user_id"),
+         "fecha": {"$gte": d0.isoformat(), "$lte": d1.isoformat()}},
+        {"_id": 0, "fecha": 1, "comidas": 1, "extras": 1, "num_comidas": 1,
+         "single_meal": 1},
+    ).to_list(400)
+
+    # El catálogo de los alimentos usados, en una sola consulta: hace falta para saber si
+    # un alimento se cuenta por unidades («1 yogur griego») y para los macros de los que no
+    # los traen resueltos.
+    ids = {a.get("alimento_id")
+           for d in dietas
+           for m in (d.get("comidas") or {}).values()
+           for a in ((m or {}).get("alimentos") or [])
+           if a.get("alimento_id") is not None}
+    catalogo: Dict[Any, Dict[str, Any]] = {}
+    if ids:
+        async for f in db.foods.find({"id": {"$in": list(ids)}}, {"_id": 0}):
+            catalogo[f["id"]] = f
+
+    from calma_suggest import macros_efectivos as _efectivos
+
+    comidas: List[Dict[str, Any]] = []
+    usos: List[Dict[str, Any]] = []
+    extras: List[Dict[str, Any]] = []
+
+    for dieta in dietas:
+        fecha = dieta.get("fecha")
+        for e in (dieta.get("extras") or []):
+            if (e.get("texto") or "").strip():
+                extras.append({"fecha": e.get("fecha") or fecha, "texto": e["texto"]})
+
+        num = int(dieta.get("num_comidas") or 4)
+        unica = bool(dieta.get("single_meal"))
+        for clave, comida in (dieta.get("comidas") or {}).items():
+            alimentos = (comida or {}).get("alimentos") or []
+            if not alimentos:
+                continue
+            items = []
+            for a in alimentos:
+                food = catalogo.get(a.get("alimento_id")) or {}
+                nombre = (a.get("nombre") or food.get("name") or "").strip()
+                if not nombre:
+                    continue
+                gramos = float(a.get("cantidad_g") or 0)
+                # Por unidades cuando el alimento las tiene: «1 yogur griego» se entiende y
+                # «125 g de yogur griego» hay que traducirlo.
+                peso_ud = float(food.get("unit_weight") or food.get("peso_unidad") or 0)
+                por_unidad = bool(food.get("por_unidad") or food.get("is_unit")) and peso_ud > 0
+                items.append({
+                    "nombre": nombre,
+                    "cantidad": (round(gramos / peso_ud, 1) if por_unidad else gramos),
+                    "unidad": "ud" if por_unidad else "g",
+                })
+                me = a.get("macros_efectivos")
+                if not (me and any((me.get(r) or 0) > 0 for r in ("P", "H", "G"))):
+                    try:
+                        me = _efectivos(food, gramos) if food else {}
+                    except Exception:      # noqa: BLE001 · un alimento raro no tumba el mes
+                        me = {}
+                usos.append({"nombre": nombre, "fecha": fecha, "macros": me or {}})
+
+            if not items:
+                continue
+            momento = momento_de_comida(clave, num, unica)
+            comidas.append({
+                "clave": clave, "fecha": fecha, "items": items,
+                "momento": momento, "es_peri": momento == PERI,
+                # EL NOMBRE SALE DEL MOMENTO, NO DE LA CLAVE. Con tres comidas la C3 es la
+                # cena y con cuatro es la merienda; llamarla siempre «Merienda» porque se
+                # llama C3 le pondría la cena a media tarde.
+                "nombre": (clave if momento == PERI
+                           else NOMBRE_DE_COMIDA.get(momento) or clave),
+            })
+
+    return {"comidas": comidas, "usos": usos, "extras": extras}
+
+
+# Cómo se llama cada comida en el informe. La app las numera («Comida 2») porque el reparto
+# cambia de un día a otro; aquí se le habla de su día, y su día tiene un desayuno.
+NOMBRE_DE_COMIDA = {
+    "desayuno": "Desayuno", "comida": "Comida", "merienda": "Merienda", "cena": "Cena",
+}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # EL PASO 1 DEL MENSUAL (documento «El reporte mensual», 1-09-2026)
 #
 # «Sale de tus check-in. Si algo no cuadra o te falta, lo arreglas al final.»

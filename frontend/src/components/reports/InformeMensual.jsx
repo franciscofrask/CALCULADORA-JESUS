@@ -15,6 +15,7 @@ import React from 'react';
 import { Camera, TrendingDown, TrendingUp, Minus, Check, AlertCircle, Lock, Users } from 'lucide-react';
 import { plural } from '../../lib/labels';
 import { TITULO_ETIQUETA } from '../../lib/comparativaFotos';
+import InformeDelMes from './InformeDelMes';
 
 const COLOR = {
     verde: 'text-emerald-500',
@@ -168,8 +169,15 @@ const Barra = ({ etiqueta, dato, sufijo, ocultarDias = false }) => (
     </div>
 );
 
-export const InformeMensual = ({ informe, onPedirFotos }) => {
+export const InformeMensual = ({ informe, onPedirFotos, api, token }) => {
     if (!informe) return null;
+
+    // EL INFORME NUEVO, CUANDO LO TRAE (documento «El informe del mes», 1-09-2026). Los
+    // informes que ya están guardados no tienen `bloques` y se siguen leyendo con los ocho
+    // apartados de siempre: un informe es la foto de un momento y no se reescribe.
+    if (informe.bloques) {
+        return <InformeDelMes informe={informe} api={api} token={token} />;
+    }
 
     // Solo para informes VIEJOS guardados sin generar: desde el punto 41 del 23-08 el
     // informe se monta siempre y esta pantalla completa no debería volver a salir.

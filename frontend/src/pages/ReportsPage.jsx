@@ -665,7 +665,8 @@ const ReportsPage = () => {
                                             ? <p className="text-sm text-muted-foreground py-4 text-center" data-testid="informe-pendiente">
                                                 {informe.mensaje}
                                               </p>
-                                            : <InformeMensual informe={informe} onPedirFotos={() => setSeccionAbierta('form')} />}
+                                            : <InformeMensual informe={informe} api={api} token={token}
+                                                onPedirFotos={() => setSeccionAbierta('form')} />}
                                 </div>
                             )}
                             {/* Con el informe abierto, estos dos sobran: el cumplimiento de

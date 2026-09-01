@@ -995,13 +995,22 @@ async def get_informe_mensual(report_id: str, user = Depends(get_current_user)):
     if perfil.get("user_id") != user["id"] and not es_del_equipo:
         raise HTTPException(status_code=403, detail="Este informe no es tuyo")
 
-    if not es_del_equipo and reporte.get("informe_estado") == "pendiente_revision":
-        return {"generado": False, "motivo": "pendiente_revision",
-                "mensaje": "Tu informe está en camino. Te aviso por aquí en cuanto esté."}
+    # EL INFORME SE ENTREGA AL ENVIAR (documento «El informe del mes», 1-09-2026):
+    #
+    #     «Se le entrega al enviar, con el hueco del feedback vacío, y el mismo informe se
+    #      completa cuando le llegas con el programa nuevo.»
+    #
+    # Aquí había un candado: mientras el reporte estuviera en `pendiente_revision`, al
+    # cliente se le decía «tu informe está en camino» y no veía nada. Venía de T9 (doc
+    # 16-08), cuando el informe ERA el feedback y enseñarlo antes era entregar media
+    # promesa. El documento nuevo lo separa en dos cosas: los nueve bloques son suyos y
+    # salen ya; el feedback es el décimo y tiene su hueco, con el día y la hora.
+    #
+    # `informe_estado` no se toca: sigue diciéndole al equipo qué le queda por revisar.
 
-    # Ya montado y publicado: se devuelve tal cual se guardó. Un informe es la foto de un
-    # momento, y recalcularlo meses después lo cambiaría con datos que entonces no había.
-    if reporte.get("informe") and (es_del_equipo or reporte.get("informe_estado") == "entregado"):
+    # Ya montado: se devuelve tal cual se guardó. Un informe es la foto de un momento, y
+    # recalcularlo meses después lo cambiaría con datos que entonces no había.
+    if reporte.get("informe"):
         return reporte["informe"]
 
     return await _montar_informe_del_reporte(reporte, perfil)
@@ -1054,7 +1063,7 @@ async def _montar_informe_del_reporte(reporte: dict, perfil: dict) -> dict:
     plan = catalogo.get(perfil.get("plan") or "", {})
     hab = plan.get("habilitaciones", {})
 
-    return montar_informe(
+    informe = montar_informe(
         perfil=perfil,
         reporte=reporte,
         reporte_anterior=anterior,
@@ -1078,6 +1087,142 @@ async def _montar_informe_del_reporte(reporte: dict, perfil: dict) -> dict:
         # Aqui eso es: si el plan trae entrenador detras, la escribe una persona.
         la_escribe_el_equipo=hab.get("acompanamiento", "solo_app") != "solo_app",
     )
+
+    # LOS DIEZ BLOQUES DEL DOCUMENTO DEL 1-09, al lado de lo que ya había. Se añaden y no
+    # sustituyen: los informes que ya están guardados siguen teniendo solo los ocho
+    # apartados viejos, y la pantalla cae en ellos cuando `bloques` no viene.
+    informe["bloques"] = await _bloques_del_informe(reporte, perfil, anterior)
+    return informe
+
+
+async def _bloques_del_informe(reporte: dict, perfil: dict,
+                               anterior: Optional[dict]) -> Dict[str, Any]:
+    """Los diez bloques del documento «El informe del mes» (1-09-2026), en su orden.
+
+    Junta de la base lo que hace falta y llama a `core.informe_del_mes`, que es donde están
+    las reglas. Aquí solo se consulta.
+    """
+    from core.actividad_mensual import cierres_del_periodo
+    from core.datos_reporte import (comidas_y_extras_del_periodo, datos_dieta,
+                                    datos_entreno, fecha_larga, serie_de_pesos)
+    from core.informe_del_mes import (ETIQUETAS_MEDIDAS, dia_tipo, donde_estas,
+                                      extras_registrados, feedback_del_informe,
+                                      grasa_del_informe, lo_que_has_hecho,
+                                      medidas_del_informe, peso_del_mes,
+                                      preferencias_de_alimentos)
+    from core.series_cliente import grasa_vigente
+
+    # EL PERIODO ES EL DE ESTE REPORTE, NO EL DE HOY. `_periodo_del_reporte` cuenta hacia
+    # atrás desde el día de hoy, que es lo que hace falta para el FORMULARIO; aquí no. Un
+    # informe es la foto del mes que cerró ese reporte, y abriéndolo en octubre tiene que
+    # seguir contando agosto. Con el otro criterio, el informe de un reporte de hace tres
+    # meses enseñaría las dietas de esta semana.
+    d1 = _dia_del_reporte(reporte)
+    dias = DIAS_DEL_PERIODO.get(reporte.get("tipo") or "mensual", 28)
+    d0 = d1 - timedelta(days=dias - 1)
+    if anterior:
+        # Y nunca antes del reporte anterior: lo que ya se contó en aquel no se vuelve a
+        # contar aquí.
+        d0 = max(d0, _dia_del_reporte(anterior) + timedelta(days=1))
+    arranque = perfil.get("arranque_lunes") or perfil.get("created_at")
+    if arranque:
+        try:
+            d0 = max(d0, datetime.fromisoformat(str(arranque).replace("Z", "+00:00")).date())
+        except (ValueError, TypeError):
+            pass
+    if d0 > d1:
+        d0 = d1
+
+    dieta = await datos_dieta(perfil, d0, d1)
+    entreno = await datos_entreno(perfil, d0, d1)
+    cierres_crudos = await db.checkins.find(
+        {"client_id": perfil.get("id"), "type": "daily",
+         "created_at": {"$gte": d0.isoformat(), "$lte": d1.isoformat() + "T23:59:59"}},
+        {"_id": 0, "extras_respuesta": 1, "movimiento": 1, "suplementos": 1},
+    ).to_list(400)
+    cierres = cierres_del_periodo(
+        cierres_crudos, (d1 - d0).days + 1,
+        tiene_suplementacion=plan_grants_feature(perfil.get("plan"), "suplementacion"))
+
+    # LA PRIMERA TOMA DE MEDIDAS de toda su historia, que es contra lo que se compara la
+    # segunda columna. No es la del mes pasado: es la del día que entró.
+    primera_medida = await db.reports.find_one(
+        {"client_id": reporte["client_id"], "measurements": {"$nin": [None, {}]}},
+        {"_id": 0, "measurements": 1}, sort=[("created_at", 1)])
+
+    serie = serie_de_pesos(perfil)
+    comido = await comidas_y_extras_del_periodo(perfil, d0, d1)
+    grasa = grasa_vigente(perfil)
+
+    from routes.plans import _overrides_by_code
+    from models.user import merged_catalog
+    catalogo = merged_catalog(await _overrides_by_code())
+    semanas_ciclo = ((catalogo.get(perfil.get("plan") or "", {}).get("ciclo")) or {}).get("semanas")
+
+    firmante = None
+    if reporte.get("trainer_feedback"):
+        entrenador = await db.users.find_one(
+            {"id": perfil.get("trainer_id")}, {"_id": 0, "name": 1}) if perfil.get("trainer_id") else None
+        firmante = (entrenador or {}).get("name") or "Jesús Gallego"
+
+    return {
+        "periodo": {"desde": d0.isoformat(), "hasta": d1.isoformat(),
+                    "dias": (d1 - d0).days + 1,
+                    "label": (f"Del {fecha_larga(d0.isoformat())} al "
+                              f"{fecha_larga(d1.isoformat())} · {(d1 - d0).days + 1} días")},
+        "donde_estas": donde_estas(perfil.get("goal"), perfil.get("week"), semanas_ciclo),
+        "feedback": feedback_del_informe(
+            reporte.get("trainer_feedback"), firmante,
+            fecha_larga(reporte.get("informe_publicado_at") or reporte.get("created_at")),
+            # El día se decide en un solo sitio, el mismo que avisa al equipo si vence.
+            dia_prometido=dia_prometido_de(reporte.get("tipo"))),
+        "peso": peso_del_mes(serie_de_pesos(perfil, d0, d1),
+                             peso_al_empezar=(serie[0]["valor"] if serie else None)),
+        "medidas": medidas_del_informe(
+            reporte.get("measurements"), (anterior or {}).get("measurements"),
+            (primera_medida or {}).get("measurements"),
+            ETIQUETAS_MEDIDAS, objetivo=perfil.get("goal")),
+        "grasa": grasa_del_informe(grasa.get("valor"), fecha_larga(grasa.get("fecha")),
+                                   grasa.get("semanas")),
+        "hecho": lo_que_has_hecho(dieta, entreno, cierres),
+        "dia_tipo": dia_tipo(comido["comidas"]),
+        "preferencias": preferencias_de_alimentos(comido["usos"]),
+        "extras": extras_registrados(comido["extras"]),
+    }
+
+
+def _dia_del_reporte(reporte: dict):
+    """El día (de España) en que se mandó. Sin zona, la medianoche de UTC cae en el día
+    anterior aquí, y el mes del informe empezaría y acabaría un día antes."""
+    from datetime import date as _date
+    crudo = reporte.get("created_at") or reporte.get("fecha")
+    try:
+        instante = datetime.fromisoformat(str(crudo).replace("Z", "+00:00"))
+        return (a_madrid(instante) or instante).date()
+    except (ValueError, TypeError):
+        try:
+            return _date.fromisoformat(str(crudo)[:10])
+        except (ValueError, TypeError):
+            return hoy_madrid()
+
+
+_DIAS = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
+
+
+def dia_prometido_de(tipo: Optional[str]) -> str:
+    """Cómo se le nombra al cliente el día que se le prometió.
+
+    SALE DEL MISMO SITIO QUE EL AVISO AL EQUIPO (`core/promesa_del_reporte.DIA_PROMETIDO`).
+    Escribirlo a mano aquí sería tener la promesa en dos sitios, y el día que uno cambie el
+    cliente leería una fecha y el aviso vencería en otra.
+
+    OJO, HAY UN DESACUERDO ABIERTO: el documento «El informe del mes» (1-09) dice «antes
+    del viernes a las 15:00» para el mensual, y el módulo dice sábado, que viene del doc
+    «El día» del 31-08. Mientras no se decida manda el módulo, que es lo que hoy usa el
+    aviso del equipo: así la pantalla no promete un día distinto del que se vigila.
+    """
+    from core.promesa_del_reporte import DIA_PROMETIDO
+    return _DIAS[DIA_PROMETIDO.get((tipo or "mensual").lower(), 4)]
 
 
 async def _actividad_del_periodo(perfil: dict, desde: Optional[str], hasta: Optional[str]):
