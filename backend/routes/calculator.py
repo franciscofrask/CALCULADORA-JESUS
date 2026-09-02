@@ -1863,6 +1863,16 @@ async def preferencias_cuadran(data: dict, user = Depends(get_current_user)):
 
     Se comprueba EN VIVO (el front llama a cada cambio, antes de guardar) y no se le dice
     qué marcar: eso sería decirle qué comer.
+
+    Y CUENTA LO QUE MARCA PARA EVITAR (1-09-2026). Esto miraba SOLO los preferidos, así que
+    en la pestaña de «Alimentos a evitar» se podían marcar los 37 grupos, la franja seguía
+    diciendo «con lo que has marcado podemos cuadrarte» y se guardaba sin protestar. Después
+    el sugeridor pasaba de 223 opciones a «No hay menús para esta comida». Se decía que sí
+    justo mientras se estaba diciendo que no a todo.
+
+    Los evitados se descuentan con la MISMA regla que los descuenta en el resto de la app
+    (`food_is_avoided`), no con una copia: si algún día cambia lo que significa evitar un
+    grupo, esta franja se entera sola.
     """
     from core.preferencias import a_nombres
     from calma_suggest import food_in_any, hay_suficiente
@@ -1875,8 +1885,19 @@ async def preferencias_cuadran(data: dict, user = Depends(get_current_user)):
     nombres.add("grasas_buenas")   # se ofrecen siempre: el motor las tiene aunque no se marquen
     prefijos = [p for n in nombres for p in AVOIDABLE_PREFIXES.get(n, [])]
 
+    # Lo que ha marcado para evitar, tal y como viene de la pantalla. Si no llega nada
+    # -- una app vieja -- se comporta como antes: mejor de menos que inventarse un filtro.
+    evitados_prefijos, evitadas_palabras = build_avoided_filter({
+        # Por `a_nombres`, igual que las marcadas: de la pantalla pueden venir códigos o
+        # nombres, y el filtro trabaja con nombres.
+        "avoided_categories": a_nombres(data.get("evitar_categorias") or []),
+        "avoided_keywords": [str(k) for k in (data.get("evitar_palabras") or []) if str(k).strip()],
+    })
+
     foods_list = await get_all_foods_cached(db)
-    elegibles = [f for f in foods_list if food_in_any(f, prefijos)]
+    elegibles = [f for f in foods_list
+                 if food_in_any(f, prefijos)
+                 and not food_is_avoided(f, evitados_prefijos, evitadas_palabras)]
 
     def se_cuadra(macro: str) -> bool:
         # El mismo bucle que hace el cliente: sugerir, añadir, volver a sugerir. Si en

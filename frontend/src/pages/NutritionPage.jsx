@@ -469,8 +469,21 @@ const NutritionPage = () => {
             const a = document.createElement('a');
             a.href = url;
             a.download = `dieta_jg12_${currentDate}.pdf`;
+            // EL ENLACE, EN EL DOCUMENTO, Y LA URL SE SUELTA DESPUÉS (1-09-2026).
+            //
+            // `revokeObjectURL` iba en la misma vuelta que el `click()`, o sea que se le
+            // quitaban los datos al navegador mientras todavía los estaba leyendo: el aviso
+            // decía «PDF descargado» y en Descargas quedaba un `.crdownload` de 6.768 bytes
+            // que no se cerraba nunca. El contenido llegaba entero desde el servidor; lo que
+            // no llegaba a existir era el fichero.
+            //
+            // Se suelta en el siguiente turno del navegador, cuando la descarga ya ha
+            // arrancado. Y el enlace se mete en el documento antes de pulsarlo, que es lo
+            // que hace que la descarga funcione igual en todos los navegadores.
+            document.body.appendChild(a);
             a.click();
-            URL.revokeObjectURL(url);
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 60_000);
             toast.success('PDF descargado');
         } catch (err) {
             // El mensaje de la excepción va a la consola, no a la cara del cliente.

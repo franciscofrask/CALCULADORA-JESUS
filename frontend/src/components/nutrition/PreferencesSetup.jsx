@@ -250,16 +250,27 @@ const PreferencesSetup = ({
     // comprueba) y simula sugerir hasta llegar a los 20 g de cada macro. La
     // comprobación es EN VIVO, a cada marca, con un respiro de medio segundo para no
     // bombardear al motor mientras se marca en cadena.
+    //
+    // Y VIAJA TAMBIÉN LO QUE MARCA PARA EVITAR (1-09-2026). Esto mandaba solo los
+    // preferidos, así que en la pestaña de «Alimentos a evitar» se podían marcar los 37
+    // grupos, la franja seguía diciendo «podemos cuadrarte» y se guardaba sin protestar;
+    // detrás, el sugeridor pasaba de 223 opciones a «No hay menús para esta comida». Y las
+    // dependencias eran solo `[selected]`, o sea que marcar algo a evitar ni siquiera
+    // volvía a preguntar: la franja se quedaba con la respuesta de antes.
     useEffect(() => {
         const t = setTimeout(() => {
             api('/api/calculator/preferencias/cuadra', {
                 method: 'POST',
-                body: JSON.stringify({ marcadas: Array.from(selected) }),
+                body: JSON.stringify({
+                    marcadas: Array.from(selected),
+                    evitar_categorias: Array.from(avoidedCats),
+                    evitar_palabras: avoidedKeywords,
+                }),
             }).then(setCuadra).catch(() => setCuadra(null));
         }, 500);
         return () => clearTimeout(t);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selected]);
+    }, [selected, avoidedCats, avoidedKeywords]);
     const noCuadra = !!cuadra && (!cuadra.proteina || !cuadra.hidratos);
 
     // Las alergias del alta y su estado ACTUAL: una está «puesta» si lo que bloquea sigue
