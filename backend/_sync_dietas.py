@@ -154,13 +154,32 @@ class Decodificador:
             comidas["Post"] = self.comida(peri_src["postentreno"])
         return comidas, comidas_src, peri_src
 
-    @staticmethod
-    def tipo_dia_de(doc):
+    #: EL 5 DE CALMA ES «DIA DE DESCANSO», no un momento de entreno (medido el 2-09).
+    #:
+    #: Los momentos de Calma van de 0 a 3 -- por eso el backend rechaza el resto con
+    #: «momento_entreno=5 no es 0-3» -- y el 5 es lo que guardaba cuando el dia no llevaba
+    #: entrenamiento. Se ve en los datos: de 25 favoritas con un 5, NINGUNA tiene
+    #: perientrenamiento (las de 0-3 lo llevan entre el 85 % y el 94 % de las veces), y sus
+    #: nombres lo dicen: «Andres 75 kg - dia descanso», «Dias-baja», «MARZO DESCANSO 2»,
+    #: «DIETA 30 DE NOV (descanso)».
+    MOMENTO_SIN_ENTRENO = 5
+
+    @classmethod
+    def tipo_dia_de(cls, doc):
         """Calma no guardaba el tipo de dia, pero lo delata la estructura: un dia (o una
         favorita) de DESCANSO no lleva ni momento de entreno ni perientrenamiento. Antes
         esto era un literal "entrenamiento" y las favoritas de descanso migradas salian
-        como entreno (doc 57, F4: 225 corregidas en prod el 21-08 por nombre+sin peri)."""
-        tiene_entreno = bool(doc.get("momentoEntrenamiento")) or bool(doc.get("perientrenamiento"))
+        como entreno (doc 57, F4: 225 corregidas en prod el 21-08 por nombre+sin peri).
+
+        Y FALTABA EL 5 (2-09). `bool(5)` es verdad, asi que las favoritas de descanso que
+        Calma marcaba con un 5 se migraban como ENTRENAMIENTO: justo al reves. De ahi salia
+        que el aviso «esta favorita se guardo en dia de descanso» no saltara nunca para
+        ellas, y que al aplicarlas se les colara el perientrenamiento.
+        """
+        momento = doc.get("momentoEntrenamiento")
+        if momento == cls.MOMENTO_SIN_ENTRENO:
+            return "descanso"
+        tiene_entreno = bool(momento) or bool(doc.get("perientrenamiento"))
         return "entrenamiento" if tiene_entreno else "descanso"
 
     def dieta(self, doc_id, doc, user_id):
