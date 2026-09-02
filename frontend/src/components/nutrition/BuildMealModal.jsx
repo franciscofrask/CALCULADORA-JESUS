@@ -9,6 +9,7 @@ import { Input } from '../ui/input';
 import { toast } from 'sonner';
 import { Search, X, Plus, Minus, Star, ChevronUp } from 'lucide-react';
 import { seExcede } from '../../lib/exceso';
+import { SUELO_DE_LA_COMIDA } from '../../lib/estadoDelMacro';
 import { num1, numMedio } from '../../lib/numeros';
 import { leerCantidad, avisoRazonable, TOPE_GRAMOS, AVISO_TOPE, AVISO_NEGATIVO } from '../../lib/cantidades';
 import { FOOD_FAVORITES_UI } from './SearchFoodModal';
@@ -342,7 +343,7 @@ const BuildMealModal = ({
 
     // Calma "Macros para Comida X" per macro (margenValido = 4), r = target - served UNROUNDED:
     //   served > 0  -> num "served/target g" + status:
-    //                  round(r)==0 -> "Cuadrado" | |r|<4 -> "Válido" |
+    //                  |r|<1 -> "cuadrado" | |r|<4 -> "cuadrado (+X,X)" |
     //                  r>=4 -> "faltan X.Xg" | r<=-4 -> "sobran X.Xg"
     //   served == 0 -> num "targetg" ONLY, NO status (e.g. "Hidratos: 30g"). The status appears
     //                  at the SAME moment Calma shows it: only once that macro has something served.
@@ -357,8 +358,20 @@ const BuildMealModal = ({
         // LOS COLORES, LEGIBLES EN CLARO. A 11 px sobre fondo blanco, `amber-500` da 2,15:1
         // y `red-500` 3,3:1: por debajo de lo que se lee sin forzar la vista (QA del 15-08).
         // En oscuro mandan los tonos claros, que ahí son los que contrastan.
-        if (Math.round(r) === 0) { status = 'Cuadrado'; cls = 'text-green-700 dark:text-green-400'; }
-        else if (Math.abs(r) < MARGEN_VALIDO) { status = 'Válido'; cls = 'text-amber-700 dark:text-amber-400'; }
+        // LAS MISMAS PALABRAS QUE LA TARJETA (revisión del 2-09). Aquí decía «Cuadrado» por
+        // debajo de medio gramo y «Válido», en ámbar, hasta los 4. La tarjeta de la comida
+        // dice «cuadrado» por debajo de UN gramo (`SUELO_DE_LA_COMIDA`, «medio gramo de grasa
+        // no lo pesa nadie») y «cuadrado (+2,3)» dentro del margen, en verde. O sea que el
+        // mismo plato se leía distinto según se mirase la tarjeta o este diálogo: 20,6 de 20
+        // era «cuadrado» fuera y «Válido» dentro. Ahora los dos dicen lo mismo.
+        //
+        // Y en verde, no en ámbar: lo manda el punto 78, «de 1 a 4, falte o sobre, es válido
+        // y sale en verde». El ámbar era el único sitio de la app que le quedaba.
+        //
+        // El signo va del lado del cliente, no del cálculo: aquí `r` es lo que FALTA
+        // (objetivo − servido), así que un `r` negativo es que se ha pasado y lleva el «+».
+        if (Math.abs(r) < SUELO_DE_LA_COMIDA) { status = 'cuadrado'; cls = 'text-green-700 dark:text-green-400'; }
+        else if (Math.abs(r) < MARGEN_VALIDO) { status = `cuadrado (${r < 0 ? '+' : '−'}${fmt1(Math.abs(r))})`; cls = 'text-green-700 dark:text-green-400'; }
         else if (r > 0) { status = `faltan ${fmt1(r)} g`; cls = 'text-red-700 dark:text-red-400'; }
         else {
             const enRojo = seExcede(key, servedVal, tgtVal, { esPeri: isPeriMode });

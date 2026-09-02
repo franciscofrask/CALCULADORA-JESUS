@@ -186,12 +186,17 @@ const ExtrasDelDia = ({ api, fecha, extras = [], onAnadido, onQuitado, origen, p
                 que se entienda que esto es para lo de fuera de la dieta.
                 «PREVISTO» (punto 175 del 27-08): decía «algo que no estaba en tu dieta», que
                 se lee como una falta. Previsto quita la culpa -- no está prohibido, es que no
-                entraba en el plan de hoy -- y así lo apunta en vez de callárselo. */}
+                entraba en el plan de hoy -- y así lo apunta en vez de callárselo.
+
+                Este comentario llevaba aquí desde el 27-08 describiendo un cambio que NUNCA
+                se hizo: la frase de abajo seguía siendo la vieja. Corregido el 2-09 con el
+                texto entero que él escribió en el punto 175, que también cambia el final
+                («en cuanto pase» en vez de «por pequeño que sea»). */}
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                     <p className="caption">Extras del día</p>
                     <p className="text-sm text-muted-foreground mt-1">
-                        Si comes algo que no está en tu dieta del día, ponlo aquí, por pequeño que sea.
+                        Si comes algo que no estaba previsto en tu dieta, ponlo aquí en cuanto pase.
                     </p>
                 </div>
                 {plegable && !desplegado && (

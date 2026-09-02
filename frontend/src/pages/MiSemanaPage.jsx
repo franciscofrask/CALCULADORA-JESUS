@@ -190,7 +190,17 @@ const LineaDieta = ({ dia }) => {
                    Las siete filas decían «Creada» en verde, así que el día que se queda a
                    128 g de hidratos se leía igual que el que cuadra, y el verde le decía
                    que iba bien. El calendario de Nutrición ya distingue las dos cosas con
-                   `is_cuadrado`; aquí se usa esa misma señal y no una nueva. */
+                   `is_cuadrado`; aquí se usa esa misma señal y no una nueva.
+
+                   EL NARANJA DE «SIN CUADRAR» SE QUEDA, Y ESTÁ SIN DECIDIR (2-09). Choca con
+                   dos cosas a la vez y no se puede arreglar solo aquí: con el punto 77
+                   («naranja sólo para lo que se pasa»; un día a medias no es un error), y con
+                   la propia fila, donde el número de la proteína ya va en naranja porque en
+                   esta pantalla los macros llevan su color (P naranja · H azul · G amarillo).
+                   Pero la leyenda del calendario de Nutrición (`DietCalendar`) pinta «Sin
+                   cuadrar» con ese mismo naranja, así que cambiarlo aquí y no allí deja las
+                   dos pantallas diciendo lo mismo de dos formas. Es una decisión de diseño de
+                   las dos a la vez, no un arreglo de una. */
                 <span className="font-data text-foreground flex items-baseline gap-1 flex-wrap min-w-0">
                     <span className={`font-semibold flex-shrink-0 ${dia.is_cuadrado ? 'text-emerald-400' : 'text-orange-400'}`}
                         data-testid={`estado-dieta-${dia.fecha}`}>
