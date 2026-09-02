@@ -23,6 +23,12 @@ const SESIONES_A_LA_VISTA = 8;
 
 const _fechaCorta = (f) => (f ? f.split('-').reverse().join('/') : '-');
 
+/** dd/mm, y con el año en dos cifras cuando las tomas no son del mismo año. */
+const _cabeceraFecha = (iso, conAnio) => {
+    const [a, m, d] = String(iso).slice(0, 10).split('-');
+    return conAnio ? `${d}/${m}/${a.slice(2)}` : `${d}/${m}`;
+};
+
 const TONOS = {
     admin: {
         caja: 'rounded-xl border bg-[#111] border-[#222] p-5',
@@ -31,7 +37,9 @@ const TONOS = {
         vacio: 'text-white/30 text-sm',
         cabecera: 'text-white/40 border-b border-[#222]',
         fila: 'border-b border-[#1a1a1a] last:border-0 hover:bg-white/[0.03]',
-        medida: 'px-2 py-1.5 text-white/70 whitespace-nowrap',
+        medida: 'px-2 py-1.5 text-white/70 whitespace-nowrap sticky left-0 z-10 bg-[#111]',
+        // El fondo de la columna fija: sin él, al desplazar se ve el número por debajo.
+        fondoFijo: 'bg-[#111]',
         valor: 'text-white font-medium',
         igual: 'text-white/30',
         sube: 'text-blue-400',
@@ -46,7 +54,8 @@ const TONOS = {
         vacio: 'text-muted-foreground text-sm',
         cabecera: 'text-muted-foreground border-b border-border',
         fila: 'border-b border-border/50 last:border-0',
-        medida: 'px-2 py-1.5 text-foreground/70 whitespace-nowrap',
+        medida: 'px-2 py-1.5 text-foreground/70 whitespace-nowrap sticky left-0 z-10 bg-card',
+        fondoFijo: 'bg-card',
         valor: 'text-foreground font-medium',
         igual: 'text-muted-foreground',
         sube: 'text-blue-500',
@@ -64,7 +73,16 @@ const EvolucionMedidas = ({ reports, tono = 'cliente', titulo }) => {
         const conMedidas = (reports || [])
             .filter(r => r?.created_at && r?.measurements && Object.keys(r.measurements).length)
             .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
-        return { todas: conMedidas.length, vistas: conMedidas.slice(-SESIONES_A_LA_VISTA) };
+        const vistas = conMedidas.slice(-SESIONES_A_LA_VISTA);
+        // EL AÑO, CUANDO LAS TOMAS NO SON DEL MISMO (revisión del 2-09).
+        //
+        // La cabecera cortaba la fecha a «dd/mm» y las columnas se leían desordenadas:
+        // «12/05 · 16/06 · 24/07 · 02/02» parece que febrero va detrás de julio, y en
+        // realidad esa toma es del año siguiente. El orden siempre fue el bueno; lo que
+        // engañaba era esconder el año. Solo se añade cuando hace falta, para no ensanchar
+        // la tabla en el caso normal (todas del mismo año).
+        const anios = new Set(vistas.map(r => String(r.created_at).slice(0, 4)));
+        return { todas: conMedidas.length, vistas, conAnio: anios.size > 1 };
     }, [reports]);
 
     if (sesiones.vistas.length === 0) {
@@ -87,17 +105,25 @@ const EvolucionMedidas = ({ reports, tono = 'cliente', titulo }) => {
                 <p className={t.titulo}>{cabecera}</p>
                 <p className={t.apunte}>
                     {fuera > 0 ? `Las ${sesiones.vistas.length} últimas de ${sesiones.todas}` : `${sesiones.todas} ${sesiones.todas === 1 ? 'toma' : 'tomas'}`}
-                    {' · '}la diferencia es con la toma anterior
+                    {/* LAS DOS REGLAS, DICHAS (revisión del 2-09). Aquí ponía solo la
+                        primera mientras la columna «Total» compara con la toma más
+                        antigua: dos formas de leer la misma tabla y una sin explicar. */}
+                    {' · '}cada columna se compara con la anterior; «Total», con la primera
                 </p>
             </div>
+            {/* LA PRIMERA COLUMNA SE QUEDA FIJA (revisión del 2-09, recorrido en móvil).
+                La tabla se desplaza de lado, y al hacerlo se perdía de qué fila era cada
+                número: «Brazo derecho relajado» pasaba a verse como «relajado» y «Gemelo
+                izquierdo» como «do». Con `sticky` en la primera celda, el nombre de la
+                medida viaja con la vista. */}
             <div className="overflow-x-auto">
                 <table className="w-full text-xs min-w-[520px]">
                     <thead>
                         <tr className={t.cabecera}>
-                            <th className="text-left font-normal px-2 py-1.5">Medida</th>
+                            <th className={`text-left font-normal px-2 py-1.5 sticky left-0 z-10 ${t.fondoFijo}`}>Medida</th>
                             {sesiones.vistas.map(r => (
                                 <th key={r.created_at} className="text-right font-normal px-2 py-1.5 whitespace-nowrap tabular-nums">
-                                    {_fechaCorta(String(r.created_at).slice(0, 10)).slice(0, 5)}
+                                    {_cabeceraFecha(r.created_at, sesiones.conAnio)}
                                 </th>
                             ))}
                             <th className="text-right font-normal px-2 py-1.5 whitespace-nowrap">Total</th>

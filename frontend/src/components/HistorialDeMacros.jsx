@@ -85,7 +85,11 @@ const HistorialDeMacros = ({ entradas }) => {
                 <table className="w-full text-sm min-w-[520px]">
                     <thead>
                         <tr className="text-muted-foreground text-[10px] uppercase tracking-wider border-b border-border">
-                            <th rowSpan={2} className="px-2 py-1.5 text-left font-semibold">Fecha</th>
+                            {/* La fecha se queda fija al desplazar (revisión del 2-09): en
+                                móvil la tabla se va de lado y la fecha quedaba cortada en
+                                «6», «4», «23», así que no se sabía de qué ajuste era la
+                                fila que se estaba mirando. */}
+                            <th rowSpan={2} className="px-2 py-1.5 text-left font-semibold sticky left-0 z-10 bg-card">Fecha</th>
                             <th rowSpan={2} className="px-2 py-1.5 text-right font-semibold">Peso</th>
                             <th colSpan={3} className="px-1.5 py-1.5 text-center font-bold border-l border-border">Entreno</th>
                             <th colSpan={2} className="px-1.5 py-1.5 text-center font-bold border-l border-border">Peri</th>
@@ -100,7 +104,7 @@ const HistorialDeMacros = ({ entradas }) => {
                     <tbody>
                         {visibles.map((h, i) => (
                             <tr key={h.id || i} className="border-b border-border last:border-0">
-                                <td className="px-2 py-2 whitespace-nowrap font-data text-foreground">{fechaCorta(h.fecha)}</td>
+                                <td className="px-2 py-2 whitespace-nowrap font-data text-foreground sticky left-0 z-10 bg-card">{fechaCorta(h.fecha)}</td>
                                 <td className="px-2 py-2 text-right whitespace-nowrap font-data text-foreground">
                                     {h.peso != null ? `${h.peso} kg` : '-'}
                                 </td>

@@ -632,7 +632,10 @@ const ReportsPage = () => {
                                     sobre blanco. */}
                                 {/* Con su objetivo al lado: el color del cambio se decide
                                     contra él (doc 23-08, bloque 10). */}
-                                <GraficaDePeso puntos={weightData} objetivo={profile?.goal} />
+                                {/* Y con el arranque de su ciclo: el resumen de arriba habla
+                                    de este ciclo, no de los tres años de historia (2-09). */}
+                                <GraficaDePeso puntos={weightData} objetivo={profile?.goal}
+                                    desdeElCiclo={profile?.cycle_start} />
                             </div>
                         ) : (
                             <div className="pt-4 border-t border-border text-center">

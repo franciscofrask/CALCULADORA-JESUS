@@ -86,7 +86,8 @@ const Globo = ({ active, payload, conAnio, objetivo }) => {
  * `puntos`: [{fecha|date, peso|value}]. Se acepta cualquiera de los dos nombres porque las
  * dos pantallas los traían distintos, y unificarlos aquí es más barato que tocar las dos.
  */
-const GraficaDePeso = ({ puntos, alto = 'h-56', conResumen = true, objetivo = null }) => {
+const GraficaDePeso = ({ puntos, alto = 'h-56', conResumen = true, objetivo = null,
+                         desdeElCiclo = null }) => {
     const datos = useMemo(() => {
         const limpio = (puntos || [])
             .map(p => {
@@ -129,9 +130,27 @@ const GraficaDePeso = ({ puntos, alto = 'h-56', conResumen = true, objetivo = nu
         );
     }
 
-    const primero = datos[0].peso;
-    const ultimo = datos[datos.length - 1].peso;
+    // ARRIBA, ESTE CICLO; SU HISTORIA ENTERA, DEBAJO (revisión del 2-09).
+    //
+    // «Empezaste en 89 · ahora 96 · cambio +7 kg» se calculaba con el primer pesaje de
+    // TODA su historia: a un cliente migrado de Calma le juntaba enero de 2023 con hoy,
+    // tres años y tres ciclos en un solo número, y encima debajo de «tu objetivo: perder
+    // grasa». Lo que le interesa es cómo va en el ciclo que está haciendo.
+    //
+    // Sin fecha de ciclo, o con ella pero sin pesajes dentro, se sigue leyendo la historia
+    // entera como hasta ahora: es mejor que quedarse sin resumen.
+    const arranqueCiclo = desdeElCiclo ? new Date(desdeElCiclo).getTime() : null;
+    const delCiclo = arranqueCiclo && Number.isFinite(arranqueCiclo)
+        ? datos.filter(p => p.ts >= arranqueCiclo)
+        : [];
+    const hayCiclo = delCiclo.length >= 2 && delCiclo.length < datos.length;
+    const serie = hayCiclo ? delCiclo : datos;
+
+    const primero = serie[0].peso;
+    const ultimo = serie[serie.length - 1].peso;
     const cambio = Math.round((ultimo - primero) * 10) / 10;
+    // Y lo de siempre, para la línea de debajo.
+    const cambioTotal = Math.round((datos[datos.length - 1].peso - datos[0].peso) * 10) / 10;
     // El objetivo del perfil, contado en cristiano. Sin objetivo conocido no se inventa.
     const objetivoTexto = OBJETIVO_TEXTO[String(objetivo || '').toLowerCase()] || null;
     // Más de un año de recorrido: las etiquetas necesitan el año o se repiten.
@@ -142,7 +161,9 @@ const GraficaDePeso = ({ puntos, alto = 'h-56', conResumen = true, objetivo = nu
             {conResumen && (
                 <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1 mb-3 text-sm">
                     <div>
-                        <span className="text-muted-foreground text-xs mr-1">Empezaste en</span>
+                        <span className="text-muted-foreground text-xs mr-1">
+                            {hayCiclo ? 'Empezaste el ciclo en' : 'Empezaste en'}
+                        </span>
                         <span className="text-foreground font-bold">{primero} kg</span>
                     </div>
                     <div>
@@ -164,9 +185,17 @@ const GraficaDePeso = ({ puntos, alto = 'h-56', conResumen = true, objetivo = nu
                         </div>
                     )}
                     <span className="text-muted-foreground text-xs">
-                        {datos.length} {datos.length === 1 ? 'pesaje' : 'pesajes'}
+                        {serie.length} {serie.length === 1 ? 'pesaje' : 'pesajes'}
                     </span>
                 </div>
+            )}
+            {/* Y su historia entera, en una línea aparte y sin colores: es contexto, no
+                es cómo va este ciclo. */}
+            {conResumen && hayCiclo && (
+                <p className="text-xs text-muted-foreground -mt-1 mb-3" data-testid="peso-historia-entera">
+                    Desde que empezaste con nosotros: {datos[0].peso} kg → {datos[datos.length - 1].peso} kg
+                    {' '}({cambioTotal > 0 ? '+' : ''}{cambioTotal} kg en {datos.length} pesajes)
+                </p>
             )}
             <div className={alto}>
                 <ResponsiveContainer width="100%" height="100%">
