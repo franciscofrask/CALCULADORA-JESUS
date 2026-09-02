@@ -2915,6 +2915,25 @@ const NutritionPage = () => {
         return 'falta';
     };
 
+    // QUÉ LE PASA AL DÍA, PARA PODER CONTARLO BIEN.
+    //
+    // `getDayStatus` responde una palabra y no se toca: de ella salen el `is_cuadrado` que
+    // se guarda, el verde del calendario y la cuenta de días cuadrados del reporte. Esto es
+    // aparte y solo sirve para las palabras del aviso: si además de pasarse falta algo, el
+    // titular no puede decir «se pasa» a secas. Mismo listón y mismas palabras que los dos
+    // «Cuadrar» (`desajusteEnPalabras`), para que la pantalla no se contradiga consigo misma.
+    const desajusteDelDia = (() => {
+        const desfase = {
+            P: dayMacros.P - (dayTarget.P_total || 0),
+            H: dayMacros.H - (dayTarget.H_total || 0),
+            G: comidasG - (dayTarget.G_total || 0),   // la grasa del peri no cuenta, como arriba
+        };
+        return {
+            falta: ['P', 'H', 'G'].some(m => desfase[m] < -MARGEN_QUE_SE_DICE),
+            frase: desajusteEnPalabras(desfase),
+        };
+    })();
+
     // Latest savable snapshot for auto-save (read in the [currentDate] cleanup). Mirrors the
     // manual saveDiet payload. Updated every render so the cleanup sees the data of the date
     // being left (state hasn't reloaded the new date yet when the cleanup fires).
@@ -3327,9 +3346,27 @@ const NutritionPage = () => {
                                 «Cuadrar el día», y el documento va por delante del vídeo.
                                 Si algún día se vuelve a lo del vídeo, es aquí y son tres
                                 palabras. */}
+                            {/* Y EL TITULAR DICE LO QUE PASA, NO SIEMPRE LO MISMO (revisión de
+                                Nutrición del 1-09, menor 2). El estado «sobra» se enciende con
+                                que UN macro se pase, así que el 19 de agosto salía «se pasa de
+                                tus macros» con 199 g de proteína y 200 de hidratos DE MENOS y
+                                solo 7 de grasa de más: justo lo contrario de lo que pasaba.
+                                Cuando además falta algo, se dice que no cuadra y se ponen los
+                                números. La maqueta de Jesús dibuja el caso de pasarse y ahí no
+                                se toca ni una palabra; esto es el caso que su maqueta no
+                                contemplaba. */}
                             <div className="min-w-0">
-                                <p className="font-bold text-foreground">Este día se pasa de tus macros de ahora</p>
+                                <p className="font-bold text-foreground">
+                                    {desajusteDelDia.falta
+                                        ? 'Este día no cuadra con tus macros de ahora'
+                                        : 'Este día se pasa de tus macros de ahora'}
+                                </p>
                                 <p className="text-xs text-muted-foreground">Si tus macros han cambiado, te reajustamos las cantidades sin quitarte nada.</p>
+                                {desajusteDelDia.falta && desajusteDelDia.frase && (
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        Ahora mismo {desajusteDelDia.frase}.
+                                    </p>
+                                )}
                             </div>
                             <button
                                 className="shrink-0 rounded-xl font-bold text-sm px-4 py-2 border border-brand text-brand hover:bg-brand hover:text-white transition-colors disabled:opacity-50"

@@ -389,8 +389,22 @@ function App() {
                                 que necesite más tiempo lo pide en su `duration`.
                                 Y ABAJO A LA DERECHA (doc 57, F6): arriba-centro el aviso
                                 caía justo encima de las pestañas de comida y se comía los
-                                clics mientras estaba visible. */}
-                            <Toaster position="bottom-right" richColors closeButton duration={6000} />
+                                clics mientras estaba visible.
+
+                                DOS A LA VEZ COMO MUCHO, Y POR ENCIMA DE LA BARRA DE ABAJO
+                                (revisión de Nutrición del 1-09, menor 1). En el teléfono los
+                                avisos ocupan el ancho de la pantalla y se pegan al borde de
+                                abajo, que es justo donde vive la barra de Inicio · Mi semana
+                                · Rutina · Más: con tres avisos encima -- y sonner enseña tres
+                                por defecto -- no se podía navegar hasta que caducaban o se
+                                cerraban a mano. Se miró en 390 px vaciando tres comidas
+                                seguidas y los cuatro botones quedaban debajo.
+                                La barra mide 72 px y el `env()` cubre el hueco del móvil sin
+                                botones. En escritorio no hay barra, así que ahí no cambia. */}
+                            <Toaster position="bottom-right" richColors closeButton duration={6000}
+                                visibleToasts={2}
+                                mobileOffset={{ bottom: 'calc(72px + env(safe-area-inset-bottom) + 12px)',
+                                                left: '16px', right: '16px' }} />
                             <InstallPrompt />
                         </OnboardingProvider>
                     </ConfirmProvider>

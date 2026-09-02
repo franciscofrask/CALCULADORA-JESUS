@@ -700,10 +700,17 @@ const PreferencesSetup = ({
                         se cuadran 20 g de proteína y 20 g de hidratos. Se pinta en las dos
                         pestañas porque el Guardar es uno y se apaga si no llega: el porqué
                         tiene que estar al lado del botón apagado. */}
+                    {/* Y ES UN MÍNIMO, NO UN TECHO (revisión de Nutrición del 1-09, menor 3).
+                        «Con lo que has marcado podemos cuadrarte 20 g de proteína» se leía
+                        como el tope al que se llega, y con el catálogo entero marcado sonaba
+                        a mala noticia. Lo que comprueba el motor es justo lo contrario: que
+                        con lo marcado se llega AL MENOS a esos 20 g, que es el suelo por
+                        debajo del cual no se puede montar una comida. Las palabras lo dicen
+                        ya: «como mínimo». */}
                     {cuadra && (
                         <div className="mb-3" data-testid="cuadra-en-vivo">
                             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-1">
-                                Con lo que has marcado podemos cuadrarte
+                                Con lo que has marcado se puede montar, como mínimo
                             </p>
                             <div className="flex gap-4 text-sm">
                                 <span className={cuadra.proteina ? 'text-green-600 dark:text-green-400' : 'text-red-500'}>
@@ -715,9 +722,9 @@ const PreferencesSetup = ({
                             </div>
                             {noCuadra && (
                                 <p className="text-xs text-red-500 mt-1">
-                                    Con lo que has marcado no podemos cuadrarte{' '}
+                                    Con lo que has marcado no se llega ni a{' '}
                                     {[!cuadra.proteina && '20 g de proteína', !cuadra.hidratos && '20 g de hidratos']
-                                        .filter(Boolean).join(' ni ')}. Marca alguna categoría más en "Mis alimentos preferidos" para poder guardar.
+                                        .filter(Boolean).join(' ni a ')}. Marca alguna categoría más en "Mis alimentos preferidos" para poder guardar.
                                 </p>
                             )}
                         </div>
