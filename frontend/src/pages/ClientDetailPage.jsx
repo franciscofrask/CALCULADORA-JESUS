@@ -3721,7 +3721,10 @@ const _resp = (r) => {
 };
 
 const CalmaReportItem = ({ r, hideHeader }) => {
-    const med = r.mediciones?.valores?.filter(v => v != null);
+    // UN CERO NO ES UNA MEDIDA (revisión del 2-09). Aquí solo caían los `null`, así que un
+    // reporte migrado sin medidas se pintaba «Medidas: 0 · 0 · 0 · 0 · 0 · 0 · 0 · 0 · 0 · 0»
+    // y eso se lee como diez tomas hechas. Si no hay dato, no hay fila.
+    const med = (r.mediciones?.valores || []).filter(v => v != null && Number(v) > 0);
     const fecha = r.fecha ? new Date(r.fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
     const filas = [
         ['Compromiso', r.compromiso], ['Objetivo', r.objetivo], ['Cumplimiento dieta', r.cumplimientoDieta],
@@ -3745,8 +3748,10 @@ const CalmaReportItem = ({ r, hideHeader }) => {
                 ))}
             </div>
             {med?.length > 0 && <p className="text-white/40 text-xs mt-2">Medidas: {med.join(' · ')}</p>}
-            {r.problemasParaEntrenar && <p className="text-white/60 text-xs mt-2"><span className="text-white/40">Problemas para entrenar: </span>{r.problemasParaEntrenar}</p>}
-            {r.comentarioCliente && <p className="text-white/60 text-xs mt-1 italic">"{r.comentarioCliente}"</p>}
+            {/* Los dos por el mismo filtro que las respuestas: un «XX» del volcado no es
+                lo que escribió el cliente. */}
+            {sinElRelleno(r.problemasParaEntrenar) && <p className="text-white/60 text-xs mt-2"><span className="text-white/40">Problemas para entrenar: </span>{sinElRelleno(r.problemasParaEntrenar)}</p>}
+            {sinElRelleno(r.comentarioCliente) && <p className="text-white/60 text-xs mt-1 italic">"{sinElRelleno(r.comentarioCliente)}"</p>}
         </div>
     );
 };
@@ -4420,9 +4425,19 @@ const PREGUNTAS_CALMA = [
 // «el cliente pone que no se ha saltado nada y a mí me sale sin calificar el
 // cumplimiento». Si detrás del relleno hay algo escrito por el cliente («Sin calificar
 // cumplimiento. Este mes lo haré 100 %»), eso sí es suyo y eso es lo que se enseña.
+// Y LA BASURA DEL IMPORT DE CALMA TAMPOCO ES UNA RESPUESTA (revisión del 2-09).
+//
+// En los reportes migrados hay campos rellenos con marcas de relleno del formulario viejo
+// -- «XX», «xxx», «-», «.», «n/a» --, y se pintaban tal cual en la ficha: el entrenador leía
+// «Problemas para entrenar: XX» y un comentario del cliente que ponía "XX". Eso no es lo que
+// escribió nadie, es lo que quedó del volcado. Se filtra donde ya se filtraba el otro
+// relleno, así que cae en todas las pantallas que usan esta función a la vez.
+const _RELLENO_DEL_IMPORT = /^(x+|-+|_+|\.+|n\/?a|na|nada|ninguno?a?|null|none)$/i;
+
 const sinElRelleno = (v) => {
     const limpio = String(v ?? '').replace(/^sin calificar (el )?cumplimiento[.,]?\s*/i, '').trim();
-    return limpio || null;
+    if (!limpio || _RELLENO_DEL_IMPORT.test(limpio)) return null;
+    return limpio;
 };
 
 const RespuestasDeCalma = ({ respuestas }) => {

@@ -17,7 +17,7 @@ Las dos son AAAA-MM-DD. Nunca van hacia atras: si llega una fecha mas antigua qu
 guardada -- porque se corrige una entrada vieja del historial -- se ignora. La que vale es
 la ultima vez que paso algo, no la ultima vez que alguien edito algo.
 """
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from core.database import db
@@ -66,6 +66,58 @@ def fecha_de_vigencia(macro_log: dict) -> str:
 async def marcar_reporte(client_id: Optional[str], fecha: Optional[str] = None) -> None:
     """Acaba de mandar un reporte."""
     await _adelantar(client_id, "ultimo_reporte", fecha)
+
+
+#: Cuánto puede mirar atrás el feedback de un ajuste para encontrar su reporte. Más allá,
+#: ese reporte ya no es al que se está contestando: es historia.
+DIAS_PARA_ENGANCHAR_EL_FEEDBACK = 45
+
+
+async def feedback_al_informe(client_id: Optional[str], texto: Optional[str],
+                              firmante: Optional[str] = None) -> Optional[str]:
+    """Lleva al informe el feedback que el coach escribe al ajustar los macros.
+
+    EL AGUJERO QUE CIERRA (revisión del 2-09). El formulario de ajuste pide «Feedback para
+    el cliente (obligatorio)» y ese texto llegaba al aviso de la campanita y a Mis macros,
+    pero `reports.trainer_feedback` nacía en None y no lo escribía NADIE: el informe del mes
+    se quedaba con el hueco en gris y su «en estos momentos estamos revisando tu reporte
+    mensual», que es justo donde al cliente se le ha prometido leerlo.
+
+    A QUÉ REPORTE VA: al último suyo que aún no tenga feedback, y solo si es reciente
+    (`DIAS_PARA_ENGANCHAR_EL_FEEDBACK`). No se pisa un feedback ya escrito -- eso sería
+    borrar lo que el coach redactó a mano en el informe -- y no se rellena un reporte viejo,
+    porque un ajuste de hoy no contesta a un reporte de hace medio año.
+
+    Devuelve el id del reporte que quedó completado, o None si no había ninguno al que
+    contestar. Falla en silencio como el resto de este módulo: el ajuste tiene que guardarse
+    aunque esto no encuentre reporte.
+    """
+    escrito = (texto or "").strip()
+    if not client_id or not escrito:
+        return None
+    try:
+        desde = (datetime.now(timezone.utc) - timedelta(days=DIAS_PARA_ENGANCHAR_EL_FEEDBACK)).isoformat()
+        reporte = await db.reports.find_one(
+            {"client_id": client_id,
+             "created_at": {"$gte": desde},
+             "$or": [{"trainer_feedback": None}, {"trainer_feedback": ""},
+                     {"trainer_feedback": {"$exists": False}}]},
+            {"_id": 0, "id": 1}, sort=[("created_at", -1)])
+        if not reporte:
+            return None
+        ahora = datetime.now(timezone.utc).isoformat()
+        await db.reports.update_one(
+            {"id": reporte["id"]},
+            {"$set": {"trainer_feedback": escrito,
+                      # La fecha con la que el informe lo firma. El estado NO se toca: que
+                      # el informe se dé por «entregado» sigue siendo una decisión suya, en
+                      # su botón de publicar.
+                      "informe_publicado_at": ahora,
+                      "feedback_de": firmante or None,
+                      "feedback_origen": "ajuste de macros"}})
+        return reporte["id"]
+    except Exception:
+        return None
 
 
 def dias_desde(fecha: Optional[str], ahora: Optional[datetime] = None) -> Optional[int]:

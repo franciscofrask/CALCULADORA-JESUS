@@ -26,7 +26,8 @@ from models.user import (
     precio_de_ciclo,
 )
 from core.cycle import enrich_cycle, compute_cycle
-from core.seguimiento import marcar_ajuste, dias_desde, fecha_de_vigencia
+from core.seguimiento import (marcar_ajuste, dias_desde, fecha_de_vigencia,
+                              feedback_al_informe)
 from core.series_cliente import anotar_peso, anotar_grasa, actual as actual_de_serie
 from core.cambios_macros import marcar_cambios, palancas
 from core.historial_macros import guardar as guardar_en_historial
@@ -1785,6 +1786,9 @@ async def update_client_macros(client_id: str, data: MacrosUpdate, user = Depend
     _refrescar_casos()
 
     await avisar_macros(profile["user_id"], nota=data.note, sin_cambios=sin_cambios)
+    # Y AL INFORME, que es donde se le ha prometido leerlo (2-09). El aviso avisa; el texto
+    # vive en el informe. Ver `core/seguimiento.feedback_al_informe`.
+    await feedback_al_informe(client_id, data.note, firmante=user.get("name"))
     client_user = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "name": 1, "email": 1})
     await audit(user, "macros", f"Actualizó macros de {(client_user or {}).get('name') or client_id} (manual)")
 
@@ -1999,6 +2003,8 @@ async def admin_calculator_apply(client_id: str, data: dict, user = Depends(get_
     )
 
     await avisar_macros(profile["user_id"], nota=note, sin_cambios=sin_cambios)
+    # La otra puerta del ajuste, con el mismo trato que la manual (2-09).
+    await feedback_al_informe(client_id, note, firmante=user.get("name"))
     client_user = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "name": 1, "email": 1})
     await audit(user, "macros", f"Aplicó macros por calculadora a {(client_user or {}).get('name') or client_id}")
 
