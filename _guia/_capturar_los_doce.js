@@ -22,6 +22,8 @@ const CARPETA = '_guia/_capturas_doce';
 if (!fs.existsSync(CARPETA)) fs.mkdirSync(CARPETA, { recursive: true });
 
 const EQUIPO = { correo: 'francisco@test.com', clave: 'demo123' };
+const AVISOS = JSON.parse(fs.readFileSync('_guia/_avisos_del_calendario.json', 'utf8'));
+const LINEAS = JSON.parse(fs.readFileSync('_guia/_lineas_del_cierre.json', 'utf8'));
 const CLIENTE = { correo: 'clientedemo@test.com', clave: 'demo123' };
 
 const pulsar = async (p, testid, espera = 2500) => {
@@ -220,6 +222,240 @@ const ESCENAS = {
         debe,
     }])),
 
+    // ── LOS AVISOS DEL CALENDARIO (bloques 4 y 6) ──
+    //
+    // Un aviso nace el dia que le toca y con el estado que le toca; reunir eso seis veces
+    // en dev no prueba mas. Los compone el MODULO DE VERDAD
+    // (`_guia/_avisos_del_calendario.py` llama a `core/avisos_cliente`) y aqui se le dan a
+    // la campanita para que los pinte. El texto sale del codigo de la app, no de este guion.
+    ...Object.fromEntries(Object.entries(AVISOS).map(([clave, m]) => [`aviso-${clave}`, {
+        cuenta: CLIENTE, ruta: '/dashboard', espera: 11000,
+        forzada: `${m.cuando}. Los avisos los compone «core/avisos_cliente» y se le dan a `
+               + 'la campanita: lo forzado es el dia, no el texto.',
+        rutas: [
+            ['**/api/notifications', (route) => (route.request().method() === 'GET'
+                ? route.fulfill({ status: 200, json: { notifications: m.avisos } })
+                : route.fulfill({ status: 200, json: { ok: true } }))],
+            ['**/api/notifications/unread-count',
+             (route) => route.fulfill({ status: 200, json: { count: m.avisos.length } })],
+        ],
+        antes: async (p) => { await pulsar(p, 'client-bell', 2500); },
+        debe: m.avisos.flatMap((a) => [a.title, a.body].filter(Boolean)),
+    }])),
+
+    // ── EL MENSUAL SIN CHECK-IN ──
+    'mensual-paso1-sin-checkin': {
+        cuenta: CLIENTE, ruta: '/dashboard/reports', espera: 9000,
+        rutas: [
+            ['**/api/reports/due*', async (route) => {
+                const r = await route.fetch();
+                const j = await r.json().catch(() => null);
+                if (!j) return route.fulfill({ response: r });
+                j.window = { ...(j.window || {}), due: true, is_open: true, submitted: false,
+                             tipos: ['mensual'], tipo_label: 'Reporte mensual' };
+                return route.fulfill({ response: r, json: j });
+            }],
+        ],
+        antes: async (p) => { await pulsar(p, 'seg-revision', 7000); },
+        forzada: 'La ventana del mensual, abierta. Los pocos check-in son REALES: esta '
+               + 'cuenta tiene 4 en veintiocho dias, que es justo el caso.',
+        debe: ['Reporte mensual', 'Son 4 pasos', 'Actualizar tus datos',
+               'Cinco preguntas y pasas al paso 2. El peso y las fotos se te piden igual.',
+               'No tengo todos los datos de tus check-in diarios',
+               '¿En qué grado has cumplido la dieta?',
+               '¿Has entrenado todos los días que tocaba?',
+               '¿Has cumplido con el cardio que tenías pautado?',
+               '¿Has tomado la suplementación que te correspondía?',
+               'Descanso — ¿cómo fue?', 'Tu peso de hoy', 'Continuar'],
+    },
+
+    // ── Y A LAS 12:00 LA FILA DE LA PESADA SE APAGA ──
+    'inicio-mediodia-sin-pesada': {
+        cuenta: CLIENTE, ruta: '/dashboard', espera: 12000,
+        reloj: '2026-09-02T10:00:00+00:00',   // miercoles, las 12:00 de España
+        forzada: 'El miercoles a las 12:00 en punto. El servidor decide con la hora del '
+               + 'cliente, que la pantalla le manda.',
+        debe: [],
+        noDebe: ['Hoy toca pesarte'],
+    },
+
+    // ── LA ESCALADA DE LA FILA DEL CIERRE (2, 4 y 7 dias) ──
+    //
+    // La compone el servidor con `core/ventana_del_dia.texto_de_la_linea`, y para verla
+    // haria falta una cuenta que de verdad lleve esos dias sin cerrar. Se le pide al propio
+    // modulo (`_guia/_lineas_del_cierre.py`) y se le da a Inicio: lo forzado es CUANTOS
+    // DIAS LLEVA, el texto es el del servidor.
+    ...Object.fromEntries(Object.entries(LINEAS).map(([clave, m]) => [`inicio-${clave}`, {
+        cuenta: CLIENTE, ruta: '/dashboard', espera: 12000,
+        forzada: `${m.cuando}: ${m.racha} dias sin cerrar. La frase la compone `
+               + '«core/ventana_del_dia», no este guion.',
+        rutas: [['**/api/checkins/estado*', async (route) => {
+            const r = await route.fetch();
+            const j = await r.json().catch(() => null);
+            if (!j) return route.fulfill({ response: r });
+            return route.fulfill({ response: r, json: { ...j, abierto: j.abierto || '2026-09-01',
+                hecho: false, es_de_ayer: false, quiere_cierre: true,
+                dias_sin_cerrar: m.racha, linea: m.linea } });
+        }]],
+        debe: [m.linea.titulo, m.linea.detalle],
+    }])),
+
+    // ── EL AVISO DE LAS COMIDAS SIN REGISTRAR, arriba del cierre ──
+    'cierre-comidas-pendientes': {
+        cuenta: CLIENTE, ruta: '/dashboard/checkins', espera: 10000,
+        forzada: 'Dos comidas del dia sin marcar (Intra y Post). Lo forzado es CUALES le '
+               + 'faltan; la frase la escribe la pantalla.',
+        rutas: [['**/api/checkins/hoy*', async (route) => {
+            const r = await route.fetch();
+            const j = await r.json().catch(() => null);
+            if (!j) return route.fulfill({ response: r });
+            return route.fulfill({ response: r, json: { ...j,
+                // Con la forma que manda el servidor: {key, etiqueta}. Con una lista de
+                // textos sueltos la pantalla pintaba «·» y parecia que no estaban.
+                comidas_pendientes: [{ key: 'Intra', etiqueta: 'Intra-entreno' },
+                                     { key: 'Post', etiqueta: 'Post-entreno' }] } });
+        }]],
+        // Esta cuenta ya cerro el dia, asi que el formulario no esta a la vista: se abre
+        // con «Editar lo de hoy», que es lo que haria el cliente.
+        antes: async (p) => { await pulsar(p, 'cierre-editar', 4000); },
+        debe: ['Te quedan 2 comidas sin registrar', 'Intra-entreno', 'Post-entreno',
+               'Puedes cerrarlas antes de seguir'],
+    },
+
+    // ── EL AVISO DE ANTES DE APAGAR EL CIERRE ──
+    'perfil-apagar-cierre': {
+        cuenta: CLIENTE, ruta: '/dashboard/profile', espera: 10000,
+        antes: async (p) => { await pulsar(p, 'aviso-cierre-dia', 2500); },
+        forzada: 'Se pulsa el interruptor del cierre para ver el aviso que sale ANTES de '
+               + 'apagarlo. No se llega a guardar.',
+        debe: ['Mi perfil', 'Avisos y recordatorios', 'El cierre del día',
+               'Rellenar el cierre del día',
+               'Si lo apagas, no podrás registrar tus datos del día',
+               'Puedes volver a activarlo cuando quieras.',
+               'Dejarlo como está', 'Apagarlo'],
+    },
+
+    // ── LOS EJERCICIOS QUE DAN MOLESTIAS, en el paso 2 del mensual ──
+    'mensual-paso2-molestias': {
+        cuenta: CLIENTE, ruta: '/dashboard/reports', espera: 9000,
+        forzada: 'Un plan CON lesiones en sus bloques: ese bloque solo sale a quien lo '
+               + 'lleva, y esta cuenta no. Lo forzado es que su plan lo incluya.',
+        rutas: [
+            ['**/api/reports/due*', async (route) => {
+                const r = await route.fetch();
+                const j = await r.json().catch(() => null);
+                if (!j) return route.fulfill({ response: r });
+                j.window = { ...(j.window || {}), due: true, is_open: true, submitted: false,
+                             tipos: ['mensual'], tipo_label: 'Reporte mensual' };
+                return route.fulfill({ response: r, json: j });
+            }],
+            ['**/api/reports/formulario*', async (route) => {
+                const r = await route.fetch();
+                const j = await r.json().catch(() => null);
+                if (!j) return route.fulfill({ response: r });
+                const bloques = Array.from(new Set([...(j.bloques || []), 'lesiones', 'molestias']));
+                // Y una lesion abierta: el bloque de ejercicios vetados cuelga de ella
+                // («la mitad util de una lesion»), asi que sin ninguna no hay nada que
+                // enseñar. Lo forzado es que la tenga; los textos son de la pantalla.
+                const datos = { ...(j.datos || {}),
+                                lesiones: [{ zona: 'Hombro derecho', desde: 'marzo',
+                                             ejercicios_vetados: ['Press militar'] }] };
+                return route.fulfill({ response: r, json: { ...j, tipo: 'mensual', bloques, datos } });
+            }],
+        ],
+        antes: async (p) => {
+            await pulsar(p, 'seg-revision', 7000);
+            // El paso 1 de esta cuenta es el de «sin check-in»: hasta que no contesta las
+            // cinco estrellas, «Continuar» esta apagado. Se contestan como las contestaria
+            // el, pulsando la tercera estrella de cada una.
+            for (const q of ['dieta_grado', 'entreno_grado', 'cardio_grado',
+                             'suplementacion_grado', 'descanso_grado']) {
+                await pulsar(p, `${q}-3`, 400);
+            }
+            const peso = p.locator('[data-testid="weight-input"]').first();
+            if (await peso.count()) await peso.fill('80').catch(() => {});
+            await pulsar(p, 'paso1-continuar', 3000);
+            await pulsar(p, 'paso1-confirmar', 3000);
+        },
+        debe: ['Quita los que ya no y añade los nuevos'],
+    },
+
+    // ── EL CUADRO DE EXTRAS, al pulsar el «+» ──
+    'inicio-extras-abierto': {
+        cuenta: CLIENTE, ruta: '/dashboard', espera: 13000,
+        antes: async (p) => { await pulsar(p, 'extras-abrir', 2500); },
+        debe: ['Extras del día',
+               'Si comes algo que no está en tu dieta del día, ponlo aquí, por pequeño que sea.',
+               'Buscar el alimento', 'o si no está',
+               'Escríbelo a mano. En cuanto pase, con la cantidad a ojo si no lo pesas.',
+               'Lo que pongas a mano no cuenta en tus macros, simplemente queda el registro. Lo que busques, sí.'],
+        recorte: 'Extras del día',
+    },
+
+    // ── LA RUTINA, cuando la del mes todavia no esta ──
+    'rutina-sin-la-del-mes': {
+        cuenta: CLIENTE, ruta: '/dashboard/routine', espera: 11000,
+        forzada: 'Un plan con la rutina como OPCIONAL (hoy, Mantenimiento) y la del mes '
+               + 'todavia sin preparar. Son los dos datos que llevan a esta rama; los '
+               + 'textos los pone la pantalla.',
+        rutas: [
+            ['**/api/routines/active*', (route) => route.fulfill({ status: 404, json: { detail: 'sin rutina' } })],
+            ['**/api/routines/rutina-del-mes/disponible*',
+             (route) => route.fulfill({ status: 200, json: { disponible: false } })],
+            // La rutina, «opcional» en su plan: no la lleva de serie. Es lo que hace que la
+            // pantalla hable de LA DEL MES y no de la personalizada.
+            ['**/api/plans*', async (route) => {
+                const r = await route.fetch();
+                const j = await r.json().catch(() => null);
+                if (!j) return route.fulfill({ response: r });
+                const tocado = Array.isArray(j) ? j : { ...j };
+                for (const k of Object.keys(tocado)) {
+                    const plan = tocado[k];
+                    if (plan && plan.habilitaciones) {
+                        tocado[k] = { ...plan,
+                                      habilitaciones: { ...plan.habilitaciones, rutina: 'opcional' } };
+                    }
+                }
+                return route.fulfill({ response: r, json: tocado });
+            }],
+        ],
+        debe: ['Todavía no está la rutina de este mes',
+               'Estamos en ello, te avisamos en cuanto esté.'],
+    },
+
+    // ── LOS DOS BLOQUES DEL INFORME QUE SALIAN VACIOS ──
+    //
+    // No estaban mal: es que el cliente del ejemplo no daba pie a ellos (no cambio de peso
+    // en el mes y no apunto ningun extra). `_guia/_escenario_informe.py` le monta las dos
+    // cosas en dev y `backend/_probar_informe_del_mes.py` vuelve a armar el informe con lo
+    // que salga. Los NUMEROS los calcula el servidor; aqui solo se sirve el informe ya
+    // armado para no crearle un reporte a nadie.
+    'informe-peso-y-extras': {
+        cuenta: CLIENTE, ruta: '/dashboard/reports', espera: 9000,
+        forzada: 'El historial y el informe se responden con el ejemplo armado contra la '
+               + 'base de dev, ya con un mes de peso que baja y dos extras apuntados.',
+        rutas: (() => {
+            const base = JSON.parse(fs.readFileSync('_guia/_informe_del_mes_ejemplo.json', 'utf8'));
+            return [
+                ['**/api/reports', (route) => (route.request().method() === 'GET'
+                    ? route.fulfill({ status: 200, json: [{
+                        id: 'informe-de-prueba', tipo: 'mensual', weight: 82.1,
+                        created_at: '2026-08-25T12:00:00+00:00', informe_estado: 'entregado' }] })
+                    : route.continue())],
+                ['**/api/reports/informe-de-prueba/informe',
+                 (route) => route.fulfill({ status: 200, json: base })],
+            ];
+        })(),
+        antes: async (p) => {
+            await pulsar(p, 'seg-historial', 5000);
+            await pulsar(p, 'ver-informe-informe-de-prueba', 5000);
+        },
+        debe: ['Porcentaje del peso total que has ido bajando por semana',
+               'Semana 1', 'Semana 4', 'Extras registrados',
+               'Un trozo de tarta', 'Dos cervezas con la comida'],
+        recorte: 'Porcentaje del peso total que has ido bajando por semana',
+    },
+
     'cierre-del-dia-sin-peso': {
         cuenta: CLIENTE, ruta: '/dashboard/checkins', espera: 9000,
         debe: [],
@@ -266,7 +502,15 @@ const ESCENAS = {
         if (escena.antes) await escena.antes(p).catch(() => {});
         await p.waitForTimeout(1200);
 
-        const visible = await p.evaluate(() => document.body.innerText);
+        // LO QUE SE LEE EN LA PANTALLA NO ES SOLO `innerText`. Los textos de dentro de un
+        // campo vacio -- «Buscar el alimento...», «Escribelo a mano...» -- son
+        // `placeholder`, y el cliente los LEE igual. Sin esto salian como si no existieran,
+        // que es justo el falso negativo que hay que evitar.
+        const visible = await p.evaluate(() => {
+            const sueltos = [...document.querySelectorAll('[placeholder]')]
+                .map((el) => el.getAttribute('placeholder')).filter(Boolean);
+            return [document.body.innerText, ...sueltos].join('\n');
+        });
         const plano = visible.toLowerCase();
         fs.writeFileSync(`${CARPETA}/${id}.txt`, visible, 'utf8');
         await p.screenshot({ path: `${CARPETA}/${id}.png`, fullPage: true });

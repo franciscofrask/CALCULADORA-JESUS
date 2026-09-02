@@ -442,8 +442,11 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
 
                 {pasoMensual === 1 && (
                     <>
-                        <RotuloDelPaso paso={1} rotulos={ROTULOS_DEL_QUINCENAL}
-                            sub="Sale de tu check-in. Si algo no cuadra o te falta, lo modificas al final." />
+                        {/* EL SUBTÍTULO LO PONE EL PASO, no esta pantalla: en la versión
+                            sin check-in dice otra cosa («Cinco preguntas y pasas al paso
+                            2»), y tenerlo aquí escribía «Sale de tu check-in» encima de un
+                            aviso que dice justo que no los tenemos. */}
+                        <RotuloDelPaso paso={1} rotulos={ROTULOS_DEL_QUINCENAL} />
                         <QuincenalPaso1
                             api={api} valores={valores} set={set}
                             huecosRespuestas={valores.huecos_paso1}
@@ -484,8 +487,8 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
 
             {pasoMensual === 1 && (
                 <>
-                    <RotuloDelPaso paso={1}
-                        sub="Sale de tus check-in. Si algo no cuadra o te falta, lo arreglas al final." />
+                    {/* El subtítulo, dentro del paso: cambia con la versión (ver arriba). */}
+                    <RotuloDelPaso paso={1} />
                     <MensualPaso1
                         api={api} valores={valores} set={set}
                         pideGrasa={bloques.includes('grasa')} grasa={ficha.datos?.grasa}

@@ -583,7 +583,15 @@ def avisos_de_calendario_doc(*, ahora_es: datetime,
                              con_correo_de_novedades: bool = False,
                              es_premium: bool = False,
                              se_peso_miercoles: bool = False,
-                             se_peso_jueves: bool = False) -> List[Dict[str, Any]]:
+                             se_peso_jueves: bool = False,
+                             # Los tres del calendario del peso del 1-09 (bloques 4 y 6).
+                             # `toca_quincenal_esta_semana` es lo que hace que el aviso del
+                             # martes no salga la semana que no hay reporte; `primer_ciclo`
+                             # deja el de la semana 1 solo la primera vez, y
+                             # `le_falta_una_pesada` es el rescate del viernes.
+                             toca_quincenal_esta_semana: bool = False,
+                             primer_ciclo: bool = False,
+                             le_falta_una_pesada: bool = False) -> List[Dict[str, Any]]:
     """Los del calendario. Siempre salen: no gastan el cupo de las condicionadas.
 
     `ventanas` son las ventanas de reporte que le tocan (la de esta semana de ciclo y la
@@ -660,34 +668,56 @@ def avisos_de_calendario_doc(*, ahora_es: datetime,
 
         # 3 y 4 · El quincenal. Quién lo tiene no se pregunta por el nombre del plan: si
         # su calendario no trae quincenal, aquí no llega ninguna ventana de ese tipo.
+        # LOS TRES DEL QUINCENAL SON SUS TEXTOS, Y VAN SIN VARIANTES («Todo lo validado
+        # antes del 1 de septiembre», «La tarjeta y los avisos»). Aquí rotaban dos o tres
+        # redacciones nuestras para que no cansaran; estas están escritas por él, dicen la
+        # hora y dicen QUÉ SE PIERDE, y rotarlas sería volver a inventar el texto que ya nos
+        # ha dado. La rotación se queda donde sigue haciendo falta (el cierre del día, que
+        # es diario).
         if tipo == "quincenal":
+            # El de la apertura: le da el plazo y le empuja a hacerlo ya.
             if hoy == abre.date() and ahora_es >= abre:
                 fuera.append({
                     "clave": f"quincenal_abierto:{abre.date()}",
                     "familia": "quincenal_abierto",
                     "tipo": "reporte",
-                    "variantes": [
-                        {"titulo": "Tu reporte quincenal está abierto",
-                         "cuerpo": "Unas breves preguntas para ajustar tus macros si hace falta. Hasta mañana a las 20:00."},
-                        {"titulo": "Toca quincenal",
-                         "cuerpo": "Cuatro preguntas. Tienes hasta mañana a las 20:00."},
-                        {"titulo": "Cuéntanos estas dos semanas",
-                         "cuerpo": "Es rápido, y con eso decidimos si te tocamos algo."},
-                    ],
+                    "titulo": "Ya puedes rellenar el reporte quincenal",
+                    "cuerpo": "Tienes para hacerlo hasta mañana jueves a las ocho, pero mi "
+                              "consejo es que lo hagas cuanto antes. Son dos minutos.",
                     "link": "/dashboard/reports",
                     "calendario": True,
                 })
-            if not mandado and not aplazado and hoy == abre.date() + timedelta(days=1) and ahora_es.hour >= 9:
+            # El del último día: le dice qué se pierde, «sin que el mensual parezca un
+            # castigo: el mensual le toca igual».
+            # Y SE CALLA EN CUANTO PASA LA HORA (`ahora_es < cierra`). Sin eso, el que abre
+            # la app a las nueve de la noche era candidato a los dos -- el recordatorio y el
+            # fuera de plazo -- y como solo nace uno al día, se llevaba el recordatorio: le
+            # estaríamos pidiendo que haga a tiempo algo que ya no puede hacer.
+            if (not mandado and not aplazado and hoy == abre.date() + timedelta(days=1)
+                    and ahora_es.hour >= 9 and ahora_es < cierra):
                 fuera.append({
                     "clave": f"quincenal_ultimo:{abre.date()}",
                     "familia": "quincenal_ultimo",
                     "tipo": "reporte",
-                    "variantes": [
-                        {"titulo": "Último día para tu quincenal",
-                         "cuerpo": "Se cierra hoy a las 20:00."},
-                        {"titulo": "Hoy cierra tu quincenal",
-                         "cuerpo": "A las 20:00. Sin él no sabemos cómo has ido estas dos semanas."},
-                    ],
+                    "titulo": "Solo recordarte que tienes hasta hoy a las ocho",
+                    "cuerpo": "Si no lo haces, este ajuste se salta y el siguiente será en "
+                              "tu reporte mensual.",
+                    "link": "/dashboard/reports",
+                    "calendario": True,
+                })
+            # Y EL FUERA DE PLAZO, EL MISMO JUEVES DE 20:00 A MEDIANOCHE. No existía: el
+            # «no nos llegó» de más abajo es del MENSUAL y salta al día siguiente, y para el
+            # quincenal el día siguiente ya es otra semana del ciclo. Su calendario lo pone
+            # aquí y dura hasta medianoche, en rojo. No le pide nada -- por eso está en
+            # `NUNCA_SE_APAGAN` --: le dice que ha perdido el ajuste de esta quincena y que
+            # el mensual le llega igual.
+            if not mandado and not aplazado and hoy == cierra.date() and ahora_es >= cierra:
+                fuera.append({
+                    "clave": f"reporte_no_llego:quincenal:{cierra.date()}",
+                    "familia": "reporte_no_llego",
+                    "tipo": "reporte",
+                    "titulo": "Se te pasó el plazo del reporte quincenal",
+                    "cuerpo": "Este ajuste se salta. El siguiente va en tu reporte mensual.",
                     "link": "/dashboard/reports",
                     "calendario": True,
                 })
@@ -927,41 +957,73 @@ def avisos_de_calendario_doc(*, ahora_es: datetime,
     # ensenando la puerta cerrada. Hoy no cambia nada -- el Premium lo lleva --, pero la
     # regla es «ningun aviso lleva a una pantalla que el plan no abre» y no «ninguno menos
     # estos dos».
-    if plan_con_cierre_dia and es_premium and ahora_es.weekday() == 2 and ahora_es.hour >= 8 and not se_peso_miercoles:
+    # EL CALENDARIO DEL PESO CAMBIA CON EL DOC DEL 1-09 («Todo lo validado antes del 1 de
+    # septiembre», bloques 4 y 6). Aquí había un aviso el miércoles y otro el jueves --los
+    # dos días de la pesada--, y su semana ya no es esa:
+    #
+    #     Semana 2 · martes por la mañana            el aviso del peso
+    #     Semana 2 · miércoles y jueves hasta 12:00  la FILA «Hoy toca pesarte» en Inicio
+    #     Semana 2 · viernes de 10:00 a 13:00        «Te falta una pesada», si le falta
+    #
+    # O sea: los dos días de pesada no llevan aviso, llevan FILA. Es su regla de la cola de
+    # Inicio -- «nunca dos avisos: una lista y un orden» -- y además la fila puede llevarle
+    # al campo, que es lo que un aviso de campanita no hace.
+    #
+    # Y HABÍA UN FALLO NUEVO QUE ARREGLAR: estos avisos mandaban a /dashboard/checkins, y el
+    # campo del peso ya no está ahí (se mudó a Evolución con el bloque 4). Dejarlos era
+    # mandarle a una pantalla donde no puede hacer lo que se le pide.
+    #
+    # SIGUEN SIENDO SOLO DEL PREMIUM y con la llave del plan, como antes: es su método del
+    # peso semanal, no el de todo el mundo.
+    #
+    # 11a · EL MARTES, UN DÍA ANTES DE QUE SE ABRA EL REPORTE, «para que le dé tiempo a la
+    # primera pesada». Sin las dos pesadas no hay media, y la media es el dato que él mira.
+    if (plan_con_cierre_dia and es_premium and ahora_es.weekday() == 1
+            and ahora_es.hour >= 8 and toca_quincenal_esta_semana):
         fuera.append({
-            "clave": f"peso_miercoles:{hoy}",
-            "familia": "peso_miercoles",
+            "clave": f"peso_martes:{hoy}",
+            "familia": "peso_miercoles",     # el mismo interruptor de siempre
             "tipo": "checkin",
-            "titulo": "Hoy toca pesarte y mañana también.",
-            "cuerpo": "Hacemos la media y ese será tu peso semanal, lo que debes registrar "
-                      "semana a semana.",
-            "link": "/dashboard/checkins",
+            "titulo": "Esta semana toca reporte quincenal",
+            "cuerpo": "Recuerda pesarte y registrar el dato. Mañana y el jueves, en ayunas "
+                      "y después de ir al baño.",
+            "link": "/dashboard/reports?abrir=peso",
             "calendario": True,
         })
-    if plan_con_cierre_dia and es_premium and ahora_es.weekday() == 3 and ahora_es.hour >= 8 and not se_peso_jueves:
-        if se_peso_miercoles:
-            fuera.append({
-                "clave": f"peso_jueves:{hoy}",
-                "familia": "peso_jueves",
-                "tipo": "checkin",
-                "titulo": "Recuerda pesarte hoy también.",
-                "cuerpo": None,
-                "link": "/dashboard/checkins",
-                "calendario": True,
-            })
-        else:
-            # La misma clave que el de arriba a propósito: es el aviso del jueves, y solo
-            # cambia el texto según se pesara ayer o no. Con dos claves, el que entra por la
-            # mañana sin haberse pesado y vuelve por la tarde ya pesado se llevaría los dos.
-            fuera.append({
-                "clave": f"peso_jueves:{hoy}",
-                "familia": "peso_jueves",
-                "tipo": "checkin",
-                "titulo": "Ayer te tocaba pesarte y no registraste el dato.",
-                "cuerpo": "Hazlo hoy y mañana, no te olvides.",
-                "link": "/dashboard/checkins",
-                "calendario": True,
-            })
+
+    # 11b · EL MIÉRCOLES DE LA SEMANA 1, la que no tiene reporte, y SOLO EL PRIMER CICLO:
+    # es la que le enseña el método. Después ya lo sabe y repetírselo cada ciclo es ruido.
+    if (plan_con_cierre_dia and es_premium and ahora_es.weekday() == 2
+            and ahora_es.hour >= 8 and semana == 1 and primer_ciclo):
+        fuera.append({
+            "clave": f"peso_semana1:{hoy}",
+            "familia": "peso_miercoles",
+            "tipo": "checkin",
+            "titulo": "Esta semana no toca reporte",
+            "cuerpo": "Solo el cierre del día, como siempre. De todas formas, algo que me "
+                      "gusta mucho es que registres tu peso semanal: te pesas dos días "
+                      "seguidos entre el miércoles y el viernes, los apuntas en Seguimiento "
+                      "y la media la hace la app de forma automática.",
+            "link": "/dashboard/reports?abrir=peso",
+            "calendario": True,
+        })
+
+    # 11c · EL VIERNES, EL RESCATE. Solo a quien MANDÓ el reporte y tiene una sola pesada:
+    # al que no lo mandó no se le persigue con una pesada, y al que tiene las dos no le
+    # falta nada. Y la hora importa: «antes de las 10 aún entra» porque a las 10:00 se
+    # cierra todo y Jesús se pone a ajustar.
+    if (plan_con_cierre_dia and es_premium and ahora_es.weekday() == 4
+            and 8 <= ahora_es.hour < 13 and le_falta_una_pesada):
+        fuera.append({
+            "clave": f"peso_viernes:{hoy}",
+            "familia": "peso_jueves",        # el mismo interruptor de siempre
+            "tipo": "checkin",
+            "titulo": "Te falta una pesada",
+            "cuerpo": "Si te pesas esta mañana antes de las 10, aún entra. Si no, me quedo "
+                      "con la que tengo.",
+            "link": "/dashboard/reports?abrir=peso",
+            "calendario": True,
+        })
 
     # 2 · "Cierra tu día". Cada día a las 20:00 si no lo ha cerrado. Es el único que el
     # cliente puede apagar (`profile.avisos.cierre_dia`): es diario, y un aviso diario que

@@ -1,0 +1,26 @@
+{
+ "dos-dias": {
+  "cuando": "Tras 2 días perdidos",
+  "racha": 2,
+  "linea": {
+   "titulo": "¿Cómo fuiste hoy?",
+   "detalle": "Llevas 2 días seguidos sin cerrar, no lo dejes hoy también"
+  }
+ },
+ "cuatro-dias": {
+  "cuando": "Tras 4 días perdidos",
+  "racha": 4,
+  "linea": {
+   "titulo": "Llevas 4 días sin cerrar",
+   "detalle": "Retómalo hoy mismo: es de donde salen tus ajustes"
+  }
+ },
+ "una-semana": {
+  "cuando": "Tras una semana",
+  "racha": 7,
+  "linea": {
+   "titulo": "Llevas una semana sin cerrar el día",
+   "detalle": "Dejo de recordártelo. Si te está costando, dímelo y lo vemos"
+  }
+ }
+}

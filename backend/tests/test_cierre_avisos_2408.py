@@ -73,13 +73,21 @@ class TestElDelReporteVaPrimero:
         return [{"tipo": "quincenal", "semana": 2, "abre": self.ABRE,
                  "cierra": self.ABRE + timedelta(days=1, hours=11), "mandado": mandado}]
 
-    def test_a_las_21_gana_el_ultimo_dia_del_quincenal(self):
+    def test_a_las_21_gana_el_del_reporte_y_no_el_de_cerrar_el_dia(self):
         """El jueves a las 21:00, sin cerrar el dia y con el quincenal sin mandar: el que
-        sale es el del reporte, que hoy es su unico dia; el de cerrar el dia vuelve manana."""
+        sale es el del reporte, que hoy es su unico dia; el de cerrar el dia vuelve manana.
+
+        Y A LAS 21:00 EL DEL REPORTE YA NO ES EL RECORDATORIO, ES EL FUERA DE PLAZO (1-09).
+        La ventana de este cliente cierra el jueves a las 20:00, asi que a las nueve de la
+        noche pedirle que lo mande a tiempo seria pedirle algo que ya no puede hacer: el
+        recordatorio se calla y en su lugar nace el que le dice que ha perdido el ajuste de
+        esta quincena. Lo que este test cuida sigue siendo lo mismo -- que el de cerrar el
+        dia no se coma al del reporte --, y sigue valiendo.
+        """
         avisos = avisos_de_calendario_doc(
             ahora_es=_es(2026, 8, 6, 21), cerro_hoy=False, ventanas=self._ventana())
-        assert _familias(avisos) == ["quincenal_ultimo", "cierra_dia"]
-        assert elegir_avisos(avisos, [], set(), None, AHORA)[0]["familia"] == "quincenal_ultimo"
+        assert _familias(avisos) == ["reporte_no_llego", "cierra_dia"]
+        assert elegir_avisos(avisos, [], set(), None, AHORA)[0]["familia"] == "reporte_no_llego"
 
     def test_sin_nada_del_reporte_sigue_saliendo_cerrar_el_dia(self):
         """El arreglo es de orden, no de quitar: la noche que no hay reporte que reclamar,

@@ -144,12 +144,23 @@ class TestElTextoRota:
         tres = [{"titulo": "A"}, {"titulo": "B"}, {"titulo": "C"}]
         assert rotar_variante(tres, 2)["titulo"] == "A"
 
-    def test_todos_los_avisos_del_doc_traen_sus_variantes(self):
-        """Si alguno se queda con un texto solo, la rotacion no existe para el."""
+    def test_el_que_rota_rota_de_verdad(self):
+        """Si uno se queda con una sola variante, la rotacion no existe para el.
+
+        NO TODOS ROTAN, Y ES A PROPOSITO DESDE EL 1-09. La rotacion se invento para los
+        textos que escribimos nosotros: son avisos que se repiten y cansan. Los que ha
+        escrito EL -- los tres del quincenal de «Todo lo validado antes del 1 de
+        septiembre» -- van con un texto solo, porque dicen la hora y dicen que se pierde, y
+        rotarlos seria volver a inventar el texto que ya nos ha dado.
+        """
         con_varias = [a for a in TODOS_LOS_AVISOS if a.get("variantes")]
-        assert len(con_varias) == len(TODOS_LOS_AVISOS), "todos los del doc rotan"
+        con_uno = [a for a in TODOS_LOS_AVISOS if not a.get("variantes")]
+        assert con_varias, "algo rota"
         for a in con_varias:
             assert len(a["variantes"]) >= 2, f"«{a['variantes'][0]['titulo']}» no rota"
+        # Y el que va con un texto solo, que lo traiga escrito: sin `titulo` no hay aviso.
+        for a in con_uno:
+            assert a.get("titulo"), f"«{a.get('familia')}» no tiene ni variantes ni titulo"
 
 
 class TestLosUmbralesDeLasCondicionadas:
@@ -282,11 +293,14 @@ class TestElQuincenal:
     MIERCOLES = _es(2026, 8, 5, 9)      # 2026-08-05 es miercoles
 
     def test_el_miercoles_a_las_9_se_abre(self):
+        """CON SU TEXTO Y SIN ROTAR (1-09, «La tarjeta y los avisos»). Antes rotaban tres
+        redacciones nuestras; esta es la suya, y da el plazo y empuja a hacerlo ya."""
         a = avisos_de_calendario_doc(ahora_es=self.MIERCOLES,
                                      ventanas=[_ventana("quincenal", self.MIERCOLES)])
         assert _claves(a) == ["quincenal_abierto"]
-        assert a[0]["variantes"][0]["titulo"] == "Tu reporte quincenal está abierto"
-        assert len(a[0]["variantes"]) == 3
+        assert a[0]["titulo"] == "Ya puedes rellenar el reporte quincenal"
+        assert a[0]["cuerpo"].startswith("Tienes para hacerlo hasta mañana jueves a las ocho")
+        assert not a[0].get("variantes"), "el texto es suyo: no se rota"
 
     def test_a_las_8_todavia_no(self):
         a = avisos_de_calendario_doc(ahora_es=_es(2026, 8, 5, 8),
@@ -297,10 +311,30 @@ class TestElQuincenal:
         assert avisos_de_calendario_doc(ahora_es=self.MIERCOLES, ventanas=[]) == []
 
     def test_el_jueves_a_las_9_el_ultimo_dia(self):
+        """Y le dice QUE SE PIERDE, sin que el mensual parezca un castigo (1-09)."""
         a = avisos_de_calendario_doc(ahora_es=_es(2026, 8, 6, 9),
                                      ventanas=[_ventana("quincenal", self.MIERCOLES)])
         assert _claves(a) == ["quincenal_ultimo"]
-        assert a[0]["variantes"][0]["cuerpo"] == "Se cierra hoy a las 20:00."
+        assert a[0]["titulo"] == "Solo recordarte que tienes hasta hoy a las ocho"
+        assert a[0]["cuerpo"] == ("Si no lo haces, este ajuste se salta y el siguiente "
+                                  "será en tu reporte mensual.")
+
+    def test_pasada_la_hora_se_calla_y_sale_el_fuera_de_plazo(self):
+        """Las dos mitades del mismo cambio del 1-09.
+
+        El fuera de plazo del quincenal NO EXISTIA: el «no nos llegó» es del mensual y salta
+        al dia siguiente, y para el quincenal el dia siguiente ya es otra semana del ciclo.
+        Su calendario lo pone el mismo jueves, de 20:00 a medianoche.
+
+        Y el recordatorio se calla en cuanto pasa la hora. Sin eso, el que abre la app a las
+        nueve de la noche era candidato a los dos y -- como solo nace uno al dia -- se
+        llevaba el recordatorio: pedirle que haga a tiempo algo que ya no puede hacer.
+        """
+        a = avisos_de_calendario_doc(ahora_es=_es(2026, 8, 6, 21),
+                                     ventanas=[_ventana("quincenal", self.MIERCOLES)])
+        assert _claves(a) == ["reporte_no_llego"]
+        assert a[0]["titulo"] == "Se te pasó el plazo del reporte quincenal"
+        assert a[0]["cuerpo"] == "Este ajuste se salta. El siguiente va en tu reporte mensual."
 
     def test_si_ya_lo_mando_no_se_le_recuerda(self):
         a = avisos_de_calendario_doc(

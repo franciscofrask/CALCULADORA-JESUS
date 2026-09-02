@@ -380,6 +380,10 @@ async def sincronizar_avisos(user_id: str, marcar_entrada: bool = True,
                 es_premium=datos.get("es_premium", False),
                 se_peso_miercoles=datos.get("se_peso_miercoles", False),
                 se_peso_jueves=datos.get("se_peso_jueves", False),
+                # Los tres del calendario del peso del 1-09.
+                toca_quincenal_esta_semana=datos.get("toca_quincenal_esta_semana", False),
+                primer_ciclo=datos.get("primer_ciclo", False),
+                le_falta_una_pesada=datos.get("le_falta_una_pesada", False),
             )
         condicionados = avisos_condicionados(
             ahora=ahora,
@@ -730,7 +734,50 @@ async def _datos_para_avisos(perfil: dict, ahora: datetime,
         "es_premium": es_premium,
         "se_peso_miercoles": _se_peso_el(perfil, lunes + timedelta(days=2)),
         "se_peso_jueves": _se_peso_el(perfil, lunes + timedelta(days=3)),
+        # ── LOS TRES DEL CALENDARIO DEL PESO (doc 1-09, bloques 4 y 6) ──
+        #
+        # El aviso del martes solo la semana que hay quincenal: «un día antes de que se
+        # abra el reporte». Si esa semana no toca, avisarle de pesarse para un reporte que
+        # no existe es pedirle algo por nada.
+        "toca_quincenal_esta_semana": any((v or {}).get("tipo") == "quincenal"
+                                          for v in (ventanas or [])),
+        # El de la semana 1 solo el PRIMER ciclo: es el que enseña el método, y a partir
+        # del segundo ya se lo sabe. Con `semanas_ciclo` no vale -- eso son las semanas que
+        # dura --, hace falta saber si va por el primero: sin `ciclo_actual` guardado, lo
+        # dice la fecha de arranque contra las semanas que lleva.
+        "primer_ciclo": _va_por_el_primer_ciclo(perfil, semanas_ciclo),
+        # El rescate del viernes, y con sus dos condiciones: que HAYA MANDADO el reporte
+        # (al que no lo mandó no se le persigue con una pesada) y que tenga exactamente
+        # UNA de las dos pesadas de la semana.
+        "le_falta_una_pesada": (
+            len([d for d in (2, 3, 4) if _se_peso_el(perfil, lunes + timedelta(days=d))]) == 1
+            and any((v or {}).get("tipo") == "quincenal" and (v or {}).get("mandado")
+                    for v in (ventanas or []))
+        ),
     }
+
+
+def _va_por_el_primer_ciclo(perfil: dict, semanas_ciclo: Optional[int]) -> bool:
+    """Si todavía está en su primer ciclo.
+
+    El aviso de la semana 1 («esta semana no toca reporte, pero pésate igual») es el que le
+    explica el método del peso semanal, y eso se explica una vez. En el segundo ciclo ya lo
+    sabe y repetírselo es ruido.
+
+    Se cuenta por los días que lleva desde que arrancó, contra las semanas que dura su
+    ciclo. Sin fecha de arranque se dice que sí: es su primera semana en la app y el aviso
+    que enseña el método es justo el que le hace falta.
+    """
+    from core.tiempo import hoy_madrid
+
+    arranque = perfil.get("arranque_lunes") or perfil.get("plan_start") or perfil.get("created_at")
+    if not arranque or not semanas_ciclo:
+        return True
+    try:
+        d0 = date.fromisoformat(str(arranque)[:10])
+    except (ValueError, TypeError):
+        return True
+    return (hoy_madrid() - d0).days < semanas_ciclo * 7
 
 
 def _se_peso_el(perfil: dict, dia: date) -> bool:

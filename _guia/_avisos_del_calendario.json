@@ -1,0 +1,92 @@
+{
+ "peso-martes": {
+  "cuando": "Semana 2 · martes por la mañana",
+  "avisos": [
+   {
+    "id": "peso-martes-0",
+    "title": "Esta semana toca reporte quincenal",
+    "body": "Recuerda pesarte y registrar el dato. Mañana y el jueves, en ayunas y después de ir al baño.",
+    "clave": "peso_martes:2026-09-01",
+    "type": "checkin",
+    "link": "/dashboard/reports?abrir=peso",
+    "created_at": "2026-09-01T09:00:00+02:00",
+    "read": false
+   }
+  ]
+ },
+ "quincenal-abierto": {
+  "cuando": "Semana 2 · miércoles a las 10:00",
+  "avisos": [
+   {
+    "id": "quincenal-abierto-0",
+    "title": "Ya puedes rellenar el reporte quincenal",
+    "body": "Tienes para hacerlo hasta mañana jueves a las ocho, pero mi consejo es que lo hagas cuanto antes. Son dos minutos.",
+    "clave": "quincenal_abierto:2026-09-02",
+    "type": "reporte",
+    "link": "/dashboard/reports",
+    "created_at": "2026-09-02T10:00:00+02:00",
+    "read": false
+   }
+  ]
+ },
+ "quincenal-ultimo": {
+  "cuando": "Semana 2 · jueves por la mañana",
+  "avisos": [
+   {
+    "id": "quincenal-ultimo-0",
+    "title": "Solo recordarte que tienes hasta hoy a las ocho",
+    "body": "Si no lo haces, este ajuste se salta y el siguiente será en tu reporte mensual.",
+    "clave": "quincenal_ultimo:2026-09-02",
+    "type": "reporte",
+    "link": "/dashboard/reports",
+    "created_at": "2026-09-03T09:00:00+02:00",
+    "read": false
+   }
+  ]
+ },
+ "quincenal-fuera-de-plazo": {
+  "cuando": "Semana 2 · jueves, de 20:00 a medianoche",
+  "avisos": [
+   {
+    "id": "quincenal-fuera-de-plazo-0",
+    "title": "Se te pasó el plazo del reporte quincenal",
+    "body": "Este ajuste se salta. El siguiente va en tu reporte mensual.",
+    "clave": "reporte_no_llego:quincenal:2026-09-03",
+    "type": "reporte",
+    "link": "/dashboard/reports",
+    "created_at": "2026-09-03T21:00:00+02:00",
+    "read": false
+   }
+  ]
+ },
+ "peso-viernes": {
+  "cuando": "Semana 2 · viernes, de 10:00 a 13:00",
+  "avisos": [
+   {
+    "id": "peso-viernes-0",
+    "title": "Te falta una pesada",
+    "body": "Si te pesas esta mañana antes de las 10, aún entra. Si no, me quedo con la que tengo.",
+    "clave": "peso_viernes:2026-09-04",
+    "type": "checkin",
+    "link": "/dashboard/reports?abrir=peso",
+    "created_at": "2026-09-04T10:00:00+02:00",
+    "read": false
+   }
+  ]
+ },
+ "peso-semana1": {
+  "cuando": "Semana 1 · miércoles (solo el primer ciclo)",
+  "avisos": [
+   {
+    "id": "peso-semana1-0",
+    "title": "Esta semana no toca reporte",
+    "body": "Solo el cierre del día, como siempre. De todas formas, algo que me gusta mucho es que registres tu peso semanal: te pesas dos días seguidos entre el miércoles y el viernes, los apuntas en Seguimiento y la media la hace la app de forma automática.",
+    "clave": "peso_semana1:2026-09-02",
+    "type": "checkin",
+    "link": "/dashboard/reports?abrir=peso",
+    "created_at": "2026-09-02T09:00:00+02:00",
+    "read": false
+   }
+  ]
+ }
+}

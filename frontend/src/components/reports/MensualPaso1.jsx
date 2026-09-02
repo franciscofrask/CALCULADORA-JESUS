@@ -19,7 +19,7 @@
  * mes que toca) para corregir lo que la app haya sacado mal.
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { DosBotones } from './piezas';
+import { DosBotones, Estrellas } from './piezas';
 import { PESO_MIN, PESO_MAX } from '../../lib/pesoValido';
 
 const ORANGE = '#FF671F';
@@ -137,8 +137,79 @@ const MensualPaso1 = ({ api, valores, set, pideGrasa, grasa, huecosRespuestas,
 
     const etiquetaPeriodo = periodo === 'principio' ? 'Desde que empezaste' : 'Desde tu último reporte';
 
+    // ── LA OTRA VERSIÓN DEL PASO 1: LA DEL QUE NO TIENE CHECK-IN ──
+    //
+    // «El paso 1 se acorta, igual que en el quincenal. El peso y las fotos se le piden
+    // igual, que ésos no dependen de haber apuntado nada.»
+    //
+    // Sin cierres con los que llenarlo, este paso salía vacío -- filas sin denominador,
+    // sensaciones sin media -- y encima le pedía confirmar una nada. Y tampoco sale el
+    // selector de periodo: no hay dos tramos que comparar cuando no hay datos en ninguno.
+    if (ficha?.sin_datos) {
+        const faltan = (ficha.preguntas || []).filter((p) => valores[p.clave] == null).length;
+        return (
+            <div className="space-y-4" data-testid="mensual-paso1">
+                <p className="text-[15px] text-muted-foreground" data-testid="paso1-sin-datos-sub">
+                    Cinco preguntas y pasas al paso 2. El peso y las fotos se te piden igual.
+                </p>
+                <div className="rounded-2xl border border-[#EF4444]/40 bg-[#EF4444]/5 p-4">
+                    <p className="text-[15px] text-foreground">
+                        <span className="font-bold">No tengo todos los datos de tus check-in diarios</span>,
+                        así que te lo pregunto aquí.
+                    </p>
+                </div>
+                {(ficha.preguntas || []).map((p) => (
+                    <Tarjeta key={p.clave} testid={`paso1-pregunta-${p.clave}`}>
+                        <p className="text-sm text-foreground">{p.pregunta}</p>
+                        <Estrellas testid={p.clave} valor={valores[p.clave]}
+                            onChange={(v) => set(p.clave, v)} />
+                    </Tarjeta>
+                ))}
+
+                {/* EL PESO SE LE PIDE IGUAL, y el % de grasa el mes que toca. No dependen
+                    de haber apuntado nada: se pesa hoy y ya está. */}
+                <Tarjeta titulo="Tu peso de hoy" testid="paso1-peso-sin-datos">
+                    <div className="flex items-center gap-2">
+                        <input type="number" step="0.1" min={PESO_MIN} max={PESO_MAX} inputMode="decimal"
+                            value={valores.weight} onChange={(e) => set('weight', e.target.value)}
+                            placeholder="—" data-testid="weight-input"
+                            className="flex-1 min-w-0 bg-muted border border-input rounded-xl px-3 py-3 text-foreground text-2xl font-bold placeholder-foreground/20 focus:outline-none focus:border-[#FF671F] transition-colors" />
+                        <span className="text-lg text-foreground/40 font-bold">kg</span>
+                    </div>
+                    {pideGrasa && (
+                        <div className="pt-1">
+                            <p className="text-sm text-foreground mb-1.5">Tu porcentaje de grasa</p>
+                            <div className="flex items-center gap-2">
+                                <input type="number" step="0.5" min="3" max="70" inputMode="decimal"
+                                    value={valores.body_fat ?? ''} onChange={(e) => set('body_fat', e.target.value)}
+                                    placeholder="—" data-testid="body-fat-input"
+                                    className="flex-1 min-w-0 bg-muted border border-input rounded-xl px-3 py-3 text-foreground text-2xl font-bold placeholder-foreground/20 focus:outline-none focus:border-[#FF671F] transition-colors" />
+                                <span className="text-lg text-foreground/40 font-bold">%</span>
+                            </div>
+                        </div>
+                    )}
+                </Tarjeta>
+
+                <button type="button" onClick={onConfirmar} disabled={faltan > 0}
+                    data-testid="paso1-continuar"
+                    className="w-full rounded-xl py-3 text-sm font-bold text-white uppercase tracking-wider disabled:opacity-40"
+                    style={{ backgroundColor: ORANGE }}>
+                    Continuar
+                </button>
+                {faltan > 0 && (
+                    <p className="text-[13px] text-muted-foreground text-center -mt-2">
+                        Te {faltan === 1 ? 'queda una' : `quedan ${faltan}`}.
+                    </p>
+                )}
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-4" data-testid="mensual-paso1">
+            <p className="text-[15px] text-muted-foreground">
+                Sale de tus check-in. Si algo no cuadra o te falta, lo arreglas al final.
+            </p>
             {/* ── EL SELECTOR ── «cambia el bloque entero, no solo el peso» ── */}
             <div className="grid grid-cols-2 gap-2" data-testid="paso1-periodo">
                 {[

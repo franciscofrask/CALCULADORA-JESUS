@@ -166,10 +166,16 @@ const QuincenalPaso1 = ({ api, valores, set, huecosRespuestas, onHueco, onConfir
         const faltan = (ficha.preguntas || []).length - contestadas;
         return (
             <div className="space-y-4" data-testid="quincenal-paso1">
-                <p className="text-[15px] text-foreground/80" data-testid="quincenal-sin-datos">
-                    <span className="font-bold">No tengo todos los datos de tus check-in diarios</span>,
-                    así que te lo pregunto aquí.
+                <p className="text-[15px] text-muted-foreground">
+                    Cinco preguntas y pasas al paso 2.
                 </p>
+                <div className="rounded-2xl border border-[#EF4444]/40 bg-[#EF4444]/5 p-4"
+                    data-testid="quincenal-sin-datos">
+                    <p className="text-[15px] text-foreground">
+                        <span className="font-bold">No tengo todos los datos de tus check-in diarios</span>,
+                        así que te lo pregunto aquí.
+                    </p>
+                </div>
                 {(ficha.preguntas || []).map((p) => (
                     <Tarjeta key={p.clave} testid={`quincenal-pregunta-${p.clave}`}>
                         <p className="text-sm text-foreground">{p.pregunta}</p>
@@ -213,6 +219,9 @@ const QuincenalPaso1 = ({ api, valores, set, huecosRespuestas, onHueco, onConfir
 
     return (
         <div className="space-y-4" data-testid="quincenal-paso1">
+            <p className="text-[15px] text-muted-foreground">
+                Sale de tu check-in. Si algo no cuadra o te falta, lo modificas al final.
+            </p>
             {/* ── PESO SEMANAL ── */}
             <Tarjeta titulo="Peso semanal" extra={semanal?.label || '—'} testid="quincenal-peso">
                 <DiasDelPeso dias={semanal?.dias} />

@@ -741,8 +741,14 @@ async def get_paso1_del_mensual(periodo: str = "ultimo", user=Depends(get_curren
 
     Los huecos solo viajan en `ultimo`: son siempre de los últimos 28 y no cambian al
     mirar el programa entero.
+
+    Y SU OTRA VERSIÓN, la del que no tiene check-in con los que llenar el paso: «El paso 1
+    se acorta, igual que en el quincenal. El peso y las fotos se le piden igual, que ésos no
+    dependen de haber apuntado nada.» Lo dicen `sin_datos` y `preguntas`.
     """
+    from core.actividad_mensual import hay_datos_suficientes, preguntas_sin_checkin
     from core.datos_reporte import datos_del_paso1
+    from core.plan_access import plan_grants_feature
 
     perfil = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
     if not perfil:
@@ -763,7 +769,22 @@ async def get_paso1_del_mensual(periodo: str = "ultimo", user=Depends(get_curren
     else:
         d0, d1 = _periodo_del_reporte(perfil, "mensual")
 
-    return await datos_del_paso1(perfil, d0, d1, desde_el_principio=desde_el_principio)
+    ficha = await datos_del_paso1(perfil, d0, d1, desde_el_principio=desde_el_principio)
+
+    # ¿HAY CON QUÉ LLENARLO? Se mide SIEMPRE contra los últimos 28, también cuando se está
+    # mirando el programa entero: la pregunta es «¿tengo sus check-in de este mes?», y en
+    # «desde que empezaste» la respuesta no puede cambiar solo porque se mire más atrás.
+    corto = (d0, d1) if not desde_el_principio else _periodo_del_reporte(perfil, "mensual")
+    cierres = await db.checkins.count_documents(
+        {"client_id": perfil.get("id"), "type": "daily",
+         "created_at": {"$gte": corto[0].isoformat(), "$lte": corto[1].isoformat() + "T23:59:59"}})
+    hay_datos = hay_datos_suficientes(cierres, (corto[1] - corto[0]).days + 1)
+    return {
+        **ficha,
+        "sin_datos": not hay_datos,
+        "preguntas": [] if hay_datos else preguntas_sin_checkin(
+            plan_grants_feature(perfil.get("plan"), "suplementacion")),
+    }
 
 
 @router.get("/quincenal/paso1")

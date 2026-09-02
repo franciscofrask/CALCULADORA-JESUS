@@ -1,0 +1,974 @@
+{
+ "validado|La pantalla de Inicio|La pantalla de Inicio, entera": {
+  "estado": "hecho_con_matiz",
+  "nota": "Lo que falta («Proteína · tu objetivo») solo sale en la pestaña Macros, y la app abre en Llevas, que es justo lo que pide el punto de al lado.",
+  "imagen": "inicio__0.jpg",
+  "ruta": "/dashboard",
+  "forzada": null,
+  "faltan": [
+   "Proteína",
+   "tu objetivo",
+   "Hidratos",
+   "tu objetivo"
+  ]
+ },
+ "validado|La pantalla de Inicio|Abre en Macros, y quedó en Llevas": {
+  "estado": "hecho_con_matiz",
+  "nota": "Los «146 de 175» son del ejemplo: salen cuando hay comidas marcadas y esta cuenta no tiene ninguna. Lo que se comprueba -- que abre en Llevas -- se ve.",
+  "imagen": null,
+  "ruta": "/dashboard",
+  "forzada": null,
+  "faltan": [
+   "Proteína",
+   "de 175",
+   "Hidratos",
+   "de 80",
+   "Grasa",
+   "ya lo tienes",
+   "4 comidas marcadas"
+  ]
+ },
+ "validado|La pantalla de Inicio|Y así queda la pantalla al pulsar el +": {
+  "estado": "hecho",
+  "nota": "El cuadro de extras se abre ahí mismo, sin salir de Inicio.",
+  "imagen": "doce-inicio-extras-abierto.jpg",
+  "ruta": "/dashboard",
+  "forzada": null,
+  "faltan": []
+ },
+ "validado|Los Extras del día|Extras del día — con el buscador delante": {
+  "estado": "hecho",
+  "nota": "El cuadro entero: el buscador delante, el «o si no está» para escribirlo a mano y la línea que avisa de que lo escrito a mano no cuenta en los macros.",
+  "imagen": "doce-inicio-extras-abierto.jpg",
+  "ruta": "/dashboard",
+  "forzada": null,
+  "faltan": []
+ },
+ "validado|Los Extras del día|Y así queda cuando ya ha apuntado algo": {
+  "estado": "hecho_con_matiz",
+  "nota": "Los dos extras se pintan y el día cuenta con ellos. Lo que falta es la pestaña Macros otra vez.",
+  "imagen": "inicio-extras-puestos__7.jpg",
+  "ruta": "/dashboard",
+  "forzada": "El día de la cuenta de pruebas se responde con dos extras dentro. Son los del documento; lo que se comprueba es que la pantalla los pinta y los suma.",
+  "faltan": [
+   "Proteína",
+   "tu objetivo",
+   "Hidratos",
+   "tu objetivo"
+  ]
+ },
+ "validado|Los Extras del día|Una comida por dentro": {
+  "estado": "hecho",
+  "nota": "La frase vuelve a su voz. OJO: su bloque 7 («La regla de las voces») dice lo contrario de su propia maqueta y está sin resolver; manda la maqueta y la duda queda apuntada.",
+  "imagen": null,
+  "ruta": "/dashboard/nutrition?date=2026-08-30&comida=C1",
+  "forzada": null,
+  "faltan": []
+ },
+ "validado|Los números y el tramo|Los números, más altos y menos gordos": {
+  "estado": "hecho_con_matiz",
+  "nota": "Los tres números viven en la pestaña Macros. El tamaño y el estirado los pone `.numero-grande`, que es la misma clase en Inicio y en Nutrición.",
+  "imagen": null,
+  "ruta": "/dashboard",
+  "forzada": null,
+  "faltan": [
+   "Proteína",
+   "tu objetivo",
+   "Hidratos",
+   "tu objetivo",
+   "Grasa",
+   "tu objetivo",
+   "Los macros totales a los que tienes que llegar hoy. Debajo verás el desglose por comidas.",
+   "Perientreno incluido"
+  ]
+ },
+ "validado|Los números y el tramo|Los números de Nutrición, como los de Inicio": {
+  "estado": "hecho_con_matiz",
+  "nota": "Los tres números están y con el mismo tamaño. Lo que falta («faltan 29», «válido −1») son los números del ejemplo.",
+  "imagen": "nutricion__14.jpg",
+  "ruta": "/dashboard/nutrition?date=2026-08-30",
+  "forzada": null,
+  "faltan": [
+   "faltan 29",
+   "válido −1",
+   "ver detalle",
+   "C1 Intra Post C2 C3 C4"
+  ]
+ },
+ "validado|Los números y el tramo|El tramo en el que está, marcado": {
+  "estado": "hecho_con_matiz",
+  "nota": "Los tres tramos están y el suyo va en naranja. La comparación falla porque en la pantalla cada tramo son dos trozos («de 20 a 40 g» y «la mitad») y el documento los junta en una línea.",
+  "imagen": "alimento-almendras__30.jpg",
+  "ruta": "/dashboard/foods",
+  "forzada": null,
+  "faltan": [
+   "hasta 20 g nada",
+   "de 20 a 40 g la mitad",
+   "más de 40 g toda"
+  ]
+ },
+ "validado|Suplementos, rutina y errores|Suplementos: el nombre y lo del chat": {
+  "estado": "hecho",
+  "nota": "Visto en la app.",
+  "imagen": "suplementos-sin-protocolo__26.jpg",
+  "ruta": "/dashboard/supplements",
+  "forzada": "El protocolo se responde vacío y la guía general también: a ese cartel «solo se llega si no hay ni general», lo dice la propia pantalla.",
+  "faltan": []
+ },
+ "validado|Suplementos, rutina y errores|La rutina sin asignar también manda al chat": {
+  "estado": "hecho",
+  "nota": "Visto en la app.",
+  "imagen": null,
+  "ruta": "/dashboard/routine",
+  "forzada": null,
+  "faltan": []
+ },
+ "validado|Suplementos, rutina y errores|«Tu plan no incluye rutina» — y debajo se la promete": {
+  "estado": "hecho",
+  "nota": "Una sola cosa, y la verdadera: «Todavía no está la rutina de este mes».",
+  "imagen": "doce-rutina-sin-la-del-mes.jpg",
+  "ruta": "/dashboard/routine",
+  "forzada": "Un plan con la rutina como OPCIONAL (hoy, Mantenimiento) y la del mes todavia sin preparar. Son los dos datos que llevan a esta rama; los textos los pone la pantalla.",
+  "faltan": []
+ },
+ "validado|Suplementos, rutina y errores|El aviso de cuando algo falla": {
+  "estado": "hecho",
+  "nota": "Visto en la app.",
+  "imagen": null,
+  "ruta": "/dashboard/routine",
+  "forzada": "La rutina se responde con un error.",
+  "faltan": []
+ },
+ "validado|Suplementos, rutina y errores|El texto de la guía de suplementos": {
+  "estado": "hecho_con_matiz",
+  "nota": "La frase entera se ve en la pantalla (comprobado en la pasada anterior); aquí falla la comparación por los espacios que el documento mete alrededor de las negritas.",
+  "imagen": null,
+  "ruta": "/dashboard/supplements",
+  "forzada": "La guía se responde con `con_plan: false` (su texto, sin tocar): es lo que ve quien todavía no tiene protocolo.",
+  "faltan": [
+   "Suplementación",
+   "Estos son los suplementos que yo más recomiendo con pautas exactas de uso. Están organizados por categorías según su función. En condiciones normales, te recomiendo empezar por los básicos."
+  ]
+ },
+ "validado|Suplementos, rutina y errores|El texto del código de FullGas": {
+  "estado": "hecho",
+  "nota": "Visto en la app.",
+  "imagen": "suplementos__24.jpg",
+  "ruta": "/dashboard/supplements",
+  "forzada": null,
+  "faltan": []
+ },
+ "validado|Las dos frases intocables|Dos frases que marcaste como intocables, cambiadas": {
+  "estado": "hecho",
+  "nota": "«Su proteína no te cuenta» vuelve donde hace falta: en los alimentos que calibran, donde el «solo» se cae y con él se iba lo único que lo decía.",
+  "imagen": "doce-alimento-almendras.jpg",
+  "ruta": "/dashboard/foods",
+  "forzada": null,
+  "faltan": []
+ },
+ "validado|El check-in del día|El cierre del día": {
+  "estado": "hecho_con_matiz",
+  "nota": "Las nueve preguntas y las notas se ven. El aviso de las comidas sin registrar necesita comidas sin marcar, y esta cuenta no tiene.",
+  "imagen": "cierre__16.jpg",
+  "ruta": "/dashboard/checkins",
+  "forzada": null,
+  "faltan": [
+   "Te quedan 2 comidas sin registrar",
+   "Intra-entreno · Post-entreno",
+   "Puedes cerrarlas antes de seguir",
+   "¿Se te ha escapado algo más hoy? Si no lo pusiste en el apartado de extras, ponlo ahora",
+   "Compartir con nosotros Te queda por contestar: ¿Entrenaste hoy? · ¿Hiciste cardio? · ¿Te moviste lo suficiente? · ¿Tomaste la suplementación? · ¿Se te ha escapado algo más hoy? · ¿Cómo descansaste la noche de ayer? · Niveles de energía · Hambre / ansiedad"
+  ]
+ },
+ "validado|El check-in del día|El aviso de arriba, si le faltan comidas": {
+  "estado": "hecho",
+  "nota": "El aviso de las comidas sin registrar, arriba del todo y antes de la primera pregunta.",
+  "imagen": "doce-cierre-comidas-pendientes.jpg",
+  "ruta": "/dashboard/checkins",
+  "forzada": "Dos comidas del dia sin marcar (Intra y Post). Lo forzado es CUALES le faltan; la frase la escribe la pantalla.",
+  "faltan": []
+ },
+ "validado|El check-in del día|Si no le falta nada nueva": {
+  "estado": "hecho",
+  "nota": "Visto en la app.",
+  "imagen": "cierre__18.jpg",
+  "ruta": "/dashboard/checkins",
+  "forzada": null,
+  "faltan": []
+ },
+ "validado|El check-in del día|Las notas — se queda igual": {
+  "estado": "hecho",
+  "nota": "Visto en la app.",
+  "imagen": "cierre__19.jpg",
+  "ruta": "/dashboard/checkins",
+  "forzada": null,
+  "faltan": []
+ },
+ "validado|El check-in del día|Antes de guardar, hoy": {
+  "estado": "hecho_con_matiz",
+  "nota": "Es el estado VIEJO. Que no esté es lo correcto: ya no nombra las sensaciones ni corta con «y 5 más».",
+  "imagen": null,
+  "ruta": "/dashboard/checkins",
+  "forzada": null,
+  "faltan": [
+   "Te queda por contestar: Sensaciones generales del día · ¿Entrenaste hoy? · ¿Hiciste cardio? y 5 más"
+  ]
+ },
+ "validado|El check-in del día|Antes de guardar, como queda": {
+  "estado": "hecho_con_matiz",
+  "nota": "La línea sale con las que falten; en la captura estaba todo contestado. Se ve en la escena del cierre, con su lista entera.",
+  "imagen": null,
+  "ruta": "/dashboard/checkins",
+  "forzada": null,
+  "faltan": [
+   "Te queda por contestar: ¿Entrenaste hoy? · ¿Hiciste cardio? · ¿Te moviste lo suficiente? · ¿Tomaste la suplementación? · ¿Se te ha escapado algo más hoy? · ¿Cómo descansaste la noche de ayer? · Niveles de energía · Hambre / ansiedad"
+  ]
+ },
+ "validado|Si no lo cierra|A la mañana siguiente, si ayer no lo cerró nueva": {
+  "estado": "hecho",
+  "nota": "Visto en la app.",
+  "imagen": "inicio-ayer-sin-cerrar__10.jpg",
+  "ruta": "/dashboard",
+  "forzada": "Se le dice al servidor que lleva 1 día(s) sin cerrar. LA FRASE LA ESCRIBE EL SERVIDOR, no este guion: aquí solo se cambia el número de días para que componga la que toca.",
+  "faltan": []
+ },
+ "validado|Si no lo cierra|Tras 2 días perdidos nueva": {
+  "estado": "hecho",
+  "nota": "La fila cambia de texto a los dos días. La compone el servidor.",
+  "imagen": "doce-inicio-dos-dias.jpg",
+  "ruta": "/dashboard",
+  "forzada": "Tras 2 días perdidos: 2 dias sin cerrar. La frase la compone «core/ventana_del_dia», no este guion.",
+  "faltan": []
+ },
+ "validado|Si no lo cierra|Tras 4 días perdidos nueva": {
+  "estado": "hecho",
+  "nota": "A los cuatro dice lo que se pierde, y sin riña.",
+  "imagen": "doce-inicio-cuatro-dias.jpg",
+  "ruta": "/dashboard",
+  "forzada": "Tras 4 días perdidos: 4 dias sin cerrar. La frase la compone «core/ventana_del_dia», no este guion.",
+  "faltan": []
+ },
+ "validado|Si no lo cierra|Tras una semana nueva": {
+  "estado": "hecho",
+  "nota": "A la semana deja de recordárselo, pero la línea NO desaparece.",
+  "imagen": "doce-inicio-una-semana.jpg",
+  "ruta": "/dashboard",
+  "forzada": "Tras una semana: 7 dias sin cerrar. La frase la compone «core/ventana_del_dia», no este guion.",
+  "faltan": []
+ },
+ "validado|La configuración de los avisos|Mi perfil · Avisos nueva": {
+  "estado": "hecho_con_matiz",
+  "nota": "Los siete interruptores y el selector de hora están. Lo que falla es la comparación: el documento mete espacios donde la pantalla no los tiene.",
+  "imagen": null,
+  "ruta": "/dashboard/profile",
+  "forzada": null,
+  "faltan": [
+   "A qué hora me sale 17:00 ▾",
+   "La fila de la mañana sigue saliendo: es tu ventana para cerrar el día de ayer.",
+   "Puedes activarla a cualquier hora a partir de las 17:00 . Permanecerá activa hasta las 15:00 del día siguiente.",
+   "El quincenal y el mensual no se pueden desactivar : son los que hacen tu ajuste. Aquí solo apagas los recordatorios."
+  ]
+ },
+ "validado|La configuración de los avisos|Al apagar el cierre nueva": {
+  "estado": "hecho",
+  "nota": "El aviso que sale antes de apagarlo, con sus dos salidas.",
+  "imagen": null,
+  "ruta": "/dashboard/profile",
+  "forzada": "Se pulsa el interruptor del cierre para ver el aviso que sale ANTES de apagarlo. No se llega a guardar.",
+  "faltan": []
+ },
+ "validado|El campo y la fila de la mañana|El campo, en Mi evolución nueva": {
+  "estado": "hecho",
+  "nota": "El peso se escribe ahora en Evolución, siempre abierto, y se fue del cierre del día.",
+  "imagen": "doce-evolucion-campo-peso.jpg",
+  "ruta": "/dashboard/reports?abrir=peso",
+  "forzada": null,
+  "faltan": []
+ },
+ "validado|El campo y la fila de la mañana|Miércoles por la mañana nueva": {
+  "estado": "hecho",
+  "nota": "«Hoy toca pesarte · En ayunas y después de ir al baño», y al tocarla le abre el campo en Evolución. No existía.",
+  "imagen": "doce-inicio-miercoles.jpg",
+  "ruta": "/dashboard",
+  "forzada": "El reporte quincenal, abierto y con plazo mañana a las ocho, y la pesada de la mañana encendida. Los dos son estado, no texto.",
+  "faltan": []
+ },
+ "validado|El campo y la fila de la mañana|Jueves por la mañana nueva": {
+  "estado": "hecho",
+  "nota": "La misma fila, el segundo día de la pareja: la regla son los dos días (miércoles y jueves), y con esos dos la media sale sola.",
+  "imagen": "doce-inicio-miercoles.jpg",
+  "ruta": "/dashboard",
+  "forzada": "El reporte quincenal, abierto y con plazo mañana a las ocho, y la pesada de la mañana encendida. Los dos son estado, no texto.",
+  "faltan": []
+ },
+ "validado|El campo y la fila de la mañana|Y a las 12:00 se apaga nueva": {
+  "estado": "hecho",
+  "nota": "A las 12:00 la fila desaparece: después de comer ya no es un peso en ayunas. El campo sigue abierto en Evolución para el que quiera.",
+  "imagen": null,
+  "ruta": "/dashboard",
+  "forzada": "El miercoles a las 12:00 en punto. El servidor decide con la hora del cliente, que la pantalla le manda.",
+  "faltan": []
+ },
+ "validado|Los avisos del peso|Martes · el primero nueva": {
+  "estado": "hecho",
+  "nota": "El aviso del martes, con su texto. No existía: aquí había uno el miércoles y otro el jueves, y su calendario pone el aviso el martes y la FILA los dos días.",
+  "imagen": "doce-aviso-peso-martes.jpg",
+  "ruta": "/dashboard",
+  "forzada": "Semana 2 · martes por la mañana. Los avisos los compone «core/avisos_cliente» y se le dan a la campanita: lo forzado es el dia, no el texto.",
+  "faltan": []
+ },
+ "validado|Los avisos del peso|Viernes · si le falta una pesada nueva": {
+  "estado": "hecho",
+  "nota": "El rescate del viernes, con su texto. Solo a quien mandó el reporte y tiene una sola pesada. No existía.",
+  "imagen": "doce-aviso-peso-viernes.jpg",
+  "ruta": "/dashboard",
+  "forzada": "Semana 2 · viernes, de 10:00 a 13:00. Los avisos los compone «core/avisos_cliente» y se le dan a la campanita: lo forzado es el dia, no el texto.",
+  "faltan": []
+ },
+ "validado|Los avisos del peso|Miércoles de la semana 1 nueva": {
+  "estado": "hecho",
+  "nota": "El de la semana sin reporte, y solo el primer ciclo: es el que le enseña el método. No existía.",
+  "imagen": "doce-aviso-peso-semana1.jpg",
+  "ruta": "/dashboard",
+  "forzada": "Semana 1 · miércoles (solo el primer ciclo). Los avisos los compone «core/avisos_cliente» y se le dan a la campanita: lo forzado es el dia, no el texto.",
+  "faltan": []
+ },
+ "validado|Las tres pantallas|Paso 1 · Confirmar nueva": {
+  "estado": "hecho",
+  "nota": "Los tres pasos, con «Son 3 pasos» arriba y el suyo marcado. El paso 1 ya no pide el peso: enseña el de la semana con sus dos días y la pareja señalada.",
+  "imagen": "doce-quincenal-paso1.jpg",
+  "ruta": "/dashboard/reports?ver=quincenal&dia=2026-08-27",
+  "forzada": "La ventana del quincenal, abierta (hoy le toca el mensual), y la semana del 27 de agosto, que es la del escenario: hoy es martes y la pareja de miercoles y jueves todavia no ha pasado.",
+  "faltan": []
+ },
+ "validado|Las tres pantallas|Paso 2 · Contar nueva": {
+  "estado": "hecho",
+  "nota": "Las dos escalas de 0 a 10 con los extremos escritos, las molestias y el campo libre.",
+  "imagen": "doce-quincenal-paso2.jpg",
+  "ruta": "/dashboard/reports?ver=quincenal&dia=2026-08-27",
+  "forzada": "La misma, y ademas se pulsa Confirmar para pasar al paso 2.",
+  "faltan": []
+ },
+ "validado|Las tres pantallas|Paso 3 · Recibir nueva": {
+  "estado": "hecho",
+  "nota": "El tercer paso existe y sale anunciado desde el primero. Y da una hora.",
+  "imagen": "doce-quincenal-paso3.jpg",
+  "ruta": "/dashboard/reports?ver=quincenal&dia=2026-08-27",
+  "forzada": "El envio se responde de mentira para no escribir un reporte en la base. Lo que se le da es el dia prometido; la frase la pone la pantalla.",
+  "faltan": []
+ },
+ "validado|Las dos versiones del paso 1|Con sus check-in nueva": {
+  "estado": "hecho",
+  "nota": "La misma pantalla con sus datos: solo confirma. Y si le falta una pesada, la línea del peso se lo dice.",
+  "imagen": "doce-quincenal-paso1.jpg",
+  "ruta": "/dashboard/reports?ver=quincenal&dia=2026-08-27",
+  "forzada": "La ventana del quincenal, abierta (hoy le toca el mensual), y la semana del 27 de agosto, que es la del escenario: hoy es martes y la pareja de miercoles y jueves todavia no ha pasado.",
+  "faltan": []
+ },
+ "validado|Las dos versiones del paso 1|Sin check-in suficientes nueva": {
+  "estado": "hecho",
+  "nota": "Al que no tiene check-in no se le enseña una pantalla vacía: se le pregunta. Cinco estrellas y al paso 2.",
+  "imagen": "doce-quincenal-paso1-sin-checkin.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del quincenal, abierta. Los pocos check-in son REALES: esta cuenta tiene 4 en catorce dias, que es justo el caso.",
+  "faltan": []
+ },
+ "validado|La tarjeta y los avisos|Pendiente": {
+  "estado": "hecho_con_matiz",
+  "nota": "La tarjeta sale en naranja con «Empezar»; lo que falla es el «›».",
+  "imagen": "seguimiento__32.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": null,
+  "faltan": [
+   "Empezar ›"
+  ]
+ },
+ "validado|La tarjeta y los avisos|Hecho": {
+  "estado": "hecho",
+  "nota": "«Respondiste a tiempo y ahora nos toca a nosotros. Te decimos algo antes del viernes a las tres de la tarde, hora de España.» Y fuera el «Esta semana».",
+  "imagen": "doce-tarjeta-hecho.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "El reporte, ya mandado (`submitted`). La frase de la tarjeta viene del servidor, de `core/promesa_del_reporte`.",
+  "faltan": []
+ },
+ "validado|La tarjeta y los avisos|Miércoles, a las 10:00 · cuando se abre nueva": {
+  "estado": "hecho",
+  "nota": "El de la apertura, con su texto. Antes rotaban tres redacciones nuestras; estas son las suyas, dicen la hora y no se rotan.",
+  "imagen": "doce-aviso-quincenal-abierto.jpg",
+  "ruta": "/dashboard",
+  "forzada": "Semana 2 · miércoles a las 10:00. Los avisos los compone «core/avisos_cliente» y se le dan a la campanita: lo forzado es el dia, no el texto.",
+  "faltan": []
+ },
+ "validado|La tarjeta y los avisos|Jueves por la mañana · el recordatorio nueva": {
+  "estado": "hecho",
+  "nota": "El del último día, y le dice QUÉ SE PIERDE sin que el mensual parezca un castigo.",
+  "imagen": "doce-aviso-quincenal-ultimo.jpg",
+  "ruta": "/dashboard",
+  "forzada": "Semana 2 · jueves por la mañana. Los avisos los compone «core/avisos_cliente» y se le dan a la campanita: lo forzado es el dia, no el texto.",
+  "faltan": []
+ },
+ "validado|La tarjeta y los avisos|Jueves, de 20:00 a 24:00 nueva": {
+  "estado": "hecho",
+  "nota": "El fuera de plazo del mismo jueves, hasta medianoche. NO EXISTÍA: el «no nos llegó» era del mensual y saltaba al día siguiente.",
+  "imagen": "doce-aviso-quincenal-fuera-de-plazo.jpg",
+  "ruta": "/dashboard",
+  "forzada": "Semana 2 · jueves, de 20:00 a medianoche. Los avisos los compone «core/avisos_cliente» y se le dan a la campanita: lo forzado es el dia, no el texto.",
+  "faltan": []
+ },
+ "validado|La cola de Inicio|Un día cualquiera, desde las 17:00": {
+  "estado": "hecho_con_matiz",
+  "nota": "«Para rellenar al final del día» es el subtítulo de la línea cuando el día está abierto. Esta cuenta ya lo cerró, así que su línea dice «Ayer no cerraste el día».",
+  "imagen": "inicio__3.jpg",
+  "ruta": "/dashboard",
+  "forzada": null,
+  "faltan": [
+   "Para rellenar al final del día"
+  ]
+ },
+ "validado|La cola de Inicio|Miércoles, desde las 10:00 nueva": {
+  "estado": "hecho",
+  "nota": "El reporte entra ARRIBA y empuja al check-in hacia abajo, y el plazo se dice con palabras: «Tienes hasta mañana jueves a las ocho».",
+  "imagen": "doce-inicio-miercoles.jpg",
+  "ruta": "/dashboard",
+  "forzada": "El reporte quincenal, abierto y con plazo mañana a las ocho, y la pesada de la mañana encendida. Los dos son estado, no texto.",
+  "faltan": []
+ },
+ "validado|La cola de Inicio|Jueves a las 17:00, si aún no lo ha mandado nueva": {
+  "estado": "hecho",
+  "nota": "El aviso del plazo no es una fila nueva: es esta misma, cambiándole el texto. Siguen siendo dos filas, no tres.",
+  "imagen": "doce-inicio-jueves.jpg",
+  "ruta": "/dashboard",
+  "forzada": "El mismo reporte con el plazo HOY a las ocho. La fila es la misma: lo que cambia es lo que dice.",
+  "faltan": []
+ },
+ "validado|La cola de Inicio|En cuanto lo manda": {
+  "estado": "hecho_con_matiz",
+  "nota": "La línea del día queda sola, que es lo que dice el punto. El resto de lo que falta es texto del propio documento, no de la pantalla.",
+  "imagen": "inicio__4.jpg",
+  "ruta": "/dashboard",
+  "forzada": null,
+  "faltan": [
+   "Para rellenar al final del día",
+   "Bloque 6 El ciclo, con sus horas Lo que Francisco necesita para programar los disparos."
+  ]
+ },
+ "validado|Semana a semana|El aviso de que no toca reporte": {
+  "estado": "hecho",
+  "nota": "El aviso de la semana 1.",
+  "imagen": "doce-aviso-peso-semana1.jpg",
+  "ruta": "/dashboard",
+  "forzada": "Semana 1 · miércoles (solo el primer ciclo). Los avisos los compone «core/avisos_cliente» y se le dan a la campanita: lo forzado es el dia, no el texto.",
+  "faltan": []
+ },
+ "validado|Semana a semana|El aviso del peso": {
+  "estado": "hecho",
+  "nota": "El aviso del martes.",
+  "imagen": "doce-aviso-peso-martes.jpg",
+  "ruta": "/dashboard",
+  "forzada": "Semana 2 · martes por la mañana. Los avisos los compone «core/avisos_cliente» y se le dan a la campanita: lo forzado es el dia, no el texto.",
+  "faltan": []
+ },
+ "validado|Semana a semana|La fila del peso en Inicio": {
+  "estado": "hecho",
+  "nota": "La fila de la pesada.",
+  "imagen": "doce-inicio-miercoles.jpg",
+  "ruta": "/dashboard",
+  "forzada": "El reporte quincenal, abierto y con plazo mañana a las ocho, y la pesada de la mañana encendida. Los dos son estado, no texto.",
+  "faltan": []
+ },
+ "validado|Semana a semana|Se abre el quincenal": {
+  "estado": "hecho",
+  "nota": "El aviso de la apertura.",
+  "imagen": "doce-aviso-quincenal-abierto.jpg",
+  "ruta": "/dashboard",
+  "forzada": "Semana 2 · miércoles a las 10:00. Los avisos los compone «core/avisos_cliente» y se le dan a la campanita: lo forzado es el dia, no el texto.",
+  "faltan": []
+ },
+ "validado|Semana a semana|El recordatorio del último día": {
+  "estado": "hecho",
+  "nota": "El del último día.",
+  "imagen": "doce-aviso-quincenal-ultimo.jpg",
+  "ruta": "/dashboard",
+  "forzada": "Semana 2 · jueves por la mañana. Los avisos los compone «core/avisos_cliente» y se le dan a la campanita: lo forzado es el dia, no el texto.",
+  "faltan": []
+ },
+ "validado|Semana a semana|Cierra el quincenal": {
+  "estado": "hecho",
+  "nota": "Es el texto de la tarjeta en Hecho, que ya está.",
+  "imagen": "doce-tarjeta-hecho.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "El reporte, ya mandado (`submitted`). La frase de la tarjeta viene del servidor, de `core/promesa_del_reporte`.",
+  "faltan": []
+ },
+ "validado|Semana a semana|Si le falta una pesada": {
+  "estado": "hecho",
+  "nota": "El rescate del viernes.",
+  "imagen": "doce-aviso-peso-viernes.jpg",
+  "ruta": "/dashboard",
+  "forzada": "Semana 2 · viernes, de 10:00 a 13:00. Los avisos los compone «core/avisos_cliente» y se le dan a la campanita: lo forzado es el dia, no el texto.",
+  "faltan": []
+ },
+ "validado|Semana a semana|Tú ajustas": {
+  "estado": "no_es_pantalla",
+  "nota": "No es de la app: es tu trabajo del viernes. A las 10:00 se cierra todo, miras el reporte contra sus check-in y pones los macros nuevos.",
+  "faltan": [
+   "A las 10:00 se cierra todo. Miras el reporte contra sus check-in y pones los macros nuevos. Antes de las tres los tiene.",
+   "Semana 3 · viernes —"
+  ]
+ },
+ "validado|Semana a semana|Se abre el mensual": {
+  "estado": "hecho_con_matiz",
+  "nota": "El mensual se abre y se ve entero; el punto es del calendario.",
+  "imagen": null,
+  "ruta": "/dashboard/reports",
+  "forzada": null,
+  "faltan": [
+   "Las fotos, el peso, el objetivo, el compromiso y las lesiones. Las fechas del peso de esta semana están sin cerrar — ver la duda de abajo.",
+   "Semana 4 · lunes —"
+  ]
+ },
+ "validado|Semana a semana|Vuelve el mensual": {
+  "estado": "no_es_pantalla",
+  "nota": "Es una fila de su calendario, no una pantalla: dice cuándo vuelve a tocar el mensual.",
+  "faltan": [
+   "Como tarde. Y con él haces la revisión del ciclo: el informe y el vídeo.",
+   "Bloque 7 La regla de las voces Para todo texto que se escriba de aquí en adelante."
+  ]
+ },
+ "mensual|Los cuatro pasos|La cabecera: son 4 pasos": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-paso1__42.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta (fuera de plazo no se pinta el formulario).",
+  "faltan": []
+ },
+ "mensual|Los cuatro pasos|El nombre del reporte, arriba": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-paso1__43.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta (fuera de plazo no se pinta el formulario).",
+  "faltan": []
+ },
+ "mensual|Paso 1 · Actualizar tus datos|El rótulo y su subtítulo": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-paso1__44.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta (fuera de plazo no se pinta el formulario).",
+  "faltan": []
+ },
+ "mensual|Paso 1 · Actualizar tus datos|El selector de periodo": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-paso1__45.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta (fuera de plazo no se pinta el formulario).",
+  "faltan": []
+ },
+ "mensual|Paso 1 · Actualizar tus datos|Tu peso, con su curva y su cambio": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-paso1__46.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta (fuera de plazo no se pinta el formulario).",
+  "faltan": []
+ },
+ "mensual|Paso 1 · Actualizar tus datos|Lo que has hecho, y su rótulo": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-paso1__47.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta (fuera de plazo no se pinta el formulario).",
+  "faltan": []
+ },
+ "mensual|Paso 1 · Actualizar tus datos|Y cómo te has sentido": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-paso1__48.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta (fuera de plazo no se pinta el formulario).",
+  "faltan": []
+ },
+ "mensual|Paso 1 · Actualizar tus datos|El pie de las sensaciones": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-paso1__49.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta (fuera de plazo no se pinta el formulario).",
+  "faltan": []
+ },
+ "mensual|Paso 1 · Actualizar tus datos|El hueco de la dieta, con sus dos respuestas": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-paso1__50.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta (fuera de plazo no se pinta el formulario).",
+  "faltan": []
+ },
+ "mensual|Paso 1 · Actualizar tus datos|Los dos botones del paso": {
+  "estado": "hecho_con_matiz",
+  "nota": "Están los dos. Cuando el peso viene vacío, el paso abre el campo solo y el botón dice «Ya está» en vez de «Modificar», que es el mismo botón.",
+  "imagen": "mensual-paso1__51.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta (fuera de plazo no se pinta el formulario).",
+  "faltan": [
+   "Modificar"
+  ]
+ },
+ "mensual|Paso 1 · Actualizar tus datos|El selector cambia el bloque entero": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-periodo__67.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta.",
+  "faltan": []
+ },
+ "mensual|Paso 2 · Tus sensaciones y tus dudas|El rótulo del paso": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-paso2__52.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta (fuera de plazo no se pinta el formulario).",
+  "faltan": []
+ },
+ "mensual|Paso 2 · Tus sensaciones y tus dudas|¿Cuánto te ha costado la dieta?": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-paso2__53.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta (fuera de plazo no se pinta el formulario).",
+  "faltan": []
+ },
+ "mensual|Paso 2 · Tus sensaciones y tus dudas|¿Y máquinas que no tienes?": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-paso2__54.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta (fuera de plazo no se pinta el formulario).",
+  "faltan": []
+ },
+ "mensual|Paso 2 · Tus sensaciones y tus dudas|El grado de compromiso": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-paso2__55.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta (fuera de plazo no se pinta el formulario).",
+  "faltan": []
+ },
+ "mensual|Paso 2 · Tus sensaciones y tus dudas|Las expectativas, de 0 a 10": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-paso2__56.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta (fuera de plazo no se pinta el formulario).",
+  "faltan": []
+ },
+ "mensual|Paso 2 · Tus sensaciones y tus dudas|Tu objetivo ahora": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-paso2__57.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta (fuera de plazo no se pinta el formulario).",
+  "faltan": []
+ },
+ "mensual|Paso 2 · Tus sensaciones y tus dudas|Dudas o lo que quieras contarme": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-paso2__58.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta (fuera de plazo no se pinta el formulario).",
+  "faltan": []
+ },
+ "mensual|Paso 2 · Tus sensaciones y tus dudas|Los ejercicios que dan molestias": {
+  "estado": "hecho",
+  "nota": "El bloque llega con los que ya dio: «Quita los que ya no y añade los nuevos».",
+  "imagen": "doce-mensual-paso2-molestias.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "Un plan CON lesiones en sus bloques: ese bloque solo sale a quien lo lleva, y esta cuenta no. Lo forzado es que su plan lo incluya.",
+  "faltan": []
+ },
+ "mensual|Paso 3 · Tus fotos y tus medidas|El rótulo y su subtítulo": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-paso3__60.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta (fuera de plazo no se pinta el formulario).",
+  "faltan": []
+ },
+ "mensual|Paso 3 · Tus fotos y tus medidas|El porqué de las fotos": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-paso3__61.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta (fuera de plazo no se pinta el formulario).",
+  "faltan": []
+ },
+ "mensual|Paso 3 · Tus fotos y tus medidas|El plazo, en su aviso": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-paso3__62.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta (fuera de plazo no se pinta el formulario).",
+  "faltan": []
+ },
+ "mensual|Paso 3 · Tus fotos y tus medidas|El metro y el vídeo": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-paso3__63.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta (fuera de plazo no se pinta el formulario).",
+  "faltan": []
+ },
+ "mensual|Paso 3 · Tus fotos y tus medidas|Las diez medidas": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-paso3__64.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta (fuera de plazo no se pinta el formulario).",
+  "faltan": []
+ },
+ "mensual|Paso 3 · Tus fotos y tus medidas|Adónde van a parar": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-paso3__65.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta (fuera de plazo no se pinta el formulario).",
+  "faltan": []
+ },
+ "mensual|Paso 3 · Tus fotos y tus medidas|El botón de enviar": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-paso3__66.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta (fuera de plazo no se pinta el formulario).",
+  "faltan": []
+ },
+ "mensual|Paso 4 · Tu plan nuevo y mi feedback|El rótulo del paso": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-paso4__68.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "El envío se responde desde aquí (no se le crea un reporte a la cuenta de pruebas) y el informe se dice que ya está publicado.",
+  "faltan": []
+ },
+ "mensual|Paso 4 · Tu plan nuevo y mi feedback|Ya lo tienes · Tu informe del mes": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-paso4__69.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "El envío se responde desde aquí (no se le crea un reporte a la cuenta de pruebas) y el informe se dice que ya está publicado.",
+  "faltan": []
+ },
+ "mensual|Paso 4 · Tu plan nuevo y mi feedback|Nuevo programa y feedback": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-paso4__70.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "El envío se responde desde aquí (no se le crea un reporte a la cuenta de pruebas) y el informe se dice que ya está publicado.",
+  "faltan": []
+ },
+ "mensual|Paso 4 · Tu plan nuevo y mi feedback|Y mientras tanto, mírate": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "mensual-paso4__71.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "El envío se responde desde aquí (no se le crea un reporte a la cuenta de pruebas) y el informe se dice que ya está publicado.",
+  "faltan": []
+ },
+ "mensual|Paso 4 · Tu plan nuevo y mi feedback|Sin informe publicado, la tarjeta no sale": {
+  "estado": "hecho_con_matiz",
+  "nota": "Que «Ya lo tienes» NO esté es justo lo que se comprueba: sin informe que abrir, la tarjeta no se pinta.",
+  "imagen": null,
+  "ruta": "/dashboard/reports",
+  "forzada": "El envío se responde desde aquí (no se le crea un reporte a la cuenta de pruebas) y el informe se dice que sigue pendiente de revisión.",
+  "faltan": [
+   "Ya lo tienes"
+  ]
+ },
+ "mensual|Y si no tengo sus check-in|El aviso de que no los tiene": {
+  "estado": "hecho",
+  "nota": "«No tengo todos los datos de tus check-in diarios, así que te lo pregunto aquí.» NO ESTABA: esto solo se había hecho para el quincenal.",
+  "imagen": "doce-mensual-paso1-sin-checkin.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta. Los pocos check-in son REALES: esta cuenta tiene 4 en veintiocho dias, que es justo el caso.",
+  "faltan": []
+ },
+ "mensual|Y si no tengo sus check-in|Las cinco preguntas con estrellas": {
+  "estado": "hecho",
+  "nota": "Las cinco, con sus palabras y con cinco estrellas.",
+  "imagen": "doce-mensual-paso1-sin-checkin.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta. Los pocos check-in son REALES: esta cuenta tiene 4 en veintiocho dias, que es justo el caso.",
+  "faltan": []
+ },
+ "mensual|Y si no tengo sus check-in|Y el botón de continuar": {
+  "estado": "hecho",
+  "nota": "«Continuar», y apagado hasta que las contesta.",
+  "imagen": "doce-mensual-paso1-sin-checkin.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta. Los pocos check-in son REALES: esta cuenta tiene 4 en veintiocho dias, que es justo el caso.",
+  "faltan": []
+ },
+ "mensual|Y si no tengo sus check-in|El peso y las fotos se le piden igual": {
+  "estado": "hecho",
+  "nota": "«Cinco preguntas y pasas al paso 2. El peso y las fotos se te piden igual»: el peso se sigue pidiendo, que ése no depende de haber apuntado nada.",
+  "imagen": "doce-mensual-paso1-sin-checkin.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "La ventana del mensual, abierta. Los pocos check-in son REALES: esta cuenta tiene 4 en veintiocho dias, que es justo el caso.",
+  "faltan": []
+ },
+ "informe|Qué es y cuándo le llega|Se entrega al enviar, con el hueco vacío": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "informe-enviado__73.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "El historial y el informe se responden con el ejemplo montado contra la base de dev (`_probar_informe_del_mes.py`), con el hueco del feedback vacío.",
+  "faltan": []
+ },
+ "informe|Qué es y cuándo le llega|Y el mismo informe, completado": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "informe-contestado__89.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "El historial y el informe se responden con el ejemplo montado contra la base de dev (`_probar_informe_del_mes.py`), con el feedback escrito.",
+  "faltan": []
+ },
+ "informe|La cabecera|El periodo y el nombre": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "informe-enviado__74.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "El historial y el informe se responden con el ejemplo montado contra la base de dev (`_probar_informe_del_mes.py`), con el hueco del feedback vacío.",
+  "faltan": []
+ },
+ "informe|1 · Dónde estás|Su objetivo y su ciclo": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "informe-enviado__75.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "El historial y el informe se responden con el ejemplo montado contra la base de dev (`_probar_informe_del_mes.py`), con el hueco del feedback vacío.",
+  "faltan": []
+ },
+ "informe|2 · Tu feedback y tu programa nuevo|El hueco, en gris y con la hora": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "informe-enviado__76.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "El historial y el informe se responden con el ejemplo montado contra la base de dev (`_probar_informe_del_mes.py`), con el hueco del feedback vacío.",
+  "faltan": []
+ },
+ "informe|2 · Tu feedback y tu programa nuevo|Y luego tu texto firmado": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "informe-contestado__90.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "El historial y el informe se responden con el ejemplo montado contra la base de dev (`_probar_informe_del_mes.py`), con el feedback escrito.",
+  "faltan": []
+ },
+ "informe|3 · Tu peso|Con qué empezó el mes y con cuál lo acaba": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "informe-enviado__77.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "El historial y el informe se responden con el ejemplo montado contra la base de dev (`_probar_informe_del_mes.py`), con el hueco del feedback vacío.",
+  "faltan": []
+ },
+ "informe|3 · Tu peso|Lo que pesaba el día que entró": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "informe-enviado__78.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "El historial y el informe se responden con el ejemplo montado contra la base de dev (`_probar_informe_del_mes.py`), con el hueco del feedback vacío.",
+  "faltan": []
+ },
+ "informe|3 · Tu peso|El porcentaje que ha bajado cada semana": {
+  "estado": "hecho",
+  "nota": "El reparto por semanas. No salía porque el cliente del ejemplo no cambió de peso; con un mes que baja, sale.",
+  "imagen": "doce-informe-peso-y-extras.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "El historial y el informe se responden con el ejemplo armado contra la base de dev, ya con un mes de peso que baja y dos extras apuntados.",
+  "faltan": []
+ },
+ "informe|4 · Tus medidas|Las diez, contra el mes pasado y la primera toma": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "informe-contestado__91.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "El historial y el informe se responden con el ejemplo montado contra la base de dev (`_probar_informe_del_mes.py`), con el feedback escrito.",
+  "faltan": []
+ },
+ "informe|5 · Tu porcentaje de grasa|Cada 12 semanas, y cuándo se midió": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "informe-enviado__80.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "El historial y el informe se responden con el ejemplo montado contra la base de dev (`_probar_informe_del_mes.py`), con el hueco del feedback vacío.",
+  "faltan": []
+ },
+ "informe|6 · Tus fotos|Dos, y las elige él": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "informe-enviado__81.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "El historial y el informe se responden con el ejemplo montado contra la base de dev (`_probar_informe_del_mes.py`), con el hueco del feedback vacío.",
+  "faltan": []
+ },
+ "informe|7 · Lo que has hecho|Dietas, entrenos, cardios y suplementación": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "informe-enviado__82.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "El historial y el informe se responden con el ejemplo montado contra la base de dev (`_probar_informe_del_mes.py`), con el hueco del feedback vacío.",
+  "faltan": []
+ },
+ "informe|8 · Tu día tipo|La combinación que más repite en cada comida": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "informe-enviado__83.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "El historial y el informe se responden con el ejemplo montado contra la base de dev (`_probar_informe_del_mes.py`), con el hueco del feedback vacío.",
+  "faltan": []
+ },
+ "informe|8 · Tu día tipo|Con su momento del día y sus cantidades": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "informe-enviado__84.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "El historial y el informe se responden con el ejemplo montado contra la base de dev (`_probar_informe_del_mes.py`), con el hueco del feedback vacío.",
+  "faltan": []
+ },
+ "informe|8 · Tu día tipo|Y cuando cambia casi cada día": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "informe-enviado__85.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "El historial y el informe se responden con el ejemplo montado contra la base de dev (`_probar_informe_del_mes.py`), con el hueco del feedback vacío.",
+  "faltan": []
+ },
+ "informe|9 · Preferencias concretas de alimentos|Sus tres de cada, con las veces": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "informe-enviado__86.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "El historial y el informe se responden con el ejemplo montado contra la base de dev (`_probar_informe_del_mes.py`), con el hueco del feedback vacío.",
+  "faltan": []
+ },
+ "informe|10 · Extras registrados|Lo que apuntó y qué día": {
+  "estado": "hecho",
+  "nota": "Los extras con su día. No salía porque el cliente del ejemplo no apuntó ninguno.",
+  "imagen": "doce-informe-peso-y-extras.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "El historial y el informe se responden con el ejemplo armado contra la base de dev, ya con un mes de peso que baja y dos extras apuntados.",
+  "faltan": []
+ },
+ "informe|La regla|El informe no le pide nada": {
+  "estado": "hecho",
+  "nota": "Se ve entero en la app.",
+  "imagen": "informe-enviado__88.jpg",
+  "ruta": "/dashboard/reports",
+  "forzada": "El historial y el informe se responden con el ejemplo montado contra la base de dev (`_probar_informe_del_mes.py`), con el hueco del feedback vacío.",
+  "faltan": []
+ }
+}
