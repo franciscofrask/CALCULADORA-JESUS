@@ -225,7 +225,14 @@ def test_13_dice_por_cuanto_se_ha_pasado(lectura_de):
     r = lectura_de(_con_comido(200, 175, 62))[0]
     assert r["palabras"]["H"] == "sobran 40", "no dice por cuanto se ha pasado"
     # La grasa, 2 g por encima, cabe en el margen de 4 de Calma y no es un aviso.
-    assert r["palabras"]["G"].startswith("valido".replace("valido", "v")), r["palabras"]["G"]
+    #
+    # LA PALABRA CAMBIO EL 2-09 y el estado no: dentro del margen decia «valido +2», que era
+    # una cuarta palabra para el mismo eje («cuadrado», «valido», «faltan», «sobran») y no
+    # decia si faltaba o sobraba. Ahora dice «cuadrado (+2)»: la misma familia que el
+    # cuadrado de verdad, con el desvio pequeno entre parentesis. El color sigue en verde,
+    # que es lo que este caso comprueba de verdad.
+    assert r["palabras"]["G"].startswith("cuadrado ("), r["palabras"]["G"]
+    assert "+2" in r["palabras"]["G"], r["palabras"]["G"]
     assert r["colores"]["G"] == "ok", "2 g caben en el margen: eso no es pasarse"
     assert r["palabras"]["P"] == "sobran 10", \
         "si esto cambia es que se ha devuelto la excepcion de la proteina: mira el docstring"

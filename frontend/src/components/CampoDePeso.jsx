@@ -136,7 +136,10 @@ const CampoDePeso = ({ api, ultimo = null, diasAtras = 14, abrir = false, onGuar
             </p>
             {ultimo?.valor != null && (
                 <p className="text-[11px] text-muted-foreground mt-1" data-testid="peso-ultimo">
-                    Último registro: {kg(ultimo.valor)} kg · {cuando(ultimo.fecha)}
+                    {/* DE QUÉ ES EL ÚLTIMO REGISTRO (revisión del 2-09): Inicio usa la misma
+                        frase para el último cierre del día, así que el cliente leía «último
+                        registro» dos veces con dos fechas distintas y ninguna decía de qué. */}
+                    Tu último peso: {kg(ultimo.valor)} kg · {cuando(ultimo.fecha)}
                 </p>
             )}
         </div>

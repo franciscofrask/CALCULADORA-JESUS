@@ -591,8 +591,16 @@ const CierreDelDia = ({ api, hoy, dia, onGuardado, inicial = null }) => {
                             // Cambiar de idea limpia lo que colgaba del «Sí».
                             if (v !== 'si') set('entreno_estrellas', null);
                         }}
-                        opciones={[{ v: 'si', l: 'Sí' }, { v: 'no', l: 'No' },
-                                   { v: 'descanso', l: 'Descanso' }]} />
+                        /* LOS BOTONES DICEN LO QUE SIGNIFICAN (revisión del 2-09).
+                           Eran «Sí · No · Descanso», y con eso el «No» no distinguía al
+                           que le tocaba entrenar y no fue del que tenía descanso: son dos
+                           cosas distintas y de ellas sale su adherencia. Los valores que
+                           se guardan (si/no/descanso) no cambian, solo cómo se le
+                           preguntan, y se alinean con lo que ya dice su historial
+                           (`ENTRENO_VALOR`: «No, tocaba descanso»). */
+                        opciones={[{ v: 'si', l: 'Sí' },
+                                   { v: 'no', l: 'No entrené' },
+                                   { v: 'descanso', l: 'Tocaba descanso' }]} />
                     {/* SANGRADA Y COLGANDO DEL «SÍ», como lo pide el doc (punto 03). */}
                     {f.entreno_respuesta === 'si' && (
                         <div className="mt-3 pl-3 border-l-2 border-brand/40" data-testid="cierre-entreno-como-fue">

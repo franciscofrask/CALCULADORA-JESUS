@@ -46,9 +46,14 @@ const HeroInicio = ({ children }) => (
                 maskImage: 'linear-gradient(to bottom, #000 0%, #000 48%, transparent 96%)',
             }}
         />
-        {/* Velo para que el texto blanco se lea (suave arriba) y, abajo, remata el fundido
-            con el fondo de la pantalla para que no quede ningún corte. */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-black/25 to-background" />
+        {/* Velo para que el texto blanco se lea y, abajo, remata el fundido con el fondo de
+            la pantalla para que no quede ningún corte.
+
+            MÁS OSCURO ARRIBA (revisión del 2-09). Estaba al 25 % plano y la foto del mes es
+            un gimnasio muy claro: la frase del día iba en blanco sobre blanco y el rótulo
+            naranja encima tampoco se leía. Se sube donde va el texto y se deja igual abajo,
+            que es donde tiene que fundirse. */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-background" />
         {/* La foto va a sangre (todo el ancho); el texto se alinea con la columna central
             (la misma anchura que la tarjeta de debajo) para que no quede descolgado. */}
         <div className="relative max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-11 pb-10">

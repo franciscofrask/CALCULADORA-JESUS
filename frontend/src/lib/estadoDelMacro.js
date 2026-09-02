@@ -72,9 +72,16 @@ const MENOS = '−';
 const PALABRA = {
     // Macros no lleva estado NUNCA: ahí el número es el objetivo, no hay bueno ni malo.
     macros: () => 'tu objetivo',
+    // DOS PALABRAS Y NO CUATRO (revisión del 2-09).
+    //
+    // Aquí convivían «cuadrado», «válido −4», «faltan X» y «sobran X» para el mismo eje, y
+    // «válido» era la rara: no dice si falta o sobra, y al lado de «cuadrado» parece otro
+    // estado cuando para el cliente es el mismo (está bien). Dentro del margen se dice
+    // «cuadrado» y se conserva el desvío pequeño entre paréntesis, que es el dato; fuera
+    // del margen, «faltan» o «sobran». El estado VALIDO no cambia: sigue siendo verde.
     dieta: (estado, desvio, objetivo, n) => {
         if (estado === CLAVADO) return 'cuadrado';
-        if (estado === VALIDO) return `válido ${desvio > 0 ? '+' : MENOS}${n(Math.abs(desvio))}`;
+        if (estado === VALIDO) return `cuadrado (${desvio > 0 ? '+' : MENOS}${n(Math.abs(desvio))})`;
         if (estado === PASADO) return `sobran ${n(Math.abs(desvio))}`;
         return `faltan ${n(Math.abs(desvio))}`;
     },

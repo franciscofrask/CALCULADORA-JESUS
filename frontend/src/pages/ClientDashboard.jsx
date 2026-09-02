@@ -570,7 +570,13 @@ const InicioNuevo = () => {
         return r === 'si';
     })();
 
-    const nombresSuplementos = suplementos.map((s) => s.titulo).filter(Boolean).join(' · ');
+    // SIN REPETIDOS (revisión del 2-09). Esta línea es el resumen del día -- cada
+    // suplemento va además debajo de la comida en que se toma, dentro de «Tu dieta hoy» --,
+    // y salía un suplemento por TOMA: quien se toma el Whey en dos comidas leía «Whey
+    // Isolate + crema de arroz» dos veces en el mismo párrafo. La pantalla de Suplementos
+    // ya lo enseña una sola vez, así que aquí se hace igual.
+    const nombresSuplementos = [...new Set(
+        suplementos.map((s) => s.titulo).filter(Boolean))].join(' · ');
 
     // La línea de entreno sale por el dato, no por el plan (regla 3): si tiene rutina
     // cargada para hoy. El día de descanso no se anuncia: no hay nada que hacer.
@@ -655,16 +661,30 @@ const InicioNuevo = () => {
         && precioRutinaSuelta != null;
 
     // ── La línea de mañana: a Nutrición en el día de mañana (?date=, como Mi semana) ──
+    //
+    // «MAÑANA» A SECAS SE LEÍA COMO «LA MAÑANA» (revisión del 2-09), y justo debajo hay
+    // otra fila que sí habla de la mañana de verdad («ayer no cerraste el día»), así que
+    // las dos juntas confundían. Se dice qué día es: «Mañana, jueves».
     const manana = (() => {
         const d = dietaManana;
         const comidas = (d?.exists && d.comidas) || {};
         const conAlimentos = Object.entries(comidas)
             .filter(([k]) => k !== 'Intra' && k !== 'Post')
             .filter(([, c]) => (c?.alimentos || []).length > 0).length;
-        if (!conAlimentos) return { detalle: 'aún sin dieta', accion: 'Repetir la de hoy' };
-        const total = d.num_comidas || 4;
-        if (conAlimentos < total) return { detalle: `empezada · ${conAlimentos} de ${total} comidas`, accion: 'Terminarla' };
-        return { detalle: 'dieta creada', accion: 'Verla' };
+        // El nombre del día, con el reloj del cliente, que es el mismo con el que se
+        // calcula qué día es «mañana» unas líneas más arriba.
+        const nombreDelDia = new Date(`${mananaDeLaDieta()}T12:00:00`)
+            .toLocaleDateString('es-ES', { weekday: 'long' });
+        const titulo = `Mañana, ${nombreDelDia}`;
+        if (!conAlimentos) return { titulo, detalle: 'aún sin dieta', accion: 'Repetir la de hoy' };
+        // Y el total cuenta las mismas comidas que se han contado arriba: `num_comidas` es
+        // el número de comidas principales y el intra/post no entra en el recuento, así que
+        // decir «1 de 3» mientras la pantalla enseña cuatro filas era comparar dos cosas
+        // distintas. Se usa el número de comidas principales que de verdad tiene el día.
+        const principales = Object.keys(comidas).filter((k) => k !== 'Intra' && k !== 'Post').length;
+        const total = principales || d.num_comidas || 4;
+        if (conAlimentos < total) return { titulo, detalle: `empezada · ${conAlimentos} de ${total} comidas`, accion: 'Terminarla' };
+        return { titulo, detalle: 'dieta creada', accion: 'Verla' };
     })();
 
     // ── Lo pendiente, en el orden del documento ──
@@ -746,8 +766,10 @@ const InicioNuevo = () => {
             titulo: estado?.linea?.titulo || '¿Cómo fuiste hoy?',
             // En cursiva, como lo pide el doc 19-08: es una aclaración, no una orden.
             detalle: estado?.linea?.detalle || 'Para rellenar al final del día', cursiva: true,
-            // La fecha y la hora del último, en vez de la palabra «pendiente».
-            extra: ultimoCierre ? `último registro: ${etiquetaMomento(ultimoCierre.created_at)}` : null,
+            // La fecha y la hora del último, en vez de la palabra «pendiente». Y se dice DE
+            // QUÉ (2-09): el campo del peso usaba esta misma frase para otra cosa, así que
+            // el cliente leía «último registro» en dos sitios, con dos fechas distintas.
+            extra: ultimoCierre ? `tu último cierre: ${etiquetaMomento(ultimoCierre.created_at)}` : null,
             // Con la ventana de la mañana abierta lleva al día de AYER, no al de hoy.
             path: estado?.es_de_ayer
                 ? `/dashboard/checkins?fecha=${estado.abierto}`
@@ -850,10 +872,13 @@ const InicioNuevo = () => {
                         Hola, {user?.name?.split(' ')[0]}
                     </h1>
                 </header>
+                {/* Con sombra, además del velo: la foto del mes cambia cada mes y no se
+                    puede dar por hecho que la siguiente sea oscura (2-09). */}
                 {frase && (
-                    <section className="mt-4" data-testid="frase-del-dia">
+                    <section className="mt-4" data-testid="frase-del-dia"
+                        style={{ textShadow: '0 1px 3px rgba(0,0,0,.75)' }}>
                         <p className="caption text-brand mb-1">La frase del día</p>
-                        <p className="text-white/90 text-lg leading-snug italic">«{frase}»</p>
+                        <p className="text-white text-lg leading-snug italic">«{frase}»</p>
                     </section>
                 )}
             </HeroInicio>
@@ -1017,7 +1042,7 @@ const InicioNuevo = () => {
                         className="surface surface-hover w-full p-4 flex items-center gap-4 text-left group">
                         <div className="min-w-0 flex-1">
                             <p className="font-bold text-foreground text-sm">
-                                Mañana <span className="text-muted-foreground font-normal">· {manana.detalle}</span>
+                                {manana.titulo} <span className="text-muted-foreground font-normal">· {manana.detalle}</span>
                             </p>
                         </div>
                         <span className="text-xs font-bold uppercase tracking-wider text-brand flex-shrink-0">
