@@ -562,7 +562,10 @@ async def get_semana(inicio: Optional[str] = None, hoy_cliente: Optional[str] = 
         d["fecha"]: d
         async for d in db.diets.find(
             {"user_id": user["id"], "fecha": {"$gte": fechas[0], "$lte": fechas[6]}},
-            {"_id": 0, "fecha": 1, "tipo_dia": 1, "num_comidas": 1, "comidas": 1})
+            # `is_cuadrado` viaja para que la fila pueda distinguir «creada» de «cuadrada»,
+            # que es la misma señal que usa el calendario de Nutrición.
+            {"_id": 0, "fecha": 1, "tipo_dia": 1, "num_comidas": 1, "comidas": 1,
+             "is_cuadrado": 1})
     }
 
     # El catálogo de TODOS los alimentos de la semana, también de una vez: hace falta
@@ -691,6 +694,14 @@ async def get_semana(inicio: Optional[str] = None, hoy_cliente: Optional[str] = 
             "tipo_dia": tipo,
             "estado": estado,
             "macros": macros,
+            # SI EL DÍA CUADRA, QUE ES OTRA COSA QUE ESTAR CREADO (revisión del 2-09).
+            #
+            # Mi semana pintaba las siete filas iguales y en verde con solo decir «Creada»:
+            # el día que se queda a 128 g de hidratos se veía igual que el que cuadra, y el
+            # verde le decía al cliente que iba bien. El calendario de Nutrición sí lo
+            # distingue y lo hace con este mismo campo, así que se manda desde aquí en vez
+            # de inventar un segundo criterio.
+            "is_cuadrado": bool((diet or {}).get("is_cuadrado")),
             "n_comidas_con_alimentos": con_alimentos,
             "n_comidas_total": num_comidas,
             "entreno": {

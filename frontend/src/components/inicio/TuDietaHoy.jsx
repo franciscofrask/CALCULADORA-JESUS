@@ -357,6 +357,22 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
     // has marcado nada»: desde que los extras no suman, el número sería un 0 pelado.
     const nadaMarcado = hechas.length === 0;
 
+    // SI LA DIETA DEL DÍA NO LLEGA A SUS MACROS, QUE SE VEA (revisión del 2-09).
+    //
+    // El bloque abre en «Llevas» por decisión del doc del 1-09 (1.1) y ahí se queda: es
+    // por dónde va hoy. Pero con la dieta montada a 128 g de hidratos de su objetivo, ese
+    // dato estaba calculado y a dos toques, en la pestaña «Dieta», sin que nada lo dijera.
+    // No se cambia la pestaña de entrada: se marca la que lo cuenta.
+    //
+    // El margen es el mismo que usa el resto de la app para dar un macro por bueno.
+    const MARGEN = 5;
+    const dietaNoCuadra = !!(conPeri && dieta?.exists
+        && ['P', 'H', 'G'].some((k) => Math.abs((totalDieta[k] || 0) - (conPeri[k] || 0)) > MARGEN));
+    const loQueMasFalta = !dietaNoCuadra ? null : ['H', 'P', 'G']
+        .map((k) => ({ k, d: Math.round((totalDieta[k] || 0) - (conPeri[k] || 0)) }))
+        .filter((x) => Math.abs(x.d) > MARGEN)
+        .sort((a, b) => Math.abs(b.d) - Math.abs(a.d))[0];
+
     // El contador de Llevas: las comidas por un lado y el peri por otro (punto 93).
     const contadorDeLlevas = contarLoMarcado(
         hechas.filter((f) => !f.esPeri).length,
@@ -392,9 +408,26 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
                                 className={`min-w-0 px-1 py-1.5 rounded-lg text-xs sm:text-sm font-semibold text-center transition-colors
                                     ${vista === v.id ? 'bg-brand text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
                                 {v.label}
+                                {/* El punto avisa de que la dieta del día no llega a sus
+                                    macros, sin sacarle de la pestaña en la que entra. */}
+                                {v.id === 'dieta' && dietaNoCuadra && (
+                                    <span data-testid="dieta-no-cuadra"
+                                        className={`inline-block w-1.5 h-1.5 rounded-full ml-1 align-middle
+                                            ${vista === v.id ? 'bg-white' : 'bg-orange-400'}`} />
+                                )}
                             </button>
                         ))}
                     </div>
+
+                    {/* Y una línea que lo dice con el número, que es el dato por el que
+                        entra: «a tu dieta de hoy le faltan 128 g de hidratos». */}
+                    {dietaNoCuadra && loQueMasFalta && vista !== 'dieta' && (
+                        <button onClick={() => setVista('dieta')} data-testid="aviso-dieta-no-cuadra"
+                            className="w-full mt-2 text-left text-xs text-orange-400 hover:underline">
+                            A tu dieta de hoy le {loQueMasFalta.d < 0 ? 'faltan' : 'sobran'}
+                            {' '}{Math.abs(loQueMasFalta.d)} g de {NOMBRE_LLANO[loQueMasFalta.k]}. Verlo
+                        </button>
+                    )}
 
                     {vista === 'llevas' && nadaMarcado ? (
                         /* Sin nada marcado, Llevas no es un 0 en rojo: se dice y ya está. */

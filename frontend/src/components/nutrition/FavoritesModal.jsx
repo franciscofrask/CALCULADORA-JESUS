@@ -76,9 +76,17 @@ const FavoritesModal = ({ open, onClose, favorites, onSave, onApply, onDelete, t
         setName('');
     };
 
+    // SE PREGUNTA TAMBIÉN CUANDO EL DÍA YA TIENE COMIDAS (revisión del 2-09).
+    //
+    // Aquí solo se miraba el tipo de día, así que aplicar una favorita sobre un día ya
+    // montado se llevaba por delante el trabajo hecho sin una sola pregunta: es la forma
+    // más fácil de perder una tarde, y no se puede deshacer. El dato para saberlo ya
+    // llegaba (`diaVacio`) y no se usaba.
+    //
+    // Se aplica directo solo cuando no hay nada que perder: día vacío Y el mismo tipo.
     const handleApplyClick = (fav) => {
         const favTipo = fav.tipo_dia || 'entrenamiento';
-        if (favTipo === tipoDia) {
+        if (favTipo === tipoDia && diaVacio) {
             onApply(fav);
             return;
         }
@@ -171,27 +179,46 @@ const FavoritesModal = ({ open, onClose, favorites, onSave, onApply, onDelete, t
 
                                 {detalleId === fav.id && <DetalleDelDia comidas={fav.comidas} />}
 
-                                {/* Tipo de día distinto: adaptar o aplicar como se guardó */}
+                                {/* Antes de aplicar: que va a reemplazar lo que haya, y si el
+                                    tipo de día no coincide, adaptar o aplicar como se guardó. */}
                                 {confirmId === fav.id && (
                                     <div className="mt-2 pt-2 border-t border-border space-y-2" data-testid={`fav-adapt-panel-${fav.id}`}>
-                                        <p className="text-xs text-foreground">
-                                            Esta favorita se guardó en día de <span className="font-bold">{etiqueta(favTipo)}</span> y
-                                            hoy es día de <span className="font-bold">{etiqueta(tipoDia)}</span>.
-                                        </p>
-                                        <Button size="sm" className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white font-bold rounded-full"
-                                            onClick={() => { setConfirmId(null); onApply(fav, { adaptar: true }); }}
-                                            data-testid={`fav-adapt-${fav.id}`}>
-                                            Adaptar a mi día de hoy ({etiqueta(tipoDia)})
-                                        </Button>
-                                        <p className="text-[11px] text-muted-foreground -mt-1">
-                                            {esDescanso(tipoDia)
-                                                ? 'El intra/post se quitará porque en descanso no hay periworkout.'
-                                                : 'El peri quedará vacío: podrás añadirlo con "Sugiéreme un menú".'}
-                                        </p>
-                                        <Button size="sm" variant="outline" className="w-full rounded-full"
-                                            onClick={() => { setConfirmId(null); onApply(fav, { adaptar: false }); }}>
-                                            Aplicar como se guardó (cambia el día a {etiqueta(favTipo)})
-                                        </Button>
+                                        {!diaVacio && (
+                                            <p className="text-xs text-foreground" data-testid={`fav-reemplaza-${fav.id}`}>
+                                                Este día ya tiene comidas. <span className="font-bold">Al aplicar la favorita se reemplazan.</span>
+                                            </p>
+                                        )}
+                                        {favTipo !== tipoDia && (
+                                            <p className="text-xs text-foreground">
+                                                Esta favorita se guardó en día de <span className="font-bold">{etiqueta(favTipo)}</span> y
+                                                hoy es día de <span className="font-bold">{etiqueta(tipoDia)}</span>.
+                                            </p>
+                                        )}
+                                        {favTipo !== tipoDia ? (
+                                            <>
+                                                <Button size="sm" className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white font-bold rounded-full"
+                                                    onClick={() => { setConfirmId(null); onApply(fav, { adaptar: true }); }}
+                                                    data-testid={`fav-adapt-${fav.id}`}>
+                                                    Adaptar a mi día de hoy ({etiqueta(tipoDia)})
+                                                </Button>
+                                                <p className="text-[11px] text-muted-foreground -mt-1">
+                                                    {esDescanso(tipoDia)
+                                                        ? 'El intra/post se quitará porque en descanso no hay periworkout.'
+                                                        : 'El peri quedará vacío: podrás añadirlo con "Sugiéreme un menú".'}
+                                                </p>
+                                                <Button size="sm" variant="outline" className="w-full rounded-full"
+                                                    onClick={() => { setConfirmId(null); onApply(fav, { adaptar: false }); }}>
+                                                    Aplicar como se guardó (cambia el día a {etiqueta(favTipo)})
+                                                </Button>
+                                            </>
+                                        ) : (
+                                            /* Mismo tipo de día: solo se pregunta por lo que se pierde. */
+                                            <Button size="sm" className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white font-bold rounded-full"
+                                                onClick={() => { setConfirmId(null); onApply(fav); }}
+                                                data-testid={`fav-reemplazar-${fav.id}`}>
+                                                Aplicar y reemplazar
+                                            </Button>
+                                        )}
                                         <button className="w-full text-center text-xs text-muted-foreground hover:text-foreground"
                                             onClick={() => setConfirmId(null)}>
                                             Cancelar

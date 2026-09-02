@@ -80,8 +80,14 @@ const MiSemanaPage = () => {
         : r.entrenos_hechos == null
             ? plural(r.entrenos_total, 'entreno')
             : `${r.entrenos_hechos} de ${plural(r.entrenos_total, 'entreno')}`;
+    // Y EL TITULAR CUENTA LAS QUE CUADRAN, no solo las creadas (revisión del 2-09):
+    // «7 creadas» con las siete sin cuadrar es el mismo problema que el verde de las filas.
+    // Se cuenta aquí, sobre los días que ya llegan, para no pedirle otro número al servidor.
+    const cuadradas = (semana.dias || []).filter(d => d.estado === 'montada' && d.is_cuadrado).length;
+    const creadas = r.montadas || 0;
     const contador = [
-        plural(r.montadas || 0, 'creada'),
+        creadas ? `${creadas} ${creadas === 1 ? 'creada' : 'creadas'}${
+            creadas ? ` (${cuadradas} ${cuadradas === 1 ? 'cuadrada' : 'cuadradas'})` : ''}` : null,
         plural(r.empezadas || 0, 'empezada'),
         `${r.sin_montar || 0} sin crear`,
         entrenosTxt,
@@ -180,8 +186,16 @@ const LineaDieta = ({ dia }) => {
                    118 …», que es justo el dato por el que se entra a mirar. Ahora, cuando no
                    caben, bajan enteros a la línea de abajo: la fila crece unos píxeles en el
                    móvil y no se pierde nada. */
+                /* CREADA NO ES CUADRADA (revisión del 2-09).
+                   Las siete filas decían «Creada» en verde, así que el día que se queda a
+                   128 g de hidratos se leía igual que el que cuadra, y el verde le decía
+                   que iba bien. El calendario de Nutrición ya distingue las dos cosas con
+                   `is_cuadrado`; aquí se usa esa misma señal y no una nueva. */
                 <span className="font-data text-foreground flex items-baseline gap-1 flex-wrap min-w-0">
-                    <span className="text-emerald-400 font-semibold flex-shrink-0">Creada</span>
+                    <span className={`font-semibold flex-shrink-0 ${dia.is_cuadrado ? 'text-emerald-400' : 'text-orange-400'}`}
+                        data-testid={`estado-dieta-${dia.fecha}`}>
+                        {dia.is_cuadrado ? 'Cuadrada' : 'Sin cuadrar'}
+                    </span>
                     <span className="text-muted-foreground">·</span>
                     <span className="whitespace-nowrap">
                         <span className="text-orange-400 font-semibold">{Math.round(m.P || 0)}</span>
