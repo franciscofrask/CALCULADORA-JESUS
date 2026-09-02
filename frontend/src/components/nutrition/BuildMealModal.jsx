@@ -372,7 +372,13 @@ const BuildMealModal = ({
         // (objetivo − servido), así que un `r` negativo es que se ha pasado y lleva el «+».
         if (Math.abs(r) < SUELO_DE_LA_COMIDA) { status = 'cuadrado'; cls = 'text-green-700 dark:text-green-400'; }
         else if (Math.abs(r) < MARGEN_VALIDO) { status = `cuadrado (${r < 0 ? '+' : '−'}${fmt1(Math.abs(r))})`; cls = 'text-green-700 dark:text-green-400'; }
-        else if (r > 0) { status = `faltan ${fmt1(r)} g`; cls = 'text-red-700 dark:text-red-400'; }
+        // LO QUE FALTA VA EN BLANCO, no en rojo (2-09). Es la regla del punto 77 -- «sin color
+        // mientras vas por debajo», porque ir corto no es un error, es que no has terminado --
+        // y la lista del 196 lo deja por escrito: «faltan 11 de proteína, en blanco, que es un
+        // número y va con su número». Este diálogo era el último sitio que lo pintaba de rojo,
+        // y ademas se abre con la comida vacía: entrabas a montarla y te recibían tres avisos
+        // rojos por no haber puesto nada todavía.
+        else if (r > 0) { status = `faltan ${fmt1(r)} g`; cls = 'text-foreground'; }
         else {
             const enRojo = seExcede(key, servedVal, tgtVal, { esPeri: isPeriMode });
             status = `sobran ${fmt1(-r)} g`;
