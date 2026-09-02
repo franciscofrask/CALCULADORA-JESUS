@@ -314,6 +314,10 @@ const NutritionPage = () => {
     // lo ha marcado nadie, se dice y se le pide que elija. Cuál debe ser la regla automática
     // es una decisión de Jesús, y con 2 de 14.027 delante se toma mejor.
     const [diaSinMarcar, setDiaSinMarcar] = useState(false);
+    // Y su ref, para el detector de tipo de día: esa petición vuelve cuando le llega el
+    // turno y necesita el valor de AHORA, no el que había cuando se lanzó.
+    const diaSinMarcarRef = useRef(false);
+    diaSinMarcarRef.current = diaSinMarcar;
 
     // EL DÍA VACÍO (doc 21-08, tarea 6.1). Cuando el día no tiene ninguna comida con
     // alimentos, en lugar de la parrilla sale una pregunta con tres salidas (DiaVacio).
@@ -408,8 +412,18 @@ const NutritionPage = () => {
         setShowPreferencesSetup(false);
     };
 
-    // Auto-detect day type from routine
+    // El tipo de día que propone su rutina: solo para el día que nadie ha configurado.
+    //
+    // Y SOLO PARA ÉSE (1-09-2026). Esto se lo ponía a todos, incluidos los días que ya
+    // estaban guardados con su tipo, así que la rutina pisaba una decisión tomada: abrir un
+    // martes de agosto que se montó como entreno lo pasaba a descanso porque hoy la rutina
+    // dice que los martes se descansa, y el día quedaba cambiado por haberlo mirado. La
+    // regla ya estaba escrita en `loadDiet` («Este día ya lo configuró alguien: su tipo es
+    // una decisión, no un supuesto»); lo que faltaba era respetarla aquí.
     useEffect(() => {
+        // DESPUÉS DE CARGAR, NO A LA VEZ. Corría en paralelo a la carga del día, así que
+        // cuando volvía no se sabía todavía si ese día estaba configurado o no.
+        if (loading) return;
         const detectDayType = async () => {
             try {
                 const routine = await api('/api/routines/current');
@@ -417,7 +431,9 @@ const NutritionPage = () => {
                     const dateObj = new Date(currentDate + 'T12:00:00');
                     const dayName = dateObj.toLocaleDateString('es-ES', { weekday: 'long' }).toLowerCase();
                     const dayData = routine.days.find(d => d.day.toLowerCase() === dayName);
-                    if (dayData) {
+                    // `diaSinMarcarRef` y no el estado: esta petición vuelve cuando quiere, y
+                    // para entonces el día ya ha cargado y el valor del cierre estaría viejo.
+                    if (dayData && diaSinMarcarRef.current) {
                         setTipoDia(dayData.is_rest ? 'descanso' : 'entrenamiento');
                     }
                 }
@@ -426,7 +442,7 @@ const NutritionPage = () => {
             }
         };
         detectDayType();
-    }, [currentDate]); // eslint-disable-line
+    }, [currentDate, loading]); // eslint-disable-line
 
     // Export diet to PDF
     const exportPdf = async () => {
@@ -436,8 +452,13 @@ const NutritionPage = () => {
             // pantalla. Sin esto, montar el dia y pulsar PDF sin salir antes de la pantalla daba
             // siempre "No hay dieta guardada para este dia" (404).
             await flushGuardado();
+            // LAS CABECERAS, DE `lib/cabeceras` (punto 2 del 17-08). Esta llamada se montaba
+            // el `Authorization` a mano y se dejaba `X-Actuar-Como`, así que el entrenador
+            // que entraba en la calculadora de un cliente y pulsaba PDF se descargaba SU
+            // PROPIO día con el nombre del día del cliente. Es el mismo fallo que se cerró
+            // el 17-08 con dos sitios que se quedaron fuera; este era uno.
             const res = await fetch(`${API_URL}/api/diets/${currentDate}/pdf`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: cabeceras(token),
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
@@ -619,11 +640,49 @@ const NutritionPage = () => {
     const hayAlimentos = (snap) =>
         Object.values(snap?.comidas || {}).some(m => (m?.alimentos || []).length > 0);
 
+    // ── MIRAR UN DÍA NO PUEDE CAMBIARLO (1-09-2026) ─────────────────────────────────────
+    //
+    // Los tres guardados de esta pantalla -- el de 1,5 s, el de salir del día y el de cerrar
+    // la pestaña -- escribían SIEMPRE, hubiera tocado algo el cliente o no. Con eso, abrir un
+    // día de agosto para mirarlo lo reescribía con la fecha de hoy y, lo que de verdad duele,
+    // le recalculaba `is_cuadrado` CON LOS MACROS DE AHORA: un día que se cuadró en su
+    // momento dejaba de estar cuadrado por el simple hecho de consultarlo, y de ese campo
+    // salen el verde del calendario y la cuenta de «cuadraste N días». Repasar el historial
+    // iba borrando el historial que se repasaba.
+    //
+    // La defensa es una huella de cómo estaba el día al cargarlo. Si lo que hay en pantalla
+    // sigue siendo eso, no se guarda nada.
+    //
+    // LA HUELLA SOLO LLEVA LO QUE EL CLIENTE DECIDE. `macros_snapshot`, `is_cuadrado` y
+    // `distribution_targets` NO entran a propósito: los tres salen de los macros de hoy, así
+    // que con ellos dentro cualquier día viejo saldría «cambiado» siempre y esto no serviría
+    // de nada, que es justo el fallo que viene a cerrar.
+    const huellaDelDia = (snap) => JSON.stringify({
+        comidas: snap?.comidas || {},
+        tipo_dia: snap?.tipo_dia,
+        num_comidas: snap?.num_comidas,
+        momento_entreno: snap?.momento_entreno,
+        opcion_peri: snap?.opcion_peri,
+        comida_volcada: snap?.comida_volcada ?? null,
+    });
+    //: Cómo estaba el día cuando se cargó. `null` mientras no se sabe (cargando o cambiando
+    //: de fecha), y en ese hueco no se guarda: es cuando la pantalla todavía se está montando.
+    const huellaCargadaRef = useRef(null);
+    //: Qué día está abierto AHORA. El guardado de despedida se llama con la fecha que se
+    //: deja, que ya no es ésta, y su huella no puede pisar la del día al que se acaba de
+    //: entrar.
+    const currentDateRef = useRef(currentDate);
+    currentDateRef.current = currentDate;
+
+    const hayCambios = (snap) =>
+        huellaCargadaRef.current !== null && huellaDelDia(snap) !== huellaCargadaRef.current;
+
     // Cuando se puede escribir en el servidor: con el dia cargado (caso normal) o, si la carga
     // fallo, en cuanto haya alimentos en pantalla. Perder lo que acabas de montar es mucho peor
     // que guardar un dia que quiza no cargo del todo; y borrar nunca se permite en ese estado.
+    // Y ademas, que haya algo que guardar: ver la huella de arriba.
     const puedeGuardar = (snap, date) =>
-        loadedDateRef.current === date || hayAlimentos(snap);
+        (loadedDateRef.current === date || hayAlimentos(snap)) && hayCambios(snap);
 
     const autoSaveDiet = useCallback(async (date, snap) => {
         if (!date || !snap) return;
@@ -659,6 +718,9 @@ const NutritionPage = () => {
                 teniaAlimentosRef.current = false;
             }
             borrarCopiaLocal(date);   // confirmado en el servidor: la copia ya no hace falta
+            // Lo guardado pasa a ser «como estaba»: si no, el mismo contenido se volvería a
+            // mandar en cada guardado de despedida hasta salir de la pantalla.
+            if (date === currentDateRef.current) huellaCargadaRef.current = huellaDelDia(snap);
             setGuardadoEstado('guardado');
             return true;
         } catch (e) {
@@ -775,6 +837,10 @@ const NutritionPage = () => {
         const init = async () => {
             setLoading(true);
             setDistribTargetsOverlay(null);
+            // Cambiando de día no se sabe todavía cómo estaba el nuevo, así que hasta que
+            // termine de cargar no se guarda nada (ver `hayCambios`). Sin esto, la primera
+            // vuelta compararía contra la huella del día ANTERIOR y todo saldría «cambiado».
+            huellaCargadaRef.current = null;
 
             // Load persisted diet config FIRST to avoid stale-closure distribution call
             let cfgOverrides = {};
@@ -845,13 +911,21 @@ const NutritionPage = () => {
     // unstable `api` would re-fire the cleanup on every render and save constantly.
     const autoSaveDietRef = useRef(autoSaveDiet);
     autoSaveDietRef.current = autoSaveDiet;
+    // Por el ref, igual que el autoguardado: la limpieza del efecto de abajo se monta con el
+    // `currentDate` de entonces y necesita la versión de ahora de esta comprobación.
+    const hayCambiosRef = useRef(hayCambios);
+    hayCambiosRef.current = hayCambios;
     // `loadDiet` se declara más arriba pero el autoguardado necesita llamarla cuando otra
     // pantalla ha tocado el día; por el ref no hay que reordenar medio fichero.
     loadDietRef.current = loadDiet;
     useEffect(() => {
         const dateLeaving = currentDate;
         return () => {
-            if (loadedDateRef.current === dateLeaving || hayAlimentos(autoSaveRef.current)) {
+            // Y AQUÍ TAMBIÉN SE MIRA SI HAY ALGO QUE GUARDAR (1-09). Este era el camino por el
+            // que abrir un día viejo y pasar al siguiente lo reescribía entero: la condición
+            // se cumplía siempre por `loadedDateRef`, tocara algo el cliente o no.
+            if ((loadedDateRef.current === dateLeaving || hayAlimentos(autoSaveRef.current))
+                    && hayCambiosRef.current(autoSaveRef.current)) {
                 autoSaveDietRef.current(dateLeaving, autoSaveRef.current);
             }
         };
@@ -869,11 +943,22 @@ const NutritionPage = () => {
             if (loading) return;
             const snap = autoSaveRef.current;
             if (!hayAlimentos(snap)) return;
+            // Y SOLO SI HAY ALGO QUE GUARDAR (1-09). Este salta también al pasar la pestaña a
+            // segundo plano, así que sin esto bastaba con cambiar de pestaña con un día viejo
+            // abierto para reescribirlo.
+            if (!hayCambios(snap)) return;
             try {
                 const token = localStorage.getItem('token');
                 fetch(`${process.env.REACT_APP_BACKEND_URL}/api/diets`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                    // Y LAS CABECERAS DE `lib/cabeceras`, QUE ESTE ESCRIBE (punto 2 del
+                    // 17-08). Era el otro sitio que se quedó fuera de aquel arreglo, y el
+                    // peor de los dos: el del PDF se lleva el día equivocado, pero este
+                    // GUARDA. Salta en `beforeunload`, en `pagehide` y al pasar la pestaña a
+                    // segundo plano, así que al entrenador que estaba en la calculadora de
+                    // un cliente le bastaba con cambiar de pestaña para escribir la dieta
+                    // del cliente EN SU PROPIA CUENTA, y encima de su día si lo tenía.
+                    headers: cabeceras(token, { 'Content-Type': 'application/json' }),
                     // CON SU VERSIÓN DEL DÍA, COMO TODOS LOS DEMÁS (16-08-2026, en prod).
                     // Este guardado de despedida era el único que no la mandaba, y resultó
                     // ser justo el que más daño hace: al salir de la pantalla escribía la
@@ -902,7 +987,14 @@ const NutritionPage = () => {
     // Guardado con retardo: cada cambio reinicia el contador y se guarda cuando paras de tocar.
     // 1,5 s es suficiente para no disparar una peticion por cada gramo que ajustas.
     useEffect(() => {
-        if (loading || !puedeGuardar(autoSaveRef.current, currentDate)) return;
+        if (loading) return;
+        // LA PRIMERA VUELTA TRAS CARGAR NO GUARDA: apunta cómo estaba el día y se va. A
+        // partir de aquí, lo que no se parezca a esto es que el cliente ha tocado algo.
+        if (huellaCargadaRef.current === null) {
+            huellaCargadaRef.current = huellaDelDia(autoSaveRef.current);
+            return;
+        }
+        if (!puedeGuardar(autoSaveRef.current, currentDate)) return;
         if (guardadoTimerRef.current) clearTimeout(guardadoTimerRef.current);
         guardadoTimerRef.current = setTimeout(() => {
             autoSaveDiet(currentDate, autoSaveRef.current);
