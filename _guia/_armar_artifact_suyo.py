@@ -283,8 +283,98 @@ NUESTRO_CSS = """
  font-size:13px;font-weight:700}
 .resumen .c-ok{color:var(--bien)} .resumen .c-matiz{color:var(--marca)}
 .resumen .c-mal{color:var(--mal)} .resumen .c-gris{color:var(--mut)}
+
+.num-h{font-family:ui-monospace,Consolas,monospace;color:var(--mut);margin-right:6px}
+.grav{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;
+ padding:2px 8px;border-radius:999px;margin-left:8px;vertical-align:middle}
+.g-grave{background:rgba(255,122,128,.16);color:var(--mal)}
+.g-medio{background:rgba(255,133,70,.16);color:var(--marca)}
+.medida{font-family:ui-monospace,Consolas,monospace;font-size:12.5px;line-height:1.55;
+ background:#0F1216;border:1px solid var(--linea);border-radius:10px;padding:11px 13px;
+ margin:0 0 12px;white-space:pre-wrap;overflow-x:auto;color:var(--tx)}
+.cuenta-nutri{display:flex;flex-wrap:wrap;gap:9px;margin:14px 0 12px}
+.cuenta-nutri span{border:1px solid var(--linea);border-radius:999px;padding:5px 12px;
+ font-size:13px;font-weight:700}
+.cuenta-nutri .c-ok{color:var(--bien);border-color:var(--bien)}
+.cuenta-nutri .c-matiz{color:var(--marca);border-color:var(--marca)}
+.cuenta-nutri .c-mal{color:var(--mal);border-color:var(--mal)}
+.cuenta-nutri .c-gris{color:var(--mut)}
+ul.menores{list-style:none;padding:0;margin:14px 0 0;display:grid;gap:14px}
+ul.menores li{border-left:2px solid var(--linea2);padding-left:14px;font-size:14.5px}
+ul.menores li.ok{border-left-color:var(--bien)}
+ul.menores li.mal{border-left-color:var(--linea2)}
+ul.menores .m-estado{font-size:11px;font-weight:800;text-transform:uppercase;
+ letter-spacing:.06em;margin-left:8px;color:var(--mut)}
+ul.menores li.ok .m-estado{color:var(--bien)}
+ul.menores .m-txt{display:block;color:var(--mut);margin-top:3px}
 </style>
 """
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Y LA REVISION DE NUTRICION, EN EL MISMO SITIO
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Francisco: «a ese artifact sumale lo que arreglamos en nutricion». No son puntos de un
+# documento de Jesus -- son hallazgos de un recorrido funcional --, asi que van en su propio
+# bloque al final y con su propia forma: el numero, la gravedad, el estado, lo que se vio y
+# lo que se hizo. Pero con LA MISMA piel que el resto, para que se lea como un solo papel.
+
+def bloque_de_nutricion():
+    from _hallazgos_nutricion import (COMMITS, ETIQUETA_ESTADO, HALLAZGOS, HECHO, ESPERA,
+                                      MENORES, PENDIENTE, SIN_CERRAR)
+
+    clase = {HECHO: "ok", ESPERA: "matiz", PENDIENTE: "mal"}
+    hechos = sum(1 for h in HALLAZGOS if h[3] == HECHO) + sum(1 for m in MENORES if m[1] == HECHO)
+    espera = sum(1 for h in HALLAZGOS if h[3] == ESPERA)
+    pend = sum(1 for m in MENORES if m[1] == PENDIENTE)
+
+    tarjetas = []
+    for num, titulo, gravedad, estado, visto, medida, hecho in HALLAZGOS:
+        tarjetas.append(f"""
+      <article class="punto-otro">
+        <h4><span class="num-h">{num}</span> {esc(titulo)}
+            <span class="grav g-{gravedad.lower()}">{esc(gravedad)}</span></h4>
+        <p class="suyo-pie">{esc(visto)}</p>
+        {f'<pre class="medida">{esc(medida)}</pre>' if medida else ""}
+        <div class="nuestro {clase[estado]}">
+          <p class="chip">{esc(ETIQUETA_ESTADO[estado])}</p>
+          <div class="txt"><p class="nota">{esc(hecho)}</p></div>
+        </div>
+      </article>""")
+
+    menores = "".join(f"""
+        <li class="{clase[e]}"><b>{esc(t)}</b> <span class="m-estado">{esc(ETIQUETA_ESTADO[e])}</span>
+            <span class="m-txt">{esc(d)}</span></li>""" for t, e, d in MENORES)
+
+    return f"""
+<div class="otrodoc">
+  <div class="cab">
+    <p class="eti">claude.ai/code/artifact/7ae47ff3 · revisión funcional</p>
+    <h1>La pestaña de Nutrición, función por función</h1>
+    <p class="baj">Recorrido completo de la pantalla en el navegador, hecho el 1 de septiembre
+       con la cuenta de Francisco. No es un documento de Jesús: es lo que se encontró al
+       usarla, y lo que se hizo después.</p>
+    <div class="cuenta-nutri">
+      <span class="c-ok">Arreglados: {hechos}</span>
+      <span class="c-matiz">Espera decisión: {espera}</span>
+      <span class="c-mal">Menores pendientes: {pend}</span>
+      <span class="c-gris">Sin cerrar: 1</span>
+    </div>
+    <p class="baj aviso">Todo lo arreglado está <b>en producción</b> desde el 2 de septiembre.
+       Commits: <code>{COMMITS}</code>. Cada arreglo se comprobó <b>reproduciendo el fallo</b>,
+       y donde el guion no distingue entre el antes y el después se dice.</p>
+  </div>
+  <section class="bloque"><h3>Los diez hallazgos con nombre y apellidos</h3>{"".join(tarjetas)}</section>
+  <section class="bloque">
+    <h3>Los menores</h3>
+    <ul class="menores">{menores}</ul>
+  </section>
+  <section class="bloque">
+    <h3>Sin cerrar</h3>
+    <p class="suyo-pie" style="max-width:46rem">{esc(SIN_CERRAR)}</p>
+  </section>
+</div>"""
 
 
 def main() -> None:
@@ -321,7 +411,7 @@ def main() -> None:
     otros = "".join(otro_documento(c, puntos, veredictos) for c in DOCS)
 
     with io.open(SALIDA, "w", encoding="utf-8") as f:
-        f.write(estilos + NUESTRO_CSS + resumen + suyo + otros)
+        f.write(estilos + NUESTRO_CSS + resumen + suyo + otros + bloque_de_nutricion())
 
     tam = os.path.getsize(SALIDA) / 1e6
     print(f"{len(puntos)} puntos · {cuenta} · {tam:.1f} MB")
