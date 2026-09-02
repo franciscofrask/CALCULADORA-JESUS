@@ -19,7 +19,7 @@
  * distintas. Qué bloques salen lo sigue decidiendo el servidor con `bloques`.
  */
 import React from 'react';
-import { Bloque, Dato, DosBotones, Estrellas, EstrellasMedia, Opciones, TextoLibre, enumerarFechas } from './piezas';
+import { Bloque, Dato, DosBotones, Escala0a10, Estrellas, EstrellasMedia, Opciones, TextoLibre, enumerarFechas } from './piezas';
 
 const ORANGE = '#FF671F';
 
@@ -84,36 +84,10 @@ const FRASE_DEL_OBJETIVO = {
     mantenimiento: 'Mantener lo que he conseguido',
 };
 
-/**
- * LA ESCALA DE 0 A 10, con sus dos extremos escritos.
- *
- * De 0 a 10 y no de 1 a 5 con estrellas: es la de la maqueta, y el cero es una respuesta
- * («No, esperaba más»), no la ausencia de respuesta. Por eso se compara con `!= null` en
- * vez de mirar si el número es verdadero, que dejaría el cero sin poder marcarse.
- */
-const Escala0a10 = ({ pregunta, valor, onChange, minLabel, maxLabel, testid }) => (
-    <div data-testid={testid}>
-        {pregunta && <p className="text-sm text-foreground mb-2">{pregunta}</p>}
-        <div className="flex gap-1">
-            {Array.from({ length: 11 }, (_, n) => {
-                const puesto = valor === n;
-                return (
-                    <button key={n} type="button" data-testid={`${testid}-${n}`}
-                        onClick={() => onChange(puesto ? null : n)}
-                        className={`flex-1 min-w-0 h-9 rounded-lg border text-[13px] font-bold tabular-nums transition-all ${
-                            puesto ? 'border-[#FF671F] bg-[#FF671F] text-white'
-                                   : 'border-border bg-muted text-foreground/60 hover:border-foreground/30'}`}>
-                        {n}
-                    </button>
-                );
-            })}
-        </div>
-        <div className="flex justify-between gap-4 mt-1.5">
-            <span className="text-[11px] text-muted-foreground">{minLabel}</span>
-            <span className="text-[11px] text-muted-foreground text-right">{maxLabel}</span>
-        </div>
-    </div>
-);
+/* LA ESCALA DE 0 A 10 vive ahora en `piezas.jsx`: el paso 2 del quincenal la usa
+   dos veces más («Todo lo validado antes del 1 de septiembre»), y dos copias de la
+   misma escala es como acaban diciendo cosas distintas. El cero sigue siendo una
+   respuesta, no la ausencia de respuesta. */
 
 const ReporteMensual = ({ datos, perfil, bloques, valores, set, setEntreno }) => {
     const dieta = datos?.dieta || {};

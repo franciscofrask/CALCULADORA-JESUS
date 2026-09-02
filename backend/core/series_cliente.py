@@ -202,6 +202,36 @@ def curva_de_peso(serie: Optional[List[Dict[str, Any]]],
 # ORDEN: la primera que exista gana, no la mejor ni la mas reciente.
 PAREJAS_DESDE_EL_MIERCOLES = ((2, 3), (3, 4), (4, 5))
 
+# ── CUANDO SE LE PIDE QUE SE PESE («Todo lo validado antes del 1 de septiembre», bloque 4)
+#
+# La regla del peso semanal existia y nadie se la contaba al cliente: la pareja de dias
+# seguidos vive en `PAREJAS_DESDE_EL_MIERCOLES` desde hace semanas, pero la app no le decia
+# ningun dia que le tocaba pesarse, asi que la pareja se formaba por casualidad. El bloque 4
+# lo cierra con una fila en Inicio esos dos dias:
+#
+#     «Hoy toca pesarte · En ayunas y despues de ir al baño»
+#     «El dia que toca la primera pesada. Al tocarla le abre el campo en Seguimiento.»
+#     «La segunda. Con esas dos, la media se hace sola y el reporte le sale ya resuelto.»
+#     «Y a las 12:00 se apaga. Despues de comer ya no es un peso en ayunas. El campo sigue
+#      abierto en Seguimiento para el que quiera, pero la app deja de pedirselo.»
+#
+# Son los dos dias de la PRIMERA pareja, no de las tres: las otras dos ((3,4) y (4,5)) son
+# el rescate de quien no se peso cuando tocaba, y pedirle cuatro pesadas para quedarse con
+# dos es pedirle que ignore la mitad de lo que se le pide.
+DIAS_DE_PESADA = (2, 3)
+HORA_EN_QUE_SE_APAGA_LA_PESADA = 12
+
+
+def toca_pesarse(dia: date, hora: int, ya_pesado: bool) -> bool:
+    """Si hoy, a esta hora, la app le pide que se pese.
+
+    `dia` es el del reloj DEL CLIENTE (es su mañana, no un plazo) y `hora` la suya. Un
+    pesaje ya apuntado hoy la apaga: la fila es una peticion, y lo pedido esta hecho.
+    """
+    return (not ya_pesado
+            and dia.weekday() in DIAS_DE_PESADA
+            and hora < HORA_EN_QUE_SE_APAGA_LA_PESADA)
+
 # La memoria de la rama c. Es el mismo tope que se midio contra produccion: con 21 dias la
 # cobertura sube al 23 % y con 30 al 30 %, pero un peso de hace un mes ya no describe la
 # semana de la que habla el reporte.

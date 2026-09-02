@@ -2,7 +2,7 @@
 Rutas de reportes: crear, listar, evolución.
 """
 from fastapi import APIRouter, Body, HTTPException, Depends
-from datetime import datetime, timezone, timedelta
+from datetime import date, datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 import uuid
 
@@ -169,6 +169,15 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
         "maquinas_no_disponibles": data.maquinas_no_disponibles or None,
         "suplementacion_motivo": data.suplementacion_motivo,
         "sugerencias": (data.sugerencias or "").strip() or None,
+        # Las del 1-09: las cinco estrellas del paso 1 cuando no hay check-in de los que
+        # sacar la quincena, y las dos escalas de 0 a 10 del paso 2.
+        "dieta_grado": data.dieta_grado,
+        "entreno_grado": data.entreno_grado,
+        "cardio_grado": data.cardio_grado,
+        "suplementacion_grado": data.suplementacion_grado,
+        "descanso_grado": data.descanso_grado,
+        "sensaciones_0a10": data.sensaciones_0a10,
+        "esfuerzo_resultados": data.esfuerzo_resultados,
         "trainer_feedback": None,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
@@ -757,6 +766,61 @@ async def get_paso1_del_mensual(periodo: str = "ultimo", user=Depends(get_curren
     return await datos_del_paso1(perfil, d0, d1, desde_el_principio=desde_el_principio)
 
 
+@router.get("/quincenal/paso1")
+async def get_paso1_del_quincenal(dia: Optional[str] = None, user=Depends(get_current_user)):
+    """EL PASO 1 DEL QUINCENAL («Todo lo validado antes del 1 de septiembre»).
+
+    Es el mismo paso que el del mensual -- lo que ha hecho, cómo se ha sentido y los huecos
+    -- con dos diferencias, y las dos son del documento:
+
+      - EL PESO ES EL SEMANAL, no la curva del mes. Los tres días en los que se puede pesar
+        con la pareja marcada, que es lo que hace que el número de arriba se entienda.
+      - SIN SELECTOR DE PERIODO. «Desde que empezaste» es del mensual: en quince días no hay
+        dos tramos que comparar.
+
+    Y LA OTRA VERSIÓN: al que no tiene check-in suficientes no se le enseña nada, se le
+    pregunta. `sin_datos` lo dice y `preguntas` trae las cinco.
+
+    `dia` ES DEL MODO REVISIÓN Y SOLO DEL EQUIPO. La semana del peso es la del día en que se
+    abre el reporte, así que en martes esta pantalla no puede enseñar una pareja: el
+    miércoles todavía no ha pasado. Con `?dia=` el equipo la mira en la semana que quiera y
+    comprueba los textos, que es para lo que existe `?ver=` en la app. A un cliente se le
+    ignora: su semana es la suya.
+    """
+    from core.actividad_mensual import hay_datos_suficientes, preguntas_sin_checkin
+    from core.datos_reporte import datos_del_paso1, peso_semanal_por_dias
+    from core.plan_access import plan_grants_feature
+
+    perfil = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not perfil:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+
+    d0, d1 = _periodo_del_reporte(perfil, "quincenal")
+    if dia and user.get("role") in ("admin", "trainer"):
+        try:
+            d1 = date.fromisoformat(dia[:10])
+            d0 = d1 - timedelta(days=DIAS_DEL_PERIODO["quincenal"] - 1)
+        except (ValueError, TypeError):
+            pass
+    ficha = await datos_del_paso1(perfil, d0, d1)
+    tiene_suplementacion = plan_grants_feature(perfil.get("plan"), "suplementacion")
+
+    # Los cierres del tramo, para saber si hay con qué llenar el paso. Se cuentan aquí y no
+    # dentro de `datos_del_paso1` porque es una decisión del quincenal: el mensual enseña
+    # sus datos aunque estén flojos, que para eso tiene 28 días y las fotos.
+    cierres = await db.checkins.count_documents(
+        {"client_id": perfil.get("id"), "type": "daily",
+         "created_at": {"$gte": d0.isoformat(), "$lte": d1.isoformat() + "T23:59:59"}})
+    hay_datos = hay_datos_suficientes(cierres, ficha["periodo"]["dias"])
+
+    return {
+        **ficha,
+        "peso_semanal": peso_semanal_por_dias(perfil, d1),
+        "sin_datos": not hay_datos,
+        "preguntas": [] if hay_datos else preguntas_sin_checkin(tiene_suplementacion),
+    }
+
+
 @router.post("/aplazar")
 async def aplazar_reporte(payload: Optional[Dict[str, Any]] = Body(default=None),
                           user=Depends(get_current_user)):
@@ -900,9 +964,17 @@ async def get_evolution_data(user = Depends(get_current_user)):
                     measurements_data[key] = []
                 measurements_data[key].append({"date": r["created_at"], "value": value})
     
+    # HASTA CUÁNDO ATRÁS SE PUEDE FECHAR UN PESAJE, dicho por quien manda la regla. El campo
+    # del peso vive ahora en Evolución («Todo lo validado antes del 1 de septiembre», bloque
+    # 4) y necesita el mismo número que el cierre del día: el desplegable de «¿de qué día es
+    # este peso?» tiene que ofrecer exactamente lo que el servidor acepta. Es el fallo 7 del
+    # repaso del 24-08 -- tres sitios y tres números para la misma decisión -- y no se
+    # repite escribiendo un 14 en la pantalla nueva.
+    from core.series_cliente import DIAS_ATRAS_PARA_UN_PESAJE
     return {
         "weight": weight_data,
-        "measurements": measurements_data
+        "measurements": measurements_data,
+        "peso_dias_atras": DIAS_ATRAS_PARA_UN_PESAJE,
     }
 
 

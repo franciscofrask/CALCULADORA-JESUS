@@ -19,7 +19,12 @@ import ReporteMensual from './ReporteMensual';
 import MensualPaso1 from './MensualPaso1';
 import MensualPaso3 from './MensualPaso3';
 import MensualPaso4 from './MensualPaso4';
-import { CabeceraDelMensual, RotuloDelPaso } from './PasosDelMensual';
+import QuincenalPaso1 from './QuincenalPaso1';
+import QuincenalPaso3 from './QuincenalPaso3';
+import {
+    CabeceraDelMensual, CabeceraDePasos, RotuloDelPaso,
+    PASOS_DEL_QUINCENAL, ROTULOS_DEL_QUINCENAL,
+} from './PasosDelMensual';
 import RevisaAntesDeEnviar from './RevisaAntesDeEnviar';
 import { MEDIDAS } from '../../lib/medidas';
 import { revisarPeso } from '../../lib/pesoValido';
@@ -38,6 +43,15 @@ const TITULOS_REPORTE = {
     mensual: 'Tu reporte mensual',
 };
 
+// El de la CABECERA DE LOS PASOS, sin el «Tu» (doc 1-09: «Reporte quincenal», igual que
+// «Reporte mensual»). Ahí el título va en versalitas y grande, y el posesivo delante de una
+// palabra en mayúsculas se lee como un error de maquetación, no como cercanía.
+const TITULOS_EN_LA_CABECERA = {
+    semanal: 'Reporte semanal',
+    quincenal: 'Reporte quincenal',
+    mensual: 'Reporte mensual',
+};
+
 const valoresIniciales = (objetivoActual) => ({
     weight: '',
     // El % de grasa solo sale en el reporte que toca, cada 12 semanas.
@@ -47,6 +61,16 @@ const valoresIniciales = (objetivoActual) => ({
     entreno_huecos: '',
     molestias: '',
     sensaciones: null,
+    // Las dos escalas de 0 a 10 del paso 2 (doc 1-09). No sustituyen a `sensaciones`, que
+    // son las cinco estrellas de los reportes de antes: son otra pregunta y otra escala.
+    sensaciones_0a10: null,
+    esfuerzo_resultados: null,
+    // Y las cinco estrellas del paso 1 cuando no hay check-in con los que llenarlo.
+    dieta_grado: null,
+    entreno_grado: null,
+    cardio_grado: null,
+    suplementacion_grado: null,
+    descanso_grado: null,
     // Semanal (doc 21-08): qué le altera la rutina la semana que viene.
     semana_proxima: '',
     // Mensual · los huecos del paso 1, que es lo único que se contesta ahí.
@@ -88,9 +112,15 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
     const [ficha, setFicha] = useState(null);          // lo que manda el servidor
     const [valores, setValores] = useState(() => valoresIniciales(perfilCliente?.goal));
     const [paso, setPaso] = useState('form');          // form | resumen | enviado
-    // EL MENSUAL VA POR PASOS (documento del 1-09): 1 sus datos, 2 sus respuestas, 3 fotos
-    // y medidas, y el 4 es la entrega, que solo se ve después de mandarlo. El quincenal no
-    // los usa: son cuatro preguntas que caben en una pantalla.
+    // LOS DOS VAN POR PASOS, y son los mismos primeros dos.
+    //
+    //   MENSUAL (doc «El reporte mensual», 1-09): 1 sus datos, 2 sus respuestas, 3 fotos y
+    //   medidas, y el 4 es la entrega, que solo se ve después de mandarlo.
+    //   QUINCENAL («Todo lo validado antes del 1 de septiembre»): 1 sus datos, 2 sus
+    //   sensaciones y dudas, y el 3 es la respuesta, también después de mandarlo.
+    //
+    // Un solo contador para los dos: son la misma máquina y lo único que cambia es cuántos
+    // pasos hay y qué se pinta en cada uno.
     const [pasoMensual, setPasoMensual] = useState(1);
     // El informe, si de verdad está publicado, para el paso 4. Sin esto la pantalla le
     // diría «ya lo tienes» sin nada que abrir.
@@ -104,7 +134,6 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
     const [pidiendoAplazar, setPidiendoAplazar] = useState(() =>
         new URLSearchParams(window.location.search).get('aplazar') === '1');
     const [notaAplazar, setNotaAplazar] = useState('');
-    const [mensajeFinal, setMensajeFinal] = useState('');
 
     const set = (campo, valor) => setValores(v => ({ ...v, [campo]: valor }));
     const setEntreno = (campo, valor) => setValores(v => ({ ...v, entreno: { ...v.entreno, [campo]: valor } }));
@@ -266,10 +295,20 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
                 proximo_objetivo: valores.proximo_objetivo || null,
                 notes: valores.notes || null,
                 sugerencias: valores.sugerencias || null,
+                // Las del quincenal de tres pasos (doc 1-09): las dos escalas del paso 2 y,
+                // sólo cuando no había check-in que enseñar, las cinco del paso 1.
+                sensaciones_0a10: valores.sensaciones_0a10,
+                esfuerzo_resultados: valores.esfuerzo_resultados,
+                dieta_grado: valores.dieta_grado,
+                entreno_grado: valores.entreno_grado,
+                cardio_grado: valores.cardio_grado,
+                suplementacion_grado: valores.suplementacion_grado,
+                descanso_grado: valores.descanso_grado,
             };
             const r = await api.post('/reports', payload);
-            setMensajeFinal(r.data?.mensaje_envio
-                || 'Antes del viernes tienes tus ajustes nuevos. Te aviso por aquí.');
+            // El `mensaje_envio` del servidor ya no se pinta: los dos últimos pasos -- el 3
+            // del quincenal y el 4 del mensual -- dicen lo mismo con más detalle y con la
+            // hora dentro. El servidor lo sigue mandando y se usa en otros sitios.
             setPromesaDia(r.data?.promesa_dia || null);
             // ¿Le sale ya su informe? El paso 4 se lo ofrece SOLO si de verdad puede
             // abrirlo: mientras esté pendiente de revisión, el servidor se lo niega (T9),
@@ -313,12 +352,12 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
                     informeId={informeListo} onVerInforme={onVerInforme} />
             );
         }
+        // Y en el quincenal, el PASO 3: «Este tercer paso es cosa nuestra». Era una tarjeta
+        // de «Reporte enviado» con una línea; ahora es el paso que sale anunciado desde la
+        // primera pantalla, y le da una hora en vez de un «en breve».
         return (
-            <div className="bg-card border border-border rounded-2xl p-6 text-center space-y-2"
-                data-testid="reporte-enviado">
-                <p className="text-lg font-bold text-foreground">Reporte enviado.</p>
-                <p className="text-[15px] text-muted-foreground">{mensajeFinal}</p>
-            </div>
+            <QuincenalPaso3 plazo={plazo} promesaDia={promesaDia}
+                titulo={TITULOS_EN_LA_CABECERA[ficha?.tipo] || 'Reporte'} />
         );
     }
 
@@ -384,20 +423,56 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
         </>
     );
 
-    // ── EL QUINCENAL: cuatro preguntas, una pantalla y a enviar (T7) ──
+    // ── EL QUINCENAL: TRES PASOS («Todo lo validado antes del 1 de septiembre») ──
+    //
+    // Era una sola pantalla con cuatro preguntas (T7 del 16-08) y pasa a tener la misma
+    // forma que el mensual: 1 sus datos, 2 sus sensaciones y dudas, y el 3 la respuesta,
+    // que se ve al mandarlo. La cabecera «Son 3 pasos» sale en los tres, con el suyo
+    // marcado, y por eso desde el primero ya sabe que después de enviar pasa algo.
+    //
+    // El paso 1 es el que más cambia: antes se le PEDÍA el peso y ahora se le ENSEÑA su
+    // semana entera -- lo que ha hecho, cómo se ha sentido y de qué dos días sale su peso
+    // -- para que solo tenga que confirmarla.
     if (!esMensual) {
+        const tituloQuincenal = TITULOS_EN_LA_CABECERA[ficha?.tipo] || 'Reporte';
         return (
             <div className="space-y-4">
-                <ReporteQuincenal datos={ficha.datos} valores={valores} set={set} plazo={plazo}
-                    bloques={bloques} titulo={TITULOS_REPORTE[ficha?.tipo] || 'Tu reporte'} />
-                {bloqueAplazar}
-                <button type="button" onClick={enviar} disabled={enviando}
-                    data-testid="submit-report-btn"
-                    className="w-full py-3 rounded-xl font-bold text-sm uppercase tracking-wider text-white flex items-center justify-center gap-2 transition-all disabled:opacity-40"
-                    style={{ backgroundColor: ORANGE }}>
-                    <Send className="w-4 h-4" />
-                    {enviando ? 'Enviando...' : 'Enviar reporte'}
-                </button>
+                <CabeceraDePasos paso={pasoMensual} plazo={plazo}
+                    pasos={PASOS_DEL_QUINCENAL} titulo={tituloQuincenal} />
+
+                {pasoMensual === 1 && (
+                    <>
+                        <RotuloDelPaso paso={1} rotulos={ROTULOS_DEL_QUINCENAL}
+                            sub="Sale de tu check-in. Si algo no cuadra o te falta, lo modificas al final." />
+                        <QuincenalPaso1
+                            api={api} valores={valores} set={set}
+                            huecosRespuestas={valores.huecos_paso1}
+                            onHueco={(tipo, v) => set('huecos_paso1',
+                                { ...(valores.huecos_paso1 || {}), [tipo]: v })}
+                            onConfirmar={confirmarPaso1} />
+                        {bloqueAplazar}
+                    </>
+                )}
+
+                {pasoMensual === 2 && (
+                    <>
+                        <RotuloDelPaso paso={2} rotulos={ROTULOS_DEL_QUINCENAL} />
+                        <ReporteQuincenal valores={valores} set={set} bloques={bloques} />
+                        <div className="flex gap-2">
+                            <button type="button" onClick={() => irAPaso(1)} data-testid="quincenal-atras"
+                                className="rounded-xl px-4 py-3 text-sm font-bold border border-border bg-card text-foreground/70 hover:border-foreground/30 transition-colors">
+                                Atrás
+                            </button>
+                            <button type="button" onClick={enviar} disabled={enviando}
+                                data-testid="submit-report-btn"
+                                className="flex-1 py-3 rounded-xl font-bold text-sm uppercase tracking-wider text-white flex items-center justify-center gap-2 transition-all disabled:opacity-40"
+                                style={{ backgroundColor: ORANGE }}>
+                                <Send className="w-4 h-4" />
+                                {enviando ? 'Enviando...' : 'Enviar reporte'}
+                            </button>
+                        </div>
+                    </>
+                )}
             </div>
         );
     }

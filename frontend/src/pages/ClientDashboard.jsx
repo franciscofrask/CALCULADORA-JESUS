@@ -6,7 +6,7 @@ import { plural, nombreDePlan } from '../lib/labels';
 import { num1 } from '../lib/numeros';
 import { objetivoDelDia, varianteDelDia } from '../lib/estadoMacros';
 import {
-    aFecha, diaLocal, hoyLocal, etiquetaMomento, fechaLargaDeHoy, textoPlazo,
+    aFecha, diaLocal, hoyLocal, etiquetaMomento, fechaLargaDeHoy, plazoEnPalabras,
 } from '../lib/horaEspana';
 import { useEsTelefono } from '../lib/esTelefono';
 import { abrirRutinaPdf } from '../lib/abrirRutina';
@@ -486,7 +486,11 @@ const InicioNuevo = () => {
                 // QUÉ DÍA ESTÁ ABIERTO Y CUÁNTOS LLEVA SIN CERRAR (doc «El día», 31-08).
                 // Viene resuelto del servidor, texto incluido: la escalada de los 2, 4 y 7
                 // días es una regla de producto y no puede vivir en dos sitios.
-                api.get(`/checkins/estado?fecha=${hoyLocal()}`).catch(() => ({ data: null })),
+                // Con la HORA del cliente además del día: la fila de la pesada se apaga a
+                // las 12:00, y esas 12:00 son las suyas (bloque 4 del 1-09). El servidor
+                // sigue decidiendo qué días toca; la pantalla solo dice qué hora es aquí.
+                api.get(`/checkins/estado?fecha=${hoyLocal()}&hora_cliente=${new Date().getHours()}`)
+                    .catch(() => ({ data: null })),
                 api.get('/reports/due').catch(() => ({ data: { items: [] } })),
                 api.get('/user/preferences').catch(() => ({ data: { has_preferences: true } })),
                 api.get('/routines/pdf/info').catch(() => ({ data: { hay: false } })),
@@ -674,6 +678,47 @@ const InicioNuevo = () => {
             path: '/planes',
         });
     }
+    // LA PESADA DE LA MAÑANA («Todo lo validado antes del 1 de septiembre», bloque 4): los
+    // dos días de la pareja de la que sale su peso semanal, y hasta las 12:00, «porque
+    // después de comer ya no es un peso en ayunas». Quién y cuándo lo dice el servidor
+    // (`toca_pesarse` en core/series_cliente); aquí solo se pinta.
+    //
+    // VA LA PRIMERA, delante incluso del reporte: es la única de la cola que se muere hoy a
+    // mediodía -- el reporte aguanta hasta mañana --, y además es lo que hace que el paso 1
+    // del quincenal le salga ya resuelto.
+    //
+    // Y LLEVA AL CAMPO, no a buscarlo: «al tocarla le abre el campo en Seguimiento».
+    if (estadoDelCierre?.toca_pesarse) {
+        pendientes.push({
+            id: 'peso', icono: Scale, titulo: 'Hoy toca pesarte',
+            detalle: 'En ayunas y después de ir al baño', cursiva: true,
+            path: '/dashboard/reports?abrir=peso',
+        });
+    }
+    // EL REPORTE VA ANTES QUE EL CIERRE («Todo lo validado antes del 1 de septiembre», «La
+    // cola de Inicio»): «el reporte entra arriba y empuja al check-in hacia abajo. Va
+    // primero porque tiene FECHA DE ENTREGA; el check-in solo tiene el día de hoy».
+    //
+    // Estaba el último de la lista, detrás del perfil y de los alimentos preferentes, o sea
+    // que el jueves por la tarde -- el día que se acaba el plazo -- lo urgente salía debajo
+    // de tres cosas que pueden esperar semanas.
+    //
+    // Y EL AVISO DEL PLAZO NO ES UNA FILA MÁS: es esta misma, con otro texto. «Así el jueves
+    // por la tarde sigue habiendo dos filas, no tres.» Lo hace `plazoEnPalabras`, que el
+    // último día dice «Solo recordarte que tienes hasta hoy a las ocho».
+    reportes.forEach((r) => {
+        // PASADA LA HORA DESAPARECE. Un plazo vencido en Inicio solo sirve para recordarle
+        // cada mañana que llega tarde a algo que ya no puede mandar.
+        const plazo = plazoEnPalabras(r.deadline);
+        if (!r.is_open || r.overdue || !plazo || plazo.pasado) return;
+        pendientes.push({
+            // «Tu reporte quincenal», no «Reporte quincenal»: en Inicio es una lista de
+            // cosas suyas, y las de al lado también le hablan a él.
+            id: `reporte-${r.tipo}`, icono: FileText,
+            titulo: `Tu ${(r.tipo_label || 'reporte').toLowerCase()}`,
+            detalle: plazo.texto, path: '/dashboard/reports',
+        });
+    });
     // EL CIERRE DEL DÍA, CON SU LLAVE PROPIA (decisión de Jesús del 24-08). Aquí se pedía
     // `reportes` y por eso la línea no le salía a los 81 clientes cuyo plan no vende
     // ningún reporte -- ELM, Mantenimiento, Calculadora JP, Básica --, que son justo los
@@ -763,17 +808,6 @@ const InicioNuevo = () => {
             path: '/questionnaire?completar=1',
         });
     }
-    reportes.forEach((r) => {
-        // PASADA LA HORA DESAPARECE. Un plazo vencido en Inicio solo sirve para recordarle
-        // cada mañana que llega tarde a algo que ya no puede mandar.
-        const plazo = textoPlazo(r.deadline);
-        if (!r.is_open || r.overdue || !plazo || plazo.pasado) return;
-        pendientes.push({
-            id: `reporte-${r.tipo}`, icono: FileText, titulo: r.tipo_label,
-            detalle: plazo.texto, path: '/dashboard/reports',
-        });
-    });
-
     // LA FRASE NO PUEDE DESAPARECER (punto 103 del 25-08). El panel lo promete con estas
     // palabras: «si un día no hay frase nueva, el cliente sigue viendo la última»
     // (AdminPlansPage). Aquí se exigía ADEMÁS que la frase guardada fuese la de hoy, así que

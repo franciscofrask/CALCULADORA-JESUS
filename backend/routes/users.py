@@ -236,6 +236,49 @@ async def anadir_medidas(data: Dict[str, Any] = Body(...), user = Depends(get_cu
     return {"ok": True, "toma": toma}
 
 
+#: EL PESO, UNA SOLA PUERTA («Todo lo validado antes del 1 de septiembre», bloque 4: «El
+#: peso. Un solo registro, tres puertas»). El peso se escribia dentro del cierre del dia, o
+#: sea que quien no cerraba el dia no tenia donde apuntarlo, y quien lo apuntaba lo dejaba
+#: enterrado en un formulario de once preguntas. Ahora el campo vive en Evolucion -- «abierto
+#: todo el año», «es el unico sitio donde el peso se escribe» -- y las otras dos puertas (la
+#: fila de la mañana en Inicio y el paso 1 del quincenal) llevan a el.
+_PESO_MIN, _PESO_MAX = 25, 300
+
+
+@router.post("/clients/me/peso")
+async def anotar_mi_peso(data: Dict[str, Any] = Body(...), user = Depends(get_current_user)):
+    """Un pesaje suelto, fuera del cierre del dia y fuera del reporte.
+
+    `fecha` es la del PESAJE, no la del dia en que se apunta: el que se pesa por la mañana y
+    lo anota de noche -- o se peso ayer -- tiene que poder fecharlo, porque la media semanal
+    sale de la pareja de dias SEGUIDOS desde el miercoles y un pesaje corrido de dia rompe
+    la pareja sin que nada avise. La regla de que fecha vale es la de la serie, la misma que
+    usa el cierre del dia (`fecha_de_pesaje_valida`), no una copia.
+
+    El rango es el mismo 25-300 del cierre y del reporte, para que no haya una puerta mas
+    blanda que otra. El salto que canta (10 kg) lo pregunta la pantalla antes de llamar
+    aqui: es una confirmacion, no un rechazo.
+    """
+    from core.series_cliente import fecha_de_pesaje_valida
+
+    profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0, "id": 1})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+    try:
+        valor = float(str((data or {}).get("valor")).replace(",", "."))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Escribe tu peso en kilos, por ejemplo 78,4.")
+    if not (_PESO_MIN <= valor <= _PESO_MAX):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Eso no parece un peso. Ponlo en kilos, entre {_PESO_MIN} y {_PESO_MAX}.")
+    fecha = fecha_de_pesaje_valida((data or {}).get("fecha"))
+    if not fecha:
+        raise HTTPException(status_code=400, detail="Esa fecha no vale para un pesaje.")
+    await anotar_peso(profile["id"], valor, fecha, origen="el cliente, desde Evolución")
+    return {"ok": True, "peso": valor, "fecha": fecha}
+
+
 @router.post("/clients/me/grasa")
 async def actualizar_mi_grasa(data: Dict[str, Any] = Body(...), user = Depends(get_current_user)):
     """El % de grasa que el cliente actualiza él mismo (con el carrusel de fotos). Va a

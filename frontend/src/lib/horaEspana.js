@@ -146,3 +146,66 @@ export function textoPlazo(valor) {
         texto: `Hasta el ${cuando}${pasado ? '' : cola}`,
     };
 }
+
+// Las horas en punto, escritas («a las ocho», no «a las 20:00»). Es como habla él en todo
+// el documento del 1-09, y en una línea de Inicio -- que se lee de pasada, no se consulta --
+// una hora en dígitos obliga a traducirla. Con minutos no hay forma bonita de decirlo, así
+// que ahí se queda el reloj: «a las 20:30».
+const EN_PALABRAS = ['doce', 'una', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete',
+    'ocho', 'nueve', 'diez', 'once'];
+const horaEnPalabras = (hhmm) => {
+    const [h, m] = String(hhmm).split(':');
+    if (m !== '00') return `las ${hhmm}`;
+    const n = Number(h) % 12;
+    return `las ${EN_PALABRAS[n]}`;
+};
+
+/**
+ * EL MISMO PLAZO, DICHO COMO LO DICE ÉL («Todo lo validado antes del 1 de septiembre»,
+ * «La cola de Inicio»): «Tienes hasta mañana jueves a las ocho», y el último día «Solo
+ * recordarte que tienes hasta hoy a las ocho».
+ *
+ * No es un texto distinto para un aviso distinto: es ESTA MISMA LÍNEA cambiando de texto.
+ * «El aviso del plazo no es un aviso aparte: así el jueves por la tarde sigue habiendo dos
+ * filas, no tres.»
+ *
+ * Frente a `textoPlazo`, que sigue viva donde se consulta un plazo con calma («Hasta el
+ * jueves 4 a las 20:00 · te queda 1 día»), aquí se habla: sin fecha cuando no hace falta
+ * -- hoy y mañana ya sitúan -- y con la hora escrita. La regla de la zona es la misma y no
+ * se duplica: si el reloj del cliente marca otra hora que el de España, va la suya con la
+ * de España detrás.
+ */
+export function plazoEnPalabras(valor) {
+    const base = textoPlazo(valor);
+    if (!base) return null;
+    const d = aFecha(valor);
+    const p = partes(d, { weekday: 'long', day: 'numeric' });
+    let hora = horaEnPalabras(horaEnEspana(d));
+    let diaSemana = p.weekday;
+    try {
+        const q = Object.fromEntries(new Intl.DateTimeFormat('es-ES', {
+            weekday: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
+            hourCycle: 'h23',
+        }).formatToParts(d).map((x) => [x.type, x.value]));
+        const local = `${q.weekday} ${q.day} ${q.hour}:${q.minute}`;
+        if (local !== `${p.weekday} ${p.day} ${horaEnEspana(d)}`) {
+            diaSemana = q.weekday;
+            hora = `${horaEnPalabras(`${q.hour}:${q.minute}`)} (${horaEnEspana(d)} h España)`;
+        }
+    } catch { /* navegador sin huso legible: se queda la hora de España */ }
+    // Los días se cuentan contra el día del PLAZO, no contra el reloj: «mañana» tiene que
+    // seguir siendo mañana a las 23:50.
+    //
+    // `hasta` es el trozo suelto -- «hasta mañana jueves a las ocho» --, que es como va en
+    // la cabecera del reporte («Semana 2 · hasta mañana jueves a las ocho»). `texto` es la
+    // frase entera de la línea de Inicio, que además cambia el último día.
+    const hasta = base.dias <= 0
+        ? `hasta hoy a ${hora}`
+        : base.dias === 1
+            ? `hasta mañana ${diaSemana} a ${hora}`
+            : `hasta el ${diaSemana} ${p.day} a ${hora}`;
+    const texto = base.dias <= 0
+        ? `Solo recordarte que tienes ${hasta}`
+        : `Tienes ${hasta}`;
+    return { ...base, hasta, texto };
+}

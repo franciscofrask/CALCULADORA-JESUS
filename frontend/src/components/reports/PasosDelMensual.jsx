@@ -1,15 +1,18 @@
 /**
- * LA CABECERA DEL MENSUAL: «SON 4 PASOS», con el suyo marcado.
+ * LA CABECERA DE LOS PASOS: «SON 4 PASOS» / «SON 3 PASOS», con el suyo marcado.
  *
  * Del documento «El reporte mensual» (1-09-2026): «Con Son 4 pasos en la cabecera de las
  * cuatro, y el suyo marcado». Va en las cuatro pantallas y siempre con la lista entera,
  * no solo con el paso actual: lo que hace es decirle cuánto le queda, y para eso tiene
  * que ver los cuatro.
  *
- * Los títulos son los del documento, palabra por palabra. No son etiquetas de navegación
- * («Datos», «Fotos»): están escritos en primera persona y contando lo que pasa después
- * («Entregarte el plan nuevo con el informe y darte feedback»), que es el motivo de que
- * el cuarto paso exista.
+ * Y LO MISMO EN EL QUINCENAL, con tres («Todo lo validado antes del 1 de septiembre», «Las
+ * tres pantallas»: «Con Son 3 pasos arriba en las tres, y el suyo marcado»). Es la misma
+ * pieza y no una copia: el día que cambie cómo se marca el paso, cambia en los dos.
+ *
+ * Los títulos son los de los documentos, palabra por palabra. No son etiquetas de
+ * navegación («Datos», «Fotos»): están escritos contando lo que pasa después («Darte
+ * feedback directo y ajustes si procede»), que es el motivo de que el último paso exista.
  */
 import React from 'react';
 
@@ -30,31 +33,47 @@ export const ROTULOS = [
     'Tu plan nuevo y mi feedback directo',
 ];
 
+// El quincenal, con sus tres. El primero va en singular («que está bien») y el del mensual
+// en plural: son las palabras de cada documento y no se unifican.
+export const PASOS_DEL_QUINCENAL = [
+    'Actualizar tus datos y confirmar que está bien',
+    'Escuchar tus sensaciones y dudas',
+    'Darte feedback directo y ajustes si procede',
+];
+
+export const ROTULOS_DEL_QUINCENAL = [
+    'Actualizar tus datos',
+    'Tus sensaciones y tus dudas',
+    'Tu feedback y tus ajustes',
+];
+
 /**
- * La cabecera entera: la semana, el nombre del reporte y la lista de los cuatro pasos.
+ * La cabecera entera: la semana, el nombre del reporte y la lista de pasos.
  *
- * `paso` es 1..4. `plazo` trae la semana del ciclo y hasta cuándo tiene.
+ * `paso` es 1..N. `plazo` trae la semana del ciclo y hasta cuándo tiene, ya redactado
+ * («hasta mañana jueves a las ocho»).
  */
-export const CabeceraDelMensual = ({ paso, plazo }) => (
+export const CabeceraDePasos = ({ paso, plazo, pasos = PASOS_DEL_MENSUAL,
+                                  titulo = 'Reporte mensual' }) => (
     <div data-testid="mensual-cabecera">
         {(plazo?.semana != null || plazo?.cierre) && (
             <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: ORANGE }}>
                 {plazo?.semana != null && `Semana ${plazo.semana}`}
                 {plazo?.semana != null && plazo?.cierre && ' · '}
-                {plazo?.cierre && `Hasta el ${plazo.cierre}`}
+                {plazo?.cierre}
             </p>
         )}
         <h2 className="text-2xl font-bold text-foreground uppercase"
             style={{ fontFamily: 'Barlow Condensed', letterSpacing: '0.02em' }}>
-            Reporte mensual
+            {titulo}
         </h2>
 
-        <div className="mt-3 rounded-2xl bg-muted p-3.5" data-testid="mensual-son-4-pasos">
+        <div className="mt-3 rounded-2xl bg-muted p-3.5" data-testid={`mensual-son-${pasos.length}-pasos`}>
             <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
-                Son 4 pasos
+                Son {pasos.length} pasos
             </p>
             <ol className="space-y-1.5">
-                {PASOS_DEL_MENSUAL.map((texto, i) => {
+                {pasos.map((texto, i) => {
                     const n = i + 1;
                     const suyo = n === paso;
                     return (
@@ -78,7 +97,7 @@ export const CabeceraDelMensual = ({ paso, plazo }) => (
 );
 
 /** «1 ACTUALIZAR TUS DATOS», con el número en su círculo, encima del contenido del paso. */
-export const RotuloDelPaso = ({ paso, sub }) => (
+export const RotuloDelPaso = ({ paso, sub, rotulos = ROTULOS }) => (
     <div data-testid={`mensual-rotulo-${paso}`}>
         <p className="flex items-center gap-2">
             <span className="shrink-0 w-5 h-5 rounded-full grid place-items-center text-[11px] font-bold tabular-nums text-white"
@@ -86,11 +105,17 @@ export const RotuloDelPaso = ({ paso, sub }) => (
                 {paso}
             </span>
             <span className="text-[13px] font-bold uppercase tracking-wider text-foreground">
-                {ROTULOS[paso - 1]}
+                {rotulos[paso - 1]}
             </span>
         </p>
         {sub && <p className="text-[15px] text-muted-foreground mt-1.5">{sub}</p>}
     </div>
+);
+
+/** El del mensual, que es el que ya existía: la cabecera con sus cuatro. */
+export const CabeceraDelMensual = ({ paso, plazo }) => (
+    <CabeceraDePasos paso={paso} plazo={plazo} pasos={PASOS_DEL_MENSUAL}
+        titulo="Reporte mensual" />
 );
 
 export default CabeceraDelMensual;

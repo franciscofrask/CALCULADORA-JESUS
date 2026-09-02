@@ -128,10 +128,24 @@ class TestLasOncePreguntasEnLaPantalla:
         "Notas personales",
         "Esto es para tu diario. Lo puedes compartir con nosotros o quedártelo para ti",
         "Cosas que quieras acordarte del entreno y de la dieta",
-        "Registrarlo es opcional, sólo para ti. Te lo pediremos sólo para los reportes",
     ])
     def test_los_literales_de_jesus_van_palabra_por_palabra(self, literal):
         assert literal in _fuente(PANTALLA)
+
+    def test_la_frase_del_peso_se_fue_con_el_campo_pero_no_se_perdio(self):
+        """«Registrarlo es opcional, sólo para ti. Te lo pediremos sólo para los reportes.»
+
+        ESTABA AQUI Y AHORA ESTA EN EVOLUCION («Todo lo validado antes del 1 de septiembre»,
+        bloque 4: «El peso. Un solo registro, tres puertas» / «es el unico sitio donde el
+        peso se escribe»). La frase es la misma palabra por palabra -- con el punto final,
+        que la maqueta si lo lleva --, asi que lo que se comprueba es que siga escrita donde
+        ahora vive el campo, no que haya desaparecido de la app.
+        """
+        frase = ("Registrarlo es opcional, sólo para ti. "
+                 "Te lo pediremos sólo para los reportes.")
+        assert frase in _fuente("frontend/src/components/CampoDePeso.jsx")
+        assert "Registrarlo es opcional" not in _fuente(PANTALLA), \
+            "si vuelve al cierre del dia habria dos campos de peso"
 
     def test_las_estrellas_son_el_componente_que_ya_existia(self):
         """Ni un segundo dibujo de estrellas: el de los reportes acepta lo que hace falta."""
@@ -290,9 +304,14 @@ class TestElDiaDelPesaje:
         assert _dia_del_pesaje("2026-13-40", "2026-08-24") == "2026-08-24"
 
     def test_la_pantalla_pregunta_de_que_dia_es(self):
-        pantalla = _fuente(PANTALLA)
-        assert "¿De qué día es este peso?" in pantalla
-        assert "peso_fecha: f.weight ? pesoFecha : null," in pantalla
+        """La pregunta se mudo con el campo, del cierre del dia a Evolucion (bloque 4 del
+        1-09). La regla no cambia -- un pesaje se archiva en el dia en que se peso, no en el
+        que lo apunta -- y por eso el desplegable tiene que seguir existiendo: sin el, la
+        pareja de dias seguidos no se forma nunca."""
+        campo = _fuente("frontend/src/components/CampoDePeso.jsx")
+        assert "¿De qué día es este peso?" in campo
+        assert "{ valor: chequeo.peso, fecha }" in campo, "la fecha elegida viaja con el peso"
+        assert "¿De qué día es este peso?" not in _fuente(PANTALLA)
 
 
 # ============ 5. EL DIARIO TRAE TODOS LOS DIAS ============

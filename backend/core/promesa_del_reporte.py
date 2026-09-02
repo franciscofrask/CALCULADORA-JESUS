@@ -89,3 +89,40 @@ def texto_del_aviso(cuantos: int) -> Dict[str, str]:
 def a_quien_le_toca(reportes: List[Dict[str, Any]], hoy: date) -> List[Dict[str, Any]]:
     """Los reportes cuya promesa vence hoy y siguen sin contestar."""
     return [r for r in reportes if vence_hoy(r, hoy)]
+
+
+# ── LA PROMESA, DICHA AL CLIENTE ──────────────────────────────────────────────────────
+#
+# «Todo lo validado antes del 1 de septiembre», la tarjeta en Hecho:
+#
+#     «Respondiste a tiempo y ahora nos toca a nosotros. Te decimos algo antes del viernes a
+#      las tres de la tarde, hora de España.»
+#     «Aqui esta lo importante: LE DAS UNA HORA. Hoy pone "Ya lo mandaste. Lo estamos
+#      mirando", que no compromete a nada.»
+#
+# La hora es la misma que marca su calendario del bloque 6: «Semana 3 · viernes -- a las
+# 10:00 se cierra todo... antes de las tres los tiene». No es `HORA_DEL_REPASO`, que es
+# cuando se avisa al equipo (a las 10, con media jornada por delante para cumplirla).
+#
+# Y SE ESCRIBE AQUI, al lado del dia, por lo mismo que el dia: si la pantalla se inventa la
+# frase, el dia que cambie la promesa habra dos promesas.
+HORA_DE_LA_PROMESA = 15
+
+_DIAS = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
+#: Las horas en punto que puede tener una promesa, dichas como las dice él.
+_EN_PALABRAS = {10: "las diez de la mañana", 13: "la una de la tarde",
+                15: "las tres de la tarde", 18: "las seis de la tarde",
+                20: "las ocho de la tarde"}
+
+
+def frase_de_la_promesa(tipo: Optional[str]) -> str:
+    """«Respondiste a tiempo y ahora nos toca a nosotros. Te decimos algo antes del viernes
+    a las tres de la tarde, hora de España.»
+
+    El dia sale de `DIA_PROMETIDO` -- el mismo del que vive el aviso al equipo --, asi que
+    el mensual dice su dia y no el del quincenal.
+    """
+    dia = _DIAS[DIA_PROMETIDO.get((tipo or "quincenal").lower(), 4)]
+    hora = _EN_PALABRAS.get(HORA_DE_LA_PROMESA, f"las {HORA_DE_LA_PROMESA}:00")
+    return ("Respondiste a tiempo y ahora nos toca a nosotros. Te decimos algo antes "
+            f"del {dia} a {hora}, hora de España.")

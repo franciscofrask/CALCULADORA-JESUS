@@ -12,9 +12,11 @@ import ComparativaCliente from '../components/ComparativaCliente';
 import Diario from '../components/Diario';
 import TresFotos from '../components/reports/TresFotos';
 import TusFotosYMetricas from '../components/TusFotosYMetricas';
+import CampoDePeso from '../components/CampoDePeso';
 import FormularioReporte from '../components/reports/FormularioReporte';
 import HistorialDeMacros from '../components/HistorialDeMacros';
 import { verComo } from '../lib/modoRevision';
+import { plazoEnPalabras } from '../lib/horaEspana';
 
 const ORANGE = '#FF671F';
 
@@ -179,15 +181,10 @@ const _diaMadrid = (d) => new Intl.DateTimeFormat('en-CA', {
     timeZone: MADRID, year: 'numeric', month: '2-digit', day: '2-digit',
 }).format(d);
 
-// "te quedan 2 días": días de calendario en España, no horas. Es como lo cuenta el cliente.
-const _cuantoQueda = (iso) => {
-    const d = iso ? new Date(iso) : null;
-    if (!d || isNaN(d)) return null;
-    const dias = Math.round(
-        (new Date(`${_diaMadrid(d)}T12:00:00Z`) - new Date(`${_diaMadrid(new Date())}T12:00:00Z`)) / 86400000);
-    if (dias <= 0) return 'hoy es el último día';
-    return dias === 1 ? 'te queda 1 día' : `te quedan ${dias} días`;
-};
+// Aquí vivía `_cuantoQueda` («te quedan 2 días»), que iba pegado al plazo de la tarjeta
+// «Pendiente». La maqueta del 1-09 deja esa tarjeta con el título y el botón y nada más, y
+// el plazo pasa a la línea de Inicio, que es donde el cliente lo lee de verdad y donde
+// ahora se dice con palabras: «Tienes hasta mañana jueves a las ocho».
 
 const PortadaSeguimiento = ({ windowState, vencido, conDiario, puedeMandarReporte,
                              onRevision, onEvolucion, onHistorial, onDiario }) => {
@@ -224,25 +221,40 @@ const PortadaSeguimiento = ({ windowState, vencido, conDiario, puedeMandarReport
     // El plazo, en hora de España y con lo que queda: la ventana son unos días y sin fecha
     // nadie sabe cuánto margen tiene (Jesús, 11-08).
     const plazo = _plazoDelCliente(windowState?.closes_at);
-    const queda = _cuantoQueda(windowState?.closes_at);
     // Aún sin abrir: cuándo se enciende, con hora y en su huso (doc 21-08).
     const apertura = _plazoDelCliente(windowState?.opens_at) || windowState?.opens_label;
 
     return (
         <div className="space-y-3" data-testid="portada-seguimiento">
+            {/* LA TARJETA, COMO LA MAQUETA DEL 1-09 («La tarjeta y los avisos»). Tres
+                cosas cambian, y las tres las dice él:
+
+                - FUERA EL «ESTA SEMANA»: «en algo quincenal miente la semana que no
+                  toca». Queda la palabra sola: Pendiente / Hecho.
+                - PENDIENTE, SIN NADA DEBAJO: ni la frase de las preguntas ni el plazo.
+                  «Lo único que tiene que ver es que le toca.» El plazo se lo da la línea
+                  de Inicio, que es donde lo va a leer.
+                - HECHO, CON UNA HORA: «Respondiste a tiempo y ahora nos toca a nosotros.
+                  Te decimos algo antes del viernes a las tres de la tarde, hora de
+                  España.» Decía «Ya lo mandaste. Lo estamos mirando», «que no compromete
+                  a nada»; ahora se compromete, y la frase viene del servidor
+                  (`core/promesa_del_reporte`) porque el día prometido es el mismo que
+                  vigila el aviso del equipo y no puede haber dos.
+
+                El «aún no abre» no sale en el documento: se queda como estaba, gris y
+                diciendo cuándo se enciende, que es lo del doc 21-08. */}
             {hayReporteALaVista && (
                 <TarjetaSeguimiento
                     testid="seg-revision"
-                    cuando={tocaRevision ? 'Esta semana · te toca' : yaMandado ? 'Esta semana · hecho' : 'Esta semana · aún no'}
+                    cuando={tocaRevision ? 'Pendiente' : yaMandado ? 'Hecho' : 'Aún no'}
                     titulo={windowState?.tipo_label || 'Tu revisión'}
                     sub={yaMandado
-                        ? 'Ya lo mandaste. Lo estamos mirando.'
-                        : 'Unas breves preguntas para ajustar tus macros si hace falta.'}
-                    extra={tocaRevision && plazo
-                        ? `Hasta el ${plazo}${queda ? ` · ${queda}` : ''}`
-                        : aunNoAbre && apertura
-                            ? `Se abre el ${apertura}.`
+                        ? (windowState?.promesa
+                            || 'Respondiste a tiempo y ahora nos toca a nosotros.')
+                        : aunNoAbre
+                            ? 'Unas breves preguntas para ajustar tus macros si hace falta.'
                             : null}
+                    extra={aunNoAbre && apertura ? `Se abre el ${apertura}.` : null}
                     cta={tocaRevision ? 'Empezar' : 'Ver'}
                     tono={tocaRevision ? 'ahora' : 'gris'}
                     onClick={onRevision} />
@@ -361,11 +373,16 @@ const ReportsPage = () => {
     // desde «No puedo esta semana» del aviso (doc 19-08, bloque 11).
     // Y «?abrir=diario» aterriza en el Diario (24-08): el cierre del día enlaza aquí con
     // «Ver mi diario», y sin esto el enlace dejaba al cliente en la portada a buscarlo.
+    // Y «?abrir=peso» aterriza en Evolución con el campo del peso ya enfocado: es el camino
+    // desde la fila «Hoy toca pesarte» de Inicio («Todo lo validado antes del 1 de
+    // septiembre», bloque 4: «al tocarla le abre el campo en Seguimiento -- no le manda a
+    // buscarlo»).
     const abrirPedida = new URLSearchParams(window.location.search).get('abrir');
     const aplazarPedido = new URLSearchParams(window.location.search).get('aplazar') === '1';
+    const pesarseHoy = abrirPedida === 'peso';
     const [seccionAbierta, setSeccionAbierta] = useState(
         tipoRevision || aplazarPedido ? 'form'
-            : abrirPedida === 'evolucion' ? 'evolution'
+            : abrirPedida === 'evolucion' || abrirPedida === 'peso' ? 'evolution'
                 : abrirPedida === 'diario' ? 'diario' : null);
     // EL FORMULARIO NO SE ABRE SIN LLAVE (24-08): ni por «?aplazar=1» ni por un enlace
     // viejo. Al que solo tiene Seguimiento en lectura se le deja en la portada.
@@ -454,6 +471,13 @@ const ReportsPage = () => {
     // Antes se le daba ya convertida a «9 ago», y con dietas desde 2022 hay cuatro «9 ago»
     // distintos que el eje juntaba en una sola columna.
     const weightData = evolution?.weight?.map(w => ({ fecha: w.date, peso: w.value })) || [];
+    // El último pesaje conocido, para la línea de abajo del campo («Último registro: 72,7 kg
+    // · 24 de agosto») y para medir contra él el salto que canta. Sale de la MISMA serie que
+    // la curva: si se pidiera aparte volverían a poder decir cosas distintas.
+    const ultimoPesaje = weightData.length
+        ? { valor: weightData[weightData.length - 1].peso, fecha: weightData[weightData.length - 1].fecha }
+        : null;
+    const pesoDiasAtras = evolution?.peso_dias_atras;
 
     if (loading) {
         return (
@@ -539,8 +563,11 @@ const ReportsPage = () => {
                                 // La semana que decidió ESTE reporte (doc 19-08): la de su
                                 // rutina si la tiene; sin rutina, la de su ciclo de siempre.
                                 semana: windowState?.semana_reporte ?? profile?.week,
-                                plazoLabel: _plazoDelCliente(windowState?.closes_at),
-                                quedaLabel: _cuantoQueda(windowState?.closes_at),
+                                // «hasta mañana jueves a las ocho», que es como lo escribe
+                                // la cabecera del 1-09. Antes iba «Hasta el jueves 4 a las
+                                // 20:00 · te queda 1 día»: la misma información contada
+                                // como un albarán.
+                                plazoLabel: plazoEnPalabras(windowState?.closes_at)?.hasta,
                             }}
                             prev={prev}
                             perfilCliente={profile}
@@ -578,27 +605,45 @@ const ReportsPage = () => {
                         onGuardado={fetchData} />
 
 
-                    {weightData.length > 0 ? (
-                        <div className="bg-card border border-border rounded-2xl p-4">
-                            <div className="flex items-center gap-2 mb-4">
-                                <Scale className="w-4 h-4" style={{ color: ORANGE }} />
-                                <p className="text-sm font-bold text-foreground uppercase tracking-wider">Tu peso</p>
+                    {/* EL CAMPO DEL PESO, AQUÍ («Todo lo validado antes del 1 de
+                        septiembre», bloque 4): «abierto todo el año», «es el único sitio
+                        donde el peso se escribe». Se escribía dentro del cierre del día,
+                        con lo que el que no cierra el día -- la mayoría -- no tenía dónde.
+
+                        Y VA EN LA MISMA TARJETA QUE LA CURVA, no en una aparte: las dos se
+                        llaman «Tu peso», y dos tarjetas seguidas con el mismo título es
+                        exactamente lo que hace que nadie lea ninguna. Aquí escribe el
+                        pesaje y justo debajo ve lo que ese pesaje hace con su línea. La
+                        tarjeta ya no depende de que haya datos: el que todavía no tiene
+                        curva es el que más necesita el campo. */}
+                    <div className="bg-card border border-border rounded-2xl p-4 space-y-4">
+                        <CampoDePeso api={api} diasAtras={pesoDiasAtras}
+                            ultimo={ultimoPesaje} abrir={pesarseHoy}
+                            onGuardado={fetchData} />
+                        {weightData.length > 0 ? (
+                            <div className="pt-1 border-t border-border">
+                                <div className="flex items-center gap-2 my-4">
+                                    <Scale className="w-4 h-4" style={{ color: ORANGE }} />
+                                    <p className="text-sm font-bold text-foreground uppercase tracking-wider">Tu curva</p>
+                                </div>
+                                {/* La gráfica es la MISMA que ve su entrenador (punto 4.13). Aquí
+                                    los ejes iban pintados de blanco a pelo, y esta tarjeta es
+                                    blanca en tema claro: eran fechas y kilos escritos en blanco
+                                    sobre blanco. */}
+                                {/* Con su objetivo al lado: el color del cambio se decide
+                                    contra él (doc 23-08, bloque 10). */}
+                                <GraficaDePeso puntos={weightData} objetivo={profile?.goal} />
                             </div>
-                            {/* La gráfica es la MISMA que ve su entrenador (punto 4.13). Aquí
-                                los ejes iban pintados de blanco a pelo, y esta tarjeta es
-                                blanca en tema claro: eran fechas y kilos escritos en blanco
-                                sobre blanco. */}
-                            {/* Con su objetivo al lado: el color del cambio se decide
-                                contra él (doc 23-08, bloque 10). */}
-                            <GraficaDePeso puntos={weightData} objetivo={profile?.goal} />
-                        </div>
-                    ) : (
-                        <div className="bg-card border border-border rounded-2xl p-8 text-center">
-                            <TrendingUp className="w-10 h-10 text-foreground/20 mx-auto mb-3" />
-                            <p className="text-foreground font-bold mb-1">Sin datos de evolución</p>
-                            <p className="text-xs text-foreground/30">Envía tu primer reporte para ver tu progreso.</p>
-                        </div>
-                    )}
+                        ) : (
+                            <div className="pt-4 border-t border-border text-center">
+                                <TrendingUp className="w-10 h-10 text-foreground/20 mx-auto mb-3" />
+                                <p className="text-foreground font-bold mb-1">Todavía no hay curva</p>
+                                <p className="text-xs text-foreground/30">
+                                    Con dos pesajes ya se ve por dónde vas.
+                                </p>
+                            </div>
+                        )}
+                    </div>
 
                     {evolucionCompleta && (
                         <>

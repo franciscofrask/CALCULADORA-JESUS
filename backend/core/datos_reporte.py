@@ -566,6 +566,86 @@ def serie_de_pesos(perfil: Dict[str, Any], d0: Optional[date] = None,
     return puntos
 
 
+# ── EL PESO SEMANAL, DÍA A DÍA («Todo lo validado antes del 1 de septiembre») ──────────
+#
+# El paso 1 del quincenal no enseña la curva del mes: enseña LA SEMANA, con los tres días en
+# los que se puede pesar y la pareja marcada.
+#
+#     Peso semanal                          78,4 kg
+#     78,6  Miércoles
+#     78,2  Jueves
+#     —     Viernes
+#     Dos días seguidos entre el miércoles y el viernes.
+#
+# El número de arriba y qué días entran los decide `core/series_cliente.peso_semanal`, que
+# es la cascada de Jesús y ya existía: aquí no se vuelve a calcular nada, solo se reparte
+# por días para que se vea de dónde sale. Un número sin sus días es un número que no se cree.
+_DIAS_DE_PESAJE = ((2, "Miércoles"), (3, "Jueves"), (4, "Viernes"))
+
+
+def peso_semanal_por_dias(perfil: Dict[str, Any], dia: date) -> Dict[str, Any]:
+    """El peso de la semana de `dia`, con sus tres días y la pareja señalada."""
+    from core.series_cliente import peso_semanal
+
+    resumen = peso_semanal(perfil.get("pesos"), dia)
+    puntos = {p["fecha"]: p["valor"] for p in serie_de_pesos(perfil)}
+    lunes = dia - timedelta(days=dia.weekday())
+    cuentan = set((resumen or {}).get("fechas") or [])
+
+    dias = []
+    for indice, etiqueta in _DIAS_DE_PESAJE:
+        fecha = (lunes + timedelta(days=indice)).isoformat()
+        valor = puntos.get(fecha)
+        dias.append({
+            "clave": etiqueta.lower().replace("é", "e"),
+            "etiqueta": etiqueta,
+            "fecha": fecha,
+            "valor": valor,
+            # El guion largo es el de la maqueta y NO es un texto: es «aquí no hay nada».
+            "label": _kg(valor) if valor is not None else "—",
+            "en_la_pareja": fecha in cuentan,
+        })
+
+    # Si el peso que sale NO es de esta semana (la rama «último» de la cascada), el número
+    # de arriba no se enseña como si fuera el de la semana: sería fechar de hoy un pesaje de
+    # hace nueve días, que es justo lo que el reporte tiene prohibido hacer.
+    de_esta_semana = bool(resumen and resumen.get("de_esta_semana"))
+    return {
+        "valor": resumen.get("valor") if de_esta_semana else None,
+        "label": _kg(resumen["valor"]) + " kg" if de_esta_semana else None,
+        "regla": (resumen or {}).get("regla"),
+        "dias": dias,
+        "pie": "Dos días seguidos entre el miércoles y el viernes.",
+        # Lo que se le dice cuando le falta alguna pesada. Sin riña y sin números raros: la
+        # regla es la de arriba y aquí solo se le recuerda qué le falta para que salga.
+        #
+        # Y CUANDO NO HAY NINGUNA, LOS KILOS DEL ÚLTIMO (fallo 6 del repaso del 24-08). Con
+        # la casilla vacía a propósito -- ese peso no es de esta semana y no se puede fechar
+        # de hoy --, esta línea es el único sitio donde ve cuánto pesaba: sin ella se le
+        # pide el peso sin recordarle el suyo. Le pasa al 13,94 % de las semanas-cliente.
+        "nota": (_nota_del_peso_semanal(dias, de_esta_semana)
+                 or (None if de_esta_semana else de_donde_sale_el_peso(resumen))),
+    }
+
+
+def _kg(valor: Optional[float]) -> str:
+    """«78,6». Con coma, y sin decimal de más."""
+    if valor is None:
+        return "—"
+    return f"{round(float(valor), 1)}".replace(".", ",")
+
+
+def _nota_del_peso_semanal(dias: List[Dict[str, Any]], de_esta_semana: bool) -> Optional[str]:
+    """«Te falta una pesada», cuando se puede arreglar. `None` si no hay nada que decir."""
+    con_peso = [d for d in dias if d["valor"] is not None]
+    if de_esta_semana and any(d["en_la_pareja"] for d in dias):
+        return None
+    if len(con_peso) == 1:
+        return ("Te falta una pesada. Con dos días seguidos la media sale sola; "
+                "con una sola, me quedo con la que tengo.")
+    return None
+
+
 async def _circulos_del_peso(perfil: Dict[str, Any], d0: date, d1: date,
                              desde_el_principio: bool) -> Dict[str, Any]:
     """Los círculos de la curva y la frase que los explica.

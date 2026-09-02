@@ -23,6 +23,7 @@ from core.calendario_reportes import (
     calendario_del_cliente, dia_de_envio, reporte_de_la_semana, toca_en_la_semana)
 from core.config import VENTANAS_SIEMPRE_ABIERTAS
 from core.cycle import compute_cycle, _parse_dt
+from core.promesa_del_reporte import frase_de_la_promesa
 from core.tiempo import MADRID, a_madrid
 from core.database import db
 from core.security import get_admin_user, get_current_user
@@ -507,6 +508,11 @@ async def get_my_due_report(user=Depends(get_current_user)):
         "semana_reporte": state.get("semana_reporte"),
         # Lo que viene después de este, para que vea su calendario y no solo el de hoy.
         "proximo": state.get("proximo"),
+        # LA PROMESA, PARA LA TARJETA EN «HECHO» («Todo lo validado antes del 1 de
+        # septiembre»): «le das una hora». Viene hecha del módulo de la promesa -- el mismo
+        # del que vive el aviso al equipo -- y no escrita en la pantalla: si no, el día que
+        # cambie el día prometido, el cliente leería una fecha y se vigilaría otra.
+        "promesa": frase_de_la_promesa((state["tipos"] or ["quincenal"])[0]),
     }
 
     items = []

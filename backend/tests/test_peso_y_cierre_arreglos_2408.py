@@ -172,11 +172,28 @@ class TestElReporteDiceCuantoPesabas:
             "La media de tus pesajes del 13 y el 14 de agosto"
         assert "kg" not in de_donde_sale_el_peso(pareja)
 
-    def test_la_pantalla_solo_calla_ultimo_registro_cuando_la_otra_frase_dice_el_kilo(self):
-        """Si vuelve a caerse el kilo de la frase, la pantalla se queda sin decirlo."""
-        quincenal = _fuente("frontend/src/components/reports/ReporteQuincenal.jsx")
-        assert "Último registro: {kg(peso.valor)}, el {peso.fecha_label}" in quincenal
-        assert "fallo 6" in quincenal, "el porque tiene que quedar escrito al lado"
+    def test_al_que_no_se_peso_esta_semana_se_le_recuerda_su_kilo(self):
+        """Si vuelve a caerse el kilo de la frase, la pantalla se queda sin decirlo.
+
+        ESTO SE COMPROBABA EN LA PANTALLA Y AHORA SE COMPRUEBA EN EL DATO, que es donde de
+        verdad se decide. El 1-09 el peso del quincenal se fue a su paso 1 («Todo lo validado
+        antes del 1 de septiembre»), donde la tarjeta enseña los tres dias de la semana; el
+        campo de antes, con su linea «Ultimo registro», ya no existe. Lo que no puede
+        desaparecer es la INFORMACION: al que no se peso esta semana la casilla se le deja
+        vacia a proposito, y si ademas no se le dice cuanto pesaba, se le esta pidiendo el
+        peso sin recordarle el suyo. Eso es el fallo 6, y le pasa al 13,94 % de las semanas.
+        """
+        from core.datos_reporte import peso_semanal_por_dias
+
+        # Un cliente que se peso hace nueve dias y esta semana no: rama «ultimo».
+        perfil = {"pesos": [{"fecha": (LUNES - timedelta(days=5)).isoformat(), "valor": 84.0}]}
+        ficha = peso_semanal_por_dias(perfil, LUNES + timedelta(days=1))
+        assert ficha["valor"] is None, "un peso viejo no se fecha de esta semana"
+        assert "84 kg" in (ficha["nota"] or ""), \
+            "sin el kilo, la pantalla le pide el peso sin recordarle el suyo (fallo 6)"
+
+        codigo = _fuente("backend/core/datos_reporte.py")
+        assert "fallo 6" in codigo, "el porque tiene que quedar escrito al lado"
 
 
 # ============ 7. UNA SOLA REGLA PARA FECHAR UN PESAJE ============
@@ -205,9 +222,21 @@ class TestUnaSolaReglaParaFecharUnPesaje:
         assert ck._dia_del_pesaje("ayer", cierre.isoformat()) == cierre.isoformat()
 
     def test_la_pantalla_no_lleva_el_numero_a_mano(self):
-        pantalla = _fuente(PANTALLA)
-        assert "i < 8" not in pantalla, "los 8 dias del desplegable eran la tercera copia"
-        assert "hoy?.peso_dias_atras" in pantalla
+        """El desplegable ofrece lo que el servidor acepta, y el numero lo dice el servidor.
+
+        LA PANTALLA ES OTRA DESDE EL 1-09: el campo del peso se mudo del cierre del dia a
+        Evolucion (bloque 4 de «Todo lo validado antes del 1 de septiembre»), y con el se
+        mudo el desplegable de «¿de que dia es este peso?». La regla no cambio -- sigue
+        viviendo solo en `core/series_cliente` -- pero ahora viaja en `/reports/evolution`
+        en vez de en `/checkins/hoy`. Lo que se comprueba es lo de siempre: que ningun 8 ni
+        ningun 14 este escrito a mano en la pantalla.
+        """
+        campo = _fuente("frontend/src/components/CampoDePeso.jsx")
+        assert "i < 8" not in campo, "los 8 dias del desplegable eran la tercera copia"
+        assert "diasAtras" in campo and "peso_dias_atras" in _fuente(
+            "frontend/src/pages/ReportsPage.jsx")
+        assert "hoy?.peso_dias_atras" not in _fuente(PANTALLA), \
+            "el cierre del dia ya no pide el peso: si vuelve a leerlo, hay dos campos"
 
     def test_el_servidor_se_la_dice_a_la_pantalla(self, api_disponible, cabeceras_cliente):
         r = _pedir("GET", "/checkins/hoy", headers=cabeceras_cliente)
@@ -319,14 +348,21 @@ class TestReeditarElCierreNoBorra:
             "sin esto no se distingue «no lo mando» de «lo mando en blanco»"
 
     def test_los_huerfanos_no_estan_en_la_lista_de_preguntas(self):
+        """Lo que el cierre NO pregunta no puede estar en la lista: si esta, reeditar lo borra.
+
+        `weight` y `peso_fecha` SE FUERON DE LA LISTA EL 1-09, y no es un descuido. El campo
+        del peso se mudo del cierre del dia a Evolucion («Todo lo validado antes del 1 de
+        septiembre», bloque 4: «es el unico sitio donde el peso se escribe»), asi que esta
+        pantalla ya no lo manda. Si siguieran aqui, cada reedicion de un cierre viejo se
+        leeria como «lo ha borrado» y le vaciaria el peso que aquel dia si apunto.
+        """
         from routes.checkins import _LO_QUE_PREGUNTA_EL_CIERRE
 
         for huerfano in ("comido_hoy", "mood", "cena_hecha", "comida_pendiente",
-                         "exceso_nota", "entreno_nota"):
+                         "exceso_nota", "entreno_nota", "weight", "peso_fecha"):
             assert huerfano not in _LO_QUE_PREGUNTA_EL_CIERRE, \
                 f"{huerfano} no se pregunta en ningun sitio: si entra aqui, se pierde"
-        for pregunta in ("sensaciones", "descanso", "energy", "hunger_anxiety", "notas",
-                         "weight"):
+        for pregunta in ("sensaciones", "descanso", "energy", "hunger_anxiety", "notas"):
             assert pregunta in _LO_QUE_PREGUNTA_EL_CIERRE
 
     def test_lo_que_calcula_el_servidor_no_se_hereda(self):

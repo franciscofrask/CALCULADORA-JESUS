@@ -275,3 +275,55 @@ def cierres_del_periodo(cierres: List[Dict[str, Any]],
                            if tiene_suplementacion and suplementos_contestados else {}),
         "sensaciones": sensaciones,
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LA OTRA VERSION DEL PASO 1: LA DEL QUE NO TIENE CHECK-IN
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# «Todo lo validado antes del 1 de septiembre», «Las dos versiones del paso 1»:
+#
+#     «Cinco preguntas y pasas al paso 2.»
+#     «No tengo todos los datos de tus check-in diarios, asi que te lo pregunto aqui.»
+#     «Si perdio dias y ademas el recordatorio del dia siguiente: cinco estrellas y al
+#      paso 2.»
+#
+# El paso 1 normal ENSEÑA lo que ya esta guardado y solo pregunta los huecos. Pero eso solo
+# vale si hay algo guardado: al que apenas ha cerrado dias, ese paso le sale vacio -- filas
+# sin denominador, sensaciones sin media -- y encima le pide que confirme una nada. A ese se
+# le pregunta, que es lo que se hacia antes de que existieran los cierres.
+#
+# EL LISTON: MENOS DE LA MITAD DE LOS DIAS. No es un numero elegido para que salga bonito:
+# la mitad es lo que separa «le faltan dias» (eso son los huecos, y se preguntan uno a uno)
+# de «no tengo sus datos» (y entonces no hay nada que enseñar). Con menos de la mitad, las
+# medias de las sensaciones tampoco describen la quincena.
+def hay_datos_suficientes(cierres: int, dias_periodo: int) -> bool:
+    """Si el paso 1 puede ENSEÑAR sus datos o tiene que PREGUNTARLOS."""
+    dias = max(0, int(dias_periodo or 0))
+    if not dias:
+        return False
+    return int(cierres or 0) * 2 >= dias
+
+
+# Las cinco de la maqueta, en su orden y con sus palabras. Son las que el quincenal dejo de
+# preguntar en el doc 16-08 («el resto ya lo ha marcado cada dia») MAS el descanso: aqui
+# vuelven porque justamente no las ha marcado cada dia.
+#
+# Todas de 1 a 5 estrellas: «cinco estrellas y al paso 2». La suplementacion solo al que
+# lleva suplementos en el plan, con el mismo criterio que la fila de la actividad.
+PREGUNTAS_SIN_CHECKIN = (
+    {"clave": "dieta_grado", "pregunta": "¿En qué grado has cumplido la dieta?"},
+    {"clave": "entreno_grado", "pregunta": "¿Has entrenado todos los días que tocaba?"},
+    {"clave": "cardio_grado", "pregunta": "¿Has cumplido con el cardio que tenías pautado?"},
+    {"clave": "suplementacion_grado",
+     "pregunta": "¿Has tomado la suplementación que te correspondía?",
+     "solo_con": "suplementacion"},
+    {"clave": "descanso_grado", "pregunta": "Descanso — ¿cómo fue?"},
+)
+
+
+def preguntas_sin_checkin(tiene_suplementacion: bool) -> List[Dict[str, Any]]:
+    """Las preguntas del paso 1 cuando no hay cierres de los que sacar los datos."""
+    return [{"clave": p["clave"], "pregunta": p["pregunta"]}
+            for p in PREGUNTAS_SIN_CHECKIN
+            if p.get("solo_con") != "suplementacion" or tiene_suplementacion]

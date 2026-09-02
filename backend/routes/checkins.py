@@ -274,7 +274,9 @@ async def _cierre_de_hoy(client_id: str, fecha: str) -> Optional[dict]:
 
 
 @router.get("/checkins/estado")
-async def estado_del_cierre(fecha: Optional[str] = Query(None), user=Depends(get_current_user)):
+async def estado_del_cierre(fecha: Optional[str] = Query(None),
+                            hora_cliente: Optional[int] = Query(None, ge=0, le=23),
+                            user=Depends(get_current_user)):
     """Qué día se puede cerrar ahora y cuántos lleva sin cerrar (doc «El día», 31-08).
 
     LA REGLA VIVE EN UN SOLO SITIO, `core/ventana_del_dia`, y se sirve resuelta: hasta el
@@ -338,7 +340,35 @@ async def estado_del_cierre(fecha: Optional[str] = Query(None), user=Depends(get
         # Ya resuelto: la fila del Inicio solo tiene que pintarlo. Sin escalada si apagó el
         # recordatorio, que es justo lo que ese interruptor significa.
         "linea": texto_de_la_linea(racha if recuerda else 0, es_de_ayer),
+        # ¿HOY TOCA PESARSE? («Todo lo validado antes del 1 de septiembre», bloque 4.) Viaja
+        # con el estado del cierre y no en una llamada nueva: es la otra fila de la misma
+        # cola de Inicio, se pinta en el mismo momento y se decide con el mismo reloj.
+        #
+        # La regla está en `core/series_cliente` -- al lado de la pareja de días de la que
+        # sale el peso semanal, que es lo que esta fila sirve --, no escrita en la pantalla.
+        "toca_pesarse": _toca_pesarse_hoy(profile, hoy_cliente, hora_cliente, ahora_es),
     }
+
+
+def _toca_pesarse_hoy(profile: dict, hoy_cliente: date,
+                      hora_del_cliente: Optional[int], ahora_es) -> bool:
+    """Si hoy le toca pesarse y todavía no lo ha hecho.
+
+    EL DÍA ES EL SUYO Y LA HORA TAMBIÉN, y por eso la hora la manda la pantalla igual que
+    manda el día. Aquí no hay ningún plazo del negocio: es su mañana, en ayunas y antes de
+    comer, así que las 12:00 son las 12:00 de donde esté. Con la hora de España, un cliente
+    en México se encontraría la fila apagada a las seis de su mañana.
+
+    La REGLA (qué días y hasta qué hora) sigue estando solo en `core/series_cliente`: la
+    pantalla dice qué hora es en su reloj, no qué hacer con ella. Si no la dice -- una app
+    vieja --, se usa la de España, que es lo que hacía todo antes del bloque F.
+    """
+    from core.series_cliente import curva_de_peso, toca_pesarse
+
+    hoy = hoy_cliente.isoformat()
+    ya = any(p.get("fecha") == hoy for p in curva_de_peso(profile.get("pesos")))
+    hora = hora_del_cliente if hora_del_cliente is not None else ahora_es.hour
+    return toca_pesarse(hoy_cliente, hora, ya)
 
 
 @router.get("/checkins/hoy")
@@ -462,10 +492,16 @@ _LO_QUE_PONE_EL_SERVIDOR = {
 # Al añadir una pregunta NUEVA al cierre hay que apuntarla aquí. Si se olvida, lo único que
 # pasa es que esa respuesta no se podrá dejar en blanco reeditando; nunca se pierde nada,
 # que es el error que importa.
+#
+# Y AL QUITAR UNA, HAY QUE QUITARLA DE AQUI. Es lo que pasa con `weight` y `peso_fecha`: el
+# campo del peso se fue del cierre a Evolucion («Todo lo validado antes del 1 de septiembre»,
+# bloque 4, «es el unico sitio donde el peso se escribe»). Si se quedaran en esta lista, cada
+# reedicion de un cierre viejo -- que ya no manda peso porque la pantalla no lo pregunta --
+# se leeria como «lo ha borrado» y le vaciaria el peso que aquel dia si apunto.
 _LO_QUE_PREGUNTA_EL_CIERRE = {
     "sensaciones", "entreno_respuesta", "entreno_estrellas", "cardio", "movimiento",
     "descanso", "energy", "hunger_anxiety", "suplementos", "extras_respuesta",
-    "notas", "weight", "peso_fecha",
+    "notas",
 }
 
 

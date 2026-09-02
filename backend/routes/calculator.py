@@ -483,8 +483,8 @@ def _que_te_cuenta(orig: dict, eff: dict, se_calibra: bool = False) -> str:
     nueces, que no cuentan nunca, si va. Lo que depende de la cantidad lo dice el punto y, al
     abrir el alimento, los tramos.
 
-    Y con esto desaparece la coletilla «Su proteína no te cuenta»: el «solo» ya lo dice, y es
-    una linea menos por alimento.
+    Y en esos, y solo en esos, la frase es «Su proteína no te cuenta» (1-09): al caerse el
+    «solo» se cayo lo unico que lo decia. Ver el comentario de abajo.
     """
     tiene = [k for k in _LOS_TRES if (orig.get(k) or 0) > 0]
     cuentan = [k for k in tiene if (eff.get(k) or 0) > 0]
@@ -502,6 +502,20 @@ def _que_te_cuenta(orig: dict, eff: dict, se_calibra: bool = False) -> str:
             return "Te cuentan los tres"
         return "Te cuenta todo"
     if len(cuentan) == 1:
+        # «SU PROTEÍNA NO TE CUENTA», DE VUELTA DONDE HACE FALTA («Todo lo validado antes
+        # del 1 de septiembre», las tres frases intocables).
+        #
+        # El 27-08 se quitó esta coletilla porque «el "solo" ya lo dice». Y es verdad en
+        # los alimentos normales -- «Te cuenta solo la grasa» dice que lo demás no --, pero
+        # NO en los que calibran: ahí el «solo» se cae a propósito (en las almendras la
+        # proteína sí cuenta a partir de 20 g, así que decir «solo» sería mentira medio
+        # día), y con él se fue lo único que decía que hoy la proteína no le cuenta. La
+        # ficha se quedaba en «Te cuenta la grasa» y el cliente no sabía qué pasaba con la
+        # proteína que ve escrita justo debajo.
+        #
+        # Así que en ese caso -- y solo en ese -- vuelve su frase, que dice exactamente eso.
+        if se_calibra and "proteinas" in tiene and "proteinas" not in cuentan:
+            return "Su proteína no te cuenta"
         solo = "" if se_calibra else "solo "
         return f"Te cuenta {solo}{_NOMBRE_MACRO[cuentan[0]]}"
     return "Te cuenta " + _lista([_NOMBRE_MACRO[k] for k in cuentan])

@@ -32,12 +32,12 @@
   "Los dos extras se pintan y el día cuenta con ellos. Lo que falta es la pestaña Macros otra vez."
  ],
  "Miércoles, desde las 10:00 nueva": [
-  "falla",
-  "La línea del reporte no entra ARRIBA: en la cola de Inicio va la última, detrás del cierre, del perfil y de los preferentes. Y su texto no es el del documento."
+  "ok",
+  "El reporte entra ARRIBA y empuja al check-in hacia abajo, y el plazo se dice con palabras: «Tienes hasta mañana jueves a las ocho»."
  ],
  "Jueves a las 17:00, si aún no lo ha mandado nueva": [
-  "falla",
-  "Mismo sitio y mismo texto: no está el «Solo recordarte que tienes hasta hoy a las ocho»."
+  "ok",
+  "El aviso del plazo no es una fila nueva: es esta misma, cambiándole el texto. El jueves por la tarde siguen siendo dos filas, no tres."
  ],
  "A la mañana siguiente, si ayer no lo cerró nueva": [
   "ok",
@@ -60,8 +60,8 @@
   "Los tres números están y con el mismo tamaño. Lo que falta («faltan 29», «válido −1») son los números del ejemplo."
  ],
  "Una comida por dentro": [
-  "falla",
-  "La comida se abre y se ve, pero la frase es «Ajusta las cantidades sin pasarse de tus macros», en impersonal. La suya solo existe dentro de un comentario."
+  "ok",
+  "La frase vuelve a su voz. OJO: su bloque 7 («La regla de las voces») dice lo contrario de su propia maqueta y está sin resolver; manda la maqueta y la duda queda apuntada."
  ],
  "El cierre del día": [
   "ok",
@@ -96,8 +96,8 @@
   "El interruptor no llegó a abrir el aviso: el guion no encontró el control."
  ],
  "El campo, en Mi evolución nueva": [
-  "falla",
-  "En Mi evolución no hay campo de peso: se suben fotos, medidas y grasa. El peso sigue escribiéndose en el cierre del día, que es de donde el documento lo saca."
+  "ok",
+  "El peso se escribe ahora en Evolución, siempre abierto, y se fue del cierre del día. Las otras dos puertas llevan aquí: la fila «Hoy toca pesarte» de Inicio y el paso 1 del quincenal."
  ],
  "Miércoles por la mañana nueva": [
   "sin_pantalla",
@@ -148,40 +148,40 @@
   null
  ],
  "Dos frases que marcaste como intocables, cambiadas": [
-  "falla",
-  "Dos de las tres se ven en su ficha: «Te cuentan los tres» y «No te cuenta nada: come lo que quieras». La de las almendras NO: la ficha dice «Te cuenta la grasa». Se quitó a propósito el 27-08 y su documento la vuelve a pedir."
+  "ok",
+  "«Su proteína no te cuenta» vuelve donde hace falta: en los alimentos que calibran, donde el «solo» se cae y con él se iba lo único que lo decía."
  ],
  "El tramo en el que está, marcado": [
   "ok",
   "Los tres tramos están y el suyo va en naranja. La comparación falla porque en la pantalla cada tramo son dos trozos («de 20 a 40 g» y «la mitad») y el documento los junta en una línea."
  ],
  "Paso 1 · Confirmar nueva": [
-  "falla",
-  "El quincenal no tiene pasos: es el formulario de siempre."
+  "ok",
+  "El quincenal se parte en tres pasos, con «Son 3 pasos» arriba y el suyo marcado. El paso 1 ya no pide el peso: enseña el de la semana con sus dos días y la pareja señalada, lo que ha hecho, cómo se ha sentido y los días que le falten."
  ],
  "Paso 2 · Contar nueva": [
-  "falla",
-  "Lo mismo."
+  "ok",
+  "Las dos escalas de 0 a 10 con los extremos escritos, las molestias y el campo libre con su «Ahora es el momento y el lugar»."
  ],
  "Paso 3 · Recibir nueva": [
-  "falla",
-  "Lo mismo. Y no existe el tercer paso, que es donde se le promete la hora."
+  "ok",
+  "El tercer paso existe y sale anunciado desde el primero. Y da una hora: el día lo dice el servidor, del mismo sitio del que vive el aviso al equipo."
  ],
  "Con sus check-in nueva": [
-  "falla",
-  "Lo mismo."
+  "ok",
+  "La misma pantalla, con sus datos: confirma. Y si le falta una pesada, la línea del peso se lo dice."
  ],
  "Sin check-in suficientes nueva": [
-  "falla",
-  "Y esta es la que más falta hace: al que perdió días no se le pregunta con estrellas, se le deja el formulario igual."
+  "ok",
+  "Al que no tiene check-in suficientes no se le enseña una pantalla vacía: se le pregunta. Cinco estrellas y al paso 2."
  ],
  "Pendiente": [
   "ok",
   "La tarjeta sale en naranja con «Empezar»; lo que falla es el «›»."
  ],
  "Hecho": [
-  "falla",
-  "La tarjeta dice «Ya lo mandaste. Lo estamos mirando», que no compromete a nada. Falta la suya, la que le da una hora."
+  "ok",
+  "«Respondiste a tiempo y ahora nos toca a nosotros. Te decimos algo antes del viernes a las tres de la tarde, hora de España.» Y fuera el «Esta semana»."
  ],
  "Miércoles, a las 10:00 · cuando se abre nueva": [
   "sin_pantalla",
@@ -216,8 +216,8 @@
   null
  ],
  "Cierra el quincenal": [
-  "falla",
-  "Es el texto de la tarjeta en Hecho, que no está."
+  "ok",
+  "Es el texto de la tarjeta en Hecho, que ya está."
  ],
  "Si le falta una pesada": [
   "sin_pantalla",

@@ -172,3 +172,38 @@ export const enumerarFechas = (fechas) => {
 
 /** El peso, con coma decimal: "77,1 kg". */
 export const kg = (v) => (v == null ? null : `${String(v).replace('.', ',')} kg`);
+
+/**
+ * LA ESCALA DE 0 A 10, con los dos extremos escritos.
+ *
+ * Vivía dentro de `ReporteMensual.jsx` («¿el programa está cumpliendo tus expectativas?»)
+ * y sube aquí porque el paso 2 del quincenal la usa dos veces con otras preguntas. Es la
+ * misma escala de las maquetas: once casillas, la elegida en naranja, y debajo lo que
+ * significan los dos bordes. Volver a pulsar la elegida la borra: un 0 es una respuesta y
+ * tenía que haber forma de decir «no contesto».
+ *
+ * Las etiquetas NO se escriben aquí: son las del documento y cambian en cada pregunta.
+ */
+export const Escala0a10 = ({ pregunta, valor, onChange, minLabel, maxLabel, testid }) => (
+    <div data-testid={testid}>
+        {pregunta && <p className="text-sm text-foreground mb-2">{pregunta}</p>}
+        <div className="flex gap-1">
+            {Array.from({ length: 11 }, (_, n) => {
+                const puesto = valor === n;
+                return (
+                    <button key={n} type="button" data-testid={`${testid}-${n}`}
+                        onClick={() => onChange(puesto ? null : n)}
+                        className={`flex-1 min-w-0 h-9 rounded-lg border text-[13px] font-bold tabular-nums transition-all ${
+                            puesto ? 'border-[#FF671F] bg-[#FF671F] text-white'
+                                   : 'border-border bg-muted text-foreground/60 hover:border-foreground/30'}`}>
+                        {n}
+                    </button>
+                );
+            })}
+        </div>
+        <div className="flex justify-between gap-4 mt-1.5">
+            <span className="text-[11px] text-muted-foreground">{minLabel}</span>
+            <span className="text-[11px] text-muted-foreground text-right">{maxLabel}</span>
+        </div>
+    </div>
+);

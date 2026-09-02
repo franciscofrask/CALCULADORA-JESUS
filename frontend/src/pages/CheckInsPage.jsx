@@ -2,8 +2,6 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useEsTelefono } from '../lib/esTelefono';
-import { revisarPeso, PESO_MIN, PESO_MAX } from '../lib/pesoValido';
-import { useConfirm } from '../components/ui/confirm';
 import { toast } from 'sonner';
 import {
     Activity, CheckCircle2, Scale, Send, Zap,
@@ -485,26 +483,10 @@ const Tarjeta = ({ titulo, ayuda, ayudaCursiva = false, encendida, contestada,
     </div>
 );
 
-// Los días entre los que puede elegir al fechar un pesaje: hoy y los `diasAtras` de antes.
-//
-// EL NÚMERO LO DICE EL SERVIDOR (fallo 7 del repaso del 24-08). Aquí había un 8 escrito a
-// mano mientras el servidor aceptaba 14 días y `core/series_cliente.py` declaraba 30 en una
-// función que no llamaba nadie: tres sitios y tres números para la misma regla, y el
-// cliente sólo podía elegir entre los 8 que le dejaba el desplegable. Ahora la regla vive
-// en la serie y viaja en `GET /checkins/hoy` (`peso_dias_atras`), así que lo que se ofrece
-// es exactamente lo que se acepta.
-const diasParaPesarse = (hoyIso, diasAtras) => {
-    const dias = [];
-    for (let i = 0; i <= diasAtras; i++) {
-        const d = new Date(`${hoyIso}T12:00:00`);
-        d.setDate(d.getDate() - i);
-        const iso = d.toLocaleDateString('en-CA');
-        const etiqueta = i === 0 ? 'Hoy' : i === 1 ? 'Ayer'
-            : d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
-        dias.push({ iso, etiqueta: etiqueta.charAt(0).toUpperCase() + etiqueta.slice(1) });
-    }
-    return dias;
-};
+// Aquí vivía `diasParaPesarse`, los días entre los que se puede fechar un pesaje. Se fue
+// con la casilla del peso a `components/CampoDePeso.jsx` (bloque 4 del 1-09), entera y con
+// su regla: el número lo sigue diciendo el servidor -- fallo 7 del repaso del 24-08, tres
+// sitios y tres números para la misma decisión --, ahora en `GET /reports/evolution`.
 
 // Los valores viejos de `entreno_respuesta` se leen con la pregunta nueva: el que
 // contestó «Sí, pero no lo puse» dijo que sí entrenó, y el que contestó «No entrené»
@@ -521,7 +503,7 @@ const ENTRENO_DE_VUELTA = { si_no_lo_puse: 'si', no_entrene: 'no' };
 // sino el aviso de arriba («la app ya sabe la respuesta»). Con eso se caen también las
 // dos reglas que lo parcheaban, `verNotas` y `verPeso`: si nada se esconde, nada se
 // puede perder al reeditar.
-const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado, inicial = null }) => {
+const CierreDelDia = ({ api, hoy, dia, onGuardado, inicial = null }) => {
     const navigate = useNavigate();
     const [enviando, setEnviando] = useState(false);
     const [f, setF] = useState(() => ({
@@ -540,7 +522,6 @@ const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado, inicial = null 
         hunger_anxiety: inicial?.hunger_anxiety ?? null,
         notas: inicial?.notas?.texto || '',
         compartida: inicial?.notas?.compartida ?? false,
-        weight: inicial?.weight != null ? String(inicial.weight) : '',
     }));
     const set = (campo, valor) => setF(prev => ({ ...prev, [campo]: valor }));
     // Antes esto además apagaba la tarjeta y encendía la siguiente. Con todas a la vista
@@ -553,14 +534,8 @@ const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado, inicial = null 
     // servidor, y si no llegó, la del reloj del cliente.
     const fechaDelDia = hoy?.fecha || todayKey();
 
-    // El peso puede ser de otro día (la regla del peso semanal, doc 24-08): se pregunta
-    // de cuándo es y se manda con el peso.
-    const [pesoFecha, setPesoFecha] = useState(inicial?.peso_fecha || fechaDelDia);
-    // Los días que se le ofrecen para fecharlo, los que diga el servidor. Si no lo dice
-    // -- una respuesta de antes de este cambio -- no se pregunta la fecha y el peso va con
-    // el día del cierre, que es lo que hacía la app antes de que la casilla llevara fecha:
-    // mejor no preguntar que ofrecer un día que el servidor va a rechazar en silencio.
-    const diasDePesaje = diasParaPesarse(fechaDelDia, hoy?.peso_dias_atras);
+    // La fecha del pesaje se pregunta ahora donde se escribe el peso, en Evolución
+    // (`CampoDePeso`), con la misma regla y el mismo número de días del servidor.
 
     // ── Los extras del día (puntos 07 y 32) ──────────────────────────────────
     // Una sola lista: la del día. Lo que escriba aquí es un `POST /diets/{fecha}/extras`,
@@ -788,7 +763,6 @@ const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado, inicial = null 
 
     const guardar = async () => {
         if (faltan.length > 0) return;
-        if (f.weight && !await pesoAceptado(f.weight)) return;
 
         setEnviando(true);
         try {
@@ -826,10 +800,9 @@ const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado, inicial = null 
                 // borrarla al reeditar sería tirar lo que escribió.
                 entreno_nota: inicial?.entreno_nota || null,
                 notas: f.notas.trim() ? { texto: f.notas.trim(), compartida: f.compartida } : null,
-                weight: f.weight ? parseFloat(String(f.weight).replace(',', '.')) : null,
-                // De qué día es ese peso: sin esto la pareja de días seguidos de la que
-                // sale la media semanal no se forma nunca.
-                peso_fecha: f.weight ? pesoFecha : null,
+                // El peso ya no viaja desde aquí: se escribe en Evolución (ver arriba). El
+                // que ya tuviera guardado un cierre se queda donde está, porque el servidor
+                // conserva lo que esta pantalla no manda.
             });
             toast.success('Anotado. Mañana seguimos.');
             onGuardado();
@@ -906,43 +879,20 @@ const CierreDelDia = ({ api, hoy, dia, onGuardado, pesoAceptado, inicial = null 
                 </label>
             </div>
 
-            <div className="rounded-2xl border border-border bg-card p-4">
-                <span className="text-sm text-foreground block">Peso</span>
-                {/* DOS RENGLONES, como los pide él: arriba para qué sirve pesarse aquí y
-                    debajo el último que tenemos. */}
-                <div className="mt-0.5 mb-2">
-                    <p className="text-[11px] text-foreground/40">
-                        Registrarlo es opcional, sólo para ti. Te lo pediremos sólo para los reportes
-                    </p>
-                    {hoy?.ultimo_peso && (
-                        <p className="text-[11px] text-foreground/40">
-                            Último registro: {kilos(hoy.ultimo_peso.valor)} · {cuando(hoy.ultimo_peso.fecha)}
-                        </p>
-                    )}
-                </div>
-                <input type="number" step="0.1" min={PESO_MIN} max={PESO_MAX} value={f.weight}
-                    onChange={e => set('weight', e.target.value)} data-testid="cierre-peso"
-                    placeholder="kg" className={inputCls} />
-                {/* DE QUÉ DÍA ES ESE PESO. El peso se archivaba con la fecha del cierre, y
-                    el que se pesa por la mañana y lo apunta de noche -- o se pesó ayer --
-                    metía el dato en el día que no era. La media semanal sale de la pareja
-                    de días SEGUIDOS desde el miércoles, así que un pesaje corrido de día
-                    rompe la pareja y la semana se queda sin peso sin que nada avise. */}
-                {f.weight && diasDePesaje.length > 1 && (
-                    <div className="mt-2">
-                        <label className="text-[11px] text-foreground/40 block mb-1" htmlFor="cierre-peso-fecha">
-                            ¿De qué día es este peso?
-                        </label>
-                        <select id="cierre-peso-fecha" value={pesoFecha}
-                            onChange={e => setPesoFecha(e.target.value)} data-testid="cierre-peso-fecha"
-                            className={inputCls}>
-                            {diasDePesaje.map(d => (
-                                <option key={d.iso} value={d.iso}>{d.etiqueta}</option>
-                            ))}
-                        </select>
-                    </div>
-                )}
-            </div>
+            {/* AQUÍ VIVÍA LA CASILLA DEL PESO, y se va a Evolución («Todo lo validado antes
+                del 1 de septiembre», bloque 4: «El peso. Un solo registro, tres puertas» /
+                «abierto todo el año» / «es el único sitio donde el peso se escribe»).
+
+                Estaba al final de once preguntas, dentro de un formulario que solo abre
+                quien cierra el día: el que no lo cierra -- la mayoría -- no tenía dónde
+                apuntar un pesaje, y el que lo apuntaba lo dejaba enterrado donde no vuelve.
+                Ahora el campo está siempre abierto en Evolución, que es de donde sale su
+                curva, y hasta allí llevan las otras dos puertas: la fila «Hoy toca pesarte»
+                de Inicio los días de pesada y el paso 1 del reporte quincenal.
+
+                LO YA GUARDADO NO SE TOCA: los cierres viejos siguen con su peso -- se cayó
+                `weight` de `_LO_QUE_PREGUNTA_EL_CIERRE` para que reeditarlos no lo borre --
+                y el historial de esta misma pantalla lo sigue pintando. */}
 
             {faltan.length > 0 && (
                 // Las tres primeras y cuántas más: la lista entera son ocho renglones al
@@ -983,7 +933,6 @@ const CheckInsPage = () => {
     // el parpadeo del formulario. (El aviso de arriba ya no lo mira: desde el 31-08 dice
     // «El día, todo bien» y le basta con las comidas pendientes.)
     const [diaHoy, setDiaHoy] = useState({ dia: null, listo: false });
-    const { confirm } = useConfirm();
     const navigate = useNavigate();
     // EL DÍA QUE SE ESTÁ CERRANDO. Normalmente el de hoy; con `?fecha=` el de ayer, que es
     // la ventana de la mañana (doc «El día», 31-08). Se acepta un día atrás y nada más: el
@@ -1077,27 +1026,12 @@ const CheckInsPage = () => {
 
     const todayDaily = checkins.find(c => c.type === 'daily' && isSameDay(c.created_at));
 
-    // EL PESO DEL CHECK-IN TAMBIÉN ESCRIBE EN EL HISTÓRICO (#48 del 15-08). Aquí no había
-    // ninguna validación: entraba un 50 detrás de un 94 sin decir nada, y de esa serie
-    // salen la gráfica y el ritmo de cambio. Se compara con el último peso que conocemos
-    // -- el del check-in más reciente que traiga uno -- y si el salto canta, se pregunta.
-    //
-    // SALE DE LA LISTA ENTERA, NO DE LOS CIERRES. Aunque el historial se pinte en dos
-    // bloques, este peso se busca en `checkins` completo a propósito: en producción casi
-    // todos los pesos conocidos vienen de los reportes mensuales importados de Calma (los
-    // cierres del día casi nunca traen peso), así que mirar solo los cierres dejaría el
-    // aviso del 50 detrás del 94 sin nada con lo que comparar y no saltaría nunca.
-    const ultimoPeso = checkins.find(c => c.weight != null)?.weight ?? null;
-    const pesoAceptado = async (valor) => {
-        const chequeo = revisarPeso(valor, ultimoPeso);
-        if (!chequeo.ok) { toast.error(chequeo.error); return false; }
-        if (!chequeo.confirmar) return true;
-        return confirm({
-            title: 'Confírmame el peso',
-            description: chequeo.confirmar,
-            confirmLabel: 'Sí, es correcto', cancelLabel: 'Lo corrijo',
-        });
-    };
+    // EL PESO YA NO SE ESCRIBE AQUÍ, así que tampoco se valida aquí. Los dos filtros del
+    // #48 del 15-08 -- el rango, que rechaza, y el salto de 10 kg, que pregunta -- viajaron
+    // enteros con el campo a `components/CampoDePeso.jsx`, con la misma `revisarPeso` y el
+    // mismo diálogo de confirmación. Allí el peso con el que se compara sale de la serie
+    // (la curva de Evolución), que es mejor referencia que la que había aquí: esto miraba
+    // solo los check-in y en producción casi ningún cierre trae peso.
 
     const submitDaily = async () => {
         if (daily.energy == null || daily.hunger_anxiety == null) {
@@ -1212,7 +1146,7 @@ const CheckInsPage = () => {
                     <div className="h-64 bg-muted rounded-2xl animate-pulse" data-testid="checkins-content" />
                 ) : (
                     <div data-testid="checkins-content">
-                        <CierreDelDia api={api} hoy={hoy} dia={diaHoy.dia} pesoAceptado={pesoAceptado}
+                        <CierreDelDia api={api} hoy={hoy} dia={diaHoy.dia}
                             inicial={editando ? hoy?.checkin : null}
                             onGuardado={() => { setEditando(false); fetchAll(); fetchHoy(); }} />
                     </div>

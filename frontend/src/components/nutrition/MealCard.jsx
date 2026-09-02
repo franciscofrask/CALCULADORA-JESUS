@@ -1020,10 +1020,24 @@ const MealCard = ({
                                         className="btn-brand w-full py-3 rounded-xl text-sm font-bold">
                                         Cuadrar
                                     </button>
-                                    {/* Y LA FRASE, FUERA DEL SINGULAR (punto 193 del 27-08): era
-                                        «Te ajusto las cantidades sin pasarme de tus macros.», con
-                                        punto final. El botón ancho ya estaba desplegado; esta
-                                        frase se había quedado.
+                                    {/* LA FRASE VUELVE A SU VOZ («Todo lo validado antes del 1 de
+                                        septiembre», «Una comida por dentro»): la columna «Como
+                                        queda» pone «Te ajusto las cantidades sin pasarme de tus
+                                        macros.» y el pie lo subraya: «La frase en su voz.»
+
+                                        Es la tercera vez que esta línea cambia de persona, así
+                                        que queda escrito el porqué de cada vuelta: el punto 193
+                                        del 27-08 la pasó al impersonal para sacarla del singular,
+                                        y el documento del 1-09 la marca en su voz.
+
+                                        OJO, EL DOCUMENTO SE CONTRADICE Y ESTÁ SIN RESOLVER: su
+                                        bloque 7, «La regla de las voces», cita esta misma frase
+                                        en impersonal como ejemplo de lo correcto -- «repartir
+                                        gramos y cuadrar una comida lo hace la calculadora, no
+                                        Jesús». Se deja lo que dice la maqueta, que es lo que él
+                                        anotó para esta pantalla, y la duda está apuntada para
+                                        que la cierre. No cambiarla en un sentido ni en el otro
+                                        sin su respuesta.
 
                                         SE PARECE A LA DE AUTOMÁTICO Y NO ES UN COPIADO (punto
                                         194): Automático es EL MODO -- trabaja solo, según montas
@@ -1031,7 +1045,7 @@ const MealCard = ({
                                         entero, de una vez. Queda dicho aquí para que quien las
                                         lea seguidas no las «arregle». */}
                                     <p className="text-xs text-muted-foreground text-center mt-1.5">
-                                        Ajusta las cantidades sin pasarse de tus macros
+                                        Te ajusto las cantidades sin pasarme de tus macros.
                                     </p>
                                 </div>
                             )}

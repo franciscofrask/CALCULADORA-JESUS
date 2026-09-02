@@ -192,6 +192,33 @@ class ReportCreate(BaseModel):
     # MENSUAL · 13 sugerencias (opcional, y es para nosotros)
     sugerencias: Optional[str] = Field(None, max_length=4000)
 
+    # ── LO QUE AÑADE «TODO LO VALIDADO ANTES DEL 1 DE SEPTIEMBRE» ─────────────
+    #
+    # LAS CINCO DEL PASO 1 SIN CHECK-IN. «No tengo todos los datos de tus check-in diarios,
+    # así que te lo pregunto aquí»: al que apenas ha cerrado días no se le puede ENSEÑAR su
+    # quincena, así que se le PREGUNTA, que es como se hacía antes de que existiera el
+    # cierre del día. Cinco estrellas, de 1 a 5.
+    #
+    # No se reaprovechan `training_compliance` y compañía -- que son los deslizadores viejos
+    # de 0 a 100 -- porque no significan lo mismo: aquellos eran un porcentaje que se
+    # inventaba el cliente y estos son su respuesta a una pregunta concreta. Mezclarlos haría
+    # que el informe no supiera si un 60 es «tres estrellas» o «el 60 % de sus entrenos».
+    dieta_grado: Optional[int] = Field(None, ge=1, le=5)
+    entreno_grado: Optional[int] = Field(None, ge=1, le=5)
+    cardio_grado: Optional[int] = Field(None, ge=1, le=5)
+    suplementacion_grado: Optional[int] = Field(None, ge=1, le=5)
+    descanso_grado: Optional[int] = Field(None, ge=1, le=5)
+    # LAS DOS ESCALAS DEL PASO 2 DEL QUINCENAL, las dos de 0 a 10 y con sus extremos
+    # escritos. `sensaciones_0a10` no sustituye a `sensaciones` (que son las cinco estrellas
+    # del quincenal viejo y siguen en 4.400 reportes): es otra escala y otra pregunta.
+    #
+    #   «Sensaciones generales hasta ahora»
+    #     0 · Muy malas, demasiado exigente para mí   10 · Genial, mejor imposible
+    #   «¿Cuánto te está costando?» · Valoración esfuerzo / resultados
+    #     0 · Mal, mucho esfuerzo para pocos avances  10 · Genial, mejor imposible
+    sensaciones_0a10: Optional[int] = Field(None, ge=0, le=10)
+    esfuerzo_resultados: Optional[int] = Field(None, ge=0, le=10)
+
     def falta_para_el_mensual(self, fotos_subidas: int = 0) -> List[str]:
         """Qué le falta a un MENSUAL para estar entero: las diez medidas y las tres fotos.
 

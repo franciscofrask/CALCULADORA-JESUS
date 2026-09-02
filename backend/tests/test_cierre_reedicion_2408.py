@@ -144,12 +144,20 @@ class TestReeditarNoBorra:
         for parche in ("const verNotas =", "const verPeso =", "const corta ="):
             assert parche not in pantalla, f"volvio {parche}, y con el lo que se escondia"
 
-    def test_las_notas_y_el_peso_se_pintan_siempre(self):
-        """Sin condicion delante: son opcionales, pero salen a todo el mundo."""
+    def test_las_notas_se_pintan_siempre(self):
+        """Sin condicion delante: son opcionales, pero salen a todo el mundo.
+
+        EL PESO YA NO ESTA EN ESTA PANTALLA (bloque 4 del 1-09): se escribe en Evolucion,
+        que es «el unico sitio donde el peso se escribe». Lo que este test cuidaba -- que no
+        volviera el cierre corto que lo escondia -- se sigue cuidando con las notas, y de
+        paso se comprueba que el campo no ha vuelto por detras.
+        """
         pantalla = _fuente(PANTALLA)
         assert "{verNotas && (" not in pantalla and "{verPeso && (" not in pantalla
         assert 'data-testid="cierre-notas"' in pantalla
-        assert 'data-testid="cierre-peso"' in pantalla
+        assert 'data-testid="cierre-peso"' not in pantalla
+        assert 'data-testid="campo-de-peso"' in _fuente(
+            "frontend/src/components/CampoDePeso.jsx")
 
     def test_lo_que_ya_no_se_pregunta_no_se_borra(self):
         """El "La hice" de la comida pendiente y la nota del exceso de macros se dejaron
@@ -206,13 +214,19 @@ class TestElReplaceQueSeLoLLevaTodo:
         # pregunta (`comido_hoy` y `mood`, del check-in de mayo, se iban). Pero el P75 no se
         # toco: una RESPUESTA del formulario que no llega es una respuesta borrada, y por eso
         # se sigue yendo. La frontera son las dos listas de backend/routes/checkins.py:
-        # `_LO_QUE_PREGUNTA_EL_CIERRE` (se borra) y todo lo demas (se hereda). `notas` y
-        # `weight` estan en la primera, asi que este test comprueba justo el lado que no
-        # cambio: si algun dia se cae, es que una pregunta se ha salido de esa lista y
-        # entonces el cliente ya no puede borrar su propia respuesta reeditando.
-        assert guardado.get("notas") is None and guardado.get("weight") is None, (
+        # `_LO_QUE_PREGUNTA_EL_CIERRE` (se borra) y todo lo demas (se hereda). `notas` esta
+        # en la primera, asi que este test comprueba justo el lado que no cambio: si algun
+        # dia se cae, es que una pregunta se ha salido de esa lista y entonces el cliente ya
+        # no puede borrar su propia respuesta reeditando.
+        assert guardado.get("notas") is None, (
             "si esto empieza a conservarse, el arreglo de la pantalla se puede simplificar; "
             "mientras el POST sustituya las RESPUESTAS, repintar es la unica defensa")
+        # Y EL PESO CAMBIA DE LADO EL 1-09. El cierre ya no lo pregunta -- se escribe en
+        # Evolucion, bloque 4 --, asi que salio de `_LO_QUE_PREGUNTA_EL_CIERRE` y ahora se
+        # HEREDA: un cierre viejo que traia peso no lo pierde al reeditarlo. Lo contrario
+        # seria vaciarle un dato por abrir una pantalla que ya no se lo pide.
+        assert guardado.get("weight") == peso, (
+            "el peso ya no es una pregunta de esta pantalla: al reeditar tiene que quedarse")
 
 
 class TestElPesoDelHistorialDelCliente:
@@ -285,7 +299,6 @@ class TestLoQuePreguntaElCierre:
         "Niveles de energía durante el día",
         "Fuera de tu entrenamiento, en tu día normal",
         "Hambre / ansiedad con la dieta",
-        "Registrarlo es opcional, sólo para ti. Te lo pediremos sólo para los reportes",
     ])
     def test_los_literales_del_doc_estan_tal_cual(self, literal):
         assert literal in _fuente(PANTALLA)
@@ -297,9 +310,16 @@ class TestLoQuePreguntaElCierre:
             assert extremo in pantalla
 
     def test_el_ultimo_peso_va_en_su_renglon_y_con_punto_medio(self):
-        pantalla = _fuente(PANTALLA)
-        assert "Último registro: {kilos(hoy.ultimo_peso.valor)} · {cuando(hoy.ultimo_peso.fecha)}" in pantalla
-        assert "Opcional{hoy?.ultimo_peso" not in pantalla, "seguia siendo una sola linea"
+        """«Último registro: 72,7 kg · 24 de agosto», en su propio renglon.
+
+        Se mudo con el campo a Evolucion (bloque 4 del 1-09) y la maqueta lo sigue pintando
+        igual: dos renglones bajo la casilla, el de para que sirve y el del ultimo que
+        tenemos, separados con el punto medio. Lo que se comprueba es lo mismo de antes en
+        el sitio nuevo.
+        """
+        campo = _fuente("frontend/src/components/CampoDePeso.jsx")
+        assert "Último registro: {kg(ultimo.valor)} kg · {cuando(ultimo.fecha)}" in campo
+        assert "Opcional{" not in campo, "seguia siendo una sola linea"
 
 
 # ============ 4. EL HISTORIAL, EN DOS BLOQUES ============
@@ -354,9 +374,19 @@ class TestElHistorialPartidoEnDos:
         # la pildora no aparece por ninguna parte.
         assert "<HistorialDeDias cierres={cierres}" in pantalla
 
-    def test_el_aviso_del_peso_raro_sigue_mirando_la_lista_entera(self):
-        """LO QUE MUERDE AL PARTIR LA LISTA: en produccion casi todos los pesos conocidos
-        vienen de los mensuales importados. Si `ultimoPeso` saliera de los cierres, el
-        aviso del 50 detras del 94 no tendria con que comparar y no saltaria nunca."""
-        pantalla = _fuente(PANTALLA)
-        assert "const ultimoPeso = checkins.find(c => c.weight != null)?.weight ?? null;" in pantalla
+    def test_el_aviso_del_peso_raro_sigue_comparando_con_la_serie(self):
+        """LO QUE MUERDE: en produccion casi ningun cierre trae peso, asi que si el numero
+        con el que se compara saliera de los cierres, el aviso del 50 detras del 94 no
+        tendria con que comparar y no saltaria nunca.
+
+        DESDE EL 1-09 SE COMPARA CONTRA LA CURVA, que es todavia mejor: el campo se mudo a
+        Evolucion (bloque 4) y alli el ultimo pesaje sale de `/reports/evolution`, o sea de
+        la MISMA serie que pinta la grafica. Los dos filtros del #48 del 15-08 -- el rango,
+        que rechaza, y el salto de 10 kg, que pregunta -- viajaron enteros con el campo.
+        """
+        campo = _fuente("frontend/src/components/CampoDePeso.jsx")
+        assert "revisarPeso(valor, ultimo?.valor)" in campo, "el salto se sigue midiendo"
+        assert "Confírmame el peso" in campo, "y se sigue preguntando, no bloqueando"
+        pagina = _fuente("frontend/src/pages/ReportsPage.jsx")
+        assert "const ultimoPesaje = weightData.length" in pagina, \
+            "el peso con el que se compara tiene que salir de la curva, no de los cierres"
