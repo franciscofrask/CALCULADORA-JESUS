@@ -10,7 +10,8 @@ Cada uno lleva:
   · el veredicto de ahora: arreglado, esperando una decision, o pendiente,
   · y, si esta arreglado, que se hizo, en que commit y con que se comprueba.
 
-LOS COMMITS SON REALES Y ESTAN EN PRODUCCION desde el 2-09. Si algun dia esto se copia a
+LOS COMMITS SON REALES. Los cuatro primeros, EN PRODUCCION desde el 2-09; el de los
+tres menores (6ae6b4a) esta en GitHub y sin desplegar. Si algun dia esto se copia a
 otro sitio, que se copie con ellos: un «arreglado» sin commit no vale nada.
 """
 
@@ -148,15 +149,17 @@ HALLAZGOS = [
 
 #: Los menores, que son de una línea.
 MENORES = [
-    ("Los avisos se apilan y tapan la esquina", PENDIENTE,
-     "Llegó a haber tres a la vez cubriendo el botón «···» de la comida y el panel de extras; "
-     "hubo que quitarlos para poder seguir pulsando."),
-    ("«Este día se pasa de tus macros de ahora» cuando el día se queda corto", PENDIENTE,
-     "En el 19 de agosto faltaban 199 g de proteína y 200 de hidratos, y solo sobraban 7 de "
-     "grasa. El titular dice lo contrario de lo que pasa."),
-    ("«Con lo que has marcado podemos cuadrarte 20 g de proteína»", PENDIENTE,
-     "Se lee como un techo cuando es un mínimo de viabilidad. Con el catálogo entero "
-     "disponible, suena a mala noticia."),
+    ("Los avisos se apilan y tapan la esquina", HECHO,
+     "Y en el teléfono era peor de lo apuntado: ocupan el ancho de la pantalla y se pegan al "
+     "borde de abajo, donde vive la barra de Inicio · Mi semana · Rutina · Más, así que con "
+     "tres encima no se podía navegar. Ahora dos como mucho y por encima de la barra."),
+    ("«Este día se pasa de tus macros de ahora» cuando el día se queda corto", HECHO,
+     "El estado «sobra» se enciende con que UN macro se pase. Cuando además falta algo, ahora "
+     "dice que no cuadra y pone los números; la frase de la maqueta se queda para el caso que "
+     "ella dibuja, que es pasarse sin quedarse corto."),
+    ("«Con lo que has marcado podemos cuadrarte 20 g de proteína»", HECHO,
+     "Era lo contrario de lo que comprueba el motor: que se llega AL MENOS a esos 20 g. Ahora "
+     "dice «se puede montar, como mínimo»."),
     ("El botón de cerrar se anunciaba en inglés («Close»)", HECHO,
      "Arreglado con el punto 07, y en TODOS los diálogos de la app: no era del calendario."),
 ]
@@ -170,4 +173,4 @@ SIN_CERRAR = (
     "página, así que queda apuntado con lo medido y sin venderlo como fallo de la pantalla."
 )
 
-COMMITS = "50e0e49 · 818ac98 · 3bd9c19 · b4577d9"
+COMMITS = "50e0e49 · 818ac98 · 3bd9c19 · b4577d9 · 6ae6b4a"
