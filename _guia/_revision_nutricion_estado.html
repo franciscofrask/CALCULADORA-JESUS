@@ -1,0 +1,733 @@
+<title>Revisión de Nutrición · 1-09</title>
+<style>
+  :root {
+    --tinta: #17150f;
+    --tinta-2: #4d4840;
+    --tinta-3: #7d766c;
+    --fondo: #f7f5f2;
+    --papel: #fffefc;
+    --linea: #e2ddd5;
+    --linea-fuerte: #cdc6bb;
+    --marca: #e8500f;
+    --grave: #c02a1c;
+    --grave-fondo: #fbeae7;
+    --medio: #9a6410;
+    --medio-fondo: #fbf1de;
+    --leve: #5b6b57;
+    --leve-fondo: #eef1ec;
+    --bien: #2f6b45;
+    --bien-fondo: #e8f2ec;
+    --sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --tinta: #f2efe9; --tinta-2: #b8b1a6; --tinta-3: #8a8378;
+      --fondo: #14130f; --papel: #1c1b16; --linea: #302e27; --linea-fuerte: #423f36;
+      --marca: #ff7038;
+      --grave: #ef6b5c; --grave-fondo: #2b1815;
+      --medio: #d9a441; --medio-fondo: #2a2213;
+      --leve: #9fb098; --leve-fondo: #1c2119;
+      --bien: #6fbf8d; --bien-fondo: #16241c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --tinta: #f2efe9; --tinta-2: #b8b1a6; --tinta-3: #8a8378;
+    --fondo: #14130f; --papel: #1c1b16; --linea: #302e27; --linea-fuerte: #423f36;
+    --marca: #ff7038;
+    --grave: #ef6b5c; --grave-fondo: #2b1815;
+    --medio: #d9a441; --medio-fondo: #2a2213;
+    --leve: #9fb098; --leve-fondo: #1c2119;
+    --bien: #6fbf8d; --bien-fondo: #16241c;
+  }
+  :root[data-theme="light"] {
+    --tinta: #17150f; --tinta-2: #4d4840; --tinta-3: #7d766c;
+    --fondo: #f7f5f2; --papel: #fffefc; --linea: #e2ddd5; --linea-fuerte: #cdc6bb;
+    --marca: #e8500f;
+    --grave: #c02a1c; --grave-fondo: #fbeae7;
+    --medio: #9a6410; --medio-fondo: #fbf1de;
+    --leve: #5b6b57; --leve-fondo: #eef1ec;
+    --bien: #2f6b45; --bien-fondo: #e8f2ec;
+  }
+
+  body {
+    margin: 0; background: var(--fondo); color: var(--tinta);
+    font-family: var(--sans); font-size: 16px; line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .envoltorio { max-width: 60rem; margin: 0 auto; padding: 3rem 1.5rem 6rem; }
+
+  .cabecera { border-bottom: 2px solid var(--tinta); padding-bottom: 1.5rem; }
+  .sello {
+    font-family: var(--mono); font-size: .72rem; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--marca); margin: 0 0 .6rem;
+  }
+  h1 {
+    font-size: clamp(2rem, 5vw, 3rem); line-height: 1.05; margin: 0 0 .8rem;
+    font-weight: 800; letter-spacing: -.025em; text-wrap: balance;
+  }
+  .entradilla { font-size: 1.08rem; color: var(--tinta-2); max-width: 42rem; margin: 0; }
+
+  .ficha-tecnica {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: 1rem 1.5rem; margin-top: 1.6rem; padding-top: 1.4rem;
+    border-top: 1px solid var(--linea);
+  }
+  .ficha-tecnica div { display: flex; flex-direction: column; gap: .15rem; }
+  .ficha-tecnica dt, .rotulo {
+    font-family: var(--mono); font-size: .68rem; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--tinta-3);
+  }
+  .ficha-tecnica dd { margin: 0; font-size: .95rem; font-weight: 600; }
+
+  .recuento { display: flex; flex-wrap: wrap; gap: .5rem; margin: 2.5rem 0 0; }
+  .recuento span {
+    display: inline-flex; align-items: baseline; gap: .45rem;
+    padding: .45rem .85rem; border: 1px solid var(--linea-fuerte);
+    font-size: .88rem; font-weight: 600;
+  }
+  .recuento b { font-family: var(--mono); font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+  .r-bien { color: var(--bien); border-color: var(--bien) !important; background: var(--bien-fondo); }
+  .r-grave { color: var(--grave); border-color: var(--grave) !important; background: var(--grave-fondo); }
+  .r-medio { color: var(--medio); border-color: var(--medio) !important; background: var(--medio-fondo); }
+  .r-leve { color: var(--leve); background: var(--leve-fondo); }
+
+  h2 {
+    font-size: 1.05rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+    margin: 4rem 0 0; padding-bottom: .6rem; border-bottom: 1px solid var(--tinta);
+  }
+  h2 + p.aclara { color: var(--tinta-3); font-size: .92rem; margin: .7rem 0 0; }
+
+  .hallazgo { border-bottom: 1px solid var(--linea); padding: 2rem 0; }
+  .hallazgo:last-child { border-bottom: none; }
+  .titular { display: flex; gap: 1rem; align-items: baseline; flex-wrap: wrap; }
+  .num {
+    font-family: var(--mono); font-size: 1.6rem; font-weight: 700; color: var(--tinta-3);
+    font-variant-numeric: tabular-nums; line-height: 1;
+  }
+  .titular h3 {
+    font-size: 1.28rem; font-weight: 700; letter-spacing: -.015em; margin: 0;
+    flex: 1 1 20rem; text-wrap: balance; line-height: 1.3;
+  }
+  .chip {
+    font-family: var(--mono); font-size: .66rem; letter-spacing: .1em; text-transform: uppercase;
+    padding: .25rem .6rem; border: 1px solid currentColor; white-space: nowrap; font-weight: 700;
+  }
+  .c-grave { color: var(--grave); background: var(--grave-fondo); }
+  .c-medio { color: var(--medio); background: var(--medio-fondo); }
+  .c-leve { color: var(--leve); background: var(--leve-fondo); }
+  .c-hecho { color: var(--bien); background: var(--bien-fondo); }
+
+  .hallazgo p { margin: 1rem 0 0; max-width: 46rem; }
+  .detalle { margin-top: 1.2rem; display: grid; gap: .9rem; }
+  .detalle > div { display: grid; grid-template-columns: 7.5rem 1fr; gap: 1rem; align-items: start; }
+  @media (max-width: 34rem) { .detalle > div { grid-template-columns: 1fr; gap: .2rem; } }
+  .detalle p { margin: 0; max-width: none; }
+
+  .cita {
+    font-family: var(--mono); font-size: .86rem; background: var(--papel);
+    border: 1px solid var(--linea); padding: .75rem .9rem; margin: 0;
+    overflow-x: auto; white-space: pre-wrap; color: var(--tinta);
+  }
+  .cita b { color: var(--marca); font-weight: 700; }
+  code {
+    font-family: var(--mono); font-size: .87em; background: var(--papel);
+    border: 1px solid var(--linea); padding: .08em .35em;
+  }
+
+  .antes-despues { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; font-family: var(--mono); font-size: .88rem; }
+  .antes-despues span { padding: .35rem .7rem; border: 1px solid var(--linea-fuerte); background: var(--papel); }
+  .flecha { color: var(--tinta-3); font-size: 1.1rem; }
+  .mal { color: var(--grave); border-color: var(--grave) !important; }
+  .ok { color: var(--bien); border-color: var(--bien) !important; }
+
+  ul.limpia { list-style: none; padding: 0; margin: 1.4rem 0 0; display: grid; gap: .6rem; }
+  ul.limpia li { display: grid; grid-template-columns: 1.3rem 1fr; gap: .6rem; align-items: start; }
+  ul.limpia li::before { content: "✓"; color: var(--bien); font-weight: 700; }
+  ul.pendiente li::before { content: "—"; color: var(--tinta-3); }
+  ul.menor { list-style: none; padding: 0; margin: 1.4rem 0 0; display: grid; gap: 1rem; }
+  ul.menor li { border-left: 2px solid var(--linea-fuerte); padding-left: 1rem; }
+
+  .nota {
+    margin-top: 1.6rem; padding: 1.1rem 1.2rem; background: var(--papel);
+    border: 1px solid var(--linea-fuerte);
+  }
+  .nota p { margin: .5rem 0 0; max-width: none; }
+  .nota p:first-child { margin-top: 0; }
+
+  /* ── EL ESTADO DE CADA HALLAZGO, añadido el 1-09 al arreglarlos ── */
+  .arreglo {
+    margin-top: 1.4rem; padding: .9rem 1.1rem; border-left: 3px solid var(--bien);
+    background: var(--bien-fondo);
+  }
+  .arreglo.espera { border-left-color: var(--medio); background: var(--medio-fondo); }
+  .arreglo .rotulo { color: inherit; opacity: .75; }
+  .arreglo p { margin: .4rem 0 0; max-width: none; font-size: .95rem; }
+  .arreglo p:first-of-type { margin-top: .35rem; }
+  .arreglo .cita { margin-top: .6rem; background: transparent; }
+
+  footer { margin-top: 4rem; padding-top: 1.4rem; border-top: 1px solid var(--linea); color: var(--tinta-3); font-size: .88rem; }
+</style>
+
+<div class="envoltorio">
+
+  <header class="cabecera">
+    <p class="sello">12EN12 · Revisión funcional · con el estado al 1-09</p>
+    <h1>La pestaña de Nutrición, función por función</h1>
+    <p class="entradilla">
+      Recorrido completo de la pantalla en el navegador, con la app levantada y la cuenta de
+      Francisco: cabecera, calendario, tipo de día, configuración, alta de alimentos, edición,
+      extras, guardado, copia, favoritas, volcado, recuadre, preferencias y móvil.
+    </p>
+    <dl class="ficha-tecnica">
+      <div><dt>Fecha</dt><dd>1 de septiembre de 2026</dd></div>
+      <div><dt>Entorno</dt><dd>local · :3000 + :8000</dd></div>
+      <div><dt>Cuentas</dt><dd>francisco@test.com · clientedemo@test.com</dd></div>
+      <div><dt>Base</dt><dd>Atlas · jg12_restored (pruebas)</dd></div>
+      <div><dt>Días usados</dt><dd>19, 20, 24-08 · 1 a 12-09</dd></div>
+      <div><dt>Móvil</dt><dd>390 × 844 real</dd></div>
+    </dl>
+    <div class="recuento">
+      <span class="r-bien"><b>10</b> arreglados</span>
+      <span class="r-medio"><b>1</b> espera una decisión</span>
+      <span class="r-leve"><b>3</b> menores pendientes</span>
+      <span class="r-leve"><b>1</b> sin cerrar</span>
+    </div>
+  </header>
+
+  <div class="nota">
+    <p><strong>Al día de hoy: 10 de los 14 arreglados, y comprobados reproduciendo el fallo.</strong></p>
+    <p>
+      Cada hallazgo lleva debajo qué se hizo, en qué commit y con qué se comprueba. Los guiones
+      de comprobación <b>fallan con el código de antes</b>: si pasaran igual antes y después no
+      probarían nada, y donde eso ocurre se dice.
+    </p>
+    <p>
+      Todo está <b>en GitHub y sin desplegar a producción</b>.
+      Commits: <code>50e0e49</code> · <code>818ac98</code> · <code>3bd9c19</code> ·
+      <code>b4577d9</code>.
+    </p>
+    <p>
+      Y una corrección al propio documento: <b>la causa del 03 estaba mal diagnosticada</b> aquí
+      (no es el redondeo) y <b>el «Close» en inglés no era del calendario</b>, era de todos los
+      diálogos de la app. Los dos puntos lo explican abajo.
+    </p>
+  </div>
+
+  <h2>Lo grave</h2>
+  <p class="aclara">Ordenado por lo que más daño hace a los datos del cliente.</p>
+
+  <div class="hallazgo">
+    <div class="titular">
+      <span class="num">01</span>
+      <h3>Abrir un día para mirarlo lo reescribe, y le quita el «cuadrado»</h3>
+      <span class="chip c-hecho">Arreglado</span>
+    </div>
+    <p>
+      No hace falta tocar nada: basta con abrir un día pasado y salir de él. El documento se
+      vuelve a guardar con la fecha de hoy y con el estado de cuadrado <em>recalculado con las
+      macros de ahora</em>. Un día que se cuadró en su momento deja de estar cuadrado por el
+      simple hecho de consultarlo.
+    </p>
+    <div class="detalle">
+      <div>
+        <p class="rotulo">Lo que vi</p>
+        <p>
+          El 24 de agosto salía verde en el calendario (única jornada cuadrada de toda la cuenta).
+          Lo abrí. Al volver a mirar, ya no queda ningún día cuadrado en mayo, junio, julio,
+          agosto ni septiembre.
+        </p>
+      </div>
+      <div>
+        <p class="rotulo">La prueba</p>
+        <p class="cita">antes  2026-08-19 · updated_at = <b>2026-08-24</b>T23:18:32
+después 2026-08-19 · updated_at = <b>2026-09-01</b>T22:27:21
+
+24-08 · is_cuadrado: <b>true → false</b> (sin tocar un solo alimento)</p>
+      </div>
+      <div>
+        <p class="rotulo">Dónde estaba</p>
+        <p>
+          <code>NutritionPage.jsx:851-858</code> — el guardado de despedida se dispara siempre al
+          cambiar de fecha, sin comprobar si hubo cambios, y manda
+          <code>is_cuadrado: getDayStatus() === 'cuadrado'</code>.
+        </p>
+      </div>
+    </div>
+    <div class="arreglo">
+      <p class="rotulo">Arreglado · <code>50e0e49</code></p>
+      <p>
+        Ahora se guarda <b>una huella de cómo estaba el día al cargarlo</b>, y si lo que hay en
+        pantalla sigue siendo eso, no se manda nada. La huella lleva solo lo que decide el
+        cliente: comidas, tipo de día, número de comidas, momento del entreno, peri y volcado.
+        <code>macros_snapshot</code>, <code>is_cuadrado</code> y <code>distribution_targets</code>
+        se quedan fuera <b>a propósito</b>, porque salen de los macros de hoy: con ellos dentro,
+        cualquier día viejo saldría «cambiado» siempre y el arreglo no valdría de nada.
+      </p>
+      <p>
+        Y había un cuarto camino que esta revisión no vio: el detector de tipo de día le ponía el
+        de la rutina a <b>todos</b> los días, incluidos los ya guardados. Abrir un martes de
+        agosto montado como entreno lo pasaba a descanso porque hoy la rutina dice que los
+        martes se descansa. Ahora solo se lo pone al día que nadie ha configurado.
+      </p>
+      <p class="cita">node _guia/_probar_arreglos_nutricion.js
+
+escrituras del dia: <b>0</b>
+updated_at   2026-08-31T23:07:12  →  2026-08-31T23:07:12
+is_cuadrado  false  →  false
+y tocar el dia SI lo guarda (2 guardados)</p>
+    </div>
+  </div>
+
+  <div class="hallazgo">
+    <div class="titular">
+      <span class="num">02</span>
+      <h3>Al abrir la pantalla, el objetivo del día es el del tipo de día equivocado</h3>
+      <span class="chip c-hecho">Arreglado</span>
+    </div>
+    <p>
+      En un día de descanso, la cabecera arranca pidiendo los macros de un día de entreno. No se
+      corrige sola: sigue mal hasta que el cliente toca el selector Entreno/Descanso.
+    </p>
+    <div class="detalle">
+      <div>
+        <p class="rotulo">La prueba</p>
+        <div class="antes-despues">
+          <span class="mal">al abrir · faltan 400 / 280 / 50</span>
+          <span class="flecha">→</span>
+          <span class="ok">tras tocar el selector · faltan 300 / 200 / 80</span>
+        </div>
+      </div>
+      <div>
+        <p class="rotulo">Dónde estaba</p>
+        <p>
+          <code>NutritionPage.jsx:412-429</code> fija el tipo de día desde la rutina y corre en
+          paralelo a la carga. El efecto que vuelve a pedir el reparto está guardado por
+          <code>if (!loading)</code> pero <b>no tiene <code>loading</code> en sus
+          dependencias</b>: cuando la rutina cambia el tipo, la pantalla aún está cargando, así
+          que ese reparto no se pide nunca.
+        </p>
+      </div>
+    </div>
+    <div class="arreglo">
+      <p class="rotulo">Arreglado · <code>50e0e49</code> y <code>818ac98</code></p>
+      <p>
+        La carrera la cierra el primero: el detector del tipo de día corre <b>después</b> de
+        cargar, así que el tipo ya no cambia con <code>loading</code> puesto. El segundo pone la
+        red por debajo: <code>loading</code> entra en las dependencias y el efecto compara con la
+        última configuración pedida, de modo que la pantalla se corrige sola venga por donde
+        venga el cambio, y sin pedir el reparto dos veces por día abierto.
+      </p>
+      <p>
+        <b>Y hay que decir qué prueba cada cosa</b>: el guion
+        <code>_guia/_probar_objetivo_del_dia.js</code> pasa también con el código de antes del
+        segundo commit, porque lo que producía el fallo ya lo había cerrado el primero. Queda
+        como prueba de que el comportamiento es el bueno, no de ese arreglo.
+      </p>
+    </div>
+  </div>
+
+  <div class="hallazgo">
+    <div class="titular">
+      <span class="num">03</span>
+      <h3>«Cuadrar» no cuadra la comida, y a veces la deja peor que antes</h3>
+      <span class="chip c-medio">Espera decisión</span>
+    </div>
+    <p>
+      El botón principal de cada comida se queda sistemáticamente corto de hidratos y, en el
+      camino, puede estropear una comida que ya estaba bien.
+    </p>
+    <div class="detalle">
+      <div>
+        <p class="rotulo">Reproducción</p>
+        <p>
+          Comida 1 con objetivo 50P · 30H · 10G: carne picada de pechuga de pollo 250 g y arroz
+          blanco. Subir el arroz a 45 g (36 H, sobran 6) y pulsar «Cuadrar».
+        </p>
+      </div>
+      <div>
+        <p class="rotulo">Lo peor</p>
+        <p>
+          Con el arroz en 35 g la comida estaba en «válido» (28 de 30 H). Pulsar «Cuadrar» la baja
+          igualmente a 25 g y la deja en «faltan 10». Entre 25 g y 100 g de entrada, la salida es
+          siempre 25 g y el desfase siempre −10 H.
+        </p>
+      </div>
+    </div>
+    <div class="arreglo espera">
+      <p class="rotulo">Reproducido, y la causa NO es la que dice este documento</p>
+      <p>
+        Reproducido con la cuenta de la ficha (<code>francisco@test.com</code>, cuya C1 es
+        justamente 50P/30H/10G): <code>_guia/_reproducir_cuadrar_03.py</code>.
+      </p>
+      <p class="cita">arroz 35 g  antes 50P 28H 10G (desvío 2,0)  →  25 g · 50P 20H 10G (10,0)  <b>PEOR</b>
+arroz 45 g  antes 50P 36H 10G (desvío 6,0)  →  25 g · 50P 20H 10G (10,0)  <b>PEOR</b></p>
+      <p>
+        <b>No es el redondeo.</b> El pollo ya clava la proteína exactamente en el objetivo
+        (250 g × 20 = 50 P), y <code>calma_suggest.ajustar_cantidad</code> limita cada alimento
+        por <b>el macro más restrictivo</b>: con la proteína a cero, el arroz no puede crecer
+        aunque falten 10 g de hidratos, y cae a su mínimo, que son esos 25 g. El arroz que
+        cuadraría son 37,5 g → 35 al redondear, pero 35 g meten 2,45 g de proteína de más y la
+        regla del método es «sin pasarse».
+      </p>
+      <p>
+        Así que la elección real es <b>50P/20H (faltan 10 H)</b> contra
+        <b>52,5P/28H (sobran 2,5 P)</b>, y hoy se elige la primera sin decirlo.
+        <b>Eso es una decisión del método, no un despiste</b>, y por eso no se ha tocado el motor
+        de macros. Lo que falta es un número: hasta cuánto se puede pasar de la proteína. Con un
+        «hasta un 5 %» el caso se resuelve solo.
+      </p>
+    </div>
+  </div>
+
+  <div class="hallazgo">
+    <div class="titular">
+      <span class="num">04</span>
+      <h3>«Cuadrar el día» avisa de que el día quedó cuadrado cuando no lo está</h3>
+      <span class="chip c-hecho">Arreglado</span>
+    </div>
+    <p>
+      El mismo problema, un piso más arriba, y aquí el mensaje es directamente falso: la app
+      afirma que el día está cuadrado mientras el cartel de al lado sigue diciendo lo contrario.
+    </p>
+    <div class="detalle">
+      <div>
+        <p class="rotulo">Lo que decía</p>
+        <p class="cita">✅ «<b>Día cuadrado a tus macros.</b>»</p>
+      </div>
+      <div>
+        <p class="rotulo">Lo que se veía</p>
+        <p class="cita">PROTEÍNA 279 · <b>faltan 21</b>
+HIDRATOS 181 · <b>faltan 19</b>
+GRASA     92 · <b>sobran 12</b></p>
+      </div>
+    </div>
+    <div class="arreglo">
+      <p class="rotulo">Arreglado · <code>b4577d9</code></p>
+      <p>
+        El aviso salía en cuanto la petición no fallaba, sin mirar el resultado. Ahora se suma el
+        desfase de todas las comidas -- que es como lo devuelve el servidor -- y se dice lo que
+        hay. Un mensaje que dice lo contrario de lo que se ve es peor que no decir nada: enseña a
+        no leer los mensajes.
+      </p>
+      <p class="cita">«El día no cuadra del todo: faltan 20,8 g de proteína, faltan 19,1 g de
+ hidratos y sobran 11,6 g de grasa. No se ha quitado nada más.»</p>
+      <p>
+        Y el listón de los 4 g y las palabras salen ahora de <b>un solo sitio</b>
+        (<code>desajusteEnPalabras</code>), compartido con el «Cuadrar» de una comida: los dos
+        botones hacen lo mismo y tienen que contarlo igual.
+      </p>
+    </div>
+  </div>
+
+  <div class="hallazgo">
+    <div class="titular">
+      <span class="num">05</span>
+      <h3>El PDF y el guardado de despedida trabajan en la cuenta equivocada</h3>
+      <span class="chip c-hecho">Arreglado</span>
+    </div>
+    <p>
+      Cuando el entrenador entra en la calculadora de un cliente, toda la pantalla manda la
+      cabecera <code>X-Actuar-Como</code>… menos dos llamadas, que se montan su propio
+      <code>fetch</code> y se la dejan. Es exactamente el fallo que se arregló el 17-08, con dos
+      sitios que se quedaron fuera.
+    </p>
+    <div class="detalle">
+      <div>
+        <p class="rotulo">La prueba</p>
+        <p class="cita">GET /api/diets/2026-09-01/pdf
+X-Actuar-Como: <b>(NO LA MANDA)</b>
+descarga: dieta_jg12_2026-09-01.pdf</p>
+      </div>
+      <div>
+        <p class="rotulo">El segundo, peor</p>
+        <p>
+          El guardado de despedida tampoco la manda, y ese <em>escribe</em>. Se dispara en
+          <code>beforeunload</code>, <code>pagehide</code> y al pasar la pestaña a segundo plano,
+          así que basta con cambiar de pestaña.
+        </p>
+      </div>
+    </div>
+    <div class="arreglo">
+      <p class="rotulo">Arreglado · <code>50e0e49</code></p>
+      <p>
+        Las dos pasan ya por <code>lib/cabeceras</code>, que es donde vive la regla desde el
+        17-08. De los dos, el que corrompía datos era el guardado: le creaba al entrenador la
+        dieta del cliente en su propia cuenta, y si ese día tenía dieta se la pisaba.
+      </p>
+      <p class="cita">node _guia/_probar_arreglos_nutricion.js
+
+PDF       X-Actuar-Como: f99879aa-…
+guardado  X-Actuar-Como: f99879aa-…</p>
+    </div>
+  </div>
+
+  <div class="hallazgo">
+    <div class="titular">
+      <span class="num">06</span>
+      <h3>Se puede dejar fuera el catálogo entero y la app dice que sí puede cuadrarte</h3>
+      <span class="chip c-hecho">Arreglado</span>
+    </div>
+    <p>
+      La franja que debería frenar una configuración imposible solo mira los alimentos
+      <em>preferidos</em>: los grupos marcados para <em>evitar</em> no entran en la cuenta, que es
+      justo lo que se está marcando en esa pestaña.
+    </p>
+    <div class="detalle">
+      <div>
+        <p class="rotulo">Lo que decía</p>
+        <p class="cita">Alimentos a evitar <b>37</b>
+
+CON LO QUE HAS MARCADO PODEMOS CUADRARTE
+<b>✓</b> 20 g de proteína    <b>✓</b> 20 g de hidratos     [ Guardar ]</p>
+      </div>
+      <div>
+        <p class="rotulo">Lo que pasaba</p>
+        <div class="antes-despues">
+          <span class="ok">antes · 223 para elegir</span>
+          <span class="flecha">→</span>
+          <span class="mal">después · «No hay menús para esta comida»</span>
+        </div>
+      </div>
+    </div>
+    <div class="arreglo">
+      <p class="rotulo">Arreglado · <code>3bd9c19</code></p>
+      <p>
+        Los evitados viajan ya con la pregunta y se descuentan con la <b>misma regla</b> que los
+        descuenta en el resto de la app (<code>food_is_avoided</code>), no con una copia. Y las
+        dependencias del efecto dejan de ser solo <code>[selected]</code>: marcar algo para
+        evitar ni siquiera volvía a preguntar, así que la franja se quedaba con la respuesta de
+        antes.
+      </p>
+      <p class="cita">node _guia/_probar_preferencias_y_pdf.js
+
+con todo marcado como PREFERIDO:   proteina true · hidratos true
+y todo marcado además para EVITAR: proteina <b>false</b> · hidratos <b>false</b>
+evitando solo un grupo:            proteina true · hidratos true</p>
+      <p>
+        La tercera línea está a propósito: un arreglo así se pasa de frenada con facilidad, y hay
+        que probar que evitar un grupo suelto no tumba la franja.
+      </p>
+    </div>
+  </div>
+
+  <h2>Lo medio</h2>
+
+  <div class="hallazgo">
+    <div class="titular">
+      <span class="num">07</span>
+      <h3>La «X» del calendario está encima de la flecha de mes siguiente</h3>
+      <span class="chip c-hecho">Arreglado</span>
+    </div>
+    <p>
+      Al ir a avanzar de mes por la esquina del botón, se cierra el calendario. No es apreciación:
+      quien recibe el clic ahí es el botón de cerrar.
+    </p>
+    <p class="cita">mes siguiente  x 997-1035 · y 193-231   (38 × 38)
+cerrar         x <b>1018-1035</b> · y <b>193-210</b>   (17 × 17, por encima)
+
+elementFromPoint en la esquina superior derecha → <b>«Close»</b></p>
+    <p>En móvil el mismo botón mide <strong>18 × 18 px</strong>, menos de la mitad del mínimo cómodo para el dedo.</p>
+    <div class="arreglo">
+      <p class="rotulo">Arreglado · <code>b4577d9</code></p>
+      <p>
+        <b>No era del calendario.</b> El botón de cerrar vive en <code>ui/dialog.jsx</code>, o sea
+        en todos los diálogos de la app. Pasa de 18×18 a 36×36 con <code>p-2 -m-2</code>: el área
+        que recibe el clic crece <b>sin mover ni un píxel</b> la equis que se ve, así que ningún
+        diálogo cambia de aspecto. Y el calendario deja hueco a la derecha de su cabecera para
+        que la flecha se aparte.
+      </p>
+      <p class="cita">node _guia/_probar_calendario_y_avisos.js
+
+antes  la esquina de la flecha la recibe «Close» · cerrar 18×18
+ahora  la esquina de la flecha la recibe <b>la flecha</b> · cerrar <b>36×36</b></p>
+      <p>
+        De paso se arregla el menor de más abajo: se anuncia <b>«Cerrar»</b> y no «Close». Era el
+        texto que trae shadcn de serie, sin traducir, en el único sitio donde no se ve.
+      </p>
+    </div>
+  </div>
+
+  <div class="hallazgo">
+    <div class="titular">
+      <span class="num">08</span>
+      <h3>El PDF dice «descargado» y deja un fichero a medias</h3>
+      <span class="chip c-hecho">Arreglado</span>
+    </div>
+    <p>
+      El contenido llega entero, pero la descarga nunca se cierra: el archivo se queda como
+      <code>.crdownload</code> indefinidamente y el cliente no tiene ningún PDF que abrir.
+    </p>
+    <p class="cita">aviso en pantalla: «PDF descargado»
+en Descargas:      dieta_jg12_2026-08-19.pdf<b>.crdownload</b>  6.768 bytes
+del servidor:      6.768 bytes  (el fichero completo)</p>
+    <div class="arreglo">
+      <p class="rotulo">Arreglado · <code>3bd9c19</code></p>
+      <p>
+        <code>URL.revokeObjectURL(url)</code> iba en la misma vuelta que <code>a.click()</code>:
+        se le quitaban los datos al navegador mientras todavía los estaba leyendo. Ahora el
+        enlace se mete en el documento antes de pulsarlo y la URL se suelta después.
+      </p>
+      <p>
+        <b>Con una salvedad honrada</b>: el guion de comprobación <b>no distingue</b>. Pasa igual
+        antes y después, porque Playwright se queda la descarga por su cuenta y no reproduce la
+        carrera; el <code>.crdownload</code> se midió en un Chrome de verdad. El arreglo es
+        correcto por construcción, pero para verlo hay que abrirlo a mano. El guion se queda como
+        red: que el PDF se descargue, que sea un PDF y que llegue entero.
+      </p>
+    </div>
+  </div>
+
+  <div class="hallazgo">
+    <div class="titular">
+      <span class="num">09</span>
+      <h3>El calendario no marca el día que estás mirando</h3>
+      <span class="chip c-hecho">Arreglado</span>
+    </div>
+    <p>
+      Solo se resalta «hoy». Si estás en el 15 de agosto y abres el calendario para saltar a otro
+      día, nada te dice de dónde vienes. <code>DietCalendar.jsx:112</code> compara únicamente
+      contra la fecha de hoy; la fecha abierta no llega al componente.
+    </p>
+    <div class="arreglo">
+      <p class="rotulo">Arreglado · <code>b4577d9</code></p>
+      <p>
+        El día abierto va relleno y con <code>aria-current="date"</code>; hoy conserva su aro,
+        porque son dos cosas distintas y tienen que distinguirse cuando coinciden. Y el
+        calendario se abre en el mes del día que se está mirando, no en el de hoy: se abre justo
+        para moverse.
+      </p>
+    </div>
+  </div>
+
+  <div class="hallazgo">
+    <div class="titular">
+      <span class="num">10</span>
+      <h3>El calendario da por «completo» cualquier día con cuatro comidas</h3>
+      <span class="chip c-hecho">Arreglado</span>
+    </div>
+    <p>
+      El número de comidas está escrito a mano en el servidor
+      (<code>diets.py:767</code>, <code>num_comidas = 4</code>) en vez de leerse del propio día. Un
+      día de tres comidas nunca llega a «completo», y uno de entreno con seis lo alcanza estando a
+      medias.
+    </p>
+    <div class="arreglo">
+      <p class="rotulo">Arreglado · <code>b4577d9</code></p>
+      <p>
+        Sale del <code>num_comidas</code> del propio día. Y el peri no cuenta ni arriba ni abajo:
+        <code>num_comidas</code> son las comidas normales, y el intra y el post no los llevan
+        todos los días, así que contarlos volvería a dar «completo» antes de tiempo.
+      </p>
+      <p class="cita">día de 3 comidas con las 3 puestas   antes «partial»   ahora <b>«complete»</b></p>
+    </div>
+  </div>
+
+  <h2>Lo menor</h2>
+  <ul class="menor">
+    <li>
+      <strong>Los avisos se apilan y tapan la esquina.</strong> Llegué a tener tres a la vez
+      cubriendo el botón «…» de la comida y el panel de extras; hubo que quitarlos para poder
+      seguir pulsando. <em>— Pendiente.</em>
+    </li>
+    <li>
+      <strong>«Este día se pasa de tus macros de ahora» cuando el día se queda corto.</strong> En
+      el 19 de agosto faltaban 199 g de proteína y 200 de hidratos, y solo sobraban 7 de grasa. El
+      titular dice justo lo contrario de lo que pasa. <em>— Pendiente.</em>
+    </li>
+    <li>
+      <strong>«Con lo que has marcado podemos cuadrarte 20 g de proteína».</strong> Se lee como un
+      techo (solo 20 g), cuando es un mínimo de viabilidad. Con el catálogo entero disponible, el
+      mensaje suena a mala noticia. <em>— Pendiente.</em>
+    </li>
+    <li>
+      <strong>El botón de cerrar del calendario se anuncia en inglés</strong> («Close») a los
+      lectores de pantalla. <em>— Arreglado en <code>b4577d9</code>, y en todos los diálogos: no
+      era del calendario.</em>
+    </li>
+  </ul>
+
+  <h2>Sin cerrar</h2>
+  <div class="nota">
+    <p><strong>La pestaña se congeló tres veces durante la revisión.</strong></p>
+    <p>
+      Tres veces con más de un minuto sin responder y sin recuperarse: tras pulsar «Descanso», tras
+      apuntar un extra a mano y tras recargar la pantalla. No es espera de red, es un bucle: el
+      proceso quemaba <strong>8,75 s de CPU en 6 s de reloj</strong> con 757 MB de memoria, y la
+      consola no soltaba ni un error.
+    </p>
+    <p>
+      No lo he podido acotar. En un navegador limpio y automatizado no se reproduce: doce vueltas
+      alternando tipo de día dejan la memoria estable entre 38 y 64 MB y cuatro peticiones por
+      vuelta, sin fugas. Lo dejo apuntado con lo medido, sin afirmar que sea un fallo de la
+      pantalla, porque las tres veces ocurrió con la extensión de automatización inyectando en la
+      página.
+    </p>
+    <p>
+      <strong>Sigue sin cerrar</strong>, y así se queda: dejarlo apuntado sin venderlo como fallo
+      es lo correcto mientras no se reproduzca fuera de la automatización.
+    </p>
+  </div>
+
+  <h2>Lo que funciona bien</h2>
+  <p class="aclara">Probado uno a uno, con su resultado en pantalla.</p>
+  <ul class="limpia">
+    <li>Flechas de día, navegación de meses del calendario y salto a una fecha concreta.</li>
+    <li>Menú de opciones, con sus cinco entradas, y el panel de configuración del día.</li>
+    <li>Número de comidas (1, 3 y 4): el reparto cuadra en los tres casos — 3 × 100P·66,5H·26,5G = 300/200/80, y la comida única recibe el día entero.</li>
+    <li>Momento del entreno: «En ayunas» coloca Intra y Post delante de la Comida 1.</li>
+    <li>Perientreno: «Sin perientreno» retira Intra y Post y reparte sus macros entre las comidas.</li>
+    <li>«Crear el día», «Una de mis dietas» y «Repetir un día», con el desvío de cada día reciente a la vista (−231 H, +4 G).</li>
+    <li>Buscador de alimentos: ajusta la cantidad al objetivo antes de añadir y ordena por lo que mejor encaja.</li>
+    <li>Alta por pasos: cubre la proteína, avisa («Proteínas cubiertas. Elige el acompañamiento») y cambia las categorías al paso siguiente.</li>
+    <li>Sugeridor de menús: 223 opciones, filtros por momento del día, margen regulable, y la opción clavada al objetivo (50/30/10).</li>
+    <li>Cantidades con + y −, y el estado se recalcula al momento («sobran 6»).</li>
+    <li>Quitar alimento y vaciar la comida: los dos preguntan antes, y vaciar ofrece deshacer, que funciona.</li>
+    <li>La propuesta tras cuadrar, con «Los quiero en 45 g» y «Dejarlo en 25 g»: respeta la elección y pasa el ajuste a Manual.</li>
+    <li>Extras del día: por catálogo y escritos a mano, con su suma aparte («hoy llevas 6,2H en extras») y sin tocar la dieta.</li>
+    <li>Aplicar una favorita de entreno en un día de descanso: avisa, ofrece adaptar o cambiar el día, y al adaptar recalcula bien el objetivo.</li>
+    <li>Guardar, aplicar y borrar dietas favoritas, con confirmación antes de borrar.</li>
+    <li>Copiar a otro día: valida la fecha vacía, confirma el destino y la copia llega completa.</li>
+    <li>Volcado: bloquea las demás comidas con su candado, ajusta el objetivo y se deshace limpio.</li>
+    <li>Las tres vistas: «Lista y detalle», «Pestañas» y «Todo seguido».</li>
+    <li>Enlace a la ficha del producto en los alimentos de marca.</li>
+    <li>El suplemento que toca con esa comida, con el nombre solo y enlace a su ficha.</li>
+    <li>Ordenar los alimentos de una comida, con su modo aparte y el orden guardado.</li>
+    <li>Móvil a 390 px: sin desbordes, sin scroll horizontal, sin textos cortados, y la barra inferior no tapa nada al llegar al fondo.</li>
+  </ul>
+
+  <h2>Lo que queda por hacer</h2>
+  <ul class="limpia pendiente">
+    <li>
+      <strong>03 · «Cuadrar» se queda corto de hidratos.</strong> Reproducido y diagnosticado.
+      Espera una sola respuesta: <b>hasta cuánto se puede pasar de la proteína</b> para no
+      quedarse corto de hidratos. Con un número, el arreglo es corto.
+    </li>
+    <li><strong>Los avisos que se apilan y tapan la esquina.</strong></li>
+    <li><strong>«Este día se pasa de tus macros de ahora» cuando en realidad se queda corto.</strong></li>
+    <li><strong>«Podemos cuadrarte 20 g de proteína», que se lee como un techo y es un mínimo.</strong></li>
+    <li>
+      <strong>La congelación de la pestaña</strong>, que sigue sin reproducirse fuera de la
+      automatización.
+    </li>
+  </ul>
+
+  <div class="nota">
+    <p><strong>Y un orden que sirve para lo que viene.</strong></p>
+    <p>
+      Francisco: <b>proteína primero, luego hidratos, luego grasas</b>. No cierra el 03 por sí
+      solo -- ahí la pregunta es si se puede <em>pasar</em> del primero, y un orden de prioridad
+      no dice cuánto --, pero sí decide otra cosa que hoy no tiene regla: cuando algo sobra y hay
+      que bajar de algún sitio, lo primero que debería ceder es la grasa, luego los hidratos y la
+      proteína la última.
+    </p>
+  </div>
+
+  <footer>
+    Revisión hecha en el navegador, pantalla a pantalla. Las consultas al servidor se usaron solo
+    para comprobar lo que la pantalla no enseña: qué quedó guardado en cada día y qué cabeceras
+    viajan en cada petición. Estado actualizado el 1 de septiembre de 2026 tras arreglar diez de
+    los catorce; todo en GitHub y sin desplegar.
+  </footer>
+
+</div>
