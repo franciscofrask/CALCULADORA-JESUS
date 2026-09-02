@@ -751,7 +751,8 @@ async def get_diet_calendar(year: int, month: int, user = Depends(get_current_us
             "user_id": user["id"],
             "fecha": {"$gte": start_date, "$lte": end_date}
         },
-        {"_id": 0, "fecha": 1, "tipo_dia": 1, "comidas": 1, "is_cuadrado": 1}
+        # `num_comidas` viaja tambien: sin el, «completo» se decidia con un 4 escrito a mano.
+        {"_id": 0, "fecha": 1, "tipo_dia": 1, "comidas": 1, "is_cuadrado": 1, "num_comidas": 1}
     ).to_list(31)
     
     calendar_data = {}
@@ -761,11 +762,25 @@ async def get_diet_calendar(year: int, month: int, user = Depends(get_current_us
         
         total_foods = sum(len(m.get("alimentos", [])) for m in comidas.values())
         total_comidas = len([k for k, v in comidas.items() if v.get("alimentos")])
-        
+
+        # CUANTAS COMIDAS TIENE ESE DIA LO DICE ESE DIA (1-09-2026). Aqui habia un 4 escrito
+        # a mano, y el numero de comidas es una decision del cliente que se guarda con la
+        # dieta: un dia de TRES comidas no llegaba nunca a «completo» aunque estuviera
+        # entero, y uno de entreno con seis lo alcanzaba estando a medias.
+        #
+        # EL PERI NO CUENTA, ni en el numerador ni en el denominador. `num_comidas` son las
+        # comidas normales; el intra y el post van aparte y no todos los dias los llevan, asi
+        # que contarlos como comidas hechas volveria a dar «completo» antes de tiempo.
+        normales = [k for k, v in comidas.items()
+                    if k not in ("Intra", "Post") and v.get("alimentos")]
+        try:
+            num_comidas = int(diet.get("num_comidas") or 4)
+        except (TypeError, ValueError):
+            num_comidas = 4
+
         status = "empty"
         if total_foods > 0:
-            num_comidas = 4
-            if total_comidas >= num_comidas:
+            if len(normales) >= max(1, num_comidas):
                 status = "complete"
             elif total_comidas > 0:
                 status = "partial"

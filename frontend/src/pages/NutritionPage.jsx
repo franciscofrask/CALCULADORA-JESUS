@@ -150,6 +150,36 @@ const POST_CARB_CATEGORIES = [
 // nada. OJO: nunca `toISOString()` -- ese es el día UTC, la trampa de siempre.
 const hoyISO = () => hoyLocal();
 
+// ── LO QUE FALTA O SOBRA, DICHO CON PALABRAS ────────────────────────────────────────────
+//
+// Lo usan los dos «Cuadrar»: el de una comida y el del día entero. Estaba escrito solo en el
+// de la comida, y por eso el del día podía decir «Día cuadrado a tus macros» mientras el
+// cartel de al lado seguía diciendo «faltan 21 de proteína» (revisión de Nutrición del
+// 1-09): el aviso salía en cuanto la petición no fallaba, sin mirar el resultado.
+//
+// EL LISTÓN SON 4 g. Por debajo de eso no hay nada que contarle: es el ruido de redondear a
+// cantidades que se puedan pesar, y llamarlo «no cuadra» sería no dejarle cuadrar nunca.
+const MARGEN_QUE_SE_DICE = 4;
+const NOMBRE_MACRO = { P: 'proteína', H: 'hidratos', G: 'grasa' };
+
+/**
+ * @param desfase  {P,H,G} en gramos: negativo = falta, positivo = sobra.
+ * @returns null si cuadra dentro del margen, o la frase («faltan 21 g de proteína y ...»).
+ */
+const desajusteEnPalabras = (desfase) => {
+    if (!desfase) return null;
+    const fuera = ['P', 'H', 'G'].filter(m => Math.abs(desfase[m] || 0) > MARGEN_QUE_SE_DICE);
+    if (!fuera.length) return null;
+    const trozos = fuera.map(m => {
+        const v = desfase[m];
+        return `${v > 0 ? 'sobran' : 'faltan'} ${num1(Math.abs(v))} g de ${NOMBRE_MACRO[m]}`;
+    });
+    // Con los tres macros fuera, unirlos todos con «y» daba «faltan A y faltan B y sobran
+    // C». Coma entre los primeros y «y» solo antes del último, que es como se escribe.
+    if (trozos.length === 1) return trozos[0];
+    return `${trozos.slice(0, -1).join(', ')} y ${trozos[trozos.length - 1]}`;
+};
+
 const NutritionPage = () => {
     // `user` hace falta para separar por cliente lo que se guarda en el navegador (punto
     // 4.7): la copia local del día se guardaba solo con la fecha, así que en un ordenador
@@ -2515,8 +2545,10 @@ const NutritionPage = () => {
             // agotaban antes de llegar a ellos.
             const nEx = res.excluidos?.length || 0;
             const d = res.desfases?.[mealKey];
-            const falla = d && ['P', 'H', 'G'].filter(m => Math.abs(d[m]) > 4);
-            const nombre = { P: 'proteína', H: 'hidratos', G: 'grasa' };
+            // Lo que falta o sobra, con el mismo listón y las mismas palabras que el
+            // «Cuadrar el día»: los dos botones hacen lo mismo y tienen que contarlo igual.
+            const desajuste = desajusteEnPalabras(d);
+            const nombre = NOMBRE_MACRO;
             // AQUÍ IBA LA COLETILLA DEL REDONDEO, Y SE HA IDO (Francisco, 31-08-2026): «quita
             // el texto intermedio, cantidades redondeadas para pesarlas fácil, no tiene
             // sentido».
@@ -2533,11 +2565,8 @@ const NutritionPage = () => {
             if (silencioso) return;
             if (nEx) {
                 toast.warning(`Comida cuadrada. ${nEx === 1 ? 'Un alimento ya no está' : `${nEx} alimentos ya no están`} en el catálogo y se quitó.`);
-            } else if (falla?.length) {
-                const texto = falla.map(m => {
-                    const v = d[m];
-                    return `${v > 0 ? 'sobran' : 'faltan'} ${num1(Math.abs(v))} g de ${nombre[m]}`;
-                }).join(' y ');
+            } else if (desajuste) {
+                const texto = desajuste;
                 // Y se dice por dónde empezar, que es lo que hace útil el aviso. Quitar
                 // lo decide el cliente: la app no toca lo que él ha puesto.
                 const s = d.sugerencia;
@@ -2802,11 +2831,32 @@ const NutritionPage = () => {
             });
             setMealsData(res.comidas || {});
             const fuera = (res.excluidos || []).length;
+            const quitados = fuera
+                ? ` ${fuera === 1 ? 'Un alimento no cabía ni al mínimo y se quitó' : `${fuera} alimentos no cabían ni al mínimo y se quitaron`}.`
+                : '';
+
+            // Y SE MIRA CÓMO HA QUEDADO ANTES DE CANTAR VICTORIA (1-09-2026). Esto decía
+            // «Día cuadrado a tus macros» en cuanto la petición no fallaba, y el cliente se
+            // quedaba con el aviso verde encima y los números de al lado diciendo «faltan
+            // 21 de proteína». Un mensaje que dice lo contrario de lo que se ve es peor que
+            // no decir nada: enseña a no leer los mensajes.
+            //
+            // El desfase se suma de todas las comidas, que es como lo devuelve el servidor:
+            // el botón es del DÍA, así que lo que hay que contarle es el del día.
+            const total = { P: 0, H: 0, G: 0 };
+            for (const d of Object.values(res.desfases || {})) {
+                for (const m of ['P', 'H', 'G']) total[m] += Number(d?.[m] || 0);
+            }
+            const desajuste = desajusteEnPalabras(total);
             // La misma palabra que el botón: si el botón dice «Cuadrar el día», lo que sale
             // después no puede decir «reajustado» (parte 6).
-            toast.success(fuera
-                ? `Día cuadrado a tus macros. ${fuera === 1 ? 'Un alimento no cabía ni al mínimo y se quitó' : `${fuera} alimentos no cabían ni al mínimo y se quitaron`}.`
-                : 'Día cuadrado a tus macros.');
+            if (desajuste) {
+                toast.warning(
+                    `El día no cuadra del todo: ${desajuste}.${quitados} No se ha quitado nada más.`,
+                    { duration: 9000 });
+            } else {
+                toast.success(`Día cuadrado a tus macros.${quitados}`);
+            }
         } catch (err) {
             console.error('[cuadrar dia]', err);
             toast.error('No hemos podido cuadrar el día. Inténtalo de nuevo.');
@@ -3553,6 +3603,9 @@ const NutritionPage = () => {
                 onClose={() => setCalendarOpen(false)}
                 onSelectDate={(date) => setCurrentDate(date)}
                 api={api}
+                // El día que se está mirando, para que el calendario lo marque y se abra en
+                // su mes: el calendario se abre para moverse, y hay que saber de dónde.
+                abierto={currentDate}
             />
         </div>
     );

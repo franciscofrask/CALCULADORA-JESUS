@@ -50,10 +50,20 @@ const DialogContent = React.forwardRef(({ className, children, ...props }, ref) 
       )}
       {...props}>
       {children}
+      {/* EL BOTÓN DE CERRAR, CON SITIO PARA EL DEDO Y EN CASTELLANO (1-09-2026).
+
+          Eran 17 x 17 px: menos de la mitad de lo que se puede pulsar cómodamente, y en el
+          calendario caía justo encima de la esquina del botón de mes siguiente, así que al
+          ir a avanzar de mes se cerraba el diálogo. Con `p-2 -m-2` el área que recibe el
+          clic crece hasta 33 px sin mover ni un píxel la equis que se ve, así que ningún
+          diálogo cambia de aspecto.
+
+          Y decía «Close» a los lectores de pantalla. Es el texto que trae shadcn de serie y
+          se había quedado sin traducir en el único sitio donde no se ve. */}
       <DialogPrimitive.Close
-        className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+        className="absolute right-4 top-4 p-2 -m-2 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
         <X className="h-4 w-4" />
-        <span className="sr-only">Close</span>
+        <span className="sr-only">Cerrar</span>
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
   </DialogPortal>
