@@ -481,17 +481,24 @@ const NutritionPage = () => {
     };
 
     // Load distribution - accepts optional overrides to avoid stale closure on init
+    //: Con qué configuración se pidió el reparto la última vez. Quien lo pide lo apunta, y
+    //: el efecto de más abajo solo vuelve a pedirlo cuando lo de ahora no es esto.
+    const configPedidaRef = useRef(null);
     const loadDistribution = useCallback(async (overrides = {}) => {
+        const pedida = {
+            tipo_dia: overrides.tipoDia ?? tipoDia,
+            num_comidas: overrides.numComidas ?? numComidas,
+            momento_entreno: overrides.momentoEntreno ?? momentoEntreno,
+            opcion_peri: overrides.opcionPeri ?? opcionPeri,
+        };
+        configPedidaRef.current = JSON.stringify([currentDate, pedida]);
         try {
             const result = await api('/api/calculator/distribute', {
                 method: 'POST',
                 body: JSON.stringify({
                     fecha: currentDate, // date-versioned macros: backend resolves the version effective on this date
-                    tipo_dia: overrides.tipoDia ?? tipoDia,
-                    num_comidas: overrides.numComidas ?? numComidas,
-                    momento_entreno: overrides.momentoEntreno ?? momentoEntreno,
-                    opcion_peri: overrides.opcionPeri ?? opcionPeri,
-                    single_meal: (overrides.numComidas ?? numComidas) === 1, // el cliente manda
+                    ...pedida,
+                    single_meal: pedida.num_comidas === 1, // el cliente manda
                 })
             });
             setDistribution(result);
@@ -1005,10 +1012,28 @@ const NutritionPage = () => {
     }, [mealsData, tipoDia, numComidas, momentoEntreno, opcionPeri, volcadoMeal,
         currentDate, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Reload distribution when config changes
+    // EL REPARTO SE VUELVE A PEDIR CUANDO CAMBIA LA CONFIGURACIÓN DEL DÍA.
+    //
+    // Y TAMBIÉN CUANDO TERMINA DE CARGAR (1-09-2026). Esto leía `loading` pero NO lo tenía
+    // en las dependencias, así que si el tipo de día cambiaba mientras la pantalla cargaba,
+    // el reparto de ese tipo no se pedía nunca: al soltarse `loading` este efecto ya no se
+    // volvía a ejecutar. El cliente se encontraba un día de descanso pidiéndole los macros
+    // de un día de entreno -- 100 g de proteína y 80 de hidratos de más, y 30 de grasa de
+    // menos -- y no se corregía solo: había que tocar el selector Entreno/Descanso.
+    //
+    // Y NO SE PIDE DOS VECES: `init` ya pide el reparto con la configuración del día antes
+    // de soltar `loading`, así que al entrar aquí casi siempre es el mismo y no hay nada que
+    // volver a preguntar. Se compara con la última que se pidió, que es lo que distingue
+    // «ha cambiado algo» de «acabo de cargar».
     useEffect(() => {
-        if (!loading) loadDistribution();
-    }, [tipoDia, numComidas, momentoEntreno, opcionPeri]); // eslint-disable-line
+        if (loading) return;
+        const ahora = JSON.stringify([currentDate, {
+            tipo_dia: tipoDia, num_comidas: numComidas,
+            momento_entreno: momentoEntreno, opcion_peri: opcionPeri,
+        }]);
+        if (configPedidaRef.current === ahora) return;
+        loadDistribution();
+    }, [tipoDia, numComidas, momentoEntreno, opcionPeri, loading, currentDate]); // eslint-disable-line
 
     // Al caer en el día vacío se cargan sus dos listas: cuántas dietas guardadas tiene
     // (para «Ver las N») y sus días recientes montados (para «Repetir un día»). Solo
