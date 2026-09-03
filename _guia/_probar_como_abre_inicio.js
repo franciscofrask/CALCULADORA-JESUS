@@ -113,6 +113,21 @@ const api = async (ruta, metodo = 'GET', cuerpo = undefined) => {
     if (/Terminarla/.test(enDieta || '')) esta('el boton «Terminarla»');
     else falta('el boton «Terminarla»', /Verlo/.test(enDieta || '') ? 'sigue el «Verlo»' : 'no hay ningun boton');
 
+    // Y LO QUE DA SENTIDO A PONERLO AQUI: que el numero del aviso sea EL MISMO que el de
+    // debajo. Es el argumento del documento -- «en Dieta, ese mismo 12 es el mismo 12 que
+    // ves debajo» --, y se rompe con solo redondear cada uno por su cuenta.
+    const enCaja = await txt('[data-testid="aviso-dieta"]');
+    const numerosCaja = [...(enCaja || '').matchAll(/(\d+) g de (proteína|hidratos|grasa)/g)]
+        .map(([, n, m]) => [{ 'proteína': 'P', hidratos: 'H', grasa: 'G' }[m], n]);
+    const descuadres = [];
+    for (const [k, n] of numerosCaja) {
+        const abajo = await txt(`[data-testid="palabra-dieta-${k}"]`);
+        if (!new RegExp(`\\b${n}\\b`).test(abajo || '')) descuadres.push(`${k}: caja ${n} vs «${abajo}»`);
+    }
+    if (numerosCaja.length && !descuadres.length)
+        esta('el aviso dice el mismo numero que hay debajo', numerosCaja.map(([k, n]) => `${k}=${n}`).join(' '));
+    else if (descuadres.length) falta('el aviso y el numero de debajo no dicen lo mismo', descuadres.join(' · '));
+
     console.log('\n02 · El punto de la pestana Dieta, en ROJO fuerte');
     // CON DIETA APAGADA. Con la pestana activa el punto va en blanco a proposito, para que
     // se vea sobre el naranja del selector, asi que mirarlo ahi no dice nada del color.
@@ -125,8 +140,51 @@ const api = async (ruta, metodo = 'GET', cuerpo = undefined) => {
     else falta('el punto en ROJO: sigue en naranja', `${punto.fondo} · ${punto.clase}`);
 
     console.log('\n03 · Como se comporta: la «×» y «Terminarla»');
-    if (await p.locator('[data-testid="cerrar-aviso-dieta"]').count()) esta('la «×» que quita el aviso por hoy');
-    else falta('la «×» que quita el aviso por hoy', 'no hay aviso que cerrar');
+    await p.locator('[data-testid="vista-dieta"]').click();
+    await p.waitForTimeout(700);
+    await p.locator('[data-testid="aviso-dieta"]').first().screenshot({ path: '_guia/_inicio_aviso.png' })
+        .catch(() => {});
+
+    // «Terminarla te lleva a arreglarlo», y arreglar una dieta se hace en Nutricion.
+    if (await p.locator('[data-testid="terminar-dieta"]').count()) {
+        await p.locator('[data-testid="terminar-dieta"]').click();
+        await p.waitForTimeout(2500);
+        const donde = p.url();
+        console.log('   «Terminarla» lleva a: ' + donde);
+        if (/\/dashboard\/nutrition/.test(donde)) esta('«Terminarla» lleva a arreglarla', donde.split('/dashboard')[1]);
+        else falta('«Terminarla» no lleva a Nutricion', donde);
+        await p.goto(`${APP}/dashboard`, { waitUntil: 'networkidle' });
+        await p.waitForTimeout(9000);
+        await p.locator('[data-testid="vista-dieta"]').click();
+        await p.waitForTimeout(700);
+    }
+    if (!(await p.locator('[data-testid="cerrar-aviso-dieta"]').count())) {
+        falta('la «×» que quita el aviso por hoy', 'no hay aviso que cerrar');
+    } else {
+        esta('la «×» que quita el aviso por hoy');
+        await p.locator('[data-testid="cerrar-aviso-dieta"]').click();
+        await p.waitForTimeout(600);
+        const caja = await p.locator('[data-testid="aviso-dieta"]').count();
+        // El punto se mira con Dieta apagada, que es donde tiene color propio.
+        await p.locator('[data-testid="vista-llevas"]').click();
+        await p.waitForTimeout(500);
+        const sigueElPunto = await p.locator('[data-testid="dieta-no-cuadra"]').count();
+        if (!caja && sigueElPunto) esta('la «×» se lleva la caja y DEJA el punto');
+        else falta('la «×» no se comporta como dice el documento', `caja ${caja} · punto ${sigueElPunto}`);
+        // «por ese día, no para siempre»: al recargar sigue quitada.
+        await p.reload({ waitUntil: 'networkidle' });
+        await p.waitForTimeout(9000);
+        await p.locator('[data-testid="vista-dieta"]').click();
+        await p.waitForTimeout(700);
+        if (!(await p.locator('[data-testid="aviso-dieta"]').count())) esta('y sigue quitada al recargar');
+        else falta('vuelve a salir al recargar: no se guarda que se quito');
+        // Se devuelve, que las pruebas de abajo miran la pantalla entera.
+        await p.evaluate(() => Object.keys(localStorage)
+            .filter((k) => k.includes('inicio-aviso-dieta'))
+            .forEach((k) => localStorage.removeItem(k)));
+        await p.reload({ waitUntil: 'networkidle' });
+        await p.waitForTimeout(9000);
+    }
 
     // ───────────────────────────────────────────────────────────────────────
     console.log('\n04 y 05 · Las cuatro pestanas, una a una');
@@ -221,16 +279,26 @@ const api = async (ruta, metodo = 'GET', cuerpo = undefined) => {
     // asi que el gris era lo correcto y solo se pudo comprobar el naranja. Con un dia de
     // UNA comida el objetivo de la comida es el del dia entero, el motor lo clava y ahi
     // tienen que salir el verde y el «ya lo tienes» del bloque 06.
+    // La configuracion del dia de una comida la usan los dos bloques de abajo, asi que vive
+    // fuera de los dos.
+    const solo = { fecha: hoy, tipo_dia: 'descanso', num_comidas: 1,
+                   momento_entreno: null, opcion_peri: null };
     console.log('\n04 y 06 · El verde: un dia cuadrado de una sola comida');
     {
-        const solo = { fecha: hoy, tipo_dia: 'descanso', num_comidas: 1,
-                       momento_entreno: null, opcion_peri: null };
         const r = await api('/api/calculator/refit-diet', 'POST', { ...solo, comidas: { C1: { alimentos: [
             { alimento_id: 119, nombre: 'Carne picada de pechuga de pollo', cantidad_g: 300 },
             { alimento_id: 48, nombre: 'Arroz Integral con quinoa', cantidad_g: 150 },
             { alimento_id: 3, nombre: 'Aceite de oliva virgen extra una cucharada sopera', cantidad_g: 20 },
         ] } } });
-        await api('/api/diets', 'POST', { ...solo, comidas: { C1: { alimentos: r.comidas?.C1?.alimentos || [] } } });
+        // LAS DEMAS SE MANDAN VACIAS. El servidor FUSIONA las comidas a proposito (para que
+        // dos pestanas no se pisen), asi que mandar solo la C1 deja las otras cuatro y el
+        // peri del dia anterior dentro: el dia salia pasado de todo y parecia que la app
+        // avisaba de mas cuando el que estaba mal era el escenario.
+        await api('/api/diets', 'POST', { ...solo, comidas: {
+            C1: { alimentos: r.comidas?.C1?.alimentos || [] },
+            C2: { alimentos: [] }, C3: { alimentos: [] }, C4: { alimentos: [] },
+            Intra: { alimentos: [] }, Post: { alimentos: [] },
+        } });
         await api(`/api/diets/${hoy}/comida-marcada`, 'PATCH', { comida: 'C1', marcada: true });
         await p.reload({ waitUntil: 'networkidle' });
         await p.waitForTimeout(9000);
@@ -254,6 +322,59 @@ const api = async (ruta, metodo = 'GET', cuerpo = undefined) => {
         const llevaP = await txt('[data-testid="palabra-llevas-P"]');
         if (/ya lo tienes|cuadrado|válido/i.test(llevaP || '')) esta('Llevas dice el estado al llegar', llevaP);
         else falta('Llevas no dice el estado al llegar', llevaP || '(nada)');
+    }
+
+    // ───────────────────────────────────────────────────────────────────────
+    // Y EL FINAL DEL BLOQUE 03: al terminar la dieta, la caja y el punto se van SOLOS. El
+    // dia de una comida quedo cuadrado por el motor, asi que aqui no debe quedar ninguno.
+    console.log('\n03 · Al terminar la dieta, caja y punto se van solos');
+    {
+        // EL MOTOR NO LO CLAVA DEL TODO: deja unos gramos de hidratos fuera del margen, y
+        // con eso el aviso SIGUE siendo correcto. Para probar que se va solo hay que
+        // terminar la dieta de verdad, asi que se cierra el hueco con arroz, leyendo lo que
+        // falta de la propia pantalla y no de una cuenta aparte.
+        const porGramo = (await api('/api/calculator/macros-efectivos', 'POST',
+            { alimento_id: 48, cantidad_g: 100, es_vegano: false })).efectivos.H / 100;
+        for (let vuelta = 1; vuelta <= 3; vuelta++) {
+            await p.locator('[data-testid="vista-dieta"]').click();
+            await p.waitForTimeout(700);
+            const palabra = await txt('[data-testid="palabra-dieta-H"]');
+            const m = /faltan (\d+)/.exec(palabra || '');
+            const caja = await txt('[data-testid="aviso-dieta"]');
+            console.log(`   vuelta ${vuelta}: hidratos «${palabra}»  ·  aviso «${caja}»`);
+            // EL CASO QUE CAZA EL REDONDEO. Aqui el desvio real son ~7,5 g: redondeando el
+            // desvio exacto salen 8 y abajo pone 7. Es el unico sitio de la prueba donde los
+            // dos redondeos pueden discrepar, asi que se mira aqui a proposito.
+            if (m && caja) {
+                // Y de paso la foto del caso de SU maqueta: un solo macro fuera.
+                await p.locator('[data-testid="aviso-dieta"]').first()
+                    .screenshot({ path: '_guia/_inicio_aviso_uno.png' }).catch(() => {});
+                if (new RegExp(`\\b${m[1]}\\b`).test(caja)) esta('con medio gramo de por medio, siguen diciendo lo mismo', `${m[1]} g`);
+                else falta('con medio gramo de por medio, el aviso y el numero discrepan', `abajo ${m[1]} · aviso «${caja}»`);
+            }
+            if (!m) break;
+            const dia = await api(`/api/diets/${hoy}`);
+            const alimentos = [...(dia.comidas?.C1?.alimentos || [])];
+            const arroz = alimentos.find((a) => a.alimento_id === 48);
+            if (!arroz) break;
+            arroz.cantidad_g = Math.round(arroz.cantidad_g + Number(m[1]) / porGramo);
+            await api('/api/diets', 'POST', { ...solo, comidas: {
+                C1: { alimentos }, C2: { alimentos: [] }, C3: { alimentos: [] },
+                C4: { alimentos: [] }, Intra: { alimentos: [] }, Post: { alimentos: [] },
+            } });
+            await p.reload({ waitUntil: 'networkidle' });
+            await p.waitForTimeout(9000);
+        }
+        await p.locator('[data-testid="vista-dieta"]').click();
+        await p.waitForTimeout(700);
+        const dieta = await txt('[data-testid="macros-de-hoy"]');
+        console.log('   Dieta dice: ' + dieta);
+        const caja = await p.locator('[data-testid="aviso-dieta"]').count();
+        await p.locator('[data-testid="vista-llevas"]').click();
+        await p.waitForTimeout(500);
+        const punto = await p.locator('[data-testid="dieta-no-cuadra"]').count();
+        if (!caja && !punto) esta('con la dieta cuadrada no queda ni caja ni punto');
+        else falta('la dieta cuadra y sigue avisando', `caja ${caja} · punto ${punto}`);
     }
 
     console.log(`\n${estan.length} de ${estan.length + faltan.length} puntos, hechos. Faltan ${faltan.length}:`);

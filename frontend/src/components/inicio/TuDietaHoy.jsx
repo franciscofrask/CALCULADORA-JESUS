@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, CheckSquare, ChevronRight, Circle, Square, Zap } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, CheckSquare, ChevronRight, Circle, Square, X, Zap } from 'lucide-react';
 import { leer as leerLocal, escribir as escribirLocal } from '../../lib/almacenLocal';
+import { MARGEN } from '../../lib/exceso';
 import { num0, num1, numMedio } from '../../lib/numeros';
 import { leerMacro, claseDelMacro, fondoDelMacro, llevaPunto } from '../../lib/estadoDelMacro';
 import { suplementosPorComida } from '../../lib/suplementosDelDia';
@@ -359,15 +360,75 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
     // has marcado nada»: desde que los extras no suman, el número sería un 0 pelado.
     const nadaMarcado = hechas.length === 0;
 
-    // SI LA DIETA DEL DÍA NO LLEGA A SUS MACROS, QUE SE VEA (revisión del 2-09).
+    // SI LA DIETA DEL DÍA NO LLEGA A SUS MACROS, QUE SE VEA (revisión del 2-09, y el aviso
+    // entero con el doc «Cómo abre Inicio» del 3-09).
     //
-    // Queda el punto en la pestaña. La línea que lo decía con el número se quitó el 2-09,
-    // porque el bloque ya abre en «Dieta» y allí el número se ve solo.
+    // EL MARGEN ES EL DE LA CASA. Aquí vivía un 5 a pelo mientras el resto de la app daba
+    // un macro por bueno con 4 («de 1 a 4, falte o sobre, es válido», punto 11.1, plano en
+    // todo desde el 3-09): con 4,5 de desvío el punto no salía y la comida sí decía que no
+    // cuadraba. Ahora sale de `lib/exceso`, como en todas partes.
+    const desvioDeLaDieta = conPeri && dieta?.exists
+        ? { P: (totalDieta.P || 0) - (conPeri.P || 0),
+            H: (totalDieta.H || 0) - (conPeri.H || 0),
+            G: (totalDieta.G || 0) - (conPeri.G || 0) }
+        : null;
+    const fueraDeMargen = desvioDeLaDieta
+        ? ['P', 'H', 'G'].filter((k) => Math.abs(desvioDeLaDieta[k]) > MARGEN) : [];
+    const dietaNoCuadra = fueraDeMargen.length > 0;
+
+    // LO QUE LE PASA A LA DIETA, DICHO COMO EN SU MAQUETA: «Te faltan 12 g de hidratos por
+    // meter». Su documento solo dibuja el caso de faltar, pero el aviso salta igual cuando
+    // el día creado SE PASA, y ahí «te faltan» sería mentira: se dice cada cosa por su
+    // nombre y, si se dan las dos, las dos.
     //
-    // El margen es el mismo que usa el resto de la app para dar un macro por bueno.
-    const MARGEN = 5;
-    const dietaNoCuadra = !!(conPeri && dieta?.exists
-        && ['P', 'H', 'G'].some((k) => Math.abs((totalDieta[k] || 0) - (conPeri[k] || 0)) > MARGEN));
+    // EL NÚMERO SALE DE LOS NÚMEROS QUE ÉL LEE, no del desvío exacto (la regla del punto 80,
+    // la misma que ya cumple `leerMacro`). Con 193,4 de 200,9 el desvío exacto redondea a 8
+    // y debajo pone «faltan 7»: el aviso diría un número distinto del que tiene justo
+    // debajo, que es exactamente lo que este aviso viene a evitar. Se resta lo pintado.
+    const desvioQueSeVe = desvioDeLaDieta
+        ? Object.fromEntries(['P', 'H', 'G'].map((k) =>
+            [k, Math.round(totalDieta[k] || 0) - Math.round(conPeri[k] || 0)]))
+        : null;
+    const enPalabras = (claves) => claves
+        .map((k) => `${num0(Math.abs(desvioQueSeVe[k]))} g de ${NOMBRE_LLANO[k]}`)
+        .reduce((a, t, i, l) => (i === 0 ? t : i === l.length - 1 ? `${a} y ${t}` : `${a}, ${t}`), '');
+    const loQueFalta = fueraDeMargen.filter((k) => desvioDeLaDieta[k] < 0);
+    const loQueSobra = fueraDeMargen.filter((k) => desvioDeLaDieta[k] > 0);
+    const avisoDeLaDieta = !dietaNoCuadra ? null
+        : loQueFalta.length && loQueSobra.length
+            ? `Te faltan ${enPalabras(loQueFalta)} por meter, y te pasas ${enPalabras(loQueSobra)}`
+            : loQueFalta.length
+                ? `Te faltan ${enPalabras(loQueFalta)} por meter`
+                : `Te pasas ${enPalabras(loQueSobra)}`;
+
+    // LA «×» LO QUITA POR HOY, NO PARA SIEMPRE (bloque 03 del doc): «mañana es otra dieta,
+    // y si tampoco llega, vuelve». Por eso la marca lleva la fecha. Y el punto de la
+    // pestaña NO se va con ella: la señal no desaparece, baja de volumen.
+    const [avisoQuitado, setAvisoQuitado] = useState(false);
+    useEffect(() => {
+        setAvisoQuitado(leerLocal(`inicio-aviso-dieta-${fecha}`, userId) === '1');
+    }, [fecha, userId]);
+    const quitarAviso = () => {
+        escribirLocal(`inicio-aviso-dieta-${fecha}`, userId, '1');
+        setAvisoQuitado(true);
+    };
+
+    // «TERMINARLA», NO «VERLO» (bloque 03): «Verlo te enseña el problema; Terminarla te
+    // lleva a arreglarlo». Y lleva a la comida donde falta, que es la primera del día cuyo
+    // montaje no llega a su objetivo. Arreglar una dieta se hace en Nutrición: en Inicio
+    // las filas son casillas para marcar lo comido, no la cocina. Si no se puede señalar
+    // ninguna -- el día no tiene reparto todavía --, se va a Nutrición sin más.
+    const comidaDondeFalta = useMemo(() => {
+        const objetivos = reparto?.comidas || {};
+        const corta = claves.find((k) => {
+            const o = objetivos[k];
+            const m = montadoPorComida[k];
+            if (!o || !m) return false;
+            return ['P', 'H', 'G'].some((x) => (o[x] || 0) - (m[x] || 0) > MARGEN);
+        });
+        return corta || null;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [claves.join(','), reparto, montadoPorComida]);
 
     // El contador de Llevas: las comidas por un lado y el peri por otro (punto 93).
     const contadorDeLlevas = contarLoMarcado(
@@ -405,20 +466,74 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
                                     ${vista === v.id ? 'bg-brand text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
                                 {v.label}
                                 {/* El punto avisa de que la dieta del día no llega a sus
-                                    macros, sin sacarle de la pestaña en la que entra. */}
+                                    macros, sin sacarle de la pestaña en la que entra.
+
+                                    EN ROJO, NO EN NARANJA (doc del 3-09, bloque 02): «que se
+                                    vea a la primera; el naranja se pierde contra el fondo del
+                                    selector». Y el rojo está FUERA de la regla de colores a
+                                    propósito, como el aviso: verde es cuadrado, naranja es
+                                    pasarse, sin color es ir por debajo, y que la dieta esté
+                                    sin terminar no es ninguna de las tres.
+                                    Sobre la pestaña encendida sigue yendo en blanco: ahí el
+                                    fondo ya es el naranja de la casa y el rojo no se leería. */}
                                 {v.id === 'dieta' && dietaNoCuadra && (
                                     <span data-testid="dieta-no-cuadra"
                                         className={`inline-block w-1.5 h-1.5 rounded-full ml-1 align-middle
-                                            ${vista === v.id ? 'bg-white' : 'bg-orange-400'}`} />
+                                            ${vista === v.id ? 'bg-white' : 'bg-red-500'}`} />
                                 )}
                             </button>
                         ))}
                     </div>
 
-                    {/* AQUÍ IBA «A tu dieta de hoy le faltan 12 g de hidratos. Verlo», y sale
-                        (Francisco, 2-09). Era para avisar desde otra pestaña de algo que solo
-                        se veía entrando en Dieta; ahora Dieta es la pestaña de entrada, así que
-                        el número se ve directamente y la línea sobraba. */}
+                    {/* EL AVISO DE LA DIETA SIN TERMINAR, DENTRO DE DIETA (doc «Cómo abre
+                        Inicio», 3-09, bloques 01 y 03).
+                        Antes esto era una línea suelta encima de los números y en TODAS las
+                        pestañas, y salió el 2-09 por chocar: en Llevas decía «faltan 12» y
+                        justo debajo había un 107 que era otra cosa. Aquí no choca: ese 12 es
+                        EL MISMO que se ve debajo, porque los dos miran lo creado contra el
+                        objetivo.
+                        El rojo es a propósito: la regla de colores dice verde cuadrado,
+                        naranja pasarse y sin color ir por debajo, y esto no es ninguna de las
+                        tres -- no es un estado de la dieta, es algo que está sin terminar.
+                        Otro color, otra cosa. */}
+                    {vista === 'dieta' && dietaNoCuadra && !avisoQuitado && (
+                        /* EN DOS FILAS EN EL TELÉFONO. Su maqueta lo dibuja todo en una línea
+                           porque nombra UN macro; con los tres fuera de sitio -- un día a
+                           medio montar -- la frase se partía en cinco renglones de tres
+                           palabras contra el botón. Aquí el texto se lleva su ancho y el
+                           botón baja; a partir de `sm` vuelve a la línea de su maqueta. */
+                        <div data-testid="aviso-dieta"
+                            className="mb-3 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2.5
+                                       flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2.5">
+                            <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                                <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+                                <p className="flex-1 min-w-0 text-sm text-foreground">{avisoDeLaDieta}</p>
+                                {/* La «×» con su hueco de dedo (36 px sin moverse, como la de
+                                    los diálogos desde el 2-09) y con nombre, que un aspa a
+                                    secas no se anuncia. En el teléfono va arriba, junto al
+                                    texto: abajo quedaría lejos de lo que cierra. */}
+                                <button onClick={quitarAviso} data-testid="cerrar-aviso-dieta"
+                                    aria-label="Quitar el aviso por hoy" title="Quitar el aviso por hoy"
+                                    className="flex-shrink-0 p-2 -m-1 sm:hidden text-muted-foreground hover:text-foreground transition-colors">
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                            <button
+                                onClick={() => navigate(comidaDondeFalta
+                                    ? `/dashboard/nutrition?comida=${comidaDondeFalta}`
+                                    : '/dashboard/nutrition')}
+                                data-testid="terminar-dieta"
+                                className="flex-shrink-0 self-start sm:self-auto rounded-full bg-red-500
+                                           hover:bg-red-600 text-white text-xs font-bold px-3 py-1.5 transition-colors">
+                                Terminarla
+                            </button>
+                            <button onClick={quitarAviso} data-testid="cerrar-aviso-dieta-ancho"
+                                aria-label="Quitar el aviso por hoy" title="Quitar el aviso por hoy"
+                                className="hidden sm:block flex-shrink-0 p-2 -m-2 text-muted-foreground hover:text-foreground transition-colors">
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                    )}
 
                     {vista === 'llevas' && nadaMarcado ? (
                         /* Sin nada marcado, Llevas no es un 0 en rojo: se dice y ya está. */
