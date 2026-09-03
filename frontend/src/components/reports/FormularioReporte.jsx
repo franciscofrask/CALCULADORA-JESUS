@@ -161,9 +161,17 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
             // Menos en la rama «ultimo», donde la casilla se deja vacía A PROPÓSITO (punto
             // 34 del doc del 24-08): ese peso no es de esta semana, así que rellenarlo
             // sería darle por bueno un número viejo sin que nadie lo mire.
+            //
+            // CON PUNTO, NO CON COMA. La casilla es un `type="number"` y un navegador tira
+            // el valor entero si no es un número que él entienda: con «78,6» dentro, la
+            // casilla salía VACÍA. O sea que al darle a «Modificar» para corregir el peso,
+            // se abría en blanco en vez de traer el número que estaba a punto de confirmar.
+            // Confirmar sí funcionaba -- `revisarElPeso` acepta las dos --, pero el cliente
+            // no veía qué estaba tocando. La coma es para LEER; dentro de una casilla de
+            // número va el punto.
             const ps = r.data?.datos?.peso_semanal;
             const puesto = ps && ps.regla !== 'ultimo' && ps.valor != null
-                ? String(ps.valor).replace('.', ',') : '';
+                ? String(ps.valor) : '';
             // Y las máquinas que no tiene, con lo que dejó la última vez: el documento dice
             // «actualiza aquí tu listado», y para eso el listado tiene que estar.
             const maquinas = r.data?.datos?.maquinas || [];
