@@ -213,7 +213,10 @@ class TestCaso31ElArroz:
         secas y las nueces llevan su frase debajo. Aqui se guarda que no se pierda.
         """
         mealcard = fuente("components/nutrition/MealCard.jsx")
-        assert "macrosLine" in mealcard and "sin macros" in mealcard, (
+        # El texto pasó de «sin macros» a «No aporta macros» el 3-09 (Jesús, minuto 11:59 de
+        # la reunión con Gonzalo). Lo que este test cuida sigue siendo lo mismo: que la línea
+        # distinga «no lleva» de «no cuenta», no la redacción exacta.
+        assert "macrosLine" in mealcard and "No aporta macros" in mealcard, (
             "La linea del alimento ya no pinta solo los macros que cuentan (macrosLine): "
             "el cliente vuelve a ver ceros sin saber si son de no llevar o de no contar")
         assert "ContadorFamilia" in mealcard, (

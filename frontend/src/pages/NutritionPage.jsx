@@ -2551,7 +2551,21 @@ const NutritionPage = () => {
                 const respuesta = await preguntarDeDondeBajo(decision);
                 // Cerrar sin elegir es «déjalo como está»: si no se había tocado nada, ni se
                 // toca; si ya se habían quitado cosas, se guarda lo hecho hasta aquí.
-                if (!respuesta) { if (!hizoAlgo) return; break; }
+                //
+                // PERO SE DICE CÓMO QUEDA. Este `return` se iba de la función sin pintar ni
+                // un aviso, así que al que decía «déjalo como está» el botón se le quedaba
+                // mudo: la comida seguía descuadrada, sin una palabra, y desde fuera parecía
+                // que el botón no funcionaba. Es lo que Gonzalo describe como «le doy a
+                // cuadrar y no pasa nada». No se toca la comida, que es lo que él ha pedido;
+                // lo que se hace es contarle en qué se queda.
+                if (!respuesta) {
+                    if (!hizoAlgo) {
+                        const queda = desajusteEnPalabras(res.desfases?.[mealKey]);
+                        if (queda) toast.info(`Lo dejo como está: ${queda}.`, { duration: 7000 });
+                        return;
+                    }
+                    break;
+                }
                 if (respuesta.modo === 'quitar') {
                     const fuera = new Set(respuesta.alimento_ids || []);
                     alimentos.filter(a => fuera.has(a.alimento_id))
@@ -2619,8 +2633,31 @@ const NutritionPage = () => {
                     : s?.que_hacer === 'anadir'
                         ? ` Para cuadrarlo te falta añadir algo con ${nombre[s.macro]}.`
                         : '';
+                // EL AVISO DECÍA TRES COSAS QUE NO ERAN (Gonzalo, minuto 10:59 de la reunión).
+                //
+                // La frase era una sola para todos los casos: «No se puede cuadrar sin quitar
+                // nada: X. No se ha quitado ninguno.» Y de ahí salían tres mentiras:
+                //
+                //   1. Hablaba de QUITAR cuando lo que pasaba era que FALTA. En la misma línea
+                //      decía «no se puede cuadrar sin quitar nada» y «te falta añadir algo».
+                //      Quitar no arregla que falte: no sobra, falta.
+                //   2. Decía «no se ha quitado ninguno» JUSTO DESPUÉS de quitar lo que el
+                //      cliente acababa de marcar, y los dos avisos salían a la vez.
+                //   3. Venía de cuando cuadrar sí quitaba por su cuenta (antes del 08-08).
+                //      Desde que pregunta, esa cabecera ya no describía nada.
+                //
+                // Ahora la cabecera sale de lo que de verdad ha pasado: si sobra y no cabe
+                // bajando, se dice; si falta, se dice que falta; y la coletilla de «no se ha
+                // quitado ninguno» solo aparece cuando de verdad no se quitó nada.
+                const soloFalta = d && ['P', 'H', 'G'].every(m => (d[m] ?? 0) <= MARGEN_QUE_SE_DICE);
+                const cabecera = soloFalta
+                    ? 'No llega a cuadrar'
+                    : 'No se puede cuadrar sin quitar nada';
+                // Y la coletilla solo cuando de verdad viene a cuento: si no sobraba nada,
+                // nadie esperaba que se quitara nada, así que decirlo es ruido.
+                const coletilla = (quitados.length || soloFalta) ? '' : ' No se ha quitado ninguno.';
                 toast.warning(
-                    `No se puede cuadrar sin quitar nada: ${texto}.${comoArreglarlo} No se ha quitado ninguno.`,
+                    `${cabecera}: ${texto}.${comoArreglarlo}${coletilla}`,
                     { duration: 9000 });
             } else {
                 toast.success('Comida cuadrada a tus macros.');

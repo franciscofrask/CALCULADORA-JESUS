@@ -460,10 +460,16 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
     }).color === 'ok');
     const pieDeFalta = diaCuadrado ? 'Día cuadrado. Mañana seguimos.' : PIE_DE_VISTA.falta;
 
-    const irANutricion = () => navigate('/dashboard/nutrition');
-    // El peri aterriza EN el peri (P32 del 23-08): pinchar su tarjeta te dejaba en la
-    // cocina con la Comida 1 delante. Se va al bloque que el día tenga (Intra o Post).
-    const irAlPeri = (clave) => navigate(`/dashboard/nutrition?comida=${clave}`);
+    // CADA COMIDA ATERRIZA EN LA SUYA, no solo el peri.
+    //
+    // Esto nació en el P32 del 23-08 para el peri: «pinchar su tarjeta te dejaba en la cocina
+    // con la Comida 1 delante, como si el peri no fuera contigo». Y se quedó ahí: las comidas
+    // normales seguían yendo a Nutrición a secas, o sea a la Comida 1, dijeras la que dijeras.
+    // Lo cazó Gonzalo probando en pantalla: «entran en el día, no entran en la comida».
+    //
+    // El destino ya sabía recibirlo (`?comida=C1..C4|Intra|Post` en NutritionPage); lo único
+    // que faltaba era decirle cuál.
+    const irALaComida = (clave) => navigate(`/dashboard/nutrition?comida=${clave}`);
 
     return (
         <>
@@ -796,7 +802,7 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
                                     ? <CheckCircle2 className="w-6 h-6 text-ok" />
                                     : <Circle className="w-6 h-6 text-muted-foreground" />}
                             </button>
-                            <button onClick={esPeri ? () => irAlPeri(k) : irANutricion}
+                            <button onClick={() => irALaComida(k)}
                                 className="flex-1 min-w-0 flex items-center gap-3 text-left group">
                                 <div className="min-w-0 flex-1">
                                     <p className={`font-bold text-sm text-foreground flex items-center gap-1.5 ${marcada ? 'line-through' : ''}`}>

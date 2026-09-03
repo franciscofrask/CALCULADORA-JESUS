@@ -174,13 +174,20 @@ const claseDelEstado = (color) => (
 const fmtHalf = numMedio;
 const fmt1 = num1;
 
+// «NO APORTA MACROS», NO «SIN MACROS» (Jesús, en la reunión con Gonzalo, minuto 11:59):
+// «en las verduras quiero que ponga, no sin macro, sino que no aporta macro». No es lo mismo:
+// «sin macros» suena a que falta el dato, y lo que pasa es que ese alimento no aporta nada.
+// El modal de construir la comida ya lo decía así, o sea que la app decía las dos cosas a la
+// vez según la pantalla. Aquí, en un solo sitio, para las dos versiones de la línea.
+const SIN_APORTE = 'No aporta macros';
+
 const macrosLine = (m) => {
     const parts = [
         (m.P || 0) > 0 && `${fmt1(m.P)} g proteína`,
         (m.H || 0) > 0 && `${fmt1(m.H)} g hidratos`,
         (m.G || 0) > 0 && `${fmt1(m.G)} g grasa`,
     ].filter(Boolean);
-    return parts.length ? parts.join(' · ') : 'sin macros';
+    return parts.length ? parts.join(' · ') : SIN_APORTE;
 };
 
 // Version corta para movil: en la fila del ingrediente los macros comparten linea con los
@@ -191,7 +198,7 @@ const macrosLineCorta = (m) => {
         (m.H || 0) > 0 && `${fmt1(m.H)}H`,
         (m.G || 0) > 0 && `${fmt1(m.G)}G`,
     ].filter(Boolean);
-    return parts.length ? parts.join(' · ') : 'sin macros';
+    return parts.length ? parts.join(' · ') : SIN_APORTE;
 };
 
 // ===== Selector item (master-detail) =====
