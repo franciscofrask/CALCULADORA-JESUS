@@ -112,16 +112,18 @@ const nombreComida = (k, unica) => (unica ? 'Comida única' : `Comida ${k.slice(
 const ORDEN_PERI = ['Intra', 'Post'];
 
 const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, suplementos }) => {
-    // ABRE EN «LLEVAS», NO EN «MACROS» («Todo lo validado antes del 1 de septiembre», 1.1).
+    // ABRE EN «DIETA» (Francisco, 2-09). Esto ha cambiado dos veces y conviene saberlo antes
+    // de tocarlo otra vez:
     //
-    // Macros es el objetivo, y el objetivo no cambia en todo el día: entrar y ver 175 · 80 · 50
-    // no dice nada que el cliente no supiera al levantarse. Llevas es por dónde va hoy, que es
-    // lo que ha venido a mirar. La frase del documento: «entra y ve 146 · 69 · 49: por dónde
-    // va hoy, y lo que le queda».
+    //   Macros  ->  el punto 170 del 27-08
+    //   Llevas  ->  «Todo lo validado antes del 1 de septiembre», 1.1, con su motivo: «Macros
+    //               es el objetivo y no cambia en todo el día; Llevas es por dónde va hoy, que
+    //               es lo que ha venido a mirar»
+    //   Dieta   ->  Francisco, 2-09, que es lo que manda ahora
     //
-    // Sin nada marcado no salen tres ceros pelados: `nadaMarcado` hace que Llevas diga
-    // «Todavía no has marcado nada», que ya estaba resuelto de antes.
-    const [vista, setVista] = useState('llevas');
+    // Sin nada marcado, Llevas no sacaba tres ceros pelados sino «Todavía no has marcado
+    // nada»; eso sigue estando y funciona igual cuando se entra a esa pestaña.
+    const [vista, setVista] = useState('dieta');
     // Las comidas ya marcadas se CONTRAEN («2 hechas · ocultas — Ver», punto 1 del doc
     // del 23-08): la lista enseña solo lo que queda por comer, y el «Ver» las despliega.
     const [verHechas, setVerHechas] = useState(false);
@@ -359,19 +361,13 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
 
     // SI LA DIETA DEL DÍA NO LLEGA A SUS MACROS, QUE SE VEA (revisión del 2-09).
     //
-    // El bloque abre en «Llevas» por decisión del doc del 1-09 (1.1) y ahí se queda: es
-    // por dónde va hoy. Pero con la dieta montada a 128 g de hidratos de su objetivo, ese
-    // dato estaba calculado y a dos toques, en la pestaña «Dieta», sin que nada lo dijera.
-    // No se cambia la pestaña de entrada: se marca la que lo cuenta.
+    // Queda el punto en la pestaña. La línea que lo decía con el número se quitó el 2-09,
+    // porque el bloque ya abre en «Dieta» y allí el número se ve solo.
     //
     // El margen es el mismo que usa el resto de la app para dar un macro por bueno.
     const MARGEN = 5;
     const dietaNoCuadra = !!(conPeri && dieta?.exists
         && ['P', 'H', 'G'].some((k) => Math.abs((totalDieta[k] || 0) - (conPeri[k] || 0)) > MARGEN));
-    const loQueMasFalta = !dietaNoCuadra ? null : ['H', 'P', 'G']
-        .map((k) => ({ k, d: Math.round((totalDieta[k] || 0) - (conPeri[k] || 0)) }))
-        .filter((x) => Math.abs(x.d) > MARGEN)
-        .sort((a, b) => Math.abs(b.d) - Math.abs(a.d))[0];
 
     // El contador de Llevas: las comidas por un lado y el peri por otro (punto 93).
     const contadorDeLlevas = contarLoMarcado(
@@ -419,15 +415,10 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
                         ))}
                     </div>
 
-                    {/* Y una línea que lo dice con el número, que es el dato por el que
-                        entra: «a tu dieta de hoy le faltan 128 g de hidratos». */}
-                    {dietaNoCuadra && loQueMasFalta && vista !== 'dieta' && (
-                        <button onClick={() => setVista('dieta')} data-testid="aviso-dieta-no-cuadra"
-                            className="w-full mt-2 text-left text-xs text-orange-400 hover:underline">
-                            A tu dieta de hoy le {loQueMasFalta.d < 0 ? 'faltan' : 'sobran'}
-                            {' '}{Math.abs(loQueMasFalta.d)} g de {NOMBRE_LLANO[loQueMasFalta.k]}. Verlo
-                        </button>
-                    )}
+                    {/* AQUÍ IBA «A tu dieta de hoy le faltan 12 g de hidratos. Verlo», y sale
+                        (Francisco, 2-09). Era para avisar desde otra pestaña de algo que solo
+                        se veía entrando en Dieta; ahora Dieta es la pestaña de entrada, así que
+                        el número se ve directamente y la línea sobraba. */}
 
                     {vista === 'llevas' && nadaMarcado ? (
                         /* Sin nada marcado, Llevas no es un 0 en rojo: se dice y ya está. */
