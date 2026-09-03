@@ -202,9 +202,15 @@ const LineaDieta = ({ dia }) => {
                    dos pantallas diciendo lo mismo de dos formas. Es una decisión de diseño de
                    las dos a la vez, no un arreglo de una. */
                 <span className="font-data text-foreground flex items-baseline gap-1 flex-wrap min-w-0">
-                    <span className={`font-semibold flex-shrink-0 ${dia.is_cuadrado ? 'text-emerald-400' : 'text-orange-400'}`}
+                    {/* `null` es «no hay con qué juzgarlo» (un cliente sin macros puestos):
+                        ahí se dice «Creada» a secas y sin color, que es lo único cierto.
+                        Antes cualquier cosa que no fuera `true` se leía «Sin cuadrar». */}
+                    <span className={`font-semibold flex-shrink-0 ${
+                        dia.is_cuadrado === true ? 'text-emerald-400'
+                            : dia.is_cuadrado === false ? 'text-orange-400' : 'text-muted-foreground'}`}
                         data-testid={`estado-dieta-${dia.fecha}`}>
-                        {dia.is_cuadrado ? 'Cuadrada' : 'Sin cuadrar'}
+                        {dia.is_cuadrado === true ? 'Cuadrada'
+                            : dia.is_cuadrado === false ? 'Sin cuadrar' : 'Creada'}
                     </span>
                     <span className="text-muted-foreground">·</span>
                     <span className="whitespace-nowrap">

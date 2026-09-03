@@ -641,6 +641,10 @@ async def get_semana(inicio: Optional[str] = None, hoy_cliente: Optional[str] = 
                 {"_id": 0, "fecha": 1, "hecho": 1}):
             logs[l["fecha"]] = bool(l.get("hecho"))
 
+    # El juez de «este día cuadra», con el historial de macros leído UNA vez para los siete.
+    from core.dia_cuadrado import juez_de_dias
+    juzgar = await juez_de_dias(db, perfil)
+
     dias = []
     montadas = empezadas = sin_montar = 0
     entrenos_total = entrenos_hechos = 0
@@ -709,10 +713,15 @@ async def get_semana(inicio: Optional[str] = None, hoy_cliente: Optional[str] = 
             #
             # Mi semana pintaba las siete filas iguales y en verde con solo decir «Creada»:
             # el día que se queda a 128 g de hidratos se veía igual que el que cuadra, y el
-            # verde le decía al cliente que iba bien. El calendario de Nutrición sí lo
-            # distingue y lo hace con este mismo campo, así que se manda desde aquí en vez
-            # de inventar un segundo criterio.
-            "is_cuadrado": bool((diet or {}).get("is_cuadrado")),
+            # verde le decía al cliente que iba bien.
+            #
+            # Y DESDE EL 3-09 SE CALCULA, NO SE LEE. Venía de `diets.is_cuadrado`, una marca
+            # que solo escribe la pantalla de Nutrición al guardar y que todas las demás
+            # puertas apagan: en dev había 42.747 días y 3 en verde. Ahora sale de
+            # `core/dia_cuadrado`, con los macros vigentes de ESE día y la misma regla que
+            # cuenta los días cuadrados del informe del mes. `null` = sin nada dentro, que
+            # no es lo mismo que descuadrado.
+            "is_cuadrado": juzgar(fecha, tipo, macros),
             "n_comidas_con_alimentos": con_alimentos,
             "n_comidas_total": num_comidas,
             "entreno": {
@@ -777,6 +786,20 @@ async def get_diet_calendar(year: int, month: int, user = Depends(get_current_us
         {"_id": 0, "fecha": 1, "tipo_dia": 1, "comidas": 1, "is_cuadrado": 1, "num_comidas": 1}
     ).to_list(31)
     
+    # EL VERDE DEL CALENDARIO SE CALCULA, NO SE LEE (3-09-2026). Igual que en Mi semana: la
+    # marca guardada `is_cuadrado` dejaba el mes entero en naranja. El catálogo y el
+    # historial de macros se traen UNA vez para los treinta y un días.
+    from core.dia_cuadrado import juez_de_dias
+    perfil_entero = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    juzgar = await juez_de_dias(db, perfil_entero)
+    ids_del_mes = set()
+    for d in diets:
+        ids_del_mes |= _ids_de(d)
+    catalogo_mes = {}
+    if ids_del_mes:
+        async for f in db.foods.find({"id": {"$in": list(ids_del_mes)}}, {"_id": 0}):
+            catalogo_mes[f["id"]] = f
+
     calendar_data = {}
     for diet in diets:
         fecha = diet["fecha"]
@@ -807,11 +830,14 @@ async def get_diet_calendar(year: int, month: int, user = Depends(get_current_us
             elif total_comidas > 0:
                 status = "partial"
         
+        macros_del_dia = _total_como_arriba(
+            await _servido_por_comida(diet, fichas=catalogo_mes)) if total_foods else {}
         calendar_data[fecha] = {
             "tipo_dia": diet.get("tipo_dia", "entrenamiento"),
             "status": status,
             "total_comidas": total_comidas,
-            "is_cuadrado": diet.get("is_cuadrado", False)
+            # `null` cuando el día no tiene nada dentro: sin empezar no es descuadrado.
+            "is_cuadrado": juzgar(fecha, diet.get("tipo_dia"), macros_del_dia),
         }
 
     # Días con cambio de macros (Calma esDiaConCambioDeMacros): effective_date de macro_history

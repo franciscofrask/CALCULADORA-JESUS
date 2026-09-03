@@ -217,9 +217,12 @@ async def datos_dieta(perfil: Dict[str, Any], d0: date, d1: date) -> Dict[str, A
         # 13-08), y por eso tampoco puede descontar un día aquí. Contándolo de otra forma,
         # el «cuadraste los macros N días» del reporte no coincidía con los días verdes que
         # el cliente ve en su calendario, sobre exactamente los mismos datos.
-        proteina_hecha = total["P"] - objetivo["P"] >= -MARGEN_VALIDO
-        resto_cuadrado = all(abs(objetivo[r] - total[r]) <= MARGEN_VALIDO for r in ("H", "G"))
-        if proteina_hecha and resto_cuadrado:
+        #
+        # Desde el 3-09 la regla vive en `core/dia_cuadrado` y la comparten los tres sitios
+        # que la necesitan: este recuento, Mi semana y el calendario. Estaba escrita aquí y
+        # los otros dos leían una marca guardada, así que daban números distintos.
+        from core.dia_cuadrado import cuadra
+        if cuadra(total, objetivo):
             cuadrados += 1
         elif objetivo["P"] - total["P"] > MARGEN_VALIDO:
             corto_proteina += 1

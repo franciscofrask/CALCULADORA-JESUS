@@ -138,8 +138,24 @@ const DietCalendar = ({ open, onClose, onSelectDate, api, abierto = null }) => {
                                         const esElAbierto = dateStr === abierto;
                                         const status = getDayStatus(day);
                                         const hasDiet = status?.status === 'complete' || status?.status === 'partial';
-                                        const isCuadrado = hasDiet && status?.is_cuadrado === true;
-                                        const isPartial = hasDiet && !isCuadrado;
+                                        // EL NARANJA ES SOLO PARA LO QUE ESTÁ MAL, NO PARA
+                                        // LO QUE ESTÁ A MEDIAS (3-09-2026).
+                                        //
+                                        // Aquí se pintaba de naranja TODO día con algo
+                                        // dentro y sin la marca de cuadrado, así que el día
+                                        // recién empezado salía con el mismo aviso que el
+                                        // que se pasa 70 g. Es lo que le salía a Gonzalo
+                                        // «a todos de naranja», y va contra la regla escrita
+                                        // de la casa (`lib/estadoDelMacro.js`): «ir corto no
+                                        // es un error, es que todavía no has terminado».
+                                        //
+                                        // Ahora un día solo se juzga cuando está entero, y
+                                        // el que está a medias va en gris, como en Mi
+                                        // semana, que dice «1 de 4 comidas» sin color.
+                                        const estaEntero = status?.status === 'complete';
+                                        const isCuadrado = estaEntero && status?.is_cuadrado === true;
+                                        const isPartial = estaEntero && status?.is_cuadrado === false;
+                                        const aMedias = hasDiet && !estaEntero;
                                         const isMacroChange = macroChangeDates.includes(dateStr);
 
                                         return (
@@ -156,6 +172,7 @@ const DietCalendar = ({ open, onClose, onSelectDate, api, abierto = null }) => {
                                                     ${!isToday && isMacroChange ? 'ring-2 ring-blue-400' : ''}
                                                     ${!esElAbierto && isCuadrado ? 'bg-green-500/20 text-green-600 hover:bg-green-500/30' : ''}
                                                     ${!esElAbierto && isPartial ? 'bg-orange-500/20 text-orange-600 hover:bg-orange-500/30' : ''}
+                                                    ${!esElAbierto && aMedias ? 'bg-muted text-foreground/70 hover:bg-muted/70' : ''}
                                                     ${!esElAbierto && !hasDiet ? 'text-muted-foreground hover:bg-muted' : ''}
                                                 `}
                                                 title={isMacroChange ? 'Cambio de macros desde este día' : undefined}
@@ -167,7 +184,10 @@ const DietCalendar = ({ open, onClose, onSelectDate, api, abierto = null }) => {
                                                     <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-blue-400" />
                                                 )}
                                                 {hasDiet && (
-                                                    <span className={`absolute bottom-0.5 w-1.5 h-1.5 rounded-full ${isCuadrado ? 'bg-green-500' : 'bg-orange-500'}`} />
+                                                    <span className={`absolute bottom-0.5 w-1.5 h-1.5 rounded-full ${
+                                                        isCuadrado ? 'bg-green-500'
+                                                            : isPartial ? 'bg-orange-500'
+                                                                : 'bg-muted-foreground/50'}`} />
                                                 )}
                                             </button>
                                         );
@@ -181,6 +201,9 @@ const DietCalendar = ({ open, onClose, onSelectDate, api, abierto = null }) => {
                     <div className="flex items-center justify-center gap-4 mt-4 pt-3 border-t text-xs text-muted-foreground">
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> Cuadrada</span>
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500" /> Sin cuadrar</span>
+                        {/* La leyenda dice lo que se ve: el día a medias tiene su punto y no
+                            es «sin dieta», que era como se leía al no estar nombrado. */}
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-muted-foreground/50" /> A medias</span>
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-muted" /> Sin dieta</span>
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400" /> Cambio macros</span>
                     </div>
