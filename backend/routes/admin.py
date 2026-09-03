@@ -980,15 +980,29 @@ async def get_client_detail(client_id: str, user = Depends(get_admin_user)):
             "desde": vigente.get("effective_date"),
             "quien": vigente.get("changed_by"),
         }
-        de_hoy = (vigente.get("training") or vigente.get("new_training") or {})
-        del_campo = profile.get("macros_training") or {}
-        p_hoy = de_hoy.get("protein") or de_hoy.get("proteinas")
-        p_campo = del_campo.get("protein") or del_campo.get("proteinas")
-        try:
-            profile["macros_descuadrados"] = (p_hoy is not None and p_campo is not None
-                                              and abs(float(p_hoy) - float(p_campo)) >= 1)
-        except (TypeError, ValueError):
-            profile["macros_descuadrados"] = False
+        # LOS TRES MACROS, NO SOLO LA PROTEÍNA (2-09). Esto comparaba únicamente `protein`, y
+        # el descuadre casi nunca está ahí: medidos en producción los migrados cuyo historial
+        # entero viene del import, **25 tienen la ficha y el ajuste vigente en desacuerdo y
+        # sólo 2 de ellos cambian la proteína**. Los otros 23 bailaban en hidratos o en grasa
+        # -- 200/240/50 en la ficha contra 200/280/60 vigente, 40 g de hidratos -- y el aviso
+        # no se encendía: el entrenador leía un número y el cliente comía otro sin que nada lo
+        # dijera. Con los tres comparados se ven los 25.
+        from macros_por_fecha import en_castellano
+
+        de_hoy = en_castellano(vigente.get("training") or vigente.get("new_training"))
+        del_campo = en_castellano(profile.get("macros_training"))
+
+        def _difieren(clave):
+            a, b = de_hoy.get(clave), del_campo.get(clave)
+            if a is None or b is None:
+                return False        # sin dato no se puede afirmar que descuadre
+            try:
+                return abs(float(a) - float(b)) >= 1
+            except (TypeError, ValueError):
+                return False
+
+        profile["macros_descuadrados"] = any(_difieren(k)
+                                             for k in ("proteinas", "hidratos", "grasas"))
 
     from core.plan_access import estado_de_acceso
 
