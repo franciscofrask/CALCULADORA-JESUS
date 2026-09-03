@@ -255,9 +255,17 @@ const PortadaSeguimiento = ({ windowState, vencido, conDiario, puedeMandarReport
                             ? 'Unas breves preguntas para ajustar tus macros si hace falta.'
                             : null}
                     extra={aunNoAbre && apertura ? `Se abre el ${apertura}.` : null}
-                    cta={tocaRevision ? 'Empezar' : 'Ver'}
+                    /* EL «VER» QUE NO LLEVABA A NINGUNA PARTE (2-09). Los tres estados de la
+                       tarjeta compartían botón y destino: decía «Ver» y llamaba a `onRevision`,
+                       o sea abría el formulario. Con la ventana cerrada ahí no hay nada que
+                       abrir, así que el botón se pulsaba y no pasaba nada.
+                       Ahora cada estado lleva lo suyo: pendiente, «Empezar» al formulario; ya
+                       mandado, «Ver» al historial, que es donde está lo que mandó; y si aún no
+                       abre, NINGÚN botón, porque todavía no hay nada que ver y la propia
+                       tarjeta ya dice cuándo se enciende. */
+                    cta={tocaRevision ? 'Empezar' : yaMandado ? 'Ver' : null}
                     tono={tocaRevision ? 'ahora' : 'gris'}
-                    onClick={onRevision} />
+                    onClick={tocaRevision ? onRevision : onHistorial} />
             )}
 
             {/* SOLO EN EL CLON DE PRUEBAS. Allí la ventana se abre a la fuerza para poder
@@ -652,8 +660,12 @@ const ReportsPage = () => {
                         <>
                             <ComparativaCliente api={api} reports={reports} faseDesde={profile?.fase_desde} />
                             {/* La misma tabla que la ficha del panel, con el tono de la app del
-                                cliente: la diferencia con la toma anterior y la columna Total. */}
-                            <EvolucionMedidas reports={reports} />
+                                cliente: la diferencia con la toma anterior y la columna Total.
+                                Con el perfil, para que entren también las medidas sueltas
+                                («Añadir medidas · cuando quieras») y las del alta: sin él, el
+                                que las apuntaba por ahí seguía leyendo aquí que no tenía
+                                ninguna. */}
+                            <EvolucionMedidas reports={reports} perfil={profile} />
                         </>
                     )}
 

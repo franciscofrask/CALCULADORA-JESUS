@@ -2471,8 +2471,10 @@ const ClientDetailPage = () => {
                     <WeightEvolution reports={reports} objetivo={profile?.goal}
                         desdeElCiclo={profile?.cycle_start} />
                     {/* Las diez medidas comparadas en el tiempo (punto 35): hasta ahora solo
-                        se veía el último dato. */}
-                    <EvolucionMedidas reports={reports} tono="admin" />
+                        se veía el último dato. Con el perfil van también las que el cliente
+                        apuntó por su cuenta y las del alta, que antes no llegaban aquí: el
+                        entrenador tampoco las veía. */}
+                    <EvolucionMedidas reports={reports} perfil={profile} tono="admin" />
                     {/* La comparativa con etiquetas (3.2): cuatro fotos como mucho y cada una
                         responde a algo. Sustituye al comparador de dos con selectores de pose,
                         que ya no hace falta (decisión del 05-08). */}

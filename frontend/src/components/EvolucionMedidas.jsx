@@ -65,14 +65,53 @@ const TONOS = {
     },
 };
 
-const EvolucionMedidas = ({ reports, tono = 'cliente', titulo }) => {
+/**
+ * LAS TRES PUERTAS POR LAS QUE ENTRA UNA MEDIDA, en una sola serie (2-09).
+ *
+ * Esta tabla solo miraba `reports[].measurements`, o sea las que se mandan dentro de un
+ * reporte. Pero la app tiene otras dos puertas, y las dos guardaban en sitios que ninguna
+ * pantalla pintaba:
+ *
+ *   - «Añadir medidas · cuando quieras» -> `client_profiles.medidas_sueltas`
+ *   - las del día 1, en el cuestionario -> `client_profiles.medidas_inicio`
+ *
+ * Un cliente las apuntaba, le salía «Medidas guardadas», y aquí abajo seguía leyendo
+ * «Todavía no has mandado ningún reporte con medidas». Era literalmente cierto y del todo
+ * inútil. El backend ya lo daba por hecho: el propio `POST /clients/me/medidas` dice que
+ * «van a su serie y la Evolución las pinta junto a las de los reportes: una toma es una
+ * toma, venga de donde venga». La Evolución no lo hacía.
+ *
+ * `medidas_sueltas` ya viajaba en el perfil, así que esto no necesitó backend. Una toma por
+ * día: si el mismo día hay reporte y toma suelta, manda la del reporte, que es la revisada.
+ */
+const _tomasDelPerfil = (perfil) => {
+    const fuera = [];
+    for (const t of (perfil?.medidas_sueltas || [])) {
+        if (t?.fecha && t?.measurements && Object.keys(t.measurements).length) {
+            fuera.push({ created_at: t.fecha, measurements: t.measurements });
+        }
+    }
+    const inicio = perfil?.medidas_inicio;
+    if (inicio && inicio.fecha) {
+        const { fecha, ...medidas } = inicio;
+        if (Object.keys(medidas).length) fuera.push({ created_at: fecha, measurements: medidas });
+    }
+    return fuera;
+};
+
+const EvolucionMedidas = ({ reports, perfil = null, tono = 'cliente', titulo }) => {
     const t = TONOS[tono] || TONOS.cliente;
     const cabecera = titulo || (tono === 'admin' ? 'Evolución de las medidas' : 'Tus medidas');
 
     const sesiones = React.useMemo(() => {
-        const conMedidas = (reports || [])
-            .filter(r => r?.created_at && r?.measurements && Object.keys(r.measurements).length)
-            .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+        const deReportes = (reports || [])
+            .filter(r => r?.created_at && r?.measurements && Object.keys(r.measurements).length);
+        const diasConReporte = new Set(deReportes.map(r => String(r.created_at).slice(0, 10)));
+        const conMedidas = [
+            ...deReportes,
+            ..._tomasDelPerfil(perfil)
+                .filter(t2 => !diasConReporte.has(String(t2.created_at).slice(0, 10))),
+        ].sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
         const vistas = conMedidas.slice(-SESIONES_A_LA_VISTA);
         // EL AÑO, CUANDO LAS TOMAS NO SON DEL MISMO (revisión del 2-09).
         //
@@ -83,16 +122,19 @@ const EvolucionMedidas = ({ reports, tono = 'cliente', titulo }) => {
         // la tabla en el caso normal (todas del mismo año).
         const anios = new Set(vistas.map(r => String(r.created_at).slice(0, 4)));
         return { todas: conMedidas.length, vistas, conAnio: anios.size > 1 };
-    }, [reports]);
+    }, [reports, perfil]);
 
     if (sesiones.vistas.length === 0) {
         return (
             <div className={t.caja} data-testid="evolucion-medidas-vacio">
                 <p className={`${t.titulo} mb-2`}>{cabecera}</p>
+                {/* «Ningún reporte con medidas» era media verdad y sonaba a reproche: ahora
+                    la tabla mira también las sueltas y las del alta, así que si sigue vacía
+                    es que no hay ninguna por ninguna de las tres puertas. */}
                 <p className={t.vacio}>
                     {tono === 'admin'
-                        ? 'Todavía no ha mandado ningún reporte con medidas.'
-                        : 'Todavía no has mandado ningún reporte con medidas.'}
+                        ? 'Todavía no ha apuntado ninguna medida.'
+                        : 'Todavía no has apuntado ninguna medida. Puedes hacerlo cuando quieras con «Añadir medidas».'}
                 </p>
             </div>
         );
