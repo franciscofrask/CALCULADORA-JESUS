@@ -74,8 +74,12 @@ const TusFotosYMetricas = ({ api, token, profile, onGuardado }) => {
                     abierto={abierto === 'medidas'} onClick={() => alternar('medidas')}
                     testid="btn-anadir-medidas" />
                 {/* «Carrusel» era jerga nuestra (doc 23-08, bloque 10): se dice lo que
-                    va a hacer, con las palabras del doc. */}
-                <Boton icon={Percent} titulo="Actualizar mi % de grasa" sub="Eliges la foto que más se parece a como estás"
+                    va a hacer, con las palabras del doc.
+                    Y CADA CUÁNTO, que es opcional (punto 10.2 del 2-09): el subtítulo decía
+                    cómo se elige, no cuándo conviene hacerlo, y el informe por su lado decía
+                    «se mide al final de cada ciclo, cada 12 semanas», que sonaba a obligación.
+                    Los dos sitios dicen ya lo mismo. */}
+                <Boton icon={Percent} titulo="Actualizar mi % de grasa" sub="Opcional · mejor uno de cada 3 reportes"
                     abierto={abierto === 'grasa'} onClick={() => alternar('grasa')}
                     testid="btn-actualizar-grasa" />
             </div>
@@ -116,6 +120,12 @@ const TusFotosYMetricas = ({ api, token, profile, onGuardado }) => {
 
             {abierto === 'grasa' && (
                 <div className="pt-1 space-y-3">
+                    {/* Su texto entero, dentro. Aquí es donde va a decidir si lo hace hoy. */}
+                    <p className="text-xs text-muted-foreground">
+                        Registrarlo es opcional, lo puedes hacer si quieres, pero para poder
+                        sacar conclusiones es mejor hacerlo uno de cada 3 reportes (12 semanas):
+                        así comparas el inicio y el final de cada ciclo.
+                    </p>
                     <BodyFatSlider value={grasa} onChange={setGrasa}
                         sexo={profile?.sex || 'hombre'} />
                     <button onClick={guardarGrasa} disabled={guardando || grasa == null}

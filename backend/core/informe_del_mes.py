@@ -299,25 +299,42 @@ def medidas_del_informe(actuales: Optional[Dict[str, Any]],
 # 5 · TU PORCENTAJE DE GRASA
 # ─────────────────────────────────────────────────────────────────────────────
 
+#: EL % DE GRASA ES OPCIONAL, Y SE DICE (punto 10.2 de «Todo lo que está validado», 2-09).
+#:
+#: Decía «Se mide al final de cada ciclo, cada 12 semanas» y sonaba a obligatorio: a una cita
+#: que se pierde si no la cumples. No lo es. Su texto, tal y como lo dejó escrito:
+#:
+#:     «registrarlo ahora es opcional, lo puedes hacer si quieres, pero para poder sacar
+#:      conclusiones es mejor hacerlo uno de cada 3 reportes (12 semanas): así comparas el
+#:      inicio y el final de cada ciclo»
+#:
+#: Va aquí y en el botón de Evolución, que son los dos sitios donde se le habla de esto, para
+#: que no cuenten dos cosas distintas. `cada_semanas` sigue mandando el número por si un plan
+#: lleva otro ciclo.
+def _texto_opcional(cada_semanas: int) -> str:
+    return ("Registrarlo es opcional, lo puedes hacer si quieres, pero para poder sacar "
+            f"conclusiones es mejor hacerlo uno de cada 3 reportes ({cada_semanas} semanas): "
+            "así comparas el inicio y el final de cada ciclo.")
+
+
 def grasa_del_informe(valor: Optional[float], fecha_label: Optional[str],
                       semanas_desde: Optional[int],
                       cada_semanas: int = 12) -> Dict[str, Any]:
-    """«Se mide al final de cada ciclo, cada 12 semanas. La última medición: 18 %, el 4 de junio.»
+    """El bloque del % de grasa: qué es, cuándo se midió y cuándo conviene la próxima.
 
     Se dice CUÁNDO se midió y cuándo toca la próxima. El informe de antes ponía el número y
     el anterior al lado, y con eso el cliente no sabía si su 18 % era de este mes o de hace
     tres, que en este dato es toda la diferencia.
     """
     if valor is None:
-        return {"hay": False,
-                "explicacion": f"Se mide al final de cada ciclo, cada {cada_semanas} semanas."}
+        return {"hay": False, "explicacion": _texto_opcional(cada_semanas)}
     faltan = None if semanas_desde is None else max(0, cada_semanas - int(semanas_desde))
     return {
         "hay": True,
         "valor": valor,
         "valor_label": f"{_num(valor)} %",
         "fecha_label": fecha_label,
-        "explicacion": f"Se mide al final de cada ciclo, cada {cada_semanas} semanas.",
+        "explicacion": _texto_opcional(cada_semanas),
         "ultima": (f"La última medición: {_num(valor)} %"
                    + (f", el {fecha_label}." if fecha_label else ".")),
         # El rótulo de la esquina: «EN 4 SEMANAS», o «TOCA AHORA» si ya se cumplieron.

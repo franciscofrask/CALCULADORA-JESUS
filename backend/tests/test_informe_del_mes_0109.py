@@ -171,11 +171,19 @@ def test_sin_medidas_no_hay_bloque():
 # 5 · GRASA
 # ═════════════════════════════════════════════════════════════════════════════
 
+#: EL TEXTO CAMBIÓ EL 2-09 y estos dos tests fijaban el viejo. Decía «se mide al final de cada
+#: ciclo, cada 12 semanas», que sonaba a obligación, y el punto 10.2 de «Todo lo que está
+#: validado» lo deja escrito de otra forma: es OPCIONAL y lo que se recomienda es hacerlo uno
+#: de cada 3 reportes. Se comprueban las dos cosas que no pueden faltar de esa frase.
+def _dice_que_es_opcional(texto):
+    return "opcional" in texto.lower() and "12 semanas" in texto
+
+
 def test_la_grasa_dice_cuando_se_midio_y_cuando_toca():
     r = idm.grasa_del_informe(18.0, "4 de junio", semanas_desde=8)
     assert r["ultima"] == "La última medición: 18 %, el 4 de junio."
     assert r["cuando"] == "En 4 semanas"
-    assert "cada 12 semanas" in r["explicacion"]
+    assert _dice_que_es_opcional(r["explicacion"]), r["explicacion"]
 
 
 def test_si_ya_toca_lo_dice():
@@ -185,7 +193,7 @@ def test_si_ya_toca_lo_dice():
 def test_sin_medicion_se_explica_igual_para_que_no_parezca_un_hueco():
     r = idm.grasa_del_informe(None, None, None)
     assert r["hay"] is False
-    assert "cada 12 semanas" in r["explicacion"]
+    assert _dice_que_es_opcional(r["explicacion"]), r["explicacion"]
 
 
 # ═════════════════════════════════════════════════════════════════════════════
