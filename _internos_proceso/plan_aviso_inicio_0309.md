@@ -123,4 +123,34 @@ quedó desfasada en esa palabra. Decirlo.
 
 ## Estado
 
-- [ ] Nada implementado aún: solo el plan. Artifact leído entero el 3-09.
+**Bloques 01, 02 y 03 HECHOS Y COMPROBADOS** (commit `959f198`, en GitHub sin desplegar).
+El **07 queda pendiente** por decisión de Francisco. Lo mide, punto por punto,
+`node _guia/_probar_como_abre_inicio.js`: **16 de 18**, y los 2 que faltan son el 07.
+
+- [x] 01 · La caja roja dentro de Dieta, con «Terminarla» y la «×».
+- [x] 02 · El punto de la pestaña en rojo (`bg-red-500`), blanco sobre la pestaña activa.
+- [x] 03 · La «×» se lleva la caja y deja el punto, y solo por ese día; «Terminarla» lleva
+      a la primera comida corta; al cuadrar, caja y punto se van solos.
+- [x] El margen local de 5 g, fuera: ahora el `MARGEN` de `lib/exceso`.
+- [x] 04, 05 y 06 · Ya se cumplían, y se comprobó en pantalla en vez de darlo por hecho:
+      número siempre en blanco, barras gris/verde/naranja según el estado (verde
+      `rgb(34,197,94)` = #22C55E y naranja `rgb(255,90,46)` = #FF5A2E, los del pie de su
+      documento), las cuatro pestañas con su palabra, y Llevas al empezar y al llegar.
+- [ ] 07 · La línea de las hechas con sus macros y la marca de la fila.
+
+### Tres cosas que decidió Francisco al cerrarlo
+
+1. **Se mantiene la apertura en Dieta.** Medido: abre en Dieta. Con eso el bloque 02 pierde
+   su pega (nadie se queda sin ver el aviso), pero el punto en rojo se hace igual.
+2. **«válido», no «cuadrado»**, dentro del margen. Sus maquetas dicen «cuadrado (+1)» y la
+   decisión del mismo 3-09 es posterior.
+3. **El 07 espera**, y hay un motivo que decirle: esa barra naranja **no marca «la comida de
+   ahora», marca el peri**, y la llevan DOS filas a la vez (el intra y el post). Llamarla
+   «AHORA» sería mentir; si lo que quiere es la palabra, la palabra es otra.
+
+### Una que salió al hacerlo
+
+El número del aviso tenía que salir de **los números que él lee**, no del desvío exacto:
+con 193,4 de 200,9 el desvío redondea a 8 y debajo pone «faltan 7». Es la regla del punto
+80, la que ya cumplía `leerMacro`, y el aviso se la había saltado. La prueba lo caza en ese
+medio gramo a propósito.
