@@ -4550,8 +4550,14 @@ class AgentTools:
                         "error": f"el método reparte el día en 3 o 4 comidas, no en "
                                  f"{num_comidas}. Díselo tal cual al cliente y ofrécele "
                                  f"3, 4 o dejar todo el día en una sola comida."}
+        # SI NADIE HA DICHO EL TIPO, EL SABADO Y EL DOMINGO SON DE DESCANSO (Francisco,
+        # 3-09). Antes caia siempre en «entrenamiento», que es lo que hacia que un domingo
+        # se montara con 60 g de hidratos y 45 de perientreno de mas. La regla vive en
+        # `core/tipo_del_dia`, con su gemelo en la pantalla (`lib/tipoDelDia.js`).
+        from core.tipo_del_dia import tipo_por_defecto
         self.bot.configure_day(
-            tipo_dia=tipo_dia or st.get("tipo_dia") or "entrenamiento",
+            tipo_dia=(tipo_dia or st.get("tipo_dia")
+                      or tipo_por_defecto(st.get("fecha_objetivo"))),
             num_comidas=int(num_comidas or st.get("num_comidas") or 4),
             momento_entreno=int(momento_entreno if momento_entreno is not None
                                 else st.get("momento_entreno", 1)),

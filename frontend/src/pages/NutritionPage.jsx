@@ -7,6 +7,7 @@ import { useOnboarding } from '../context/OnboardingContext';
 import { leer as leerLocal, escribir as escribirLocal, borrar as borrarLocal } from '../lib/almacenLocal';
 import { excesos, textoExceso, margenDe, MARGEN } from '../lib/exceso';
 import { num1 } from '../lib/numeros';
+import { tipoPorDefecto } from '../lib/tipoDelDia';
 import { leerCantidad, avisoRazonable, TOPE_GRAMOS, AVISO_TOPE, AVISO_NO_ES_NUMERO, AVISO_NEGATIVO } from '../lib/cantidades';
 import { useConfirm } from '../components/ui/confirm';
 import { Card, CardContent } from '../components/ui/card';
@@ -636,8 +637,12 @@ const NutritionPage = () => {
                 setMealsData({});
                 setVolcadoMeal(null);
                 setLoMontoSuCoach(null);
-                // NADIE HA DICHO SI ESTE DÍA ENTRENA (punto 4.17). Se sigue abriendo en
-                // «Entreno» porque hay que abrir en algo, pero se dice.
+                // NADIE HA DICHO SI ESTE DÍA ENTRENA (punto 4.17). Se sigue diciendo -- el
+                // selector se queda con su aro --, pero ya no se abre siempre en «Entreno»:
+                // el sábado y el domingo abren en descanso (Francisco, 3-09). La regla vive
+                // en `lib/tipoDelDia`, no aquí, porque el asistente monta días por su cuenta
+                // y tiene que abrirlos igual.
+                setTipoDia(tipoPorDefecto(date));
                 setDiaSinMarcar(true);
                 return { targets: null, config: null, ok: true, comidas: {} };
             }
