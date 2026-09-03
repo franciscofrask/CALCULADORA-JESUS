@@ -364,3 +364,40 @@ def test_si_todos_cayeron_en_finde_no_se_repite_el_numero():
 def test_sin_extras_no_hay_bloque():
     assert idm.extras_registrados([])["hay"] is False
     assert idm.extras_registrados([{"fecha": "2026-08-01", "texto": "   "}])["hay"] is False
+
+
+def test_el_dia_tipo_lleva_con_que_volver_a_montar_la_comida():
+    """EL BOTON «Guardamela como plantilla» NECESITA EL ID Y LOS GRAMOS (bloque 8).
+
+    La fila enseña «1 Yogur griego y 30 g de Nueces», que es lo que el cliente reconoce,
+    pero para guardar eso como favorita hace falta el `alimento_id` y los GRAMOS: la
+    cantidad que se pinta puede venir en unidades y una favorita se guarda en gramos.
+
+    Y los gramos son la MEDIANA del mes, igual que la cantidad: si un dia se puso el doble
+    de nueces, la plantilla no puede salir con ese dia.
+    """
+    dias = [_comida("C1", f"2026-08-{d:02d}",
+                    [{"nombre": "Yogur griego", "cantidad": 1, "unidad": "ud",
+                      "alimento_id": 501, "gramos": 125},
+                     {"nombre": "Nueces", "cantidad": 25 + d, "unidad": "g",
+                      "alimento_id": 502, "gramos": 25 + d}], momento="desayuno")
+            for d in range(1, 12)]
+    fila = idm.dia_tipo(dias)["filas"][0]
+    assert fila["varia"] is False
+    porNombre = {i["nombre"]: i for i in fila["items"]}
+    assert porNombre["Yogur griego"]["alimento_id"] == 501
+    assert porNombre["Yogur griego"]["gramos"] == 125
+    assert porNombre["Nueces"]["alimento_id"] == 502
+    # 26..36: la mediana de once dias es el sexto, 31.
+    assert porNombre["Nueces"]["gramos"] == 31
+
+
+def test_una_comida_sin_id_no_revienta_el_dia_tipo():
+    """Los dias viejos no traen `alimento_id`: la fila sale igual, sin con que guardarla."""
+    dias = [_comida("C1", f"2026-08-{d:02d}",
+                    [{"nombre": "Avena", "cantidad": 80, "unidad": "g"}], momento="desayuno")
+            for d in range(1, 12)]
+    fila = idm.dia_tipo(dias)["filas"][0]
+    assert fila["items"][0]["alimento_id"] is None
+    assert fila["items"][0]["gramos"] is None
+    assert fila["texto"] == "80 g de Avena"

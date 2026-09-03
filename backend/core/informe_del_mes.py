@@ -474,6 +474,11 @@ def dia_tipo(comidas_por_dia: List[Dict[str, Any]]) -> Dict[str, Any]:
             por_nombre: Dict[str, List[float]] = {}
             unidad_de: Dict[str, str] = {}
             visible: Dict[str, str] = {}
+            # El id y los gramos viajan también: son lo que hace falta para volver a montar
+            # la comida desde el botón «Guárdamela como plantilla». La mediana se saca de
+            # los gramos por su cuenta, porque `cantidad` puede venir en unidades.
+            id_de: Dict[str, Any] = {}
+            gramos_de: Dict[str, List[float]] = {}
             for items in apariciones:
                 for i in items:
                     n = (i.get("nombre") or "").strip()
@@ -482,6 +487,10 @@ def dia_tipo(comidas_por_dia: List[Dict[str, Any]]) -> Dict[str, Any]:
                     clave_n = n.lower()
                     visible.setdefault(clave_n, n)
                     unidad_de.setdefault(clave_n, i.get("unidad") or "g")
+                    if i.get("alimento_id") is not None:
+                        id_de.setdefault(clave_n, i["alimento_id"])
+                    if i.get("gramos") is not None:
+                        gramos_de.setdefault(clave_n, []).append(float(i["gramos"]))
                     if i.get("cantidad") is not None:
                         por_nombre.setdefault(clave_n, []).append(float(i["cantidad"]))
             # EN EL ORDEN DE LA COMIDA, NO EN EL DEL ALFABETO. La firma va ordenada para
@@ -493,10 +502,13 @@ def dia_tipo(comidas_por_dia: List[Dict[str, Any]]) -> Dict[str, Any]:
                 if not clave_n or any(r["_clave"] == clave_n for r in resumen):
                     continue
                 valores = sorted(por_nombre.get(clave_n) or [])
+                gramos = sorted(gramos_de.get(clave_n) or [])
                 resumen.append({"_clave": clave_n,
                                 "nombre": visible.get(clave_n, clave_n),
                                 "unidad": unidad_de.get(clave_n, "g"),
-                                "cantidad": valores[len(valores) // 2] if valores else None})
+                                "cantidad": valores[len(valores) // 2] if valores else None,
+                                "alimento_id": id_de.get(clave_n),
+                                "gramos": gramos[len(gramos) // 2] if gramos else None})
             for r in resumen:
                 r.pop("_clave", None)
             fila.update({

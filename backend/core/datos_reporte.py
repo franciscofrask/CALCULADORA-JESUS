@@ -501,6 +501,13 @@ async def comidas_y_extras_del_periodo(perfil: Dict[str, Any], d0: date,
                     "nombre": nombre,
                     "cantidad": (round(gramos / peso_ud, 1) if por_unidad else gramos),
                     "unidad": "ud" if por_unidad else "g",
+                    # Y EL ID Y LOS GRAMOS, para poder VOLVER A MONTAR la comida. Lo pide
+                    # el botón «Guárdamela como plantilla» del día tipo (bloque 8 de su
+                    # documento del 1-09): sin el id no hay alimento que guardar, y sin los
+                    # gramos tampoco, porque `cantidad` puede venir en unidades («1 yogur»)
+                    # y una favorita se guarda siempre en gramos.
+                    "alimento_id": a.get("alimento_id"),
+                    "gramos": gramos,
                 })
                 me = a.get("macros_efectivos")
                 if not (me and any((me.get(r) or 0) > 0 for r in ("P", "H", "G"))):

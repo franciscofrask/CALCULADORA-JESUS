@@ -20,6 +20,7 @@
  * tarjeta vacía con un guion dentro se lee como que la app no sabe de él.
  */
 import React, { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
 const ORANGE = '#FF671F';
 const VERDE = '#22C55E';
@@ -205,6 +206,61 @@ const TusFotos = ({ api, token }) => {
     );
 };
 
+/**
+ * «GUÁRDAMELA COMO PLANTILLA» (bloque 8 de su documento).
+ *
+ * Guarda la combinación que él ya reconoce como su desayuno -- los alimentos del día tipo,
+ * con las cantidades que enseña la fila, que son la MEDIANA del mes -- como una favorita de
+ * COMIDA, que es la que luego se pone de un toque en cualquier comida desde Nutrición.
+ *
+ * El nombre se pone solo y con la fecha detrás: pedirle que escriba uno sería pedirle algo,
+ * y el informe no le pide nada. Si ya tiene una con ese nombre, el servidor no protesta
+ * (eso solo lo mira la pantalla de favoritas del día), así que la fecha las distingue.
+ */
+const ComoPlantilla = ({ api, fila }) => {
+    const [estado, setEstado] = useState('');       // '' | 'guardando' | 'hecho'
+    const guardar = async () => {
+        if (estado) return;
+        setEstado('guardando');
+        try {
+            await api.post('/diets/favorites', {
+                name: `${fila.nombre} de siempre · ${new Date().toLocaleDateString('es-ES',
+                    { day: 'numeric', month: 'long' })}`,
+                ambito: 'comida',
+                comida: fila.clave,
+                alimentos: (fila.items || [])
+                    .filter((x) => x.alimento_id != null)
+                    .map((x) => ({ alimento_id: x.alimento_id, nombre: x.nombre,
+                                   cantidad_g: x.gramos })),
+            });
+            setEstado('hecho');
+        } catch (e) {
+            console.error('[informe] no se pudo guardar la plantilla', e);
+            setEstado('');
+            toast.error('No hemos podido guardarla. Inténtalo de nuevo.');
+        }
+    };
+    // Ya guardada, el botón se queda diciendo dónde está: guardarla dos veces no aporta
+    // nada y dejar el botón igual invita a hacerlo.
+    if (estado === 'hecho') {
+        return (
+            <span className="mt-2 block text-[13px]" style={{ color: VERDE }}
+                data-testid="informe-plantilla-hecha">
+                Guardada · La tienes en tus comidas favoritas
+            </span>
+        );
+    }
+    return (
+        <button type="button" onClick={guardar} disabled={estado === 'guardando'}
+            data-testid="informe-guardar-plantilla"
+            className="mt-2 rounded-full border px-3 py-1.5 text-[13px] font-bold transition-colors
+                       disabled:opacity-60"
+            style={{ borderColor: ORANGE, color: ORANGE }}>
+            {estado === 'guardando' ? 'Guardando...' : 'Guárdamela como plantilla'}
+        </button>
+    );
+};
+
 const InformeDelMes = ({ informe, api, token }) => {
     const b = informe?.bloques;
     if (!b) return null;
@@ -383,6 +439,19 @@ const InformeDelMes = ({ informe, api, token }) => {
                                     <span className="block text-sm font-bold text-foreground">{f.nombre}</span>
                                     <span className="block text-[13px] text-muted-foreground">{f.texto}</span>
                                     <span className="block text-base text-foreground/70 mt-0.5">{f.cuantos}</span>
+                                    {/* EL ÚNICO BOTÓN DEL INFORME, ADEMÁS DE LOS SELECTORES DE
+                                        LAS FOTOS. Su documento lo dice dos veces: la maqueta lo
+                                        dibuja bajo el desayuno y el pie remata «lo único que
+                                        puede tocar son los selectores de las fotos y el botón de
+                                        guardar SU DESAYUNO como plantilla». Por eso va en la
+                                        primera comida del día y no en todas: ponerlo en las seis
+                                        convertiría el informe en una pantalla de botones, que es
+                                        justo lo que él no quiere.
+                                        Solo cuando esa comida es una de verdad: si «cambia casi
+                                        cada día» no hay plantilla que guardar. */}
+                                    {i === 0 && !f.varia && (f.items || []).some(x => x.alimento_id != null) && (
+                                        <ComoPlantilla api={api} fila={f} />
+                                    )}
                                 </span>
                             </div>
                         ))}
