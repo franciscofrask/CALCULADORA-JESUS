@@ -77,9 +77,10 @@ const SemanaDeRutina = ({ semana, abrirPdf, tienePdf, onMarcarHoy, onSiLoHice, o
                 {tienePdf && (
                     <button onClick={abrirPdf} data-testid="semana-rutina-pdf"
                         className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand hover:underline underline-offset-4">
-                        {/* «Ver PDF», la misma palabra que el botón de abajo: los dos abren
-                            lo mismo y no pueden llamarse distinto (Francisco, 27-08). */}
-                        <FileText className="w-4 h-4" /> Ver PDF
+                        {/* «Ver rutina», la misma palabra que el botón de abajo: los dos
+                            abren lo mismo y no pueden llamarse distinto (Francisco, 27-08;
+                            la palabra, del 3-09 -- ver el comentario de la tarjeta). */}
+                        <FileText className="w-4 h-4" /> Ver rutina
                     </button>
                 )}
             </div>
@@ -218,10 +219,15 @@ const SemanaDeRutina = ({ semana, abrirPdf, tienePdf, onMarcarHoy, onSiLoHice, o
 // DENTRO del gesto del dedo (lib/abrirRutina), que es lo que hacía que en el iPhone no
 // pasara nada.
 //
-// EL RÓTULO DEL BOTÓN: «Ver PDF» (Francisco, 27-08). OJO, porque contradice al vídeo de esa
-// misma mañana: en el minuto 8:46 Jesús dice «olvida el PDF, olvida la palabra PDF, eso no
-// tiene sentido», y por eso ponía «Abrirla entera». Manda lo último que se ha pedido, pero
-// si Jesús vuelve a verlo va a preguntar, así que queda escrito de dónde viene cada cosa.
+// EL RÓTULO DEL BOTÓN: «Ver rutina» (Francisco, 3-09-2026). Es la tercera palabra que lleva
+// este botón y conviene tener la historia entera a la vista:
+//
+//   «Abrirla entera»  porque en el vídeo del 27-08, minuto 8:46, Jesús dice «olvida el PDF,
+//                     olvida la palabra PDF, eso no tiene sentido».
+//   «Ver PDF»         Francisco, esa misma mañana del 27-08.
+//   «Ver rutina»      Francisco, 3-09. Vuelve a lo que pedía el vídeo: el cliente no abre un
+//                     formato, abre SU RUTINA. Y ya no hay contradicción entre los dos.
+//
 // La fecha se queda -- saber de cuándo es sí le dice algo.
 // ─────────────────────────────────────────────────────────────────────────────
 const TarjetaDeLaRutina = ({ info, abrirPdf }) => (
@@ -235,7 +241,7 @@ const TarjetaDeLaRutina = ({ info, abrirPdf }) => (
             </div>
             <button onClick={abrirPdf} data-testid="routine-pdf-btn"
                 className="btn-brand inline-flex items-center gap-2 shrink-0">
-                Ver PDF <ChevronRight className="w-4 h-4" />
+                Ver rutina <ChevronRight className="w-4 h-4" />
             </button>
         </div>
     </div>
