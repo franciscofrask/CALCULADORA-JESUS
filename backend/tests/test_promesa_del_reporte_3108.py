@@ -26,8 +26,16 @@ class TestQueDiaSeLePrometio:
     def test_el_quincenal_promete_el_viernes(self):
         assert dia_de_la_promesa("quincenal", LUNES) == VIERNES
 
-    def test_el_mensual_promete_el_sabado(self):
-        assert dia_de_la_promesa("mensual", LUNES) == SABADO
+    def test_el_mensual_tambien_promete_el_viernes(self):
+        """VIERNES DESDE EL 3-09, no sabado (decision de Francisco).
+
+        El doc «El dia» del 31-08 puso sabado para el mensual con feedback. Despues, CUATRO
+        documentos suyos dijeron viernes -- «El reporte mensual» y «El informe del mes», los
+        dos del 1-09 --, y eligio la mayoria: «si 4 documentos dicen viernes entonces es
+        viernes». Si vuelve a ser sabado, se cambia `DIA_PROMETIDO` y este test con el.
+        """
+        assert dia_de_la_promesa("mensual", LUNES) == VIERNES
+        assert dia_de_la_promesa("mensual", LUNES) != SABADO
 
     def test_el_semanal_promete_el_domingo(self):
         """«El domingo tienes mi feedback: empiezas el lunes sabiendo que cambia.»"""
@@ -89,10 +97,14 @@ class TestAQuienLeToca:
             self._reporte(id="a"),                                  # le toca hoy
             self._reporte(id="b", informe_estado="entregado"),       # ya contestado
             self._reporte(id="c", created_at="2026-09-01"),          # su viernes es el mismo
-            self._reporte(id="d", tipo="mensual"),                   # el suyo es el sabado
+            # El mensual TAMBIEN vence el viernes desde el 3-09: antes era el sabado y por
+            # eso este quedaba fuera de la lista del viernes.
+            self._reporte(id="d", tipo="mensual"),
         ]
         ids = {r["id"] for r in a_quien_le_toca(reportes, VIERNES)}
-        assert ids == {"a", "c"}
+        assert ids == {"a", "c", "d"}
+        # Y el sabado ya no le toca a nadie: es la otra cara del mismo cambio.
+        assert a_quien_le_toca(reportes, SABADO) == []
 
 
 class TestElTexto:

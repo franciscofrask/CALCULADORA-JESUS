@@ -4,8 +4,10 @@
 Al mandar su reporte, al cliente se le dice una fecha:
 
     «Antes del viernes tienes tus ajustes nuevos. Te aviso por aquí.»
-    «Antes del sábado tienes tu informe completo con mi feedback y tus ajustes.»
     «El domingo tienes mi feedback: empiezas el lunes sabiendo qué cambia.»
+
+El mensual prometía el sábado; desde el 3-09 promete el viernes, como el quincenal (ver
+`DIA_PROMETIDO`).
 
 Y ese «te aviso por aquí» ya funciona: al publicar el informe o al guardarle los macros le
 salta su aviso. El agujero es el otro lado. SI NADIE LE CONTESTA, NO PASA NADA: el cliente
@@ -28,10 +30,20 @@ from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 #: Cada tipo de reporte promete un dia distinto de la semana (0 = lunes).
-#:   quincenal y el mensual sin feedback -> «antes del viernes»
-#:   mensual con feedback                -> «antes del sabado»
-#:   semanal                             -> «el domingo», que es cuando lo lee
-DIA_PROMETIDO = {"quincenal": 4, "mensual": 5, "semanal": 6}
+#:   quincenal y mensual -> «antes del viernes»
+#:   semanal             -> «el domingo», que es cuando lo lee
+#:
+#: EL MENSUAL PASA DE SABADO A VIERNES (Francisco, 3-09-2026). El doc «El dia» del 31-08
+#: decia sabado para el mensual con feedback, y de ahi salio este 5. Pero desde entonces
+#: CUATRO documentos suyos han dicho viernes -- «El reporte mensual» y «El informe del mes»,
+#: los dos del 1-09, y los dos artifacts donde se repiten --, y su decision fue literal: «si
+#: 4 documentos dicen viernes entonces es viernes».
+#:
+#: De este numero cuelgan las dos puntas de la promesa, y por eso se cambia AQUI y en ningun
+#: otro sitio: la frase que lee el cliente (`frase_de_la_promesa`, y el `promesa_dia` que
+#: pinta el paso 4 del mensual) y el aviso al equipo, que ahora saltara el viernes. Si algun
+#: dia vuelve a ser sabado, es este 4 y nada mas.
+DIA_PROMETIDO = {"quincenal": 4, "mensual": 4, "semanal": 6}
 
 #: La hora a la que se mira, en España. A las 10:00 queda media jornada por delante: avisar a
 #: las 14:55 de un «antes de las tres» es contarlo, no evitarlo.

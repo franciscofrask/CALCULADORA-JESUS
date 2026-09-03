@@ -246,12 +246,24 @@ class TestUnPesajeConSuFecha:
         assert peso_semanal(serie, LUNES)["regla"] == "pareja"
 
 
-# ── Los tres avisos del Premium (punto 35) ───────────────────────────────────
+# ── Los tres avisos del Premium ──────────────────────────────────────────────
 #
 # Los textos son LITERALES del doc y se comprueban letra a letra: es la voz de Jesus.
+#
+# OJO: ESTOS TRES CAMBIARON EL 1-09 (commit 758c024) y esta clase defendia los de antes.
+# Eran el del MIERCOLES («Hoy toca pesarte y manana tambien») y el del JUEVES; se fueron
+# porque su calendario del doc «validado» pone el aviso el MARTES y deja los dos dias de
+# pesada con FILA en Inicio, no con aviso -- su regla de la cola, «nunca dos avisos» --, y
+# porque ademas mandaban a /dashboard/checkins, donde el campo del peso ya no esta.
+#
+# Los de ahora son otros tres: martes, miercoles de la semana 1 del primer ciclo, y el
+# rescate del viernes. Se reescriben aqui en vez de borrarse: lo que hay que fijar es la
+# regla vigente, y de paso queda escrito cual se derogo y por que.
 
+MARTES_ES = datetime(2026, 8, 11, 9, 0, tzinfo=MADRID)
 MIERCOLES_ES = datetime(2026, 8, 12, 9, 0, tzinfo=MADRID)
 JUEVES_ES = datetime(2026, 8, 13, 9, 0, tzinfo=MADRID)
+VIERNES_ES = datetime(2026, 8, 14, 9, 0, tzinfo=MADRID)
 
 
 def _peso(avisos):
@@ -259,45 +271,52 @@ def _peso(avisos):
 
 
 class TestLosTresAvisosDelPeso:
-    def test_el_del_miercoles_va_literal(self):
-        a = _peso(avisos_de_calendario_doc(ahora_es=MIERCOLES_ES, es_premium=True))[0]
-        assert a["titulo"] == "Hoy toca pesarte y mañana también."
-        assert a["cuerpo"] == ("Hacemos la media y ese será tu peso semanal, lo que debes "
-                               "registrar semana a semana.")
-        assert a["link"] == "/dashboard/checkins"
+    def test_el_del_martes_avisa_de_que_toca_reporte(self):
+        a = _peso(avisos_de_calendario_doc(ahora_es=MARTES_ES, es_premium=True,
+                                           toca_quincenal_esta_semana=True))[0]
+        assert a["titulo"] == "Esta semana toca reporte quincenal"
+        assert a["cuerpo"] == ("Recuerda pesarte y registrar el dato. Manana y el jueves, "
+                               "en ayunas y despues de ir al bano.").replace(
+                                   "Manana", "Mañana").replace("despues", "después").replace(
+                                   "bano", "baño")
+        # AL SITIO DONDE SE APUNTA. Los de antes mandaban a /dashboard/checkins y el campo
+        # del peso se mudo a Evolucion: era mandarle donde no puede hacer lo que se le pide.
+        assert a["link"] == "/dashboard/reports?abrir=peso"
 
-    def test_el_del_jueves_habiendose_pesado_el_miercoles(self):
-        a = _peso(avisos_de_calendario_doc(ahora_es=JUEVES_ES, es_premium=True,
-                                           se_peso_miercoles=True))[0]
-        assert a["titulo"] == "Recuerda pesarte hoy también."
+    def test_el_del_martes_no_sale_la_semana_sin_reporte(self):
+        """Sin quincenal esa semana no hay media que preparar, asi que no se le pide."""
+        assert _peso(avisos_de_calendario_doc(ahora_es=MARTES_ES, es_premium=True)) == []
 
-    def test_el_del_jueves_sin_haberse_pesado(self):
-        a = _peso(avisos_de_calendario_doc(ahora_es=JUEVES_ES, es_premium=True))[0]
-        assert a["titulo"] == "Ayer te tocaba pesarte y no registraste el dato."
-        assert a["cuerpo"] == "Hazlo hoy y mañana, no te olvides."
+    def test_el_de_la_semana_1_solo_el_primer_ciclo(self):
+        """Es el que le ENSENA el metodo; repetirselo cada ciclo es ruido."""
+        a = _peso(avisos_de_calendario_doc(ahora_es=MIERCOLES_ES, es_premium=True,
+                                           semana=1, primer_ciclo=True))[0]
+        assert a["titulo"] == "Esta semana no toca reporte"
+        assert "te pesas dos días seguidos entre el miércoles y el viernes" in a["cuerpo"]
+        assert _peso(avisos_de_calendario_doc(ahora_es=MIERCOLES_ES, es_premium=True,
+                                              semana=1, primer_ciclo=False)) == []
 
-    def test_el_jueves_nace_UNO_y_no_dos(self):
-        for peso_ayer in (True, False):
-            avisos = _peso(avisos_de_calendario_doc(ahora_es=JUEVES_ES, es_premium=True,
-                                                    se_peso_miercoles=peso_ayer))
-            assert len(avisos) == 1
+    def test_el_del_viernes_es_el_rescate_y_solo_si_le_falta_una(self):
+        a = _peso(avisos_de_calendario_doc(ahora_es=VIERNES_ES, es_premium=True,
+                                           le_falta_una_pesada=True))[0]
+        assert a["titulo"] == "Te falta una pesada"
+        assert "antes de las 10" in a["cuerpo"]
+        # Al que tiene las dos no le falta nada, y al que no mando el reporte no se le
+        # persigue: las dos cosas las decide `le_falta_una_pesada`.
+        assert _peso(avisos_de_calendario_doc(ahora_es=VIERNES_ES, es_premium=True)) == []
 
-    def test_los_dos_del_jueves_comparten_clave(self):
-        """El que entra por la mañana sin pesarse y vuelve por la tarde ya pesado recibiria
-        los dos si cada texto tuviera su clave. Es el aviso del jueves, uno."""
-        sin = _peso(avisos_de_calendario_doc(ahora_es=JUEVES_ES, es_premium=True))[0]
-        con = _peso(avisos_de_calendario_doc(ahora_es=JUEVES_ES, es_premium=True,
-                                             se_peso_miercoles=True))[0]
-        assert sin["clave"] == con["clave"] == "peso_jueves:2026-08-13"
-
-    def test_el_del_viernes_no_existe(self):
-        """Jesus quito el cuarto el 24-08: el viernes ya tiene por delante «Tu reporte
-        semanal esta abierto» y el correo de novedades, y solo nace un aviso al dia."""
-        viernes = datetime(2026, 8, 14, 9, 0, tzinfo=MADRID)
-        assert _peso(avisos_de_calendario_doc(ahora_es=viernes, es_premium=True)) == []
+    def test_el_miercoles_y_el_jueves_ya_no_llevan_aviso(self):
+        """LOS DOS DIAS DE PESADA LLEVAN FILA EN INICIO, no aviso (1-09). Este test es el
+        que impide que vuelvan sin querer: si alguien los resucita, salta aqui."""
+        for cuando in (MIERCOLES_ES, JUEVES_ES):
+            assert _peso(avisos_de_calendario_doc(ahora_es=cuando, es_premium=True)) == []
+            assert _peso(avisos_de_calendario_doc(ahora_es=cuando, es_premium=True,
+                                                  se_peso_miercoles=True)) == []
 
     def test_ningun_otro_dia_de_la_semana(self):
-        for n in (0, 1, 4, 5, 6):
+        """Lunes, jueves, sabado y domingo, ninguno. El martes, el miercoles y el viernes
+        tienen los suyos pero con condicion, y sin ella tampoco nacen."""
+        for n in (0, 3, 5, 6):
             cuando = datetime(2026, 8, 10 + n, 9, 0, tzinfo=MADRID)
             assert _peso(avisos_de_calendario_doc(ahora_es=cuando, es_premium=True)) == []
 
@@ -308,15 +327,20 @@ class TestNoNacenDeMadrugada:
     por delante al que tenia su hora mas tarde y era candidato ese dia y solo ese. Es el
     mismo mordisco que la pasada de fondo de las 00:15 (ver `sincronizar_avisos`)."""
 
-    @pytest.mark.parametrize("dia", [12, 13])       # miercoles y jueves
-    def test_a_las_cero_treinta_no_nace(self, dia):
-        madrugada = datetime(2026, 8, dia, 0, 30, tzinfo=MADRID)
-        assert _peso(avisos_de_calendario_doc(ahora_es=madrugada, es_premium=True)) == []
+    #: Los dias que llevan aviso desde el 1-09, con lo que hace falta para que nazca: el
+    #: martes (11) y el viernes (14). El miercoles y el jueves ya no llevan ninguno.
+    CON_AVISO = [(11, {"toca_quincenal_esta_semana": True}),
+                 (14, {"le_falta_una_pesada": True})]
 
-    @pytest.mark.parametrize("dia", [12, 13])
-    def test_a_las_ocho_ya_esta(self, dia):
+    @pytest.mark.parametrize("dia,cond", CON_AVISO)
+    def test_a_las_cero_treinta_no_nace(self, dia, cond):
+        madrugada = datetime(2026, 8, dia, 0, 30, tzinfo=MADRID)
+        assert _peso(avisos_de_calendario_doc(ahora_es=madrugada, es_premium=True, **cond)) == []
+
+    @pytest.mark.parametrize("dia,cond", CON_AVISO)
+    def test_a_las_ocho_ya_esta(self, dia, cond):
         ocho = datetime(2026, 8, dia, 8, 0, tzinfo=MADRID)
-        assert len(_peso(avisos_de_calendario_doc(ahora_es=ocho, es_premium=True))) == 1
+        assert len(_peso(avisos_de_calendario_doc(ahora_es=ocho, es_premium=True, **cond))) == 1
 
 
 class TestSoloPremium:
@@ -373,38 +397,73 @@ class TestNoSeComenAOtroAviso:
         for v in self._ventanas_de_premium():
             assert v["abre"].weekday() == 4, "todas las ventanas del Premium abren viernes"
 
-    @pytest.mark.parametrize("dia_semana", [2, 3])
-    def test_el_aviso_del_peso_nace_las_26_semanas(self, dia_semana):
+    # Martes (1) con quincenal esa semana, y viernes (4) con una pesada de menos. Antes
+    # eran el miercoles y el jueves, que desde el 1-09 no llevan aviso.
+    #
+    # Y CADA UNO A SU HORA. El del viernes solo vive de 8:00 a 13:00 («si te pesas esta
+    # manana antes de las 10, aun entra»), asi que a las 21:00 no existe y probarlo ahi no
+    # dice nada: se mira a las 9. El del martes si nace por la tarde.
+    @pytest.mark.parametrize("dia_semana,hora,cond",
+                             [(1, 21, {"toca_quincenal_esta_semana": True}),
+                              (4, 9, {"le_falta_una_pesada": True})])
+    def test_el_aviso_del_peso_nace_las_26_semanas(self, dia_semana, hora, cond):
         ventanas = self._ventanas_de_premium()
         for n in range(26):
             dia = LUNES + timedelta(days=7 * n + dia_semana)
-            ahora = datetime(dia.year, dia.month, dia.day, 21, 0, tzinfo=MADRID)
-            # A las 21:00 y con el dia sin cerrar, que es el peor caso: es la hora en la
-            # que «Cierra tu dia» se comia a los demas antes del arreglo del 24-08.
+            ahora = datetime(dia.year, dia.month, dia.day, hora, 0, tzinfo=MADRID)
             calendario = avisos_de_calendario_doc(
                 ahora_es=ahora, cliente_id="c1", cerro_hoy=False,
                 ventanas=[v for v in ventanas
                           if abs((v["abre"].date() - dia).days) <= 7],
-                semana=n + 1, semanas_ciclo=12, es_premium=True)
+                semana=n + 1, semanas_ciclo=12, es_premium=True, **cond)
+            assert _peso(calendario), f"semana {n + 1}: no nacio el aviso del peso"
+
+    def test_y_a_las_26_semanas_le_gana_a_cierra_tu_dia(self):
+        """NACER NO ES GANAR, y esta clase va de lo segundo. El del martes gana siempre
+        menos cuando hay algo mas gordo delante: «no nos llego tu reporte», que es un
+        plazo que se le paso. Eso NO es que se lo coma un aviso cualquiera -- es la regla
+        de uno al dia funcionando --, asi que lo que se fija es que gane a «Cierra tu
+        dia», que es el que se los comia antes del arreglo del 24-08.
+        """
+        ventanas = self._ventanas_de_premium()
+        perdidas = []
+        for n in range(26):
+            dia = LUNES + timedelta(days=7 * n + 1)
+            ahora = datetime(dia.year, dia.month, dia.day, 21, 0, tzinfo=MADRID)
+            calendario = avisos_de_calendario_doc(
+                ahora_es=ahora, cliente_id="c1", cerro_hoy=False,
+                ventanas=[v for v in ventanas
+                          if abs((v["abre"].date() - dia).days) <= 7],
+                semana=n + 1, semanas_ciclo=12, es_premium=True,
+                toca_quincenal_esta_semana=True)
             elegido = elegir_avisos(calendario, [], set(), None, ahora)
             assert elegido, f"semana {n + 1}: no nacio ningun aviso"
-            assert elegido[0]["clave"].startswith("peso_"), (
-                f"semana {n + 1}: gano «{elegido[0]['titulo']}» y no el del peso")
+            gana = elegido[0]["clave"]
+            assert not gana.startswith("cierra_dia"), (
+                f"semana {n + 1}: «Cierra tu dia» se comio al del peso")
+            if not gana.startswith("peso_"):
+                perdidas.append(gana.split(":")[0])
+        # Lo unico que le gana es el reporte que no llego. Si algun dia le gana otra cosa,
+        # que salte aqui y se mire: puede estar bien, pero hay que decidirlo.
+        assert set(perdidas) <= {"reporte_no_llego"}, sorted(set(perdidas))
 
     def test_pero_no_le_quita_el_sitio_a_una_entrega(self):
         """Va el ultimo de los de calendario a proposito: gana a «Cierra tu dia», que
         vuelve a nacer mañana, y pierde contra el fin de ciclo, que trae el dinero."""
-        ahora = datetime(2026, 8, 12, 21, 0, tzinfo=MADRID)
+        ahora = datetime(2026, 8, 11, 21, 0, tzinfo=MADRID)
         calendario = avisos_de_calendario_doc(
             ahora_es=ahora, cliente_id="c1", cerro_hoy=False, es_premium=True,
-            fin_de_ciclo=date(2026, 8, 16))
+            toca_quincenal_esta_semana=True, fin_de_ciclo=date(2026, 8, 16))
         elegido = elegir_avisos(calendario, [], set(), None, ahora)
         assert elegido[0]["familia"] == "fin_ciclo"
 
     def test_y_gana_a_cierra_tu_dia(self):
-        ahora = datetime(2026, 8, 12, 21, 0, tzinfo=MADRID)
+        """El del MARTES desde el 1-09. La familia sigue llamandose «peso_miercoles»
+        porque es el mismo interruptor de siempre: el nombre es de la llave, no del dia."""
+        ahora = datetime(2026, 8, 11, 21, 0, tzinfo=MADRID)
         calendario = avisos_de_calendario_doc(ahora_es=ahora, cliente_id="c1",
-                                              cerro_hoy=False, es_premium=True)
+                                              cerro_hoy=False, es_premium=True,
+                                              toca_quincenal_esta_semana=True)
         assert [a["familia"] for a in calendario] == ["peso_miercoles", "cierra_dia"]
 
 
