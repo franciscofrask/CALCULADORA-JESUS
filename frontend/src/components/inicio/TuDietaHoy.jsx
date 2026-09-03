@@ -502,36 +502,45 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
                            medio montar -- la frase se partía en cinco renglones de tres
                            palabras contra el botón. Aquí el texto se lleva su ancho y el
                            botón baja; a partir de `sm` vuelve a la línea de su maqueta. */
+                        /* EL AIRE, QUE NO LO TENÍA (Francisco, 3-09, con la captura delante).
+                           Iba pegado al selector, sin un solo píxel entre medias, y de lejos
+                           se leía como una quinta pestaña en vez de como un aviso. Y la «×»
+                           tocaba el borde de la tarjeta.
+                           Ahora: separación arriba, más alto de caja, y las dos cosas que se
+                           tocan -- el botón y la «×» -- agrupadas a la derecha con su hueco,
+                           sin que ninguna llegue al filo. */
                         <div data-testid="aviso-dieta"
-                            className="mb-3 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2.5
-                                       flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2.5">
+                            className="mt-3 mb-3 rounded-xl border border-red-500/50 bg-red-500/[0.13]
+                                       px-3.5 py-3 flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3">
                             <div className="flex items-start gap-2.5 flex-1 min-w-0">
                                 <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-                                <p className="flex-1 min-w-0 text-sm text-foreground">{avisoDeLaDieta}</p>
-                                {/* La «×» con su hueco de dedo (36 px sin moverse, como la de
-                                    los diálogos desde el 2-09) y con nombre, que un aspa a
+                                <p className="flex-1 min-w-0 text-sm text-foreground leading-snug">{avisoDeLaDieta}</p>
+                                {/* La «×» con su hueco de dedo y con nombre, que un aspa a
                                     secas no se anuncia. En el teléfono va arriba, junto al
                                     texto: abajo quedaría lejos de lo que cierra. */}
                                 <button onClick={quitarAviso} data-testid="cerrar-aviso-dieta"
                                     aria-label="Quitar el aviso por hoy" title="Quitar el aviso por hoy"
-                                    className="flex-shrink-0 p-2 -m-1 sm:hidden text-muted-foreground hover:text-foreground transition-colors">
+                                    className="flex-shrink-0 p-1.5 -mt-1 -mr-1 sm:hidden text-muted-foreground hover:text-foreground transition-colors">
                                     <X className="w-4 h-4" />
                                 </button>
                             </div>
-                            <button
-                                onClick={() => navigate(comidaDondeFalta
-                                    ? `/dashboard/nutrition?comida=${comidaDondeFalta}`
-                                    : '/dashboard/nutrition')}
-                                data-testid="terminar-dieta"
-                                className="flex-shrink-0 self-start sm:self-auto rounded-full bg-red-500
-                                           hover:bg-red-600 text-white text-xs font-bold px-3 py-1.5 transition-colors">
-                                Terminarla
-                            </button>
-                            <button onClick={quitarAviso} data-testid="cerrar-aviso-dieta-ancho"
-                                aria-label="Quitar el aviso por hoy" title="Quitar el aviso por hoy"
-                                className="hidden sm:block flex-shrink-0 p-2 -m-2 text-muted-foreground hover:text-foreground transition-colors">
-                                <X className="w-4 h-4" />
-                            </button>
+                            <div className="flex items-center gap-1.5 self-start sm:self-auto flex-shrink-0">
+                                <button
+                                    onClick={() => navigate(comidaDondeFalta
+                                        ? `/dashboard/nutrition?comida=${comidaDondeFalta}`
+                                        : '/dashboard/nutrition')}
+                                    data-testid="terminar-dieta"
+                                    className="rounded-full bg-red-500 hover:bg-red-600 text-white
+                                               text-xs font-bold px-3.5 py-2 transition-colors">
+                                    Terminarla
+                                </button>
+                                <button onClick={quitarAviso} data-testid="cerrar-aviso-dieta-ancho"
+                                    aria-label="Quitar el aviso por hoy" title="Quitar el aviso por hoy"
+                                    className="hidden sm:block p-1.5 rounded-lg text-muted-foreground
+                                               hover:text-foreground hover:bg-red-500/10 transition-colors">
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
                         </div>
                     )}
 
