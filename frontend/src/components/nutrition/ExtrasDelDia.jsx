@@ -59,14 +59,24 @@ const detalleDelExtra = (e) => [
  * se lleva media pantalla para algo que la mayoría de los días no se usa: la frase se queda
  * -- que es lo que dice para qué sirve -- y el campo aparece cuando se va a escribir.
  *
- * En el Inicio NO se pliega: allí es el sitio donde se apunta lo del día sobre la marcha, y
- * un toque de más entre «me he comido algo» y apuntarlo es justo donde se pierde la gente.
- * Con algo ya apuntado se abre solo: la lista tiene que verse sin buscarla.
+ * SE PLIEGA EN LOS TRES SITIOS (Francisco, 2-09). Antes `plegable` venía en `false` y no lo
+ * pasaba nadie, así que el buscador y la caja de escribir salían de entrada en Inicio, en
+ * Nutrición y en el panel del día: media pantalla ocupada por un formulario para algo que la
+ * mayoría de los días no se usa. Ahora el bloque nace cerrado en todas partes y lo abre el
+ * «+», que es lo que él pidió: «tiene que ser un botón de más y ahí mostrar el buscador».
+ *
+ * Aquí había escrita la decisión contraria («en el Inicio NO se pliega, un toque de más entre
+ * me he comido algo y apuntarlo es justo donde se pierde la gente»). La cambió él.
+ *
+ * LO APUNTADO SE VE SIEMPRE, esté abierto o cerrado: la lista es el registro y va fuera del
+ * bloque que se pliega. Lo que se esconde es el formulario, no lo que ya se anotó. Por eso
+ * `desplegado` es solo `abierto` y ya no se abre solo por tener extras: con algo apuntado se
+ * abría entero otra vez y volvía el formulario a la pantalla.
  */
 //: Los que se cuentan por piezas: ahí la cantidad son unidades y no gramos.
 const esPorUnidad = (food) => Boolean(food?.por_unidad ?? food?.unidades);
 
-const ExtrasDelDia = ({ api, fecha, extras = [], onAnadido, onQuitado, origen, plegable = false }) => {
+const ExtrasDelDia = ({ api, fecha, extras = [], onAnadido, onQuitado, origen, plegable = true }) => {
     const [texto, setTexto] = useState('');
     const [guardando, setGuardando] = useState(false);
     const [quitando, setQuitando] = useState(null);
@@ -158,8 +168,9 @@ const ExtrasDelDia = ({ api, fecha, extras = [], onAnadido, onQuitado, origen, p
         }
     };
 
-    // Con algo apuntado se abre solo: la lista no se esconde detrás de un botón.
-    const desplegado = abierto || extras.length > 0;
+    // Solo lo que él abre. La lista de lo apuntado se pinta igual, esté abierto o cerrado
+    // (va fuera de este bloque), así que tener extras ya no tiene por qué sacar el formulario.
+    const desplegado = abierto;
 
     // LO QUE LLEVA EN EXTRAS, SUMADO Y APARTE (1-09).
     //
@@ -312,16 +323,12 @@ const ExtrasDelDia = ({ api, fecha, extras = [], onAnadido, onQuitado, origen, p
                     </div>
                 )}
 
-                {!elegido && (
-                    <p className="text-xs text-muted-foreground text-center" data-testid="extras-o-si-no">
-                        o si no está
-                    </p>
-                )}
+                {/* FUERA «o si no está» (Francisco, 2-09), junto con el «a ojo» del campo y
+                    la frase de qué cuenta y qué no. Eran tres explicaciones seguidas encima de
+                    dos controles que se entienden solos: se busca, o se escribe. */}
 
-                {/* El «a ojo» va DENTRO del campo (punto 31), que es donde lo lee justo
-                    cuando va a escribir, y no gasta una línea de la pantalla. Tres filas
-                    porque en un móvil de 390 px el gris ocupa tres líneas y con dos se
-                    cortaba justo la mitad que importa («pero ponlo todo»). */}
+                {/* Tres filas porque en un móvil de 390 px el campo con dos se queda corto en
+                    cuanto apunta la comida de un domingo entero. */}
                 <Textarea rows={3} value={texto} maxLength={LARGO_MAX}
                     onChange={(ev) => setTexto(ev.target.value)}
                     /* Enter apunta; para partir la línea, Mayúsculas + Enter. Es una línea
@@ -329,17 +336,13 @@ const ExtrasDelDia = ({ api, fecha, extras = [], onAnadido, onQuitado, origen, p
                     onKeyDown={(ev) => {
                         if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); apuntar(); }
                     }}
-                    placeholder="Escríbelo a mano. En cuanto pase, con la cantidad a ojo si no lo pesas."
+                    /* Sin `placeholder`: decía «Escríbelo a mano. En cuanto pase, con la
+                       cantidad a ojo si no lo pesas», y sale (Francisco, 2-09). Lo que hay que
+                       poner ahí ya lo dice el rótulo del bloque, arriba. */
                     /* El campo no tiene etiqueta encima (el rótulo es el del bloque), así que
                        el nombre para quien lo lee con voz sale de aquí. */
                     aria-label="Apunta un extra del día"
-                    /* EL «A OJO» PESA MENOS QUE LA INSTRUCCIÓN (punto 176 del 27-08). Salía
-                       casi del mismo tamaño que la frase de arriba y competían: aquélla dice
-                       qué es esto, y ésta es ayuda de mientras escribe.
-                       Se toca SOLO el `placeholder`, no el texto que teclea: en el móvil un
-                       campo por debajo de 16 px hace que el navegador dé un salto de zoom al
-                       entrar, y eso vale para lo que se escribe, no para lo que sugiere. */
-                    className="rounded-xl bg-muted border-0 resize-none placeholder:text-xs"
+                    className="rounded-xl bg-muted border-0 resize-none"
                     /* `extras-` y no `extra-`: cada fila apuntada es `extra-{id}`, así que
                        un guión que busque `[data-testid^="extra-"]` para contar lo apuntado
                        se llevaría también el campo y la cuenta. */
@@ -363,18 +366,11 @@ const ExtrasDelDia = ({ api, fecha, extras = [], onAnadido, onQuitado, origen, p
                     </button>
                 )}
 
-                {/* LA TERCERA FRASE, TAL CUAL LA ESCRIBIÓ JESÚS (punto 1.2 del 1-09).
-                    Estuvo fuera hasta que fue verdad: hasta hoy el extra del catálogo se
-                    guardaba con sus macros y ninguna pantalla los sumaba, así que «lo que
-                    busques, sí» habría sido mentira. Ahora se suman en la línea de arriba,
-                    aparte de la dieta, y la frase dice exactamente lo que pasa: lo escrito a
-                    mano queda anotado, lo buscado queda medido. */}
-                {!elegido && (
-                    <p className="text-xs text-muted-foreground" data-testid="extras-que-cuenta">
-                        Lo que pongas a mano no cuenta en tus macros, simplemente queda el
-                        registro. Lo que busques, sí.
-                    </p>
-                )}
+                {/* Aquí iba «Lo que pongas a mano no cuenta en tus macros, simplemente queda
+                    el registro. Lo que busques, sí» (punto 1.2 del 1-09). FUERA por decisión
+                    suya del 2-09. Lo que decía sigue siendo verdad y se sigue viendo donde
+                    importa: la línea «Además de tu dieta, hoy llevas ... en extras» solo suma
+                    lo buscado, porque lo escrito a mano no trae macros de ningún sitio. */}
             </div>
         </section>
     );
