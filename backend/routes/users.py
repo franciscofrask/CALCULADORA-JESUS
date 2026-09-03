@@ -1907,11 +1907,11 @@ async def get_mi_historial_de_macros(user = Depends(get_current_user)):
     try:
         from core.ventana_revision import ventana_de_revision
         # Con el catalogo del panel, el mismo que resolvio `modo` arriba, como ya se hace en
-        # GET /clients/profile. PENDIENTE Y NO ES DE ESTE FICHERO: `ventana_de_revision` usa
-        # el catalogo que recibe para el calendario de reportes, pero el modo lo sigue
-        # sacando de `modo_calculadora(perfil["plan"])` en seco (core/ventana_revision.py).
-        # Hasta que esa linea reciba el catalogo, un override de la Calculadora puede mandar
-        # esta fecha por la rama equivocada mientras la cabecera de al lado ya cambio.
+        # GET /clients/profile. Lo que quedaba pendiente aqui -- que `ventana_de_revision`
+        # eligiera la RAMA con el catalogo de fabrica y no con el del panel, y que por eso un
+        # override de la Calculadora mandara esta fecha por el camino equivocado mientras la
+        # cabecera de al lado ya habia cambiado -- se arreglo el 2-09 en
+        # `core/ventana_revision.py`: el modo se resuelve ya con este mismo catalogo.
         ventana = await ventana_de_revision(db, profile, catalogo=catalogo)
         proxima_revision = hoy if ventana.get("abierta") else ventana.get("se_abre")
     except Exception as e:  # noqa: BLE001 - la cabecera puede vivir sin fecha

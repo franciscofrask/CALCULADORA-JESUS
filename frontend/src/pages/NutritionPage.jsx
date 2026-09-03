@@ -1893,6 +1893,16 @@ const NutritionPage = () => {
                     ? `Hemos añadido ${anadidos[0].nombre} para poder cuadrarla con tus macros de hoy.`
                     : `Hemos añadido ${anadidos.map(i => i.nombre).join(' y ')} para poder cuadrarla con tus macros de hoy.`);
             }
+            // Y SI LA CANTIDAD SE HA IDO, SE DICE (2-09). Cuadrando una comida de un solo
+            // alimento el motor puede escribir 2.475 g de flan para llegar a la proteína del
+            // día: más de lo que la propia pantalla deja teclear a mano. Antes se guardaba
+            // en silencio y el cliente se encontraba dos kilos y medio en su comida.
+            const pasados = (r.items || []).filter(i => i.pasa_de_razonable);
+            if (pasados.length) {
+                toast.warning(pasados.length === 1
+                    ? `Para cuadrarla hemos puesto ${Math.round(pasados[0].cantidad_g)} g de ${pasados[0].nombre}. Es mucho más de lo normal: revísalo antes de guardar.`
+                    : `Para cuadrarla hemos puesto cantidades muy altas de ${pasados.map(i => i.nombre).join(' y ')}. Revísalas antes de guardar.`);
+            }
         } catch (err) {
             console.error('cuadrar-comida falló; se escala por proteína:', err);
         }

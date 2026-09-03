@@ -2599,6 +2599,26 @@ async def cuadrar_comida(data: dict, user = Depends(get_current_user)):
     for it in items:
         if int(it.get("alimento_id") or it.get("id") or 0) in ids_anadidos:
             it["anadido_para_cuadrar"] = True
+
+    # Y SE MARCA LA CANTIDAD QUE NO SE SOSTIENE (2-09, del repaso de Gonzalo: «puso
+    # cantidades random»). Cuadrando una comida de un solo alimento, el motor escribio
+    # **2.475 g de flan** para llegar a 250 g de proteina: 2,5 kilos, ocho veces el
+    # `max_razonable` de esa ficha y por encima del tope duro de 2.000 g que la pantalla
+    # SI le impone a una persona que teclea. Se guardaba sin decir nada: el aviso de este
+    # endpoint solo salta cuando AÑADE alimentos, nunca cuando la cantidad se dispara.
+    #
+    # Aqui se marca, no se recorta: el tope razonable «avisa, no bloquea» es una decision
+    # ya tomada (el litro de leche de almendras, Jesus 16-08), y recortar por detras dejaria
+    # `macros_totales` mintiendo. Recortar de verdad -- que el motor no pueda pasar del tope
+    # que no deja pasar a una persona -- es la decision que queda pendiente.
+    for it in items:
+        gramos = float(it.get("cantidad_g") or 0)
+        ficha = next((f for f in puestos + anadidos
+                      if int(f.get("id") or f.get("alimento_id") or 0)
+                      == int(it.get("alimento_id") or it.get("id") or 0)), None)
+        tope = tope_de_alimento(ficha) if ficha else None
+        if tope and gramos > float(tope):
+            it["pasa_de_razonable"] = round(float(tope), 1)
     err = sum(abs(obj[m] - totales[m]) for m in ("P", "H", "G"))
     return {
         "items": items,

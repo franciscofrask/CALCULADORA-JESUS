@@ -118,7 +118,13 @@ async def ventana_de_revision(db, perfil: Dict[str, Any],
     from core.tiempo import a_madrid, hoy_madrid
 
     hoy = hoy or hoy_madrid()
-    modo = modo_calculadora(perfil.get("plan"))
+    # CON EL CATALOGO QUE LLEGA, no en seco (2-09). Estaba anotado como pendiente en
+    # `routes/users.py`: la eleccion de plan de aqui abajo ya usaba `catalogo`, pero la RAMA
+    # se decidia con el catalogo de fabrica, asi que un override de la Calculadora en el panel
+    # mandaba esta fecha por el camino equivocado -- autogestion contra personalizado -- y
+    # entonces «Mis macros» y el boton de Seguimiento contaban cosas distintas del mismo
+    # cliente. `modo_calculadora` ya aceptaba el catalogo; solo faltaba dárselo.
+    modo = modo_calculadora(perfil.get("plan"), catalogo)
 
     if modo == "autogestion":
         # El ultimo quiz_ajuste, POR effective_date. Nunca created_at: en las filas
