@@ -89,7 +89,10 @@ const PALABRA = {
         // «Ya lo tienes» le dice que puede olvidarse de ése el resto del día, que es lo
         // único que necesita saber en esta pestaña.
         if (estado === CLAVADO || estado === VALIDO) return 'ya lo tienes';
-        return `de ${n(objetivo)}`;
+        // Y POR DEBAJO, NADA: el «de 250» ya no vive aquí, vive en `referencia` y se pinta
+        // SIEMPRE (ver abajo). Antes esta palabra hacía las dos cosas y por eso el objetivo
+        // desaparecía justo cuando aparecía el estado.
+        return null;
     },
     falta: (estado, desvio, objetivo, n) => {
         if (estado === PASADO) return `te pasas ${n(Math.abs(desvio))}`;
@@ -120,7 +123,11 @@ export function leerMacro({ vista, hay, objetivo, margen }) {
         // `apagado` y no `null`: en esta pestaña el número ES el objetivo, así que «tu
         // objetivo» es un rótulo y va en gris. `null` significa otra cosa -- «vas por
         // debajo» --, y eso se pinta en blanco.
-        return { estado: SIN_ESTADO, palabra: PALABRA.macros(), color: 'apagado', barra: null };
+        // `referencia: null` explícito y no ausente: quien pinta pregunta por ese campo en
+        // las cuatro pestañas, y una forma que a veces trae la clave y a veces no es una
+        // trampa esperando. Aquí no hay «de N» porque el número YA es el objetivo.
+        return { estado: SIN_ESTADO, palabra: PALABRA.macros(), color: 'apagado',
+                 referencia: null, barra: null };
     }
     // DENTRO DE UNA COMIDA NO SE REDONDEA, ni el número ni la palabra (punto 121). En el
     // resto de la app sí: un decimal en un total del día no decide nada y ensucia.
@@ -151,6 +158,19 @@ export function leerMacro({ vista, hay, objetivo, margen }) {
         estado,
         desvio,
         palabra: (PALABRA[vista] || PALABRA.dieta)(estado, desvio, meta, n),
+        // EL «DE 250» SE VE SIEMPRE, PASE LO QUE PASE (Francisco, 3-09, con la maqueta del
+        // bloque 06 delante: «250 / de 250 / ya lo tienes» y «212 / de 210 / cuadrado
+        // (+2)»). Son DOS lineas debajo del numero, no una: arriba contra qué se mide y
+        // abajo cómo va.
+        //
+        // Antes el objetivo y el estado se turnaban en la misma línea, así que el objetivo
+        // desaparecía justo cuando el estado tenía algo que decir -- que es cuando más falta
+        // hace saber de cuánto hablamos.
+        //
+        // Solo en Dieta y en Llevas. En Macros el número YA es el objetivo, y en Falta el
+        // número es lo que queda: repetir el total ahí no dice nada. Y dentro de una comida
+        // tampoco, que ahí la fila ya lleva su objetivo al lado.
+        referencia: (vista === 'dieta' || vista === 'llevas') ? `de ${n(meta)}` : null,
         color,
         barra: {
             // La barra hace algo que el punto no hace: en un día cuadrado se llenan las

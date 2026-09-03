@@ -260,18 +260,57 @@ const api = async (ruta, metodo = 'GET', cuerpo = undefined) => {
     if (hechas && /\d+P/.test(hechas)) esta('la linea de las hechas dice QUE llevas', hechas);
     else falta('la linea de las hechas solo dice cuantas', hechas || '(no sale)');
 
-    // Y la marca de la comida: ¿palabra o barra sin leyenda?
+    // Y LA MARCA DE LA COMIDA. Se despliegan las hechas UNA sola vez: con el dia entero
+    // marcado, las filas estan escondidas y sin abrirlas no hay nada que leer. Ojo con
+    // pulsar «Ver» dos veces, que vuelve a cerrarlas y la lista sale vacia.
     await p.locator('[data-testid="ver-hechas"]').click().catch(() => {});
-    await p.waitForTimeout(700);
-    const marca = await p.evaluate(() => {
-        const fila = [...document.querySelectorAll('[data-testid^="comida-hoy-"]')]
-            .find(e => /border-l-4/.test(e.className));
-        if (!fila) return null;
-        return { clase: fila.className, texto: (fila.innerText || '').replace(/\s+/g, ' ').slice(0, 80) };
-    });
-    console.log('   marca de la fila: ' + JSON.stringify(marca));
-    if (marca && /AHORA/i.test(marca.texto)) esta('la marca es una palabra que se entiende');
-    else falta('la marca sigue siendo una barra sin leyenda', marca ? marca.texto : '(no hay fila marcada)');
+    await p.waitForTimeout(900);
+    // «AHORA» ES LA MARCA DEL PERI, VUELTA PALABRA CUANDO LE TOCA (regla de Francisco del
+    // 3-09, leyendo su documento: «el Post lleva una barra naranja que no dice que significa»
+    // -> «la marca del Post pasa a ser una palabra, Ahora»). O sea DOS condiciones: que la
+    // fila sea el intra o el post, y que sea la siguiente sin marcar.
+    //
+    // Con el dia entero marcado no toca ninguna.
+    const conChip = await p.locator('[data-testid^="ahora-"]').count();
+    console.log('   con el dia entero marcado, chips «Ahora»: ' + conChip);
+    if (!conChip) esta('con todo marcado no toca ninguna, y no sale el chip');
+    else falta('sale «Ahora» con el dia terminado', String(conChip));
+
+    const orden = await p.evaluate(() => [...document.querySelectorAll('[data-testid^="comida-hoy-"]')]
+        .map((e) => e.getAttribute('data-testid').replace('comida-hoy-', '')));
+    console.log('   orden del dia: ' + JSON.stringify(orden));
+    const elPeri = orden.find((k) => k === 'Intra' || k === 'Post');
+    if (!elPeri) {
+        console.log('   (este dia no lleva peri: no hay marca que convertir)');
+    } else {
+        // 1 · Se desmarca SOLO el peri: entonces es el siguiente y le toca.
+        await p.locator(`[data-testid="marcar-${elPeri}"]`).first().click().catch(() => {});
+        await p.waitForTimeout(800);
+        const chips = await p.evaluate(() => [...document.querySelectorAll('[data-testid^="ahora-"]')]
+            .map((e) => e.getAttribute('data-testid').replace('ahora-', '')));
+        console.log(`   con solo ${elPeri} sin marcar, chips: ` + JSON.stringify(chips));
+        if (chips.length === 1 && chips[0] === elPeri)
+            esta(`la marca del ${elPeri} se vuelve la palabra «Ahora»`, elPeri);
+        else falta('el chip no sale en el peri cuando le toca', JSON.stringify(chips));
+        // Y la barra y el chip son LA MISMA marca: no se pintan a la vez.
+        const claseDelPeri = await p.evaluate((k) => (document
+            .querySelector(`[data-testid="comida-hoy-${k}"]`) || {}).className || '', elPeri);
+        if (!/border-l-4/.test(claseDelPeri)) esta('y su barra de la izquierda deja el sitio');
+        else falta('la barra y el chip salen a la vez', claseDelPeri.slice(0, 80));
+
+        // 2 · Y ahora se desmarca ademas una comida ANTERIOR al peri: le toca a ella, que no
+        // lleva marca, asi que no debe salir ningun chip. Es lo que distingue esta regla de
+        // «un chip en la siguiente, sea la que sea».
+        const antes = orden.slice(0, orden.indexOf(elPeri)).pop();
+        if (antes) {
+            await p.locator(`[data-testid="marcar-${antes}"]`).first().click().catch(() => {});
+            await p.waitForTimeout(800);
+            const luego = await p.locator('[data-testid^="ahora-"]').count();
+            console.log(`   con ${antes} sin marcar por delante, chips: ` + luego);
+            if (!luego) esta(`le toca a ${antes}, que no lleva marca: ningun chip`);
+            else falta('sale «Ahora» en una fila que no es el peri', String(luego));
+        }
+    }
     await p.locator('[data-testid="marca-comidas"]').screenshot({ path: '_guia/_inicio_comidas.png' });
 
     // ───────────────────────────────────────────────────────────────────────

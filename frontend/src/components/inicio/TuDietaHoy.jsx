@@ -308,6 +308,24 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
     }, [claves.join(','), clavesPeri.join(','), trasComida]);
 
     const hechas = filas.filter((f) => marcadas[f.clave]);
+
+    // LA QUE TOCA AHORA (bloque 07 del doc «Cómo abre Inicio», 3-09).
+    //
+    // Su documento dice: «el Post lleva una barra naranja a la izquierda que no dice qué
+    // significa» y «la marca del Post pasa a ser una palabra, Ahora, que se entiende sin
+    // leyenda». O sea que NO es una marca nueva en cualquier fila: es LA MARCA QUE YA HAY
+    // -- la del peri -- convertida en palabra cuando a esa toma le toca.
+    //
+    // Y «le toca» es secuencial (Francisco, 3-09): la primera SIN MARCAR en el orden del
+    // día, que ya lo monta `filas` con el intra y el post en su sitio según el momento de
+    // entreno. No hay reloj de por medio: se lee de lo que él ha ido marcando.
+    //
+    // Así que el chip sale en el intra o en el post cuando son los siguientes, y entonces
+    // sustituyen su barra. Las demás filas no llevaban marca y siguen sin llevarla.
+    //
+    // Con el día entero marcado no toca ninguna, que es lo correcto.
+    const siguienteSinMarcar = filas.find((f) => !marcadas[f.clave]) || null;
+    const laDeAhora = siguienteSinMarcar?.esPeri ? siguienteSinMarcar.clave : null;
     // «Llevas» son las comidas marcadas y nada más: los extras NO se suman (punto 28 del
     // doc del 24-08). Ya mordió una vez -- sumarlos encogía el «Falta» del resto del día y
     // la app acababa diciéndole que se saltara una comida por haberse comido una tarta --,
@@ -601,10 +619,22 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
                                             <p className="numero-grande font-data leading-none text-[44px] mt-1.5 text-foreground">
                                                 {impreso == null ? '·' : impreso}
                                             </p>
-                                            <p data-testid={`palabra-${vista}-${k}`}
-                                                className={`text-xs mt-1 ${claseDelMacro(lectura.color)}`}>
-                                                {lectura.palabra}
-                                            </p>
+                                            {/* CONTRA QUÉ SE MIDE, y siempre (bloque 06 de su
+                                                documento: «250 / de 250 / ya lo tienes»). Va
+                                                en gris y por encima del estado: es la
+                                                referencia, no el juicio. */}
+                                            {lectura.referencia && (
+                                                <p data-testid={`de-${vista}-${k}`}
+                                                    className="text-xs mt-1 text-muted-foreground">
+                                                    {lectura.referencia}
+                                                </p>
+                                            )}
+                                            {lectura.palabra && (
+                                                <p data-testid={`palabra-${vista}-${k}`}
+                                                    className={`text-xs ${lectura.referencia ? '' : 'mt-1'} ${claseDelMacro(lectura.color)}`}>
+                                                    {lectura.palabra}
+                                                </p>
+                                            )}
                                             {/* La barra, en las cuatro menos en Macros: allí no
                                                 hay nada que recorrer. */}
                                             {lectura.barra && (
@@ -694,11 +724,17 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
                 {hechas.length > 0 && (
                     <div className="surface p-3.5 sm:p-4 flex items-center justify-between gap-3"
                         data-testid="resumen-hechas">
+                        {/* QUÉ LLEVAS, NO SOLO CUÁNTAS (bloque 07 del doc del 3-09): «3 hechas
+                            151P · 107H · 49G». Ponía «3 hechas · ocultas», y para saber qué
+                            llevaba había que pulsar «Ver». Los macros son los mismos que suma
+                            la pestaña Llevas, así que la línea no puede decir otra cosa que
+                            el número de arriba.
+                            El «· ocultas» se va: lo dice ya el botón, que pone «Ver». */}
                         <p className="text-sm text-muted-foreground">
                             <span className="font-bold text-foreground">
                                 {hechas.length === 1 ? '1 hecha' : `${hechas.length} hechas`}
                             </span>
-                            {!verHechas && ' · ocultas'}
+                            {' '}{num0(llevas.P)}P · {num0(llevas.H)}H · {num0(llevas.G)}G
                         </p>
                         <button onClick={() => setVerHechas((v) => !v)} data-testid="ver-hechas"
                             className="text-sm font-semibold text-brand flex items-center gap-0.5">
@@ -733,8 +769,24 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
                         // macros y flecha) y, debajo, la línea del suplemento, que lleva a otro
                         // sitio y necesita ser su propio botón (punto 190). Por eso el `flex`
                         // baja un nivel y aquí queda sólo la caja.
+                        // Y LA MARCA DEL PERI SE VUELVE PALABRA CUANDO LE TOCA (bloque 07).
+                        // La barra de la izquierda y el chip son LA MISMA marca en dos
+                        // momentos, así que no se pintan a la vez: mientras no le toca, la
+                        // barra; cuando le toca, el chip «Ahora» y el borde entero, que es
+                        // como lo dibuja su maqueta. El chip va solapando el borde de arriba,
+                        // y por eso la caja necesita `relative`.
                         <div key={k} data-testid={`comida-hoy-${k}`}
-                            className={`surface p-3.5 sm:p-4 transition-opacity ${esPeri ? 'border-l-4 border-l-brand' : ''} ${marcada ? 'opacity-55' : ''}`}>
+                            className={`surface p-3.5 sm:p-4 transition-opacity relative
+                                ${esPeri && k !== laDeAhora ? 'border-l-4 border-l-brand' : ''}
+                                ${k === laDeAhora ? 'border border-brand' : ''}
+                                ${marcada ? 'opacity-55' : ''}`}>
+                            {k === laDeAhora && (
+                                <span data-testid={`ahora-${k}`}
+                                    className="absolute -top-2 left-3 rounded-full bg-brand px-2 py-0.5
+                                               text-[10px] font-bold uppercase tracking-wide text-white">
+                                    Ahora
+                                </span>
+                            )}
                             <div className="flex items-center gap-3">
                             {/* La casilla. Persistencia: ver el comentario de cabecera. */}
                             <button onClick={() => marcar(k)} role="checkbox" aria-checked={marcada}
