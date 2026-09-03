@@ -148,7 +148,7 @@ const ESCENAS = {
                '¿Has entrenado todos los días que tocaba?',
                '¿Has cumplido con el cardio que tenías pautado?',
                '¿Has tomado la suplementación que te correspondía?',
-               'Descanso — ¿cómo fue?', 'Continuar'],
+               'Descanso · ¿cómo fue?', 'Continuar'],
     },
 
     // ── B · La cola de Inicio ──
@@ -266,7 +266,7 @@ const ESCENAS = {
                '¿Has entrenado todos los días que tocaba?',
                '¿Has cumplido con el cardio que tenías pautado?',
                '¿Has tomado la suplementación que te correspondía?',
-               'Descanso — ¿cómo fue?', 'Tu peso de hoy', 'Continuar'],
+               'Descanso · ¿cómo fue?', 'Tu peso de hoy', 'Continuar'],
     },
 
     // ── Y A LAS 12:00 LA FILA DE LA PESADA SE APAGA ──

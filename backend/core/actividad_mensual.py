@@ -318,7 +318,9 @@ PREGUNTAS_SIN_CHECKIN = (
     {"clave": "suplementacion_grado",
      "pregunta": "¿Has tomado la suplementación que te correspondía?",
      "solo_con": "suplementacion"},
-    {"clave": "descanso_grado", "pregunta": "Descanso — ¿cómo fue?"},
+    # CON PUNTO VOLADO Y NO CON RAYA: «Descanso · ¿cómo fue?» es como lo escribe la maqueta,
+    # y ademas en esta casa no se usa la raya larga en ningun texto que lea un cliente.
+    {"clave": "descanso_grado", "pregunta": "Descanso · ¿cómo fue?"},
 )
 
 
