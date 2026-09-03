@@ -1289,7 +1289,16 @@ const ClientDetailPage = () => {
                             })()} />
                             <InfoItem icon={Target} label="Rutina" value={activeRoutine ? plural(activeRoutine.days?.filter(d => !d.is_rest).length || 0, 'día') : 'Sin rutina'} />
                             <InfoItem icon={CreditCard} label="Próx. cobro" value={profile?.next_payment ? new Date(profile.next_payment).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : '-'} />
-                            <InfoItem icon={Calendar} label="Inicio" value={profile?.created_at ? new Date(profile.created_at).toLocaleDateString('es-ES') : '-'} />
+                            {/* «ALTA» Y «INICIO DEL CICLO» SON DOS COSAS (2-09). Esto ponía
+                                «Inicio» y pintaba `created_at`, justo al lado de un «Semana
+                                4/12» que se cuenta desde `cycle_start`. En la ficha de
+                                Montalvo se leía «INICIO 5/7/2026 · SEMANA 4/12», y del 5 de
+                                julio a hoy van nueve semanas, no cuatro: la tarjeta se
+                                contradecía sola porque enseñaba un anclaje y contaba con
+                                otro. Ahora se dicen los dos, con su nombre. */}
+                            <InfoItem icon={Calendar} label="Alta" value={profile?.created_at ? new Date(profile.created_at).toLocaleDateString('es-ES') : '-'} />
+                            <InfoItem icon={Calendar} label="Inicio del ciclo"
+                                value={profile?.cycle_start ? new Date(profile.cycle_start).toLocaleDateString('es-ES') : '-'} />
                             {/* Punto 30: el peso, con su fecha. "94 kg · hace 3 días". El
                                 número es el último de la serie; si el cliente es antiguo y
                                 no tiene serie todavía, se cae al campo de la ficha. */}
@@ -1820,7 +1829,16 @@ const ClientDetailPage = () => {
                                 lo dice el servidor por el catálogo, no un if por nombre. */}
                             <InfoItem icon={CreditCard} label="Precio"
                                 value={profile?.precio_cortesia ? 'Cortesía' : `${profile?.precio_ciclo ?? profile?.price ?? 0}€/${profile?.precio_periodo || 'ciclo'}`} />
-                            <InfoItem icon={Calendar} label="Inicio" value={profile?.created_at ? new Date(profile.created_at).toLocaleDateString('es-ES') : '-'} />
+                            {/* «ALTA» Y «INICIO DEL CICLO» SON DOS COSAS (2-09). Esto ponía
+                                «Inicio» y pintaba `created_at`, justo al lado de un «Semana
+                                4/12» que se cuenta desde `cycle_start`. En la ficha de
+                                Montalvo se leía «INICIO 5/7/2026 · SEMANA 4/12», y del 5 de
+                                julio a hoy van nueve semanas, no cuatro: la tarjeta se
+                                contradecía sola porque enseñaba un anclaje y contaba con
+                                otro. Ahora se dicen los dos, con su nombre. */}
+                            <InfoItem icon={Calendar} label="Alta" value={profile?.created_at ? new Date(profile.created_at).toLocaleDateString('es-ES') : '-'} />
+                            <InfoItem icon={Calendar} label="Inicio del ciclo"
+                                value={profile?.cycle_start ? new Date(profile.cycle_start).toLocaleDateString('es-ES') : '-'} />
                             <InfoItem icon={Calendar} label="Próx. cobro" value={profile?.next_payment ? new Date(profile.next_payment).toLocaleDateString('es-ES') : '-'} />
                         </div>
                         {/* SI HA ENTRADO ALGUNA VEZ (la otra mitad del punto 48: «no hay
