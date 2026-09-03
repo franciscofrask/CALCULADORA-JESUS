@@ -2273,6 +2273,19 @@ const NutritionPage = () => {
                       duration: 9000 });
             }
 
+            // LO QUE ENTRA Y TÚ EVITAS, DICHO (Gonzalo, minuto 25:59 del vídeo del 3-09):
+            // «quité aves, apliqué la dieta que tenía pollo y me añadió el pollo igualmente».
+            // No se quita, que la app no borra lo que ha puesto el cliente y una favorita es
+            // suya; lo que faltaba era enterarse de que choca con lo que ha dicho que evita.
+            const evitados = res.evitados || [];
+            if (evitados.length) {
+                toast.warning(evitados.length === 1
+                    ? `Esta favorita lleva ${evitados[0]}, y lo tienes entre lo que evitas.`
+                    : `Esta favorita lleva ${evitados.length} cosas que tienes entre lo que evitas: ${evitados.join(', ')}.`,
+                    { description: 'Se ha aplicado igual: es tu favorita. Cámbialo si ya no lo quieres.',
+                      duration: 9000 });
+            }
+
             const excluidos = res.excluidos || [];
             const periQuitado = excluidos.filter(e => e.motivo === 'sin_objetivo_en_dia');
             const noCaben = excluidos.filter(e => e.motivo !== 'sin_objetivo_en_dia');

@@ -2170,8 +2170,40 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
             sugerencia = {"que_hacer": "anadir", "macro": peor, "falta": -desfase[peor]}
         desfases[meal_key] = {**desfase, "sugerencia": sugerencia, "redondeado": redondeado}
         out_comidas[meal_key] = {**meal, "alimentos": refit_foods}
+
+    # LO QUE ENTRA Y EL CLIENTE EVITA, DICHO (Gonzalo, minuto 25:59 del vídeo del 3-09).
+    #
+    # «Fui a preferencias y quité aves, y copié la dieta que ya tenía pollo, pero me añadió
+    # el pollo igualmente. No lo descarta.»
+    #
+    # El filtro de evitados existe y funciona: el buscador pasa de 29 resultados a 0 en
+    # cuanto marcas «Aves». Lo que pasa es que muerde donde la app SUGIERE (el buscador, los
+    # menús, montar el día) y no aquí, que es donde el cliente aplica algo SUYO: una favorita
+    # que él guardó o un día que él copia.
+    #
+    # Y aquí no se quita: la app no borra lo que ha puesto el cliente, esa es la regla desde
+    # el 08-08. Lo que faltaba era enterarse. Se devuelven los nombres y quien pinta avisa.
+    evitados = []
+    perfil_evita = await db.client_profiles.find_one(
+        {"user_id": user["id"]}, {"_id": 0, "avoided_categories": 1, "avoided_keywords": 1})
+    prefijos, palabras = build_avoided_filter(perfil_evita)
+    if prefijos or palabras:
+        for comida in out_comidas.values():
+            for a in (comida.get("alimentos") or []):
+                try:
+                    ficha = _cats_tramo.get(int(a.get("alimento_id"))) or {}
+                except (TypeError, ValueError):
+                    ficha = {}
+                # El nombre lo pone la línea y las categorías el catálogo: `food_is_avoided`
+                # mira las dos cosas, la palabra suelta y el grupo.
+                mirado = {"nombre": a.get("nombre") or "", "categorias": ficha.get("categorias", [])}
+                if food_is_avoided(mirado, prefijos, palabras):
+                    nombre = a.get("nombre")
+                    if nombre and nombre not in evitados:
+                        evitados.append(nombre)
+
     return {"comidas": out_comidas, "distribution": dist, "excluidos": excluidos,
-            "desfases": desfases, "decisiones": decisiones}
+            "desfases": desfases, "decisiones": decisiones, "evitados": evitados}
 
 
 @router.post("/suggest")
