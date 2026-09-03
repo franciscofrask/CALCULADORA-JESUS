@@ -167,6 +167,7 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
         "compromiso": data.compromiso,
         "expectativas": data.expectativas,
         "maquinas_no_disponibles": data.maquinas_no_disponibles or None,
+        "ejercicios_molestos": data.ejercicios_molestos or None,
         "suplementacion_motivo": data.suplementacion_motivo,
         "sugerencias": (data.sugerencias or "").strip() or None,
         # Las del 1-09: las cinco estrellas del paso 1 cuando no hay check-in de los que
@@ -244,6 +245,21 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
     if data.maquinas_no_disponibles is not None:
         set_perfil["maquinas_no_disponibles"] = [
             m.strip() for m in data.maquinas_no_disponibles if str(m).strip()]
+
+    # LOS EJERCICIOS QUE LE MOLESTAN VAN A `injuries`, Y AQUÍ SE CIERRA UN AGUJERO.
+    #
+    # `injuries` es el campo que lee el generador de rutinas para agrupar, y hasta hoy lo
+    # escribía SOLO el cuestionario del alta: lo que el cliente contestaba cada mes se
+    # guardaba en `client_profiles.lesiones`, que el generador no mira. O sea que se le
+    # preguntaba por sus lesiones todos los meses y esa respuesta no llegaba nunca a su
+    # rutina. La pregunta 5 del documento del 1-09 pide justo la lista que ese campo
+    # necesita, así que al hacerla como él la pide se arregla solo.
+    #
+    # Se pisa entera, como las máquinas: quitar un ejercicio de la lista es tan válido como
+    # añadirlo, y ese es el sentido de «quita los que ya no».
+    if data.ejercicios_molestos is not None:
+        set_perfil["injuries"] = [
+            e.strip() for e in data.ejercicios_molestos if str(e).strip()]
     await db.client_profiles.update_one({"id": profile["id"]}, {"$set": set_perfil})
     # Y el perfil que se lleva el informe es el de DESPUÉS: si acaba de cambiar de fase,
     # la foto de "inicio de fase" es la de ahora, no la de la fase que deja atrás.

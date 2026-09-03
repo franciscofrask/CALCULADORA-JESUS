@@ -184,6 +184,15 @@ class ReportCreate(BaseModel):
         None, pattern="^(maximo|bastante_bien|circunstancias|no_he_podido)$")
     expectativas: Optional[int] = Field(None, ge=0, le=10)
     maquinas_no_disponibles: Optional[List[str]] = None
+    # Y LA PREGUNTA 5, QUE SUSTITUYE AL BLOQUE DE LESIONES (documento del 1-09, aplicado el
+    # 3-09 por decisión de Francisco). Su maqueta colapsa zona + «cómo está este mes» +
+    # ejercicios vetados en una sola pregunta con etiquetas: «¿Sigue habiendo ejercicios que
+    # te dan molestias? Estos son los que me diste. Quita los que ya no y añade los nuevos».
+    #
+    # `lesiones` se queda en el modelo y NO se borra: los reportes ya mandados se leen con
+    # ella y el panel enseña el histórico por zona. Lo que deja de preguntarse es el estado
+    # del mes, que es lo que su documento decide quitar.
+    ejercicios_molestos: Optional[List[str]] = None
     # El motivo de no haber tomado la suplementación, cuando se le pregunta porque falló
     # días. `suplementacion.detalle` sigue siendo el texto libre; esto es la respuesta
     # cerrada, que es la que se puede contar.

@@ -85,9 +85,9 @@ const RevisaAntesDeEnviar = ({ valores, datos, bloques, perfil, prev, enviando, 
         ? Math.round((parseFloat(cintura) - cinturaAntes) * 10) / 10 : null;
     const otrasPuestas = MEDIDAS.filter(m => m.key !== 'cintura' && valores.measurements?.[m.key]).length;
 
-    const lesionesPuestas = (valores.lesiones || [])
-        .filter(l => l.estado_mes)
-        .map(l => `${String(l.zona || '').toLowerCase()}: ${l.estado_mes}`);
+    // Los ejercicios que le molestan, que desde el 3-09 sustituyen al bloque de lesiones
+    // (pregunta 5 del doc del 1-09). Aqui se resume lo que va a mandar.
+    const molestias = (valores.ejercicios_molestos || []).filter(e => String(e).trim());
 
     const conf = valores.entreno?.confirmacion || {};
     const confirmados = Object.keys(conf).filter(k => conf[k]).length;
@@ -144,9 +144,10 @@ const RevisaAntesDeEnviar = ({ valores, datos, bloques, perfil, prev, enviando, 
                 ) : null}
 
                 {lleva('lesiones') && (
-                    <Renglon testid="rev-lesiones" que="Lesiones"
-                        valor={lesionesPuestas.length ? enumerar(lesionesPuestas)
-                            : valores.lesion_nueva_hay === 'no' ? 'nada nuevo' : null} />
+                    /* «Ninguno» es una respuesta y se dice: significa que quito los que
+                       tenia, y eso es justo lo que su documento pide poder contestar. */
+                    <Renglon testid="rev-lesiones" que="Ejercicios que te molestan"
+                        valor={molestias.length ? enumerar(molestias.slice(0, 3)) : 'ninguno'} />
                 )}
                 {/* Sin sesiones de cardio en su rutina no hay "9 de 16" que enseñar: lo
                     que contestó pasa a ser el valor, en vez de dejar un "sin poner" al

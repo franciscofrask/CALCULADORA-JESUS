@@ -381,6 +381,43 @@ def lesiones_del_perfil(perfil: Dict[str, Any]) -> List[Dict[str, Any]]:
     return []
 
 
+def ejercicios_que_le_molestan(perfil: Dict[str, Any]) -> List[str]:
+    """«Estos son los que me diste. Quita los que ya no y añade los nuevos» (doc 1-09).
+
+    Su documento colapsa el bloque de lesiones -- zona, cómo está este mes y ejercicios
+    vetados -- en UNA pregunta con etiquetas: la lista de ejercicios que le molestan. Esto
+    es lo que se le enseña ya puesto.
+
+    SALE DE `injuries`, Y ESO ARREGLA UN AGUJERO. Ese campo es el que lee el generador de
+    rutinas para agrupar, y hasta hoy lo escribía SOLO el cuestionario del alta: lo que el
+    cliente contestaba cada mes se guardaba en `client_profiles.lesiones`, que el generador
+    no mira. O sea que se le preguntaba por sus lesiones todos los meses y la respuesta no
+    llegaba nunca a su rutina. Con la pregunta de su documento, lo que contesta ES la lista
+    que el generador lee.
+
+    Y se le suman los `ejercicios_vetados` que dejó dentro de las lesiones abiertas: la
+    primera vez que conteste la pregunta nueva no puede salirle en blanco lo que ya contó.
+    Después, `injuries` lo lleva todo.
+    """
+    fuera: List[str] = []
+    vistos = set()
+
+    def meter(texto: Any) -> None:
+        t = str(texto or "").strip()
+        if not t or t.lower() in vistos:
+            return
+        vistos.add(t.lower())
+        fuera.append(t)
+
+    for t in (perfil.get("injuries") or []):
+        meter(t)
+    for l in (perfil.get("lesiones") or []):
+        if isinstance(l, dict) and l.get("estado_mes") != "superada":
+            for e in (l.get("ejercicios_vetados") or []):
+                meter(e)
+    return fuera
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # TODO JUNTO
 # ─────────────────────────────────────────────────────────────────────────────
@@ -416,7 +453,10 @@ async def datos_del_reporte(perfil: Dict[str, Any], tipo: str,
 
     datos["dieta"] = await datos_dieta(perfil, d0, d1)
     datos["cierres"] = await datos_de_los_cierres(perfil, d0, d1)
+    # `lesiones` se queda: los reportes ya guardados se leen con ella, y el panel enseña el
+    # histórico por zona. Lo que se PREGUNTA desde el 3-09 es `ejercicios_molestos`.
     datos["lesiones"] = lesiones_del_perfil(perfil)
+    datos["ejercicios_molestos"] = ejercicios_que_le_molestan(perfil)
     # «Estos son los que me diste»: las máquinas que dijo que no tiene, para que el mes que
     # viene salgan puestas y solo tenga que corregir lo que haya cambiado (doc 1-09).
     datos["maquinas"] = [m for m in (perfil.get("maquinas_no_disponibles") or [])

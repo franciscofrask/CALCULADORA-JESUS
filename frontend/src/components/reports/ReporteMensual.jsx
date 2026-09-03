@@ -96,7 +96,6 @@ const ReporteMensual = ({ datos, perfil, bloques, valores, set, setEntreno }) =>
     // Los días de entreno sin confirmar se enseñan de dos en dos (ver el bloque del entreno).
     const [verTodosLosDias, setVerTodosLosDias] = React.useState(false);
     const cierres = datos?.cierres || {};
-    const lesiones = datos?.lesiones || [];
     // Los días que no tomó la suplementación, que es lo que decide si se le pregunta.
     // Sin el bloque de suplementos en su plan no hay `de` y no se pregunta nada.
     const suplementacion = cierres.suplementacion || {};
@@ -276,53 +275,27 @@ const ReporteMensual = ({ datos, perfil, bloques, valores, set, setEntreno }) =>
             </Bloque>
             )}
 
-            {/* ── LESIONES Y MOLESTIAS · solo quien lo lleva en su plan ── */}
+            {/* ── LOS EJERCICIOS QUE LE MOLESTAN · solo quien lo lleva en su plan ──
+                LA PREGUNTA 5 DE SU DOCUMENTO DEL 1-09, aplicada el 3-09 por decisión de
+                Francisco. Sustituye al bloque de lesiones, que preguntaba por cada zona
+                «¿cómo está respecto al mes pasado?» (peor/igual/mejor/superada), sus
+                ejercicios vetados y si había alguna nueva. Su maqueta lo colapsa todo en
+                UNA pregunta con etiquetas quitables, la misma forma que las máquinas.
+
+                SE PIERDE EL «PEOR / IGUAL / MEJOR / SUPERADA», y es a propósito: lo decide
+                su documento. Si algún día lo quiere de vuelta, vuelve aquí.
+
+                Y lo que se contesta aquí es lo que de verdad se usa: esta lista se guarda
+                en `client_profiles.injuries`, que es por donde agrupa el generador de
+                rutinas. El bloque de antes escribía `lesiones`, que el generador no mira. */}
             {lleva('lesiones') && (
-                <Bloque titulo="Lesiones y molestias" testid="mensual-lesiones">
-                    {lesiones.length > 0 && (
-                        <>
-                            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                                Lo que ya me contaste
-                            </p>
-                            {lesiones.map((l, i) => (
-                                <div key={`${l.zona}-${i}`} className="rounded-xl bg-muted p-3 space-y-2">
-                                    <p className="text-sm font-bold text-foreground">
-                                        {l.zona}
-                                        {l.desde && <span className="font-normal text-muted-foreground"> desde {l.desde}</span>}
-                                    </p>
-                                    <Opciones testid={`lesion-${i}`} pregunta="¿Cómo está respecto al mes pasado?"
-                                        columnas={4}
-                                        valor={(valores.lesiones[i] || {}).estado_mes}
-                                        onChange={(v) => set('lesiones', valores.lesiones.map(
-                                            (x, j) => (j === i ? { ...x, estado_mes: v } : x)))}
-                                        opciones={[
-                                            { value: 'peor', label: 'Peor' },
-                                            { value: 'igual', label: 'Igual' },
-                                            { value: 'mejor', label: 'Mejor' },
-                                            { value: 'superada', label: 'Superada' },
-                                        ]} />
-                                    <EjerciciosVetados
-                                        lista={(valores.lesiones[i] || {}).ejercicios || []}
-                                        onChange={(ejercicios) => set('lesiones', valores.lesiones.map(
-                                            (x, j) => (j === i ? { ...x, ejercicios } : x)))}
-                                        testid={`vetados-${i}`} />
-                                </div>
-                            ))}
-                        </>
-                    )}
-                    <p className="text-sm text-foreground">¿Alguna nueva?</p>
-                    <DosBotones testid="lesion-nueva"
-                        valor={valores.lesion_nueva_hay}
-                        onChange={(v) => set('lesion_nueva_hay', v)}
-                        opciones={[
-                            { value: 'no', label: 'Nada nuevo' },
-                            { value: 'si', label: 'Sí, te cuento' },
-                        ]} />
-                    {valores.lesion_nueva_hay === 'si' && (
-                        <TextoLibre testid="lesion-nueva-texto"
-                            ayuda="Qué es, desde cuándo y qué ejercicios no puedes hacer."
-                            valor={valores.lesion_nueva} onChange={(v) => set('lesion_nueva', v)} />
-                    )}
+                <Bloque titulo="¿Sigue habiendo ejercicios que te dan molestias?"
+                    sub="Estos son los que me diste. Quita los que ya no y añade los nuevos"
+                    testid="mensual-molestias">
+                    <ListaDeEtiquetas testid="molestias"
+                        lista={valores.ejercicios_molestos || []}
+                        onChange={(v) => set('ejercicios_molestos', v)}
+                        etiqueta={null} ejemplo="Press militar" anadir="+ Añadir ejercicio" />
                 </Bloque>
             )}
 
@@ -545,17 +518,5 @@ const ListaDeEtiquetas = ({ lista, onChange, testid, etiqueta, ejemplo, anadir: 
         </div>
     );
 };
-
-/**
- * "Ejercicios que te dan molestias": los que ya dijo, más los que añada.
- *
- * Es la mitad útil de una lesión. Saber que le duele el hombro no cambia nada; saber que
- * no puede hacer press militar sí cambia la rutina del mes que viene.
- */
-const EjerciciosVetados = ({ lista, onChange, testid }) => (
-    <ListaDeEtiquetas lista={lista} onChange={onChange} testid={testid}
-        etiqueta="Estos son los que me diste. Quita los que ya no y añade los nuevos"
-        ejemplo="Press militar" anadir="+ Añadir ejercicio" />
-);
 
 export default ReporteMensual;

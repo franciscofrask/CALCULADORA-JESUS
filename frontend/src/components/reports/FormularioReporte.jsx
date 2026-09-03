@@ -79,9 +79,12 @@ const valoresIniciales = (objetivoActual) => ({
     viabilidad_ajuste: '',
     entreno: { confirmacion: {}, estrellas: null, nota: '', regularidad: '',
                rutina_del_mes: '', quiere_saber_del_silver: null },
+    // `lesiones` se queda en el estado aunque ya no se pregunte: los reportes viejos se
+    // leen con ella. Lo que se contesta desde el 3-09 es `ejercicios_molestos`.
     lesiones: [],
     lesion_nueva_hay: '',
     lesion_nueva: '',
+    ejercicios_molestos: [],
     cardio_proximo_mes: '',
     suplementacion: { respuesta: '', detalle: '' },
     // El motivo de no haberla tomado, que solo se pregunta si dejó días (doc 1-09).
@@ -164,8 +167,13 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
             // Y las máquinas que no tiene, con lo que dejó la última vez: el documento dice
             // «actualiza aquí tu listado», y para eso el listado tiene que estar.
             const maquinas = r.data?.datos?.maquinas || [];
+            // Y los ejercicios que le molestan, por lo mismo: «estos son los que me diste,
+            // quita los que ya no». Vienen de `injuries`, con lo que dejó dentro de sus
+            // lesiones abiertas sumado, para que la primera vez no le salga en blanco.
+            const molestias = r.data?.datos?.ejercicios_molestos || [];
             setValores(v => ({ ...v, lesiones: abiertas, weight: v.weight || puesto,
-                               maquinas_no_disponibles: maquinas }));
+                               maquinas_no_disponibles: maquinas,
+                               ejercicios_molestos: molestias }));
         } catch (e) {
             console.error('No se pudo cargar el formulario del reporte', e);
             toast.error('No hemos podido preparar tu reporte. Inténtalo en un momento.');
@@ -277,6 +285,10 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
                         estado_mes: l.estado_mes || null, ejercicios: l.ejercicios || [] }))
                     : null,
                 lesion_nueva: valores.lesion_nueva_hay === 'si' ? (valores.lesion_nueva || null) : null,
+                // La pregunta 5 del doc del 1-09. Va con el mismo candado que las lesiones:
+                // solo la contesta quien lleva ese bloque en su plan.
+                ejercicios_molestos: bloques.includes('lesiones')
+                    ? (valores.ejercicios_molestos || []) : null,
                 cardio_proximo_mes: valores.cardio_proximo_mes || null,
                 suplementacion: valores.suplementacion.respuesta
                     ? { respuesta: valores.suplementacion.respuesta,

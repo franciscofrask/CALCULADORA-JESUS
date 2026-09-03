@@ -262,3 +262,55 @@ def test_un_cierre_a_medias_no_rompe_nada():
 def test_sin_cierres_no_hay_sensaciones_que_pintar():
     r = am.cierres_del_periodo([], 28, tiene_suplementacion=True)
     assert am.sensaciones_del_periodo(r) == []
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LA PREGUNTA 5: LOS EJERCICIOS QUE LE MOLESTAN (doc 1-09, aplicada el 3-09)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Su documento colapsa el bloque de lesiones -- zona, «como esta este mes» y ejercicios
+# vetados -- en UNA pregunta con etiquetas. Lo que se guarda es la lista, y se guarda en
+# `injuries`, que es por donde agrupa el generador de rutinas.
+
+def test_los_ejercicios_que_le_molestan_salen_de_injuries():
+    """«Estos son los que me diste»: lo que lee el generador de rutinas."""
+    from core.datos_reporte import ejercicios_que_le_molestan
+    perfil = {"injuries": ["Press militar", "Sentadilla profunda"]}
+    assert ejercicios_que_le_molestan(perfil) == ["Press militar", "Sentadilla profunda"]
+
+
+def test_y_se_le_suma_lo_que_dejo_dentro_de_sus_lesiones():
+    """LA PRIMERA VEZ NO PUEDE SALIRLE EN BLANCO. Quien ya contesto el bloque viejo tiene
+    sus ejercicios dentro de `lesiones[].ejercicios_vetados`, que el generador no mira: se
+    suman aqui para que la pregunta nueva salga con todo lo que ya conto."""
+    from core.datos_reporte import ejercicios_que_le_molestan
+    perfil = {
+        "injuries": ["Press militar"],
+        "lesiones": [{"zona": "Hombro", "estado_mes": "igual",
+                      "ejercicios_vetados": ["Fondos", "Press militar"]}],
+    }
+    # Sin repetir el que ya estaba, y en el orden en que se leen.
+    assert ejercicios_que_le_molestan(perfil) == ["Press militar", "Fondos"]
+
+
+def test_una_lesion_superada_no_arrastra_sus_ejercicios():
+    """Se pregunto una vez y se cerro: sus vetados no vuelven a la lista."""
+    from core.datos_reporte import ejercicios_que_le_molestan
+    perfil = {"lesiones": [{"zona": "Rodilla", "estado_mes": "superada",
+                            "ejercicios_vetados": ["Sentadilla profunda"]}]}
+    assert ejercicios_que_le_molestan(perfil) == []
+
+
+def test_sin_nada_apuntado_la_lista_sale_vacia_y_no_revienta():
+    from core.datos_reporte import ejercicios_que_le_molestan
+    assert ejercicios_que_le_molestan({}) == []
+    assert ejercicios_que_le_molestan({"injuries": None, "lesiones": None}) == []
+
+
+def test_el_modelo_acepta_la_lista_de_la_pregunta_5():
+    from models.common import ReportCreate
+    r = ReportCreate(tipo="mensual", weight=80.0,
+                     ejercicios_molestos=["Press militar", "Fondos"])
+    assert r.ejercicios_molestos == ["Press militar", "Fondos"]
+    # Y sigue aceptando el bloque viejo: los reportes ya mandados se leen con el.
+    assert ReportCreate(tipo="mensual", weight=80.0).ejercicios_molestos is None
