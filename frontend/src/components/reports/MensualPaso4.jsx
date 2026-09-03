@@ -15,13 +15,106 @@
  * salta al equipo si ese día llega sin contestar. Escribir el día a mano en esta pantalla
  * era la forma segura de que un día dijeran cosas distintas.
  */
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { CabeceraDelMensual, RotuloDelPaso } from './PasosDelMensual';
 
 const ORANGE = '#FF671F';
 
-const MensualPaso4 = ({ plazo, promesaDia, informeId, onVerInforme }) => {
+/** «12 de agosto», para el pie de cada foto. La de hoy se dice «Hoy». */
+const cuando = (iso, hoy) => {
+    const dia = String(iso || '').slice(0, 10);
+    if (!dia) return '';
+    if (dia === hoy) return 'Hoy';
+    const d = new Date(`${dia}T12:00:00`);
+    return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
+};
+
+/**
+ * «Y MIENTRAS TANTO, MÍRATE»: tres fotos suyas de frente, mientras espera el programa.
+ *
+ * El rótulo estaba puesto y debajo NO HABÍA NADA: un título que no presenta nada, que es
+ * peor que no ponerlo. La maqueta enseña tres de la misma pose en tres momentos, y el
+ * sentido es ese: lo que se ve comparando es el cambio, no una foto suelta.
+ *
+ * LA PRIMERA, UNA DEL MEDIO Y LA ÚLTIMA. Con dos, salen las dos; con una, no sale nada --
+ * ni el rótulo --, porque una foto sola no compara con nada. De frente, que es la pose que
+ * todo el mundo tiene: es la que se pide primero.
+ */
+const MientrasTantoMirate = ({ api, token }) => {
+    const [fotos, setFotos] = useState(null);
+    const [urls, setUrls] = useState({});
+
+    useEffect(() => {
+        if (!api) { setFotos([]); return; }
+        api.get('/reports/photos')
+            .then((r) => setFotos(r.data?.photos || []))
+            .catch(() => setFotos([]));
+    }, [api]);
+
+    const base = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/$/, '');
+    // `urls` NO entra en las dependencias, y por eso el «ya la tengo» se pregunta dentro
+    // del `setUrls`: con `urls` fuera, cada foto que llega volvería a disparar el efecto y
+    // el efecto volvería a pedirlas todas, que es un bucle que no para.
+    const traer = useCallback((id) => {
+        if (!id) return;
+        setUrls((u) => {
+            if (u[id]) return u;
+            fetch(`${base}/api/reports/photos/${id}`, { headers: { Authorization: `Bearer ${token}` } })
+                .then((r) => (r.ok ? r.blob() : Promise.reject(new Error('no'))))
+                .then((b) => setUrls((v) => ({ ...v, [id]: URL.createObjectURL(b) })))
+                .catch(() => { });
+            return { ...u, [id]: '' };      // apuntada como pedida, para no pedirla dos veces
+        });
+    }, [base, token]);
+
+    const deFrente = (fotos || [])
+        .filter((f) => (f.pose || 'frente') === 'frente' && f.taken_at)
+        .sort((a, b) => String(a.taken_at).localeCompare(String(b.taken_at)));
+
+    // La primera, una del medio y la última: tres momentos, no las tres últimas semanas.
+    const tres = deFrente.length <= 3
+        ? deFrente
+        : [deFrente[0], deFrente[Math.floor((deFrente.length - 1) / 2)], deFrente[deFrente.length - 1]];
+
+    // Por los ids y no por el array: `tres` se rehace en cada render y como dependencia no
+    // pararía nunca.
+    const idsDeLasTres = tres.map((f) => f.id).join(',');
+    useEffect(() => {
+        idsDeLasTres.split(',').filter(Boolean).forEach((id) => traer(id));
+    }, [idsDeLasTres, traer]);
+
+    if (fotos === null || tres.length < 2) return null;
+    const hoy = new Date().toISOString().slice(0, 10);
+
+    return (
+        <div className="space-y-2" data-testid="paso4-mirate">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-1">
+                Y mientras tanto, mírate
+            </p>
+            <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${tres.length}, minmax(0, 1fr))` }}>
+                {tres.map((f) => (
+                    <div key={f.id} className="space-y-1">
+                        <div className="aspect-[3/4] rounded-xl bg-muted overflow-hidden">
+                            {urls[f.id] && (
+                                <img src={urls[f.id]} alt={`De frente, ${cuando(f.taken_at, hoy)}`}
+                                    className="w-full h-full object-cover" />
+                            )}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground text-center">
+                            {cuando(f.taken_at, hoy)}
+                        </p>
+                    </div>
+                ))}
+            </div>
+            <p className="text-[13px] text-muted-foreground px-1">
+                De frente, relajado. Los tres primeros días de cada mes.
+            </p>
+        </div>
+    );
+};
+
+const MensualPaso4 = ({ plazo, promesaDia, informeId, onVerInforme, api, token }) => {
     const dia = promesaDia || 'viernes';
 
     return (
@@ -82,9 +175,7 @@ const MensualPaso4 = ({ plazo, promesaDia, informeId, onVerInforme }) => {
             </div>
 
             {/* ── Y MIENTRAS TANTO, MÍRATE ── */}
-            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-1">
-                Y mientras tanto, mírate
-            </p>
+            <MientrasTantoMirate api={api} token={token} />
         </div>
     );
 };

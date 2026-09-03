@@ -265,6 +265,33 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
 
     const enviar = async () => {
         if (paso === 'form' && !await revisar()) return;
+
+        // EN MODO REVISIÓN NO SE MANDA NADA, PERO EL ÚLTIMO PASO SE VE.
+        //
+        // `?ver=` existe para que el equipo mire un reporte fuera de su semana, y el paso
+        // 4 -- la entrega, que es donde se le da algo al cliente -- era el único que no se
+        // podía mirar: solo aparece después de un envío, y el servidor rechaza el envío
+        // fuera de ventana («Todavía no toca: se abre el viernes...»). O sea que la
+        // pantalla que más falta hace repasar era justo la que no se podía abrir.
+        //
+        // Aquí no se escribe nada: no hay POST, no se crea reporte, no se toca su ficha.
+        // Se pinta el paso 4 tal cual, con el informe de su último reporte para que el
+        // botón lleve a algún sitio.
+        if (tipoRevision) {
+            try {
+                const r = await api.get('/reports');
+                const ultimo = (r.data || [])[0];
+                if (ultimo?.id) {
+                    await api.get(`/reports/${ultimo.id}/informe`);
+                    setInformeListo(ultimo.id);
+                }
+            } catch { setInformeListo(null); }
+            setPaso('enviado');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            toast.info('Modo revisión: no se ha enviado nada. Esto es el paso 4 tal y como lo ve el cliente.');
+            return;
+        }
+
         setEnviando(true);
         try {
             const payload = {
@@ -368,7 +395,7 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
     if (paso === 'enviado') {
         if (esMensual) {
             return (
-                <MensualPaso4 plazo={plazo} promesaDia={promesaDia}
+                <MensualPaso4 plazo={plazo} promesaDia={promesaDia} api={api} token={token}
                     informeId={informeListo} onVerInforme={onVerInforme} />
             );
         }
