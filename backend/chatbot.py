@@ -419,39 +419,36 @@ class NutritionChatbot:
 
     @staticmethod
     def margen_de(objetivo: float) -> float:
-        """Cuánto se puede desviar un macro para que la comida siga estando «cuadrada».
+        """Cuánto se puede desviar un macro para que la comida siga estando «cuadrada»:
+        LOS 4 G PLANOS, SIEMPRE (Francisco, 3-09-2026).
 
-        El margen de Calma son 4 g y en una comida normal está bien: sobre 47 g de proteína
-        es un 8 %. Pero el intra pide 9 g de proteína, y ahí esos mismos 4 g son el 44 %:
-        Francisco vio en producción «Comida cuadrada. Pulsa Guardar y siguiente» debajo de
-        un «5 / 9» de proteína, y con el propio asistente diciendo en el mensaje de al lado
-        que faltaban 4 g. Dos cosas contradictorias en la misma pantalla, y la que manda es
-        la que le invita a guardar y pasar a otra cosa.
-
-        Así que el margen se estrecha cuando el objetivo es pequeño -- una cuarta parte de
-        lo que se pide -- y nunca baja de 1,5 g, que es lo que se puede afinar con cucharas
-        y básculas de casa. En una comida normal no cambia nada: el 25 % de 47 es 11, así
-        que sigue mandando el 4 de siempre.
+        Aquí vivía un margen proporcional -- una cuarta parte de lo pedido, mínimo 1,5 --
+        nacido del intra: pide 9 g de proteína y un «5/9» salía como «comida cuadrada»
+        faltándole casi la mitad. Pero ese estrechado chocaba con el punto 11.1 de Jesús
+        («de 1 a 4, falte o sobre, es válido y sale en verde. Igual en toda la app, sin
+        excepciones»), y Francisco eligió el 11.1 a la letra SABIENDO que el caso del
+        intra vuelve a caber en el margen: «1-4 plano en todo». El gemelo de pantalla es
+        `lib/exceso.margenDe`; si algún día se revierte, son los dos a la vez.
         """
-        return min(4.0, max(1.5, 0.25 * abs(float(objetivo or 0)))) if objetivo else 4.0
+        return 4.0
 
     def comida_cuadrada(self, restante: dict, objetivo: dict = None) -> bool:
-        """¿Está cuadrada? Con el margen que le toca a cada macro (ver `margen_de`), y
-        MÁS ESTRECHO POR ARRIBA EN HIDRATOS Y GRASA: por abajo se ajusta, por arriba no se
-        pasa. Con el mismo margen en los dos sentidos salía «Comida cuadrada» sobre una
-        grasa de 15/12 mientras la cabecera decía «te pasas 3 g» (15-08, en vivo).
+        """¿Está cuadrada? Con el margen plano de `margen_de`, igual por los dos lados.
+
+        Aquí había un estrechado extra POR ARRIBA en hidratos y grasa (margen/2), del
+        15-08: el chat decía «cuadrada» sobre una grasa de 15/12 mientras la cabecera
+        decía «te pasas 3 g». Con el margen unificado del 3-09 («1-4 plano en todo», la
+        letra del punto 11.1) ese +3 es VÁLIDO también para la cabecera, así que la
+        contradicción de origen ya no puede darse -- y conservar el estrechado crearía la
+        inversa: el chat regañando por un desvío que la pantalla da por válido.
 
         LA PROTEÍNA ES OTRA COSA (mejora 4 de Jesús): pasarse de proteína no es un fallo
-        del método, así que conserva su margen entero por los dos lados. Cuánto es
-        «pasarse demasiado» de proteína lo tiene que fijar él (su punto 22, pendiente);
-        mientras, no se trata como error."""
+        del método. Cuánto es «pasarse demasiado» de proteína lo tiene que fijar él (su
+        punto 22, pendiente); mientras, no se trata como error."""
         objetivo = objetivo or self.get_current_meal_macros()
         for m in ("P", "H", "G"):
             r = restante.get(m, 0)
-            margen = self.margen_de(objetivo.get(m, 0))
-            if r < 0 and m != "P":
-                margen = max(1.5, margen / 2)
-            if abs(r) > margen:
+            if abs(r) > self.margen_de(objetivo.get(m, 0)):
                 return False
         return True
 

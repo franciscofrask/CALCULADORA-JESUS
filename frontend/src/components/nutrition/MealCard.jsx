@@ -51,12 +51,9 @@ const estadoDeLaComida = (status, target, served, cuantosAlimentos, esPeri = fal
     if (!cuantosAlimentos) return { texto: 'sin crear', color: 'apagado' };
 
     const claves = esPeri ? ['P', 'H'] : ['P', 'H', 'G'];
-    // EL MARGEN DE CADA MACRO ES EL DE LA COMIDA (`margenDe`), no los 4 g planos del día.
-    // El artifact dice que el margen es «el mismo de la parte 2», pero aquí eso mordería:
-    // 4 g sobre los 9 de proteína que pide un intra son casi la mitad, y ya pasó una vez
-    // que la pantalla decía «Comida cuadrada. Pulsa Guardar» sobre un «5 / 9». El margen
-    // proporcional es el mismo criterio con el que `getMealStatus` decide el estado, así
-    // que la palabra y el color no pueden contradecirlo. Ver lib/exceso.
+    // EL MARGEN ES EL DE `margenDe` (lib/exceso): desde el 3-09, los 4 g planos en todo
+    // (decisión de Francisco, la letra del 11.1); antes era proporcional y ya no. Y es
+    // INCLUSIVO: «de 1 a 4, falte o sobre, es válido», así que fuera es MÁS de 4, no >=.
     // LA MISMA RESTA QUE DENTRO DE LA COMIDA (punto 200 del 28-08). Dentro, el objetivo se
     // enseña al medio gramo y lo servido a la décima, y lo que falta se cuenta contra ESOS
     // (regla del 17-08: «quien escriba una diferencia al lado de dos cifras redondeadas
@@ -65,7 +62,7 @@ const estadoDeLaComida = (status, target, served, cuantosAlimentos, esPeri = fal
     // sitios, con el mismo margen, o la lista y la comida se contradicen.
     const meta = (k) => alMedio(target[k] || 0);
     const desvios = claves.map((k) => ({ k, d: alDecima(served[k] || 0) - meta(k) }));
-    const fuera = desvios.filter((x) => Math.abs(x.d) >= margenDe(meta(x.k)));
+    const fuera = desvios.filter((x) => Math.abs(x.d) > margenDe(meta(x.k)));
 
     // POR CUÁNTO Y DE QUÉ, no solo que te pasas (Jesús, 13-08): «la app enseña los dos
     // números pero no la diferencia; el cliente tiene que restar».
@@ -488,6 +485,11 @@ const MealCard = ({
     // Aquí sobraba un macro, había varios sitios de donde bajarlo y se bajó de todos a la
     // vez porque nadie pudo preguntar (ver el aviso de más abajo, 31-08-2026).
     const eleccionPendiente = Boolean(mealsData[mealKey]?.eleccion_pendiente);
+    // Y el caso duro (3-09-2026): la pregunta pendiente es de QUITAR, porque ni con todo
+    // al mínimo cabe. Ahí no se bajó nada -- no había nada que bajar -- y decir «lo bajé
+    // de todo a la vez» era mentira: la C4 de Francisco, con los mínimos del yogur, las
+    // fresas y el skyr sumando 18 H sobre un objetivo de 10.
+    const pendienteEsQuitar = mealsData[mealKey]?.eleccion_pendiente?.decision?.tipo === 'quitar';
     const isPeri = mealKey === 'Intra' || mealKey === 'Post';
     const info = mealInfo[mealKey];
     const status = getMealStatus(mealKey);
@@ -1007,10 +1009,14 @@ const MealCard = ({
                                     data-testid={`eleccion-pendiente-${mealKey}`}
                                     className="w-full text-left rounded-xl border border-brand/40 bg-brand/5 px-3 py-2.5 mb-2">
                                     <span className="block text-xs font-bold text-brand">
-                                        Aquí sobraba y lo bajé de todo a la vez
+                                        {pendienteEsQuitar
+                                            ? 'Aquí sobra aunque esté todo al mínimo'
+                                            : 'Aquí sobraba y lo bajé de todo a la vez'}
                                     </span>
                                     <span className="block text-xs text-muted-foreground mt-0.5">
-                                        Toca si prefieres bajarlo de un alimento concreto
+                                        {pendienteEsQuitar
+                                            ? 'Toca para elegir qué quitar'
+                                            : 'Toca si prefieres bajarlo de un alimento concreto'}
                                     </span>
                                 </button>
                             )}

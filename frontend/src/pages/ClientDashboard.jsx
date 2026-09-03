@@ -862,7 +862,16 @@ const InicioNuevo = () => {
                 hoy no hay nueva, se queda la del día anterior y no se dice de cuándo es. */}
             <HeroInicio>
                 <header>
-                    <p className="text-sm text-white/75 first-letter:uppercase" data-testid="inicio-fecha">
+                    {/* QUE SE LEA (Francisco, 3-09): «no se lee bien, casi no se nota».
+                        Iba al 75 % de blanco, en peso normal y SIN sombra, encima de una foto
+                        que tiene zonas claras: la línea desaparecía justo donde cruza el neón.
+                        El 2-09 se le puso sombra a la frase del día y se oscureció el velo,
+                        pero a esta línea no se le tocó nada. Se sube el blanco, se le da el
+                        mismo peso medio y la MISMA sombra que la frase. Sigue por debajo de
+                        «Hola, X», que es blanco entero y grande: no compite con el saludo. */}
+                    <p className="text-sm font-semibold text-white first-letter:uppercase"
+                        style={{ textShadow: '0 1px 4px rgba(0,0,0,.9)' }}
+                        data-testid="inicio-fecha">
                         {fechaLargaDeHoy()}
                         {/* «DÍA DE ENTRENO», no «entreno» (la regla del 13-08, la misma que en
                             el Inicio viejo): es el tipo de día del que salen los macros. */}

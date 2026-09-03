@@ -326,6 +326,7 @@ async def delete_favorite(fav_id: str, user = Depends(get_current_user)):
 @router.get("/recent")
 async def get_recent_diets(limit: int = 14, para: Optional[str] = None,
                            hoy_cliente: Optional[str] = None,
+                           tipo_destino: Optional[str] = None,
                            user = Depends(get_current_user)):
     """Lista los últimos días con dieta guardada.
 
@@ -351,18 +352,21 @@ async def get_recent_diets(limit: int = 14, para: Optional[str] = None,
     # que un reloj roto (o una trampa) abra la puerta a días del año que viene.
     techo = dia_del_cliente(hoy_cliente)
 
-    # EL DÍA DESTINO ES EL QUE ESTÁ ABIERTO, AUNQUE SEA DE LA SEMANA PASADA (punto 212). Esto
-    # pasaba `para` por `dia_del_cliente`, que lo recorta a un día del de España porque su
-    # trabajo es validar el RELOJ del cliente, no una fecha cualquiera. Resultado: quien
-    # abría el lunes 24 veía las etiquetas calculadas contra los macros del jueves 28. Aquí
-    # `para` no es «qué día dice que vive», es «qué día estoy montando», y ese sí puede estar
-    # lejos. Se valida el formato y que no sea del futuro, y ya.
+    # EL DÍA DESTINO ES EL QUE ESTÁ ABIERTO, AUNQUE SEA DE LA SEMANA PASADA... O DE LA QUE
+    # VIENE (punto 212, ampliado el 3-09). Esto pasaba `para` por `dia_del_cliente`, que lo
+    # recorta a un día del de España: quien abría el lunes 24 veía las etiquetas calculadas
+    # contra los macros del jueves 28. Y la primera corrección dejó otra puerta igual: se
+    # descartaba cualquier `para` del FUTURO, así que quien montaba un día por delante --
+    # planificar la semana es un uso legítimo -- veía las etiquetas juzgadas contra HOY.
+    # Francisco lo cazó montando el 21 de diciembre desde el 3 de septiembre (su descanso):
+    # los días de descanso salían «+12 G» y los de entreno «OTRO DÍA», al revés de su
+    # pantalla. `para` no es «qué día dice que vive», es «qué día estoy montando», y ese
+    # puede estar lejos en las dos direcciones. Se valida el formato, y ya. (El TECHO de la
+    # lista sí sigue siendo hoy: se ofrece repetir lo vivido, no lo por vivir.)
     fecha_para = techo
     if para:
         try:
-            d = date.fromisoformat(str(para)[:10])
-            if d.isoformat() <= techo:
-                fecha_para = d.isoformat()
+            fecha_para = date.fromisoformat(str(para)[:10]).isoformat()
         except (ValueError, TypeError):
             pass
 
@@ -422,6 +426,13 @@ async def get_recent_diets(limit: int = 14, para: Optional[str] = None,
     destino = await db.diets.find_one(
         {"user_id": user["id"], "fecha": fecha_para},
         {"_id": 0, "tipo_dia": 1, "num_comidas": 1, "momento_entreno": 1, "opcion_peri": 1})
+    # EL TIPO QUE EL CLIENTE TIENE DELANTE MANDA (3-09). En un día sin guardar, el servidor
+    # caía a su propia precedencia (perfil) y la pantalla a la suya (Entreno, punto 4.17):
+    # dos opiniones para el mismo día y las etiquetas juzgadas con la que el cliente no ve.
+    # El front manda `tipo_destino` -- lo que enseña su selector -- y aquí se respeta, igual
+    # que hace `contexto_dia` con la calibración. Sin él, todo sigue como estaba.
+    if tipo_destino in ("entrenamiento", "descanso"):
+        destino = {**(destino or {}), "tipo_dia": tipo_destino}
     tipo_destino = (destino or {}).get("tipo_dia") or "entrenamiento"
     reparto_destino = await _reparto_del_dia(fecha_para, destino, user)
     resumen = (reparto_destino or {}).get("resumen") or {}

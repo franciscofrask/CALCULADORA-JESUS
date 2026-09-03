@@ -39,7 +39,7 @@ from core.quiz_store import guardar_quiz_respuestas
 from core.series_cliente import anotar_peso, anotar_grasa
 from core.topes_cantidad import tope_de_alimento
 from macro_distribution import distribuir_macros as dist_macros, leer_macro, leer_peri
-from redondeo_salida import redondear_cantidad, minimo_pesable
+from redondeo_salida import redondear_cantidad, minimo_pesable, paso_en_gramos, redondear_a_la_baja
 
 router = APIRouter(prefix="/calculator", tags=["calculator"])
 
@@ -1418,6 +1418,96 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
     # devuelve la pregunta en `decisiones` para que la pantalla la haga.
     ajustes = data.get("ajuste") or {}
     decisiones = {}
+
+    # ── LA MISMA VARA QUE LA PANTALLA (3-09-2026) ────────────────────────────
+    #
+    # Este endpoint calculaba cada alimento con la regla por categoría A SECAS,
+    # mientras la pantalla enseña los macros con la CALIBRACIÓN DEL DÍA puesta
+    # (/calibrar-dia). Dos modelos para la misma comida, y Francisco lo cazó con
+    # sus almendras (día con más de 40 g de frutos secos: su proteína cuenta
+    # entera):
+    #
+    #   · Al aplicar una favorita, para este cálculo la proteína de las almendras
+    #     no contaba, así que el solomillo se dimensionaba a los 50 g del objetivo
+    #     ENTERO -- y en cuanto la pantalla recalibraba, la comida amanecía con
+    #     «sobran 4,6». Él lo arregló a mano porque él sí ve la lista entera.
+    #   · Y «Cuadrar el día» era peor: devolvía las MISMAS cantidades con los
+    #     macros sin calibrar, la pantalla los pintaba tal cual y, como las
+    #     cantidades no cambiaban, el recálculo de /calibrar-dia no saltaba (su
+    #     disparador es ids+cantidades). La comida se daba por cuadrada con unos
+    #     números que el día no respalda; al recargar, volvían los de verdad.
+    #
+    # El tramo lo decide el total del DÍA de cada familia (calibracion_dia), y es
+    # el mismo para todas las comidas. Aquí se suma lo que va a quedar: las
+    # comidas del reparto que vienen en la petición y, si el que llama solo manda
+    # una (el botón «Cuadrar» de una comida), el resto del día viaja en
+    # `contexto_dia` ({clave: [{alimento_id, cantidad_g}]}), que es lo que el
+    # cliente tiene delante. Sin contexto, el tramo se mide solo con lo enviado.
+    from calibracion_dia import clasificar_bloque as _bloque_del_dia, \
+        macros_item_calibrados as _macros_calibrados_item
+    from calma_engine import _calibracion_cereales_panes as _tramo_cp, \
+        _calibracion_frutos_secos as _tramo_fs
+
+    contexto_dia = data.get("contexto_dia") or {}
+
+    def _items_para_tramo():
+        # Solo lo que el día va a enseñar: las comidas sin hueco en el reparto o
+        # se vacían (descartar) o no se pintan, y la pantalla tampoco las cuenta.
+        en_reparto = lambda mk: mk in targets or mk in peri_targets
+        for mk, m_in in comidas_in.items():
+            if not en_reparto(mk):
+                continue
+            for it in ((m_in if isinstance(m_in, dict) else {}).get("alimentos") or []):
+                yield it
+        for mk, items in contexto_dia.items():
+            if not en_reparto(mk) or mk in comidas_in:
+                continue        # si viene repetida, manda la petición principal
+            for it in (items or []):
+                if isinstance(it, dict):
+                    yield it
+
+    _ids_tramo = set()
+    for it in _items_para_tramo():
+        try:
+            _ids_tramo.add(int(it.get("alimento_id")))
+        except (TypeError, ValueError):
+            pass
+    _cats_tramo = {}
+    if _ids_tramo:
+        async for f in db.foods.find({"id": {"$in": list(_ids_tramo)}},
+                                     {"_id": 0, "id": 1, "categorias": 1}):
+            _cats_tramo[int(f["id"])] = f
+    _total_cp = _total_fs = 0.0
+    for it in _items_para_tramo():
+        try:
+            f_cat = _cats_tramo.get(int(it.get("alimento_id")))
+        except (TypeError, ValueError):
+            f_cat = None
+        if not f_cat:
+            continue
+        _b = _bloque_del_dia(f_cat)
+        if _b == "cereal_pan":
+            _total_cp += float(it.get("cantidad_g") or 0)
+        elif _b == "fruto_seco":
+            _total_fs += float(it.get("cantidad_g") or 0)
+    pct_cp_dia = _tramo_cp(_total_cp)
+    pct_fs_dia = _tramo_fs(_total_fs)
+
+    # El alimento tal y como está en el catálogo, ANTES de pasarle las reglas: la
+    # calibración parte de la etiqueta y las aplica ella misma.
+    puros: Dict[int, dict] = {}
+
+    def _macros_del_dia(food: dict, cant_motor: float) -> Dict[str, float]:
+        """macros_at, pero con la calibración del día puesta. Fuera de las dos
+        familias calibradas es EXACTAMENTE el cálculo de siempre."""
+        if _bloque_del_dia(food) is None:
+            return macros_at_calma(food, cant_motor)
+        racion_c = float(food.get("racion") or 100) or 100.0
+        cantidad_g = cant_motor * racion_c if food.get("unidades") else cant_motor
+        base = puros.get(int(food.get("id") or 0), food)
+        m = _macros_calibrados_item(base, float(cantidad_g), pct_cp_dia, pct_fs_dia)
+        return {"proteinas": m["P"], "hidratos": m["H"], "grasas": m["G"]}
+
     for meal_key, meal in comidas_in.items():
         meal = meal if isinstance(meal, dict) else {}
         # El peri sí se cuadra: tiene objetivo, solo que en `periworkout`.
@@ -1475,6 +1565,10 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
                 excluidos.append({"meal": meal_key, "nombre": it.get("nombre"),
                                   "motivo": "no_esta_en_el_catalogo"})
                 continue
+            # La copia sin reglas, para la calibración del día (arriba): aplicarle
+            # las reglas dos veces a un calibrado le pisa la etiqueta original.
+            if food.get("id") is not None:
+                puros.setdefault(int(food["id"]), copy.deepcopy(food))
             aplicar_regla_macros_calma(food)
             entradas.append((it, food, cantidad_minima_calma(food)))
 
@@ -1499,33 +1593,157 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
             cfg_s = _config_del_alimento(food)
             return minimo_pesable(food, float(cfg_s.get("minimo", 5) or 5))
 
+        def _suelo_catalogo(food):
+            """El mínimo de verdad del alimento, SIN subirlo a los 20 g pesables."""
+            from calculator import get_food_config as _config_del_alimento
+            cfg_s = _config_del_alimento(food)
+            return float(cfg_s.get("minimo", 5) or 5)
+
+        # El suelo en gramos que rige AHORA para cada alimento. Arranca en el pesable;
+        # si el pesable resulta ser lo único que impide cuadrar, baja al del catálogo.
+        suelos = {}
         aportes = []
         for it, food, _m in entradas:
             racion_a = float(food.get("racion") or 100)
             es_ud = bool(food.get("unidades"))
             cant_g = float(it.get("cantidad_g") or 0)
             cant_a = (cant_g / racion_a) if es_ud else cant_g
-            ma = macros_at_calma(food, cant_a)
+            ma = _macros_del_dia(food, cant_a)
             # Y lo que pondría si se le bajara todo lo que se puede bajar. De aquí sale si la
             # comida tiene arreglo bajando o si hay que quitar algo.
             suelo_g = _suelo_de(food)
-            ms = macros_at_calma(food, (suelo_g / racion_a) if es_ud else suelo_g)
+            # El suelo pesable NO SUBE lo que ya venía más abajo (la misma regla que el
+            # afinado): a la harina que entró con 10 g no se le puede contar un suelo de
+            # 20, o «bajar devuelve» sale negativo y las cuentas de la pregunta mienten.
+            if cant_g and cant_g < suelo_g:
+                suelo_g = min(cant_g, _suelo_catalogo(food))
+            suelo_cat_g = min(suelo_g, _suelo_catalogo(food))
+            suelos[int(food.get("id") or 0)] = suelo_g
+            ms = _macros_del_dia(food, (suelo_g / racion_a) if es_ud else suelo_g)
+            mc = _macros_del_dia(food, (suelo_cat_g / racion_a) if es_ud else suelo_cat_g)
             aportes.append({
                 "alimento_id": int(food.get("id") or 0),
                 "nombre": food.get("nombre") or it.get("nombre"),
                 "cantidad_g": cant_g,
                 "macros": {"P": ma["proteinas"], "H": ma["hidratos"], "G": ma["grasas"]},
                 "suelo": {"P": ms["proteinas"], "H": ms["hidratos"], "G": ms["grasas"]},
+                "_suelo_catalogo": {"g": suelo_cat_g,
+                                    "macros": {"P": mc["proteinas"], "H": mc["hidratos"],
+                                               "G": mc["grasas"]}},
                 "_food": food,
             })
+        # Con cuánto ENTRÓ cada alimento: el suelo pesable del afinado no puede subir
+        # por encima de esto (ver el comentario del afinado, 3-09).
+        entrada_g = {a["alimento_id"]: float(a["cantidad_g"] or 0) for a in aportes}
         servido_ahora = {m: sum(a["macros"][m] for a in aportes) for m in ("P", "H", "G")}
         objetivo_m = {"P": objetivo["proteinas"], "H": objetivo["hidratos"],
                       "G": objetivo["grasas"]}
         toca = de_donde_bajo.hay_que_preguntar(servido_ahora, objetivo_m, aportes)
         macro_sobra, tipo_pregunta = toca if toca else (None, None)
 
+        # EL SUELO PESABLE NO MANDA MÁS QUE CUADRAR (Francisco, 3-09-2026).
+        #
+        # El suelo de 20 g (fallo 29 de Jesús: menos es «un poco», no comida) le decía
+        # «aunque lo baje todo al mínimo, sobran 5,6 g de grasa» con unas almendras que
+        # en 10 g dejaban la comida clavada: lo comprobó él bajándolas a mano. «No puede
+        # ser que yo bajando un alimento lo cuadre y la calibración automática no pueda.»
+        #
+        # Así que cuando el pesable es lo ÚNICO que impide cuadrar, se baja hasta el
+        # mínimo del catálogo antes de rendirse a preguntar qué quitar. Para el
+        # dimensionado normal el pesable sigue mandando: esto solo se abre cuando la
+        # alternativa es una comida en naranja o quitar el alimento entero.
+        if macro_sobra and tipo_pregunta == "quitar":
+            aportes = [dict(a, suelo=a["_suelo_catalogo"]["macros"]) for a in aportes]
+            for a in aportes:
+                suelos[a["alimento_id"]] = a["_suelo_catalogo"]["g"]
+            if not de_donde_bajo.bajar_no_llega(aportes, objetivo_m, macro_sobra):
+                tipo_pregunta = "bajar"
+            # Si ni con el catálogo cabe, sigue siendo «¿qué quito?», pero con los
+            # números del mínimo de verdad, que es lo que la pregunta promete.
+
         fijos = None
         decision = None
+
+        # Las tres piezas de una bajada, parametrizadas por macro: las usa el macro que
+        # pregunta Y los que sobran por detrás de él (el bloque de más abajo).
+        def _pesable(food, cantidad):
+            """Al múltiplo pesable MÁS CERCANO, sin bajar del suelo que rige ahora
+            (el pesable, o el del catálogo si el pesable impedía cuadrar).
+
+            Aquí no se redondea a la baja como en el dimensionado: esto es «en cuánto
+            se queda» un alimento al que se le está bajando, y 9,4 g de almendras
+            están más cerca de 10 que de 5 (Francisco eligió 10 a mano, 3-09). El
+            medio paso de más cabe de sobra en el margen del día."""
+            suelo = suelos.get(int(food.get("id") or 0)) or _suelo_de(food)
+            cantidad = max(suelo, cantidad)
+            paso = paso_en_gramos(food)
+            abajo = redondear_a_la_baja(cantidad, paso, minimo_g=suelo)
+            arriba = abajo + paso
+            mejor = arriba if (arriba - cantidad) < (cantidad - abajo) else abajo
+            return max(suelo, mejor)
+
+        def _bajar_solo_de(elegido, macro_m, candidatos_m):
+            """Ese alimento se lleva toda la bajada; los demás candidatos, como estaban."""
+            resto = servido_ahora[macro_m] - elegido["macros"][macro_m]
+            por_gramo = (elegido["macros"][macro_m] / elegido["cantidad_g"]
+                         if elegido["cantidad_g"] > 0 else 0.0)
+            hueco = objetivo_m[macro_m] - resto
+            cant = (elegido["cantidad_g"] if por_gramo <= 0
+                    else min(elegido["cantidad_g"], hueco / por_gramo))
+            cant = _pesable(elegido["_food"], cant)
+            pins = {a["alimento_id"]: a["cantidad_g"] for a in candidatos_m}
+            pins[elegido["alimento_id"]] = cant
+            return pins, cant, max(0.0, resto + por_gramo * cant - objetivo_m[macro_m])
+
+        def _bajar_de_todos(macro_m, candidatos_m):
+            """Todos los candidatos por el mismo factor: la comida mantiene su equilibrio."""
+            puesto = sum(a["macros"][macro_m] for a in candidatos_m)
+            k = de_donde_bajo.factor_proporcional(
+                servido_ahora[macro_m] - objetivo_m[macro_m], puesto)
+            return {a["alimento_id"]: _pesable(a["_food"], a["cantidad_g"] * k)
+                    for a in candidatos_m}
+
+        def _candidatos_anchos(macro_m):
+            """Para BAJAR en proporción valen todos los que aportan algo del macro.
+
+            El filtro de `de_donde_se_puede_bajar` (devolver al menos 4 g) es para la
+            PREGUNTA, para no listar opciones inútiles. Pero en la Comida 4 de Francisco
+            (3-09) el hidrato sobraba +11,5 repartido en cinco migajas -- 6+4,1+2,4+5,5+3,5
+            -- y ese filtro los descartaba a todos: nadie bajaba nada y la comida se
+            quedaba pasada. Juntas, las migajas sí devuelven la sobra entera."""
+            return [a for a in aportes
+                    if a["macros"][macro_m] - a["suelo"][macro_m] > 0.5]
+
+        def _pregunta_de_bajada(macro_m, candidatos_m, fijos_m):
+            """La pregunta de «¿de dónde bajo?», con lo que quedaría en cada opción."""
+            sobra_m = servido_ahora[macro_m] - objetivo_m[macro_m]
+            opciones = []
+            for a in candidatos_m:
+                _, queda, sobraria = _bajar_solo_de(a, macro_m, candidatos_m)
+                opciones.append({
+                    "modo": "solo",
+                    "alimento_id": a["alimento_id"],
+                    "nombre": a["nombre"],
+                    "cantidad_ahora": round(a["cantidad_g"], 1),
+                    "aporta": round(a["macros"][macro_m], 1),
+                    "queda_en": round(queda, 1),
+                    "sobraria_aun": round(sobraria, 1),
+                })
+            opciones.append({
+                "modo": "proporcional",
+                "cantidades": [{"alimento_id": a["alimento_id"], "nombre": a["nombre"],
+                                "cantidad_ahora": round(a["cantidad_g"], 1),
+                                "queda_en": round(fijos_m[a["alimento_id"]], 1)}
+                               for a in candidatos_m],
+            })
+            return {
+                "macro": macro_m,
+                "tipo": "bajar",
+                "sobra": round(sobra_m, 1),
+                "titulo": de_donde_bajo.titulo(macro_m, sobra_m),
+                "opciones": opciones,
+            }
+
         if macro_sobra and tipo_pregunta == "quitar":
             # BAJANDO NO SE ARREGLA: aunque todo esté en su mínimo, ese macro se pasa. No hay
             # nada que clavar; se cuadra como siempre (lo mejor que se pueda) y se devuelve la
@@ -1552,71 +1770,86 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
             }
         elif macro_sobra:
             candidatos = de_donde_bajo.de_donde_se_puede_bajar(aportes, macro_sobra)
-            objetivo_del_macro = objetivo_m[macro_sobra]
-            sobra_total = servido_ahora[macro_sobra] - objetivo_del_macro
-
-            def _pesable(food, cantidad):
-                """A una cantidad que se pueda pesar, sin bajar del suelo de ese alimento."""
-                suelo = _suelo_de(food)
-                return max(suelo, redondear_cantidad(food, max(suelo, cantidad), minimo_g=suelo))
-
-            def _bajar_solo_de(elegido):
-                """Ese alimento se lleva toda la bajada; los demás candidatos, como estaban."""
-                resto = servido_ahora[macro_sobra] - elegido["macros"][macro_sobra]
-                por_gramo = (elegido["macros"][macro_sobra] / elegido["cantidad_g"]
-                             if elegido["cantidad_g"] > 0 else 0.0)
-                hueco = objetivo_del_macro - resto
-                cant = (elegido["cantidad_g"] if por_gramo <= 0
-                        else min(elegido["cantidad_g"], hueco / por_gramo))
-                cant = _pesable(elegido["_food"], cant)
-                pins = {a["alimento_id"]: a["cantidad_g"] for a in candidatos}
-                pins[elegido["alimento_id"]] = cant
-                return pins, cant, max(0.0, resto + por_gramo * cant - objetivo_del_macro)
-
-            def _bajar_de_todos():
-                """Todos los candidatos por el mismo factor: la comida mantiene su equilibrio."""
-                puesto = sum(a["macros"][macro_sobra] for a in candidatos)
-                k = de_donde_bajo.factor_proporcional(sobra_total, puesto)
-                return {a["alimento_id"]: _pesable(a["_food"], a["cantidad_g"] * k)
-                        for a in candidatos}
-
             elegido_id = (ajustes.get(meal_key) or {}).get("alimento_id")
             modo = (ajustes.get(meal_key) or {}).get("modo")
             elegido = next((a for a in candidatos
                             if elegido_id and a["alimento_id"] == int(elegido_id)), None)
             if modo == "solo" and elegido:
-                fijos, _, _ = _bajar_solo_de(elegido)
+                fijos, _, _ = _bajar_solo_de(elegido, macro_sobra, candidatos)
             elif modo == "proporcional":
-                fijos = _bajar_de_todos()
+                fijos = _bajar_de_todos(macro_sobra, candidatos)
+            elif len(candidatos) < 2:
+                # Un solo sitio de donde bajar (o ninguno que devuelva 4 g él solo): no hay
+                # decisión que tomar, se baja y ya (el contrato de de_donde_bajo) -- y se
+                # baja del conjunto ANCHO, que las migajas juntas sí llegan (ver arriba).
+                fijos = _bajar_de_todos(macro_sobra, _candidatos_anchos(macro_sobra) or candidatos)
             else:
                 # Nadie ha contestado: se baja en proporción y se devuelve la pregunta.
-                fijos = _bajar_de_todos()
-                opciones = []
-                for a in candidatos:
-                    _, queda, sobraria = _bajar_solo_de(a)
-                    opciones.append({
-                        "modo": "solo",
-                        "alimento_id": a["alimento_id"],
-                        "nombre": a["nombre"],
-                        "cantidad_ahora": round(a["cantidad_g"], 1),
-                        "aporta": round(a["macros"][macro_sobra], 1),
-                        "queda_en": round(queda, 1),
-                        "sobraria_aun": round(sobraria, 1),
-                    })
-                opciones.append({
-                    "modo": "proporcional",
-                    "cantidades": [{"alimento_id": a["alimento_id"], "nombre": a["nombre"],
-                                    "cantidad_ahora": round(a["cantidad_g"], 1),
-                                    "queda_en": round(fijos[a["alimento_id"]], 1)}
-                                   for a in candidatos],
-                })
-                decision = {
-                    "macro": macro_sobra,
-                    "tipo": "bajar",
-                    "sobra": round(sobra_total, 1),
-                    "titulo": de_donde_bajo.titulo(macro_sobra, sobra_total),
-                    "opciones": opciones,
-                }
+                fijos = _bajar_de_todos(macro_sobra, candidatos)
+                decision = _pregunta_de_bajada(macro_sobra, candidatos, fijos)
+        else:
+            # SOBRA PERO NO HAY PREGUNTA QUE HACER (Francisco, 3-09-2026, su Comida 4).
+            #
+            # `hay_que_preguntar` devuelve None cuando sobra un macro pero ningún alimento
+            # puede devolver 4 g él solo -- su contrato dice «la app decide sola»... y la
+            # app no decidía: se fiaba del dimensionado, que solo reparte hacia arriba. En
+            # su C4 el hidrato sobraba +8,2 repartido en migajas (6+0,8+2,4+5,5+3,5) y todo
+            # se quedaba tal cual entró. Aquí se decide de verdad: proporcional del
+            # conjunto ancho, sin pregunta porque no hay elección con sustancia que dar.
+            m_solo = de_donde_bajo.macro_que_sobra(servido_ahora, objetivo_m)
+            if m_solo:
+                anchos_solo = _candidatos_anchos(m_solo)
+                if anchos_solo:
+                    fijos = _bajar_de_todos(m_solo, anchos_solo)
+                    macro_sobra = m_solo    # que el barrido de abajo no lo repita
+
+        # LOS QUE SOBRAN POR DETRÁS DEL PEOR TAMBIÉN SE BAJAN (Francisco, 3-09-2026).
+        #
+        # `hay_que_preguntar` atiende al macro que MÁS se pasa. En su favorita el peor
+        # era la proteína -- que el dimensionado arregla solo, bajando el solomillo -- y
+        # la grasa, clavada en los suelos, salía «sobran 5,6» en el mismo pantallazo en
+        # el que la proteína quedaba perfecta. El botón de la comida acababa cuadrando
+        # porque pregunta en bucle; aplicar una favorita llama UNA vez, así que se
+        # resuelve aquí, en la misma llamada: TODOS los macros que sobran y a los que el
+        # dimensionado no puede llegar (su suelo se lo impide) se bajan -- soltando el
+        # suelo pesable si hace falta --, no solo el primero («revisa bien todas las
+        # maneras de cuadrar», mismo día). Si dos macros bajan el mismo alimento, manda
+        # el clavado MENOR, que sirve a los dos. La pregunta sigue siendo una por comida:
+        # la del peor macro si la dejó, o la del primero de estos con elección real.
+        pins_extra = {}
+        for m_extra in ("P", "H", "G"):
+            if m_extra == macro_sobra:
+                continue
+            obj_x = float(objetivo_m.get(m_extra) or 0)
+            if math.isinf(obj_x):
+                continue
+            if (servido_ahora.get(m_extra, 0) - obj_x) <= de_donde_bajo.SOBRA_MINIMA:
+                continue
+            if not de_donde_bajo.bajar_no_llega(aportes, objetivo_m, m_extra):
+                continue     # en el suelo cabe: esto lo arregla el dimensionado normal
+            relajados = [dict(a, suelo=a["_suelo_catalogo"]["macros"]) for a in aportes]
+            if de_donde_bajo.bajar_no_llega(relajados, objetivo_m, m_extra):
+                continue     # ni con el catálogo cabe: bajar no puede, y quitar ya
+                             # tiene su pregunta cuando le toque ser el peor
+            aportes = relajados
+            for a in aportes:
+                suelos[a["alimento_id"]] = a["_suelo_catalogo"]["g"]
+            anchos = _candidatos_anchos(m_extra)
+            if not anchos:
+                continue
+            nuevos = _bajar_de_todos(m_extra, anchos)
+            for fid, cant in nuevos.items():
+                pins_extra[fid] = min(pins_extra.get(fid, cant), cant)
+            candidatos_x = de_donde_bajo.de_donde_se_puede_bajar(aportes, m_extra)
+            if decision is None and len(candidatos_x) >= 2:
+                decision = _pregunta_de_bajada(
+                    m_extra, candidatos_x,
+                    {a["alimento_id"]: nuevos.get(a["alimento_id"], a["cantidad_g"])
+                     for a in candidatos_x})
+        if pins_extra:
+            fijos = dict(fijos or {})
+            for fid, cant in pins_extra.items():
+                fijos[fid] = min(fijos.get(fid, cant), cant)
         if decision:
             decisiones[meal_key] = decision
 
@@ -1640,7 +1873,7 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
         # Lo que consumen los mínimos sale del presupuesto antes de repartir.
         for _, food, minimo in entradas:
             clavado = _clavado(food)
-            aporte = macros_at_calma(food, clavado if clavado is not None else minimo)
+            aporte = _macros_del_dia(food, clavado if clavado is not None else minimo)
             for k in ("proteinas", "hidratos", "grasas"):
                 if not math.isinf(remaining[k]):
                     remaining[k] = max(0.0, remaining[k] - aporte[k])
@@ -1651,7 +1884,7 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
             if clavado is not None:
                 # Ya se descontó entero arriba: aquí solo se coloca.
                 cant = max(0.0, clavado)
-                contrib = macros_at_calma(food, cant)
+                contrib = _macros_del_dia(food, cant)
                 minimo = cant   # para que el afinado de abajo tampoco lo mueva
             else:
                 # Lo que quepa por encima del mínimo, con el mismo dimensionado de siempre.
@@ -1661,8 +1894,8 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
                 # `ajustar_cantidad` devuelve la cantidad total que cabría, no un extra:
                 # como el mínimo ya está reservado, se descuenta para no contarlo dos veces.
                 cant = max(minimo, extra)
-                contrib = macros_at_calma(food, cant)
-            aporte_minimo = macros_at_calma(food, minimo)
+                contrib = _macros_del_dia(food, cant)
+            aporte_minimo = _macros_del_dia(food, minimo)
             for k in ("proteinas", "hidratos", "grasas"):
                 if not math.isinf(remaining[k]):
                     remaining[k] = max(0.0, remaining[k] - max(0.0, contrib[k] - aporte_minimo[k]))
@@ -1696,7 +1929,15 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
             opt_foods = []
             for rf, food in zip(refit_foods, food_docs):
                 cfg = get_food_config(food)
-                ef = get_effective_macros_per_100g(food)
+                ef = dict(get_effective_macros_per_100g(food))
+                # La calibración del día también aquí: el afinado optimiza contra el
+                # objetivo, y si mide un calibrado sin su proteína «arregla» la
+                # comida subiendo lo que no toca. Fuera de los dos bloques, ni se toca.
+                if _bloque_del_dia(food) is not None:
+                    _mc = _macros_calibrados_item(
+                        puros.get(int(food.get("id") or 0), food), 100.0,
+                        pct_cp_dia, pct_fs_dia)
+                    ef.update({"P": _mc["P"], "H": _mc["H"], "G": _mc["G"]})
                 # CANTIDADES QUE SE PUEDAN PESAR (Jesús, 15-08, fallo 29). El mínimo del
                 # catálogo deja bajar el aguacate a 5 g y el yogur a 30, y eso no es comida:
                 # es «un poco». `minimo_pesable` sube ese suelo a 20 g salvo en lo que de
@@ -1704,6 +1945,16 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
                 # también a la cantidad de partida, porque el afinado solo acepta movimientos
                 # DENTRO del rango: si entra por debajo del suelo, se queda ahí.
                 minimo = minimo_pesable(food, float(cfg.get("minimo", 5) or 5))
+                # PERO EL SUELO NO SUBE LO QUE YA VENÍA MÁS ABAJO (Francisco, 3-09-2026).
+                # Su favorita traía las almendras en 10 g -- la comida entraba casi clavada --
+                # y este suelo las subía a 20 al afinar: le metía 5 g de grasa que la comida
+                # no puede absorber. Si la cantidad ENTRÓ por debajo del pesable, el suelo
+                # baja al del catálogo -- BAJA, no «se queda en la entrada»: la primera
+                # versión de esto usaba la entrada como suelo y unas almendras de 15 g ya no
+                # podían bajar a 10 aunque fuera lo que cuadraba (lo cazó él, mismo día).
+                ent = entrada_g.get(int(food.get("id") or 0))
+                if ent and float(ent) < minimo:
+                    minimo = min(float(ent), _suelo_catalogo(food))
                 _, maximo_base = get_food_limits(food, cfg)
                 peso_unidad = float(food.get("peso_unidad") or food.get("racion") or 0)
                 es_unidad = bool(food.get("unidades") or food.get("por_unidad") or cfg.get("por_unidad"))
@@ -1768,6 +2019,111 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
                     "H": round((of["ef"].get("H", 0) or 0) * fac, 1),
                     "G": round((of["ef"].get("G", 0) or 0) * fac, 1),
                 }
+
+            # LO QUE FALTA SE ECHA, COMO LO ECHARÍA ÉL (Francisco, 3-09-2026: «sigo
+            # haciéndolo mejor yo a mano en todas las comidas»). El redondeo de salida
+            # baja SIEMPRE al múltiplo (regla del 07-08) y los topes congelan lo que entró
+            # por encima, y entre los dos dejaban comidas sistemáticamente CORTAS: su
+            # intra en 54 H de 60 con la bebida en 900 (a 1.000 clavaba) y su post en
+            # 134,8 H de 140 con la crema en 135. La mano no da pasitos: mira cuánto
+            # falta, elige el alimento que lleva ese macro y LO ECHA de una vez,
+            # redondeado a su paso. Eso se hace aquí, con dos candados: no pasar ningún
+            # macro de su objetivo más el margen, y que la comida quede más cerca (con
+            # pasarse pesando doble, la vara del afinado, para que el día no acumule
+            # los «+3» de cada comida). Lo clavado por una respuesta no se toca, y la
+            # regla «a la baja» sigue mandando en el dimensionado normal.
+            tgt_paso = _target(meal_key)
+            obj_paso = {"P": tgt_paso["proteinas"], "H": tgt_paso["hidratos"],
+                        "G": tgt_paso["grasas"]}
+
+            def _falta_total(t):
+                return sum(max(0.0, obj_paso[k2] - t[k2])
+                           for k2 in ("P", "H", "G") if not math.isinf(obj_paso[k2]))
+
+            def _dist_paso(t):
+                # La misma vara que el afinado: pasarse pesa el doble que quedarse corto.
+                # Sin esto, el paso «arreglaba» un faltan 1,2 saltando a un sobran 2,9 --
+                # válido comida a comida, pero el DÍA acumulaba los +3 de cada una y
+                # acababa en «sobran 6» (medido con la dieta 1 el 3-09).
+                total = 0.0
+                for k2 in ("P", "H", "G"):
+                    if math.isinf(obj_paso[k2]):
+                        continue
+                    d = t[k2] - obj_paso[k2]
+                    total += (2 if d > 0 else 1) * abs(d)
+                return total
+
+            totales_paso = {"P": 0.0, "H": 0.0, "G": 0.0}
+            for r2 in refit_foods:
+                m2 = r2.get("macros_efectivos") or {}
+                for k2 in totales_paso:
+                    totales_paso[k2] += float(m2.get(k2, 0) or 0)
+
+            # Hasta tres rondas: cada una arregla el macro que MÁS falta con el mejor
+            # alimento disponible; con lo puesto se vuelve a mirar. Converge porque cada
+            # ronda tiene que acercar o se corta.
+            for _ronda in range(3):
+                if _falta_total(totales_paso) <= 1.0:
+                    break
+                faltas = {k2: obj_paso[k2] - totales_paso[k2]
+                          for k2 in ("P", "H", "G")
+                          if not math.isinf(obj_paso[k2])
+                          and (obj_paso[k2] - totales_paso[k2]) > 1.0}
+                if not faltas:
+                    break
+                m_falta = max(faltas, key=lambda k2: faltas[k2])
+                mejor = None
+                for rf, of, food in zip(refit_foods, opt_foods, food_docs):
+                    if (fijos or {}).get(int(food.get("id") or 0)) is not None:
+                        continue
+                    cantidad = float(rf["cantidad_g"])
+                    viejo = rf.get("macros_efectivos") or {}
+                    por_gramo = (float(viejo.get(m_falta, 0) or 0) / cantidad
+                                 if cantidad > 0 else 0.0)
+                    if por_gramo <= 1e-4:
+                        continue
+                    paso = paso_en_gramos(food)
+                    if paso <= 0:
+                        continue
+                    # El techo de siempre... salvo que el alimento ya viniera por encima
+                    # de él (cantidad puesta por el cliente): ahí el tope ya no protege
+                    # nada y se le deja crecer hasta un cuarto más de lo que traía.
+                    techo = float(of["maximo"])
+                    if cantidad >= techo:
+                        techo = cantidad * 1.25
+                    # Lo que echaría la mano: lo que falta, en gramos de ESTE alimento,
+                    # redondeado a su paso (al más cercano: aquí se está completando, no
+                    # dimensionando desde cero).
+                    exacta = cantidad + faltas[m_falta] / por_gramo
+                    abajo = math.floor(exacta / paso + 1e-9) * paso
+                    arriba = abajo + paso
+                    nueva = arriba if (arriba - exacta) < (exacta - abajo) else abajo
+                    nueva = min(nueva, math.floor(techo / paso + 1e-9) * paso)
+                    if nueva <= cantidad + 1e-6:
+                        continue
+                    racion_p = float(food.get("racion") or 100) or 100.0
+                    cant_motor = (nueva / racion_p) if food.get("unidades") else nueva
+                    m_nueva = _macros_del_dia(food, cant_motor)
+                    cand = {"P": round(m_nueva["proteinas"], 1),
+                            "H": round(m_nueva["hidratos"], 1),
+                            "G": round(m_nueva["grasas"], 1)}
+                    t_cand = {k2: totales_paso[k2] - float(viejo.get(k2, 0) or 0) + cand[k2]
+                              for k2 in ("P", "H", "G")}
+                    if any((not math.isinf(obj_paso[k2]))
+                           and t_cand[k2] > obj_paso[k2] + de_donde_bajo.SOBRA_MINIMA
+                           for k2 in ("P", "H", "G")):
+                        continue
+                    d_cand = _dist_paso(t_cand)
+                    if d_cand >= _dist_paso(totales_paso) - 1e-9:
+                        continue
+                    if mejor is None or d_cand < mejor[0]:
+                        mejor = (d_cand, rf, nueva, cand, t_cand)
+                if mejor is None:
+                    break
+                _, rf_m, nueva_m, cand_m, t_m = mejor
+                rf_m["cantidad_g"] = round(nueva_m, 1)
+                rf_m["macros_efectivos"] = cand_m
+                totales_paso = t_m
         # Lo que ha quedado sin cuadrar, para poder decirlo en vez de callarlo. Como ya
         # no se quita nada, hay comidas que no van a cuadrar al gramo -- por ejemplo si
         # los mínimos de lo que ha puesto el cliente ya se pasan de grasa --, y eso hay

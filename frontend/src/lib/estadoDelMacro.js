@@ -72,16 +72,15 @@ const MENOS = '−';
 const PALABRA = {
     // Macros no lleva estado NUNCA: ahí el número es el objetivo, no hay bueno ni malo.
     macros: () => 'tu objetivo',
-    // DOS PALABRAS Y NO CUATRO (revisión del 2-09).
-    //
-    // Aquí convivían «cuadrado», «válido −4», «faltan X» y «sobran X» para el mismo eje, y
-    // «válido» era la rara: no dice si falta o sobra, y al lado de «cuadrado» parece otro
-    // estado cuando para el cliente es el mismo (está bien). Dentro del margen se dice
-    // «cuadrado» y se conserva el desvío pequeño entre paréntesis, que es el dato; fuera
-    // del margen, «faltan» o «sobran». El estado VALIDO no cambia: sigue siendo verde.
+    // «CUADRADO» ES CUANDO ESTÁ EXACTO (Francisco, 3-09-2026). Esto REVIERTE la revisión
+    // del 2-09, que dentro del margen ponía «cuadrado (+2,6)»: «dice cuadrado pero le
+    // faltan 2,3; cuadrado es cuando está exacto, si no es válido, o sobra o falta».
+    // Es además la letra del punto 11.1 de Jesús: «de 1 a 4, falte o sobre, es VÁLIDO y
+    // sale en verde». Así que: exacto -> «cuadrado»; dentro del margen -> «válido» con su
+    // desvío, en verde igual; fuera -> «faltan»/«sobran».
     dieta: (estado, desvio, objetivo, n) => {
         if (estado === CLAVADO) return 'cuadrado';
-        if (estado === VALIDO) return `cuadrado (${desvio > 0 ? '+' : MENOS}${n(Math.abs(desvio))})`;
+        if (estado === VALIDO) return `válido (${desvio > 0 ? '+' : MENOS}${n(Math.abs(desvio))})`;
         if (estado === PASADO) return `sobran ${n(Math.abs(desvio))}`;
         return `faltan ${n(Math.abs(desvio))}`;
     },
@@ -94,12 +93,14 @@ const PALABRA = {
     },
     falta: (estado, desvio, objetivo, n) => {
         if (estado === PASADO) return `te pasas ${n(Math.abs(desvio))}`;
-        if (estado === CLAVADO || estado === VALIDO) return 'cuadrado';
+        // La misma regla del 3-09: «cuadrado» solo el exacto; el del margen, «válido».
+        if (estado === CLAVADO) return 'cuadrado';
+        if (estado === VALIDO) return 'válido';
         // El número YA es lo que falta, así que no se pone «faltan»: sería decirlo dos veces.
         return 'para llegar';
     },
 };
-// Dentro de una comida las palabras son las de Dieta -- «cuadrado», «válido +2,3»,
+// Dentro de una comida las palabras son las de Dieta -- «cuadrado», «válido (+2,3)»,
 // «faltan 4,5» --, lo que cambia es que llevan decimal.
 PALABRA.comida = PALABRA.dieta;
 
@@ -130,8 +131,8 @@ export function leerMacro({ vista, hay, objetivo, margen }) {
     // Lo que hay MENOS lo que debería haber: negativo es que falta, positivo es que sobra.
     const desvio = tiene - meta;
     const fuera = Math.abs(desvio);
-    // El margen puede venir dado: dentro de una comida es el proporcional de `lib/exceso`
-    // (`margenDe`), porque 4 g sobre los 9 de proteína de un intra son casi la mitad.
+    // El margen puede venir dado; desde el 3-09 (decisión de Francisco: «1-4 plano en
+    // todo») `margenDe` devuelve siempre los 4 de Calma, así que dado o no, es el mismo.
     const tope = margen != null ? margen : MARGEN;
 
     let estado;

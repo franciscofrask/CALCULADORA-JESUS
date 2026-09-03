@@ -43,13 +43,27 @@ const DetalleDelDia = ({ comidas }) => {
 const esDescanso = (t) => t === 'descanso';
 const etiqueta = (t) => esDescanso(t) ? 'descanso' : 'entreno';
 
+// EL AVISO DICE EL NÚMERO (doc de Jesús 3-09, detalle 1): «tus 3 comidas» y no «esas
+// comidas», que es lo que hace parar. Y en singular, «1 comida».
+//
+// El intra y el post no son comidas (regla del 31-08), así que no entran en la cuenta. Pero
+// un día que solo tenga el peri montado NO está vacío y diría «ya tiene 0 comidas», que es
+// falso: en ese caso se les llama por su nombre.
+const loQueHayEnElDia = (comidas, peri) => {
+    if (comidas > 0) return comidas === 1 ? '1 comida' : `${comidas} comidas`;
+    const p = peri || [];
+    if (p.length === 2) return 'el intra y el post';
+    if (p.length === 1) return p[0] === 'Intra' ? 'el intra' : 'el post';
+    return 'comidas';
+};
+
 const TipoDiaBadge = ({ tipo }) => (
     <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${esDescanso(tipo) ? 'bg-muted-foreground/10 text-muted-foreground' : 'bg-brand-orange/10 text-brand-orange'}`}>
         {esDescanso(tipo) ? 'Descanso' : 'Entreno'}
     </span>
 );
 
-const FavoritesModal = ({ open, onClose, favorites, onSave, onApply, onDelete, tipoDia = 'entrenamiento', diaVacio = false }) => {
+const FavoritesModal = ({ open, onClose, favorites, onSave, onApply, onDelete, tipoDia = 'entrenamiento', diaVacio = false, comidasDelDia = 0, periDelDia = [] }) => {
     const [name, setName] = useState('');
     const [saving, setSaving] = useState(false);
     // Favorita con el panel "adaptar o aplicar como se guardó" desplegado.
@@ -179,19 +193,26 @@ const FavoritesModal = ({ open, onClose, favorites, onSave, onApply, onDelete, t
 
                                 {detalleId === fav.id && <DetalleDelDia comidas={fav.comidas} />}
 
-                                {/* Antes de aplicar: que va a reemplazar lo que haya, y si el
-                                    tipo de día no coincide, adaptar o aplicar como se guardó. */}
+                                {/* EL AVISO DE ANTES DE APLICAR (doc de Jesús 3-09).
+                                    Dos condiciones, cada una con su frase, siempre antes de
+                                    los botones y en este orden: PRIMERO LO QUE SE PIERDE,
+                                    DESPUÉS EL TIPO DE DÍA. Las dos frases van juntas, una
+                                    detrás de otra, no separadas. */}
                                 {confirmId === fav.id && (
                                     <div className="mt-2 pt-2 border-t border-border space-y-2" data-testid={`fav-adapt-panel-${fav.id}`}>
-                                        {!diaVacio && (
-                                            <p className="text-xs text-foreground" data-testid={`fav-reemplaza-${fav.id}`}>
-                                                Este día ya tiene comidas. <span className="font-bold">Al aplicar la favorita se reemplazan.</span>
-                                            </p>
-                                        )}
-                                        {favTipo !== tipoDia && (
+                                        {(!diaVacio || favTipo !== tipoDia) && (
                                             <p className="text-xs text-foreground">
-                                                Esta favorita se guardó en día de <span className="font-bold">{etiqueta(favTipo)}</span> y
-                                                hoy es día de <span className="font-bold">{etiqueta(tipoDia)}</span>.
+                                                {!diaVacio && (
+                                                    <span className="block" data-testid={`fav-reemplaza-${fav.id}`}>
+                                                        Este día ya tiene {loQueHayEnElDia(comidasDelDia, periDelDia)}. Al
+                                                        aplicar la favorita se borran y se quedan las de la favorita.
+                                                    </span>
+                                                )}
+                                                {favTipo !== tipoDia && (
+                                                    <span className="block" data-testid={`fav-tipo-${fav.id}`}>
+                                                        Esta favorita es de día de {etiqueta(favTipo)}; hoy tienes {etiqueta(tipoDia)}.
+                                                    </span>
+                                                )}
                                             </p>
                                         )}
                                         {favTipo !== tipoDia ? (
@@ -199,16 +220,20 @@ const FavoritesModal = ({ open, onClose, favorites, onSave, onApply, onDelete, t
                                                 <Button size="sm" className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white font-bold rounded-full"
                                                     onClick={() => { setConfirmId(null); onApply(fav, { adaptar: true }); }}
                                                     data-testid={`fav-adapt-${fav.id}`}>
-                                                    Adaptar a mi día de hoy ({etiqueta(tipoDia)})
+                                                    Aplicar y adaptar a mi día de hoy
                                                 </Button>
+                                                {/* LA LÍNEA GRIS CAMBIA CON EL SENTIDO (detalle 2). De entreno
+                                                    a descanso el peri se quita; de descanso a entreno se añade
+                                                    VACÍO, con sus macros y sin alimentos: la app no se inventa
+                                                    qué meter dentro, lo rellena el cliente. */}
                                                 <p className="text-[11px] text-muted-foreground -mt-1">
                                                     {esDescanso(tipoDia)
-                                                        ? 'El intra/post se quitará porque en descanso no hay periworkout.'
-                                                        : 'El peri quedará vacío: podrás añadirlo con "Sugiéreme un menú".'}
+                                                        ? 'el intra y el post se quitan'
+                                                        : 'se añaden el intra y el post, que tendrás que rellenar'}
                                                 </p>
                                                 <Button size="sm" variant="outline" className="w-full rounded-full"
                                                     onClick={() => { setConfirmId(null); onApply(fav, { adaptar: false }); }}>
-                                                    Aplicar como se guardó (cambia el día a {etiqueta(favTipo)})
+                                                    Aplicar como se guardó (pasa el día a {etiqueta(favTipo)})
                                                 </Button>
                                             </>
                                         ) : (
@@ -216,10 +241,12 @@ const FavoritesModal = ({ open, onClose, favorites, onSave, onApply, onDelete, t
                                             <Button size="sm" className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white font-bold rounded-full"
                                                 onClick={() => { setConfirmId(null); onApply(fav); }}
                                                 data-testid={`fav-reemplazar-${fav.id}`}>
-                                                Aplicar y reemplazar
+                                                Aplicar
                                             </Button>
                                         )}
-                                        <button className="w-full text-center text-xs text-muted-foreground hover:text-foreground"
+                                        {/* Cancelar es un ENLACE en gris, sin caja (detalle 4). Cierra el
+                                            aviso y deja la lista de favoritas abierta (detalle 5). */}
+                                        <button className="block text-left text-xs text-muted-foreground underline hover:text-foreground"
                                             onClick={() => setConfirmId(null)}>
                                             Cancelar
                                         </button>

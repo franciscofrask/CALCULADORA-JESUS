@@ -11,10 +11,13 @@ describe('pasarse de un macro', () => {
         expect(seExcede('P', 59.1, 59)).toBe(false);
     });
 
-    test('pasarse de hidratos o de grasa si, a partir del margen', () => {
-        expect(seExcede('H', 66 + MARGEN, 66)).toBe(true);
-        expect(seExcede('G', 12 + MARGEN, 12)).toBe(true);
-        // Justo por debajo del margen todavia no: es el margenValido de Calma.
+    test('pasarse de hidratos o de grasa si, PASADO el margen', () => {
+        // El margen es inclusivo («de 1 a 4, falte o sobre, es valido», punto 11.1,
+        // alineado el 3-09): el 4,0 clavado todavia es valido, pasarse es MAS de 4.
+        expect(seExcede('H', 66 + MARGEN + 0.1, 66)).toBe(true);
+        expect(seExcede('G', 12 + MARGEN + 0.1, 12)).toBe(true);
+        expect(seExcede('H', 66 + MARGEN, 66)).toBe(false);
+        expect(seExcede('G', 12 + MARGEN, 12)).toBe(false);
         expect(seExcede('H', 66 + MARGEN - 0.1, 66)).toBe(false);
         expect(seExcede('G', 12 + MARGEN - 0.1, 12)).toBe(false);
     });

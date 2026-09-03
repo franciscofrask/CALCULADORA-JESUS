@@ -641,9 +641,12 @@ cantidades.
 - **Repetir una comida** de otro día: se listan los últimos 14 días con dieta, y al elegir
   una comida **se reescala por proteína** al objetivo de la comida destino, recalculando
   cada macro de verdad
-- **Dietas favoritas**: guardar el día como plantilla con nombre. Al aplicar una de un tipo
-  de día distinto, pregunta: *"Adaptar a mi día de hoy"* (recalcula cantidades) o *"Aplicar
-  como se guardó"* (cambia el tipo de día)
+- **Dietas favoritas**: guardar el día como plantilla con nombre. Al aplicar, la app mira dos
+  cosas y cada una añade su frase, primero lo que se pierde y después el tipo de día: si el
+  día ya tiene comidas avisa con el número (*"Este día ya tiene 3 comidas..."*), y si la
+  favorita es de otro tipo de día ofrece *"Aplicar y adaptar a mi día de hoy"* (recalcula
+  cantidades) o *"Aplicar como se guardó"* (pasa el día al tipo de la favorita). Día vacío y
+  mismo tipo se aplica sin aviso (doc de Jesús 3-09)
 - **Sugerir un alimento** que falte en el catálogo (ver [1.10](#110-alimentos--dashboardfoods))
 - **PDF** del día (ver [4.5](#45-el-pdf))
 

@@ -58,13 +58,23 @@ def entrenador(api_disponible):
 
 @pytest.fixture(scope="module")
 def id_de_un_cliente(admin):
-    r = requests.get(f"{API}/admin/clients?limit=5", headers=_cabeceras(admin), timeout=30)
+    """Un cliente CON PLAN VIVO. Antes valia el primero que tuviera user_id, y desde el
+    candado del 29-08 (sin plan no se usa la app) actuar como un caducado devuelve 402:
+    el test se ponia rojo por elegir mal al figurante, no por lo que prueba (3-09)."""
+    r = requests.get(f"{API}/admin/clients?limit=25", headers=_cabeceras(admin), timeout=30)
     r.raise_for_status()
     datos = r.json()
     lista = datos if isinstance(datos, list) else (datos.get("clients") or datos.get("items") or [])
-    for c in lista:
-        if c.get("user_id"):
-            return c["user_id"]
+    candidatos = [c["user_id"] for c in lista if c.get("user_id")]
+    for uid in candidatos:
+        # La misma puerta que van a cruzar los tests (las dietas, que SI estan tras el
+        # candado; el perfil no lo esta y daba el visto bueno a caducados): si contesta
+        # 200 vale, si 402 (caducado), al siguiente.
+        p = requests.get(f"{API}/diets/recent?limit=1", headers=_cabeceras(admin, uid), timeout=30)
+        if p.status_code == 200:
+            return uid
+    if candidatos:
+        pytest.skip("todos los clientes de la muestra tienen el plan caducado (candado del 29-08)")
     pytest.skip("no hay clientes con user_id para probar")
 
 

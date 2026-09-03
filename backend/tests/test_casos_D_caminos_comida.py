@@ -19,6 +19,7 @@ Como se ejecuta (backend vivo en el 8000):
         tests/test_casos_D_caminos_comida.py -q
 """
 import os
+import re
 import time
 from datetime import date
 
@@ -274,11 +275,21 @@ def test_24_el_recetario_responde_en_menos_de_tres_segundos(cabeceras_cliente):
 
 
 def test_24_la_ventana_de_menus_abre_en_el_recetario():
-    """24 (la otra mitad). "Abre en el Recetario": la pestaña por defecto del modal."""
+    """24 (la otra mitad). La puerta de entrada del modal no es la biblioteca lenta.
+
+    El contrato original era `useState('recetario')`: el modal tenia pestañas y abria en la
+    del Recetario. El 29-08 (deploy de los menus por momento del dia, EN PROD) las pestañas
+    se fueron y quedo UNA sola lista; lo que conserva el espiritu del caso -- Jesus dejo la
+    biblioteca mas de 30 segundos cargando y esta es la puerta de entrada de la pantalla --
+    es que «ver los menus de la gente» (la poblacion lenta) arranque APAGADO. Actualizado el
+    3-09 al detectar que el test comprobaba una pestaña que ya no existe."""
     fuente = leer_del_front("components", "nutrition", "LibraryMenusModal.jsx")
-    assert "useState('recetario')" in fuente, (
-        "El modal de menus ya no abre en el recetario. Jesus dejo la biblioteca mas de 30 "
-        "segundos cargando y esta es la puerta de entrada de la pantalla.")
+    assert "useState(false)" in fuente and "verReales" in fuente, (
+        "El modal de menus ya no arranca con los menus de la gente apagados. Jesus dejo la "
+        "biblioteca mas de 30 segundos cargando y esta es la puerta de entrada de la pantalla.")
+    assert re.search(r"\[verReales,\s*setVerReales\]\s*=\s*React\.useState\(false\)", fuente), (
+        "«Ver los menus de la gente» tiene que arrancar apagado: la poblacion lenta no puede "
+        "ser la puerta de entrada.")
 
 
 def test_24_la_biblioteca_no_se_queda_cargando(cabeceras_cliente, objetivo_c2):

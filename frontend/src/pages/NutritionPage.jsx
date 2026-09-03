@@ -1310,22 +1310,19 @@ const NutritionPage = () => {
         const served = calculateMealMacros(mealKey);
         const foods = mealsData[mealKey]?.alimentos || [];
         if (foods.length === 0) return 'empty';
-        // Calma margenValido = 4: a macro is OK while |target - served| < 4. "Sobra" only when
-        // a macro genuinely overshoots by >= 4; "falta" otherwise. (margin 0 wrongly flagged
-        // a 0.2 g overshoot as "sobra".) El número no se escribe aquí: vive en `lib/exceso`.
+        // Calma margenValido = 4, INCLUSIVO desde el 3-09: «de 1 a 4, falte o sobre, es
+        // válido» (punto 11.1, y la decisión de Francisco del margen plano en todo). El
+        // número no se escribe aquí: vive en `lib/exceso` (`margenDe`, ya sin estrechado).
         const margin = MARGEN;
         const isPeriMeal = mealKey === 'Intra' || mealKey === 'Post';
-        // EL MARGEN, PROPORCIONAL A LO QUE SE PIDE (13-08). Los 4 g fijos daban por
-        // «cuadrado» un intra con 5 de 9 g de proteína, porque 4 sobre 9 es el 44 %. En una
-        // comida normal no cambia nada; ver `margenDe` en lib/exceso.
         const mP = margenDe(target.P);
         const mH = margenDe(target.H);
         const mG = margenDe(target.G);
         // La proteína, cubierta basta (ver `getDayStatus`): pasarse no es un fallo, así que
         // tampoco puede dejar la comida en «te falta».
-        const pOk = served.P - target.P > -mP;
-        const hOk = Math.abs(target.H - served.H) < mH;
-        const gOk = isPeriMeal || Math.abs(target.G - served.G) < mG;
+        const pOk = served.P - target.P >= -mP;
+        const hOk = Math.abs(target.H - served.H) <= mH;
+        const gOk = isPeriMeal || Math.abs(target.G - served.G) <= mG;
         if (pOk && hOk && gOk) return 'cuadrada';
         // PASARSE DE PROTEÍNA NO ES PASARSE (Jesús, 13-08). El criterio vive en
         // `lib/exceso`; aquí antes se contaba también `served.P - target.P`, y con eso una
@@ -1815,8 +1812,12 @@ const NutritionPage = () => {
             // cuadrar con los macros de ESE día (caso 27; punto 14 del 23-08).
             // `hoy_cliente`: el día de ESTE reloj, que es el techo de la lista -- repetir
             // es mirar atrás, y sin techo salían primero los días de 2027 (punto 210).
+            // `tipo_destino`: el tipo que el cliente tiene DELANTE en el selector. En un
+            // día sin guardar, el servidor y la pantalla tenían cada uno su valor por
+            // defecto y las etiquetas «Encaja / +12 G / Otro día» salían juzgadas con el
+            // que el cliente no ve (3-09, montando el 21-12 desde el 3-09).
             const result = await api(
-                `/api/diets/recent?limit=14&para=${currentDate}&hoy_cliente=${hoyISO()}`);
+                `/api/diets/recent?limit=14&para=${currentDate}&hoy_cliente=${hoyISO()}&tipo_destino=${tipoDia}`);
             setRecentDiets(result.diets || []);
         } catch (err) {
             console.error('Error loading recent diets:', err);
@@ -2245,12 +2246,25 @@ const NutritionPage = () => {
                     eleccion_pendiente: eleccionPendienteDe(fav.comidas?.[k], conDecision[k]) }];
             })));
             if (res.distribution) setDistribution(res.distribution);
+            // Las dos preguntas que pueden quedar pendientes se cuentan cada una con su
+            // verdad (3-09): en las de BAJAR se bajó de todo a la vez; en las de QUITAR no
+            // se bajó nada -- ni con todo al mínimo cabe -- y decir «lo he bajado» era
+            // mentira (la C4 de Francisco, con los mínimos sumando 18 H sobre 10).
             const aElegir = Object.keys(conDecision).filter(k => delReparto.includes(k));
-            if (aElegir.length) {
-                toast.info(aElegir.length === 1
-                    ? `En ${mealInfo[aElegir[0]]?.name || aElegir[0]} sobraba y lo he bajado de todo a la vez.`
-                    : `En ${aElegir.length} comidas sobraba y lo he bajado de todo a la vez.`,
+            const aQuitar = aElegir.filter(k => conDecision[k]?.tipo === 'quitar');
+            const aBajar = aElegir.filter(k => conDecision[k]?.tipo !== 'quitar');
+            if (aBajar.length) {
+                toast.info(aBajar.length === 1
+                    ? `En ${mealInfo[aBajar[0]]?.name || aBajar[0]} sobraba y lo he bajado de todo a la vez.`
+                    : `En ${aBajar.length} comidas sobraba y lo he bajado de todo a la vez.`,
                     { description: 'Si prefieres bajarlo de un alimento concreto, dale a "Cuadrar" en esa comida.',
+                      duration: 9000 });
+            }
+            if (aQuitar.length) {
+                toast.warning(aQuitar.length === 1
+                    ? `En ${mealInfo[aQuitar[0]]?.name || aQuitar[0]} sobra aunque esté todo al mínimo.`
+                    : `En ${aQuitar.length} comidas sobra aunque esté todo al mínimo.`,
+                    { description: 'Dale a "Cuadrar" en esa comida para elegir qué quitar.',
                       duration: 9000 });
             }
 
@@ -2276,7 +2290,8 @@ const NutritionPage = () => {
                 : `${cortas.length} comidas se quedan cortas de macros`;
 
             if (adaptar && periQuitado.length) {
-                toast.warning(`Aplicada "${fav.name}" adaptada a tu día de ${etiquetaDia}. El intra/post se ha quitado porque hoy no hay periworkout.`);
+                // La voz del doc del 3-09: «el intra y el post», no «el intra/post».
+                toast.warning(`Aplicada "${fav.name}" adaptada a tu día de ${etiquetaDia}. El intra y el post se han quitado.`);
             } else if (adaptar && cortas.length) {
                 toast.warning(`Aplicada "${fav.name}" adaptada a tu día de ${etiquetaDia}, pero ${seQuedaCorta}.`, avisoCorta);
             } else if (adaptar) {
@@ -2304,8 +2319,12 @@ const NutritionPage = () => {
                 && ((mealsData[k]?.alimentos) || []).length > 0);
             if (vaciadas.length) {
                 const soloPeri = vaciadas.every((k) => ['Intra', 'Post'].includes(k));
+                // Sin el puntero a «Sugiéreme un menú»: el doc del 3-09 lo deja en que lo
+                // rellena el cliente, y ya lo dice la línea gris de antes de aplicar.
+                const nombrePeri = vaciadas.length === 2 ? 'El intra y el post han quedado vacíos'
+                    : (vaciadas[0] === 'Intra' ? 'El intra ha quedado vacío' : 'El post ha quedado vacío');
                 toast.info(soloPeri
-                    ? 'El peri ha quedado vacío: la favorita no lo traía. Añádelo con "Sugiéreme un menú".'
+                    ? `${nombrePeri}: la favorita no traía nada ahí.`
                     : `${vaciadas.map(k => mealInfo[k]?.name || k).join(' y ')}: la favorita no traía nada ahí y se han vaciado.`,
                     { duration: 8000 });
             }
@@ -2481,6 +2500,16 @@ const NutritionPage = () => {
                     tipo_dia: tipoDia, num_comidas: numComidas,
                     momento_entreno: momentoEntreno, opcion_peri: opcionPeri,
                     comidas: { [mealKey]: { ...dePartida, alimentos: lista } },
+                    // EL TRAMO DE LA CALIBRACIÓN LO DECIDE EL DÍA ENTERO (3-09): si solo
+                    // viaja una comida, el servidor mediría las almendras con un día de
+                    // cero gramos de frutos secos y contaría otra proteína que la pantalla.
+                    // El resto del día va aparte, solo ids y cantidades.
+                    contexto_dia: Object.fromEntries(getMealOrder()
+                        .filter(k => k !== mealKey)
+                        .map(k => [k, (mealsData[k]?.alimentos || []).map(a => ({
+                            alimento_id: a.alimento_id ?? null,
+                            cantidad_g: a.cantidad_g ?? 0,
+                        }))])),
                     ...(ajuste ? { ajuste: { [mealKey]: ajuste } } : {}),
                 }),
             });
@@ -2985,8 +3014,15 @@ const NutritionPage = () => {
     // «Vacío» es SOLO ninguna comida con alimentos: un día migrado con 1-2 comidas
     // montadas sigue yendo a la parrilla de siempre. Y si la carga falló, la pantalla
     // vacía sería mentira (el día puede existir en el servidor), así que tampoco.
-    const diaVacio = !Object.values(mealsData || {}).some(m => (m?.alimentos || []).length > 0);
+    const montadasDelDia = Object.entries(mealsData || {})
+        .filter(([, m]) => (m?.alimentos || []).length > 0).map(([k]) => k);
+    const diaVacio = montadasDelDia.length === 0;
     const mostrarDiaVacio = diaVacio && !cargaFallida && diaEnCreacion !== currentDate;
+    // EL AVISO DE APLICAR UNA FAVORITA DICE EL NÚMERO (doc 3-09, detalle 1): «tus 3 comidas»
+    // y no «esas comidas», que es lo que hace parar. El intra y el post no cuentan como
+    // comidas (regla del 31-08), así que van aparte para poder nombrarlos por su nombre.
+    const comidasDelDia = montadasDelDia.filter(k => /^C\d+$/.test(k)).length;
+    const periDelDia = montadasDelDia.filter(k => k === 'Intra' || k === 'Post');
     // Los días que se ofrecen repetir: montados de verdad y que no sean el día abierto.
     const recientesMontados = (recentDiets || []).filter(d =>
         d.fecha !== currentDate
@@ -3630,6 +3666,9 @@ const NutritionPage = () => {
                 tipoDia={tipoDia}
                 // Para no dejar guardar un día sin comidas como favorita.
                 diaVacio={diaVacio}
+                // Y para que el aviso de antes de aplicar diga cuántas comidas se pierden.
+                comidasDelDia={comidasDelDia}
+                periDelDia={periDelDia}
             />
 
             <FavoritasDeComida

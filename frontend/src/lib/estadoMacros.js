@@ -73,7 +73,11 @@ export function estadoMacro(key, servido, objetivo) {
     // día por decisión de Francisco: «si está dentro del margen, cuadra». Mientras estuvo en
     // los dos sitios con criterios distintos, la misma comida salía cuadrada en Nutrición y
     // «válida» en Inicio, y el cliente veía dos varas para el mismo método.
-    if (Math.abs(resto) < MARGEN) return ESTADO.CUADRADO;
+    // OJO (3-09): las pantallas vivas ya no leen de aquí (usan lib/estadoDelMacro, que desde
+    // hoy vuelve a separar «cuadrado» exacto de «válido» por decisión de Francisco); de esta
+    // lib solo se usan objetivoDelDia y varianteDelDia. El margen queda INCLUSIVO (<=),
+    // como en toda la app: «de 1 a 4, falte o sobre, es válido».
+    if (Math.abs(resto) <= MARGEN) return ESTADO.CUADRADO;
     if (resto > 0) return ESTADO.FALTA;
     // Por arriba: solo hidratos y grasa se marcan; pasarse de proteína no es un fallo.
     return seExcede(key, val, obj) ? ESTADO.EXCESO : ESTADO.CUADRADO;

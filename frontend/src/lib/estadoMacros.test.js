@@ -57,7 +57,10 @@ describe('el estado de un macro', () => {
 
     test('pasarse de proteina no es un fallo, pasarse de hidratos si', () => {
         expect(estadoMacro('P', 160, 120)).toBe(ESTADO.CUADRADO);
-        expect(estadoMacro('H', 50 + MARGEN, 50)).toBe(ESTADO.EXCESO);
+        // El margen es inclusivo desde el 3-09 («de 1 a 4, falte o sobre, es valido»,
+        // punto 11.1): el +4 clavado todavia entra, el exceso empieza pasado el 4.
+        expect(estadoMacro('H', 50 + MARGEN, 50)).toBe(ESTADO.CUADRADO);
+        expect(estadoMacro('H', 50 + MARGEN + 1, 50)).toBe(ESTADO.EXCESO);
     });
 
     test('sin objetivo no se le pone medalla a nadie', () => {
@@ -95,7 +98,7 @@ describe('el estado del dia', () => {
     });
 
     test('pasarse de hidratos tampoco da el dia por bueno', () => {
-        expect(estadoDelDia({ P: 120, H: 50 + MARGEN, G: 50 }, objetivos)).toBe(null);
+        expect(estadoDelDia({ P: 120, H: 50 + MARGEN + 1, G: 50 }, objetivos)).toBe(null);
     });
 
     test('sin objetivos no hay dia que valorar', () => {

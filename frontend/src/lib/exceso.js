@@ -21,22 +21,20 @@ import { num1 } from './numeros';
 export const MARGEN = 4;
 
 /**
- * El margen que le toca a un macro según lo que se le pide.
+ * El margen de un macro: LOS 4 G PLANOS, SIEMPRE (Francisco, 3-09-2026).
  *
- * Los 4 g de Calma están bien en una comida normal -- sobre 47 g de proteína son un 8 % --,
- * pero el intra pide 9 g y ahí son el 44 %. Francisco lo vio en producción: «Comida
- * cuadrada. Pulsa Guardar y siguiente» debajo de un «5 / 9» de proteína, con el asistente
- * diciendo al lado que faltaban 4 g. La pantalla le estaba invitando a guardar una comida a
- * la que le faltaba casi la mitad de la proteína.
+ * Aquí vivía un margen proporcional -- una cuarta parte de lo pedido, mínimo 1,5 -- nacido
+ * del intra: pide 9 g de proteína y con el margen de 4 un «5/9» salía como «comida
+ * cuadrada» faltándole casi la mitad. Pero ese estrechado chocaba con la regla validada
+ * del punto 11.1 de Jesús («de 1 a 4, falte o sobre, es válido y sale en verde. Igual en
+ * toda la app, sin excepciones»): una grasa de 13 sobre 10 decía «sobran 3» en naranja
+ * cuando el 11.1 la da por válida.
  *
- * Se estrecha a una cuarta parte de lo que se pide y nunca baja de 1,5 g, que es lo que se
- * puede afinar con una cuchara y una báscula de casa. En una comida normal no cambia nada.
- * Mismo criterio que `NutritionChatbot.margen_de` en el backend.
+ * Francisco eligió el 11.1 a la letra, SABIENDO que el caso del intra vuelve a caber en el
+ * margen (5/9 saldrá «válido»): «1-4 plano en todo». Si algún día se revierte, es aquí y
+ * en `NutritionChatbot.margen_de`, que es el mismo criterio en el backend.
  */
-export const margenDe = (objetivo) => {
-    const o = Math.abs(Number(objetivo) || 0);
-    return o ? Math.min(MARGEN, Math.max(1.5, 0.25 * o)) : MARGEN;
-};
+export const margenDe = () => MARGEN;
 
 export const NOMBRE_MACRO = { P: 'proteína', H: 'hidratos', G: 'grasa' };
 
@@ -57,7 +55,10 @@ export const fmtGramos = (x) => num1(x);
 export const seExcede = (key, servido, objetivo, { margen = MARGEN, esPeri = false } = {}) => {
     if (!MACROS_QUE_SE_PASAN.includes(key)) return false;
     if (esPeri && key === 'G') return false;
-    return (servido || 0) - (objetivo || 0) >= margen;
+    // ESTRICTO, no >=: «de 1 a 4, falte o sobre, es válido» (punto 11.1) incluye el 4
+    // clavado. Con >= aquí, un +4,0 exacto decía «válido» en la palabra y «te pasas» en el
+    // aviso a la vez (alineado el 3-09, con la decisión del margen plano).
+    return (servido || 0) - (objetivo || 0) > margen;
 };
 
 /** Los macros pasados, con sus gramos de más: [{ key: 'G', gramos: 8 }]. */

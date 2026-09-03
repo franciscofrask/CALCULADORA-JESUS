@@ -201,20 +201,27 @@ class TestCaso31ElArroz:
         assert ficha["que_te_cuenta"] == "Te cuenta solo el hidrato"
 
     def test_la_linea_de_nutricion_tambien_lo_dice(self):
-        """FALLA A PROPOSITO. Jesus pide que se diga «en la propia linea del alimento», y la
-        linea del alimento donde el cliente come es la de la pestana de Nutricion.
+        """La linea del alimento de Nutricion dice que cuenta, por dos vias.
 
-        Ahi NO se dice. `NutritionPage` recibe `que_cuenta` del backend y lo guarda en el
-        estado del alimento (cuatro sitios), pero `MealCard` nunca lo pinta: la fila es
-        nombre + macros + cantidad. O sea que el cliente ve «0 g proteinas» y tiene que
-        deducir por su cuenta si eso es que el arroz no lleva proteina o que no le cuenta.
-        La frase existe y esta bien resuelta -- llega al Buscador y al asistente --, solo que
-        no llega a la pantalla donde se monta la comida.
+        Este test nacio FALLANDO A PROPOSITO (12-08): MealCard no pintaba `que_cuenta` y el
+        cliente veia «0 g proteinas» sin saber si el arroz no lleva o no le cuenta. Desde
+        entonces la pantalla lo resolvio por otro camino y el test seguia buscando el
+        literal viejo (actualizado el 3-09): `macrosLine` pinta SOLO los macros efectivos
+        -- el anulado desaparece de la linea, y sin ninguno dice «sin macros» --, y
+        `ContadorFamilia` pone «Su proteina no te cuenta» a los calibrados que no pasan el
+        tercio (punto 133). Comprobado en pantalla el 3-09: el arroz dice «30 g hidratos» a
+        secas y las nueces llevan su frase debajo. Aqui se guarda que no se pierda.
         """
         mealcard = fuente("components/nutrition/MealCard.jsx")
-        assert "que_cuenta" in mealcard or "que_te_cuenta" in mealcard, (
-            "La linea del alimento de Nutricion (MealCard.jsx) no dice que macros cuentan: "
-            "el dato llega del backend y se queda en el estado sin pintarse")
+        assert "macrosLine" in mealcard and "sin macros" in mealcard, (
+            "La linea del alimento ya no pinta solo los macros que cuentan (macrosLine): "
+            "el cliente vuelve a ver ceros sin saber si son de no llevar o de no contar")
+        assert "ContadorFamilia" in mealcard, (
+            "La linea del alimento ya no lleva el contador de familia: los calibrados se "
+            "quedan sin su «Su proteina no te cuenta»")
+        contador = fuente("components/nutrition/ContadorFamilia.jsx")
+        assert "no te cuenta" in contador, (
+            "ContadorFamilia ya no dice «Su proteina no te cuenta» al que no pasa el tercio")
 
 
 # ═════════════════════════════════════════════════════════════════════════════

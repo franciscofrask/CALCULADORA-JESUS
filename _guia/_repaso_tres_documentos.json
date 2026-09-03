@@ -240,8 +240,8 @@
     "donde": [
      [
       "frontend/src/components/nutrition/MealCard.jsx",
-      1024,
-      "«Te ajusto las cantidades sin pasarme de tus macros.», con"
+      1048,
+      "Te ajusto las cantidades sin pasarme de tus macros."
      ]
     ],
     "veces": 1
@@ -457,7 +457,12 @@
      [
       "backend/routes/calculator.py",
       486,
-      "Y con esto desaparece la coletilla «Su proteína no te cuenta»: el «solo» ya lo dice, y es"
+      "Y en esos, y solo en esos, la frase es «Su proteína no te cuenta» (1-09): al caerse el"
+     ],
+     [
+      "backend/routes/calculator.py",
+      518,
+      "return \"Su proteína no te cuenta\""
      ],
      [
       "frontend/src/components/nutrition/ContadorFamilia.jsx",
@@ -465,7 +470,7 @@
       "Su proteína no te cuenta"
      ]
     ],
-    "veces": 2
+    "veces": 3
    },
    {
     "frase": "Te cuentan los tres",
@@ -525,7 +530,7 @@
     "donde": [
      [
       "frontend/src/pages/CheckInsPage.jsx",
-      683,
+      658,
       "titulo: '¿Tomaste la suplementación que tenías pautada?',"
      ]
     ],
@@ -547,11 +552,21 @@
     "donde": [
      [
       "backend/models/common.py",
-      305,
+      215,
+      "#   «Sensaciones generales hasta ahora»"
+     ],
+     [
+      "backend/models/common.py",
+      332,
       "# «Sensaciones generales del día», con estrellas. CAMPO NUEVO Y NO `mood`, a propósito:"
+     ],
+     [
+      "frontend/src/components/reports/ReporteQuincenal.jsx",
+      6,
+      "*     Sensaciones generales hasta ahora"
      ]
     ],
-    "veces": 1
+    "veces": 4
    }
   ],
   "faltan": [],
@@ -569,7 +584,7 @@
     "donde": [
      [
       "frontend/src/pages/CheckInsPage.jsx",
-      701,
+      676,
       "ayuda: 'Si no lo pusiste en el apartado de extras, ponlo ahora',"
      ]
     ],
@@ -591,17 +606,17 @@
     "donde": [
      [
       "frontend/src/pages/CheckInsPage.jsx",
-      787,
+      762,
       "// registrada». Con «El día, todo bien» ya no hace falta: ver el aviso más abajo."
      ],
      [
       "frontend/src/pages/CheckInsPage.jsx",
-      876,
+      849,
       "<p className=\"text-sm font-bold text-foreground\">El día, todo bien</p>"
      ],
      [
       "frontend/src/pages/CheckInsPage.jsx",
-      984,
+      934,
       "// «El día, todo bien» y le basta con las comidas pendientes.)"
      ]
     ],
@@ -612,7 +627,7 @@
     "donde": [
      [
       "frontend/src/pages/CheckInsPage.jsx",
-      877,
+      850,
       "<p className=\"text-sm text-foreground/60 mt-0.5\">No te queda nada por registrar</p>"
      ]
     ],
@@ -634,7 +649,7 @@
     "donde": [
      [
       "frontend/src/pages/CheckInsPage.jsx",
-      957,
+      907,
       "Te queda por contestar: {faltan.join(' · ')}"
      ]
     ],
@@ -841,9 +856,9 @@
     "frase": "sólo para ti",
     "donde": [
      [
-      "frontend/src/pages/CheckInsPage.jsx",
-      915,
-      "Registrarlo es opcional, sólo para ti. Te lo pediremos sólo para los reportes"
+      "frontend/src/components/CampoDePeso.jsx",
+      135,
+      "Registrarlo es opcional, sólo para ti. Te lo pediremos sólo para los reportes."
      ]
     ],
     "veces": 1
@@ -864,11 +879,21 @@
     "donde": [
      [
       "backend/core/avisos_cliente.py",
-      935,
-      "\"titulo\": \"Hoy toca pesarte y mañana también.\","
+      965,
+      "#     Semana 2 · miércoles y jueves hasta 12:00  la FILA «Hoy toca pesarte» en Inicio"
+     ],
+     [
+      "backend/core/series_cliente.py",
+      212,
+      "#     «Hoy toca pesarte · En ayunas y despues de ir al baño»"
+     ],
+     [
+      "frontend/src/components/CampoDePeso.jsx",
+      11,
+      "* hasta aquí: la fila «Hoy toca pesarte» de Inicio los días de pesada y el paso 1 del"
      ]
     ],
-    "veces": 1
+    "veces": 7
    }
   ],
   "faltan": [],
@@ -880,11 +905,21 @@
   "punto": "El aviso del martes",
   "dice": "«Esta semana toca reporte quincenal. Recuerda pesarte y registrar el dato…»",
   "esperado_en": "backend",
-  "pruebas": [],
-  "faltan": [
-   "Esta semana toca reporte quincenal"
+  "pruebas": [
+   {
+    "frase": "Esta semana toca reporte quincenal",
+    "donde": [
+     [
+      "backend/core/avisos_cliente.py",
+      987,
+      "\"titulo\": \"Esta semana toca reporte quincenal\","
+     ]
+    ],
+    "veces": 1
+   }
   ],
-  "estado": "abierto"
+  "faltan": [],
+  "estado": "cerrado"
  },
  {
   "doc": "validado",
@@ -892,11 +927,31 @@
   "punto": "El aviso de la pesada que falta",
   "dice": "«Te falta una pesada. Si te pesas esta mañana antes de las 10, aún entra.»",
   "esperado_en": "backend",
-  "pruebas": [],
-  "faltan": [
-   "Te falta una pesada"
+  "pruebas": [
+   {
+    "frase": "Te falta una pesada",
+    "donde": [
+     [
+      "backend/core/avisos_cliente.py",
+      966,
+      "#     Semana 2 · viernes de 10:00 a 13:00        «Te falta una pesada», si le falta"
+     ],
+     [
+      "backend/core/avisos_cliente.py",
+      1021,
+      "\"titulo\": \"Te falta una pesada\","
+     ],
+     [
+      "backend/core/datos_reporte.py",
+      639,
+      "\"\"\"«Te falta una pesada», cuando se puede arreglar. `None` si no hay nada que decir.\"\"\""
+     ]
+    ],
+    "veces": 4
+   }
   ],
-  "estado": "abierto"
+  "faltan": [],
+  "estado": "cerrado"
  },
  {
   "doc": "validado",
@@ -909,17 +964,22 @@
     "frase": "Esta semana no toca reporte",
     "donde": [
      [
+      "backend/core/avisos_cliente.py",
+      1002,
+      "\"titulo\": \"Esta semana no toca reporte\","
+     ],
+     [
       "backend/routes/reports.py",
       54,
       "raise HTTPException(status_code=403, detail=\"Esta semana no toca reporte. Te avisaremos cuando abra la ventana.\")"
      ],
      [
       "frontend/src/pages/ReportsPage.jsx",
-      56,
+      58,
       "Esta semana no toca reporte. Te avisaremos cuando abra la ventana."
      ]
     ],
-    "veces": 2
+    "veces": 3
    }
   ],
   "faltan": [],
@@ -931,11 +991,26 @@
   "punto": "Son 3 pasos",
   "dice": "«Con Son 3 pasos arriba en las tres, y el suyo marcado.»",
   "esperado_en": "frontend/src/components/reports",
-  "pruebas": [],
-  "faltan": [
-   "Son 3 pasos"
+  "pruebas": [
+   {
+    "frase": "Son 3 pasos",
+    "donde": [
+     [
+      "frontend/src/components/reports/FormularioReporte.jsx",
+      430,
+      "// que se ve al mandarlo. La cabecera «Son 3 pasos» sale en los tres, con el suyo"
+     ],
+     [
+      "frontend/src/components/reports/PasosDelMensual.jsx",
+      10,
+      "* tres pantallas»: «Con Son 3 pasos arriba en las tres, y el suyo marcado»). Es la misma"
+     ]
+    ],
+    "veces": 2
+   }
   ],
-  "estado": "abierto"
+  "faltan": [],
+  "estado": "cerrado"
  },
  {
   "doc": "validado",
@@ -943,11 +1018,26 @@
   "punto": "Paso 1 · Actualizar tus datos",
   "dice": "«Sale de tu check-in. Si algo no cuadra o te falta, lo modificas al final.»",
   "esperado_en": "frontend/src/components/reports",
-  "pruebas": [],
-  "faltan": [
-   "Sale de tu check-in"
+  "pruebas": [
+   {
+    "frase": "Sale de tu check-in",
+    "donde": [
+     [
+      "frontend/src/components/reports/FormularioReporte.jsx",
+      447,
+      "2»), y tenerlo aquí escribía «Sale de tu check-in» encima de un"
+     ],
+     [
+      "frontend/src/components/reports/QuincenalPaso1.jsx",
+      223,
+      "Sale de tu check-in. Si algo no cuadra o te falta, lo modificas al final."
+     ]
+    ],
+    "veces": 2
+   }
   ],
-  "estado": "abierto"
+  "faltan": [],
+  "estado": "cerrado"
  },
  {
   "doc": "validado",
@@ -955,11 +1045,26 @@
   "punto": "Paso 2 · Tus sensaciones y tus dudas",
   "dice": "«¿Algún ejercicio que te dé molestias o alguna máquina que no tengas?»",
   "esperado_en": "frontend/src/components/reports",
-  "pruebas": [],
-  "faltan": [
-   "alguna máquina que no tengas"
+  "pruebas": [
+   {
+    "frase": "alguna máquina que no tengas",
+    "donde": [
+     [
+      "frontend/src/components/reports/ReporteQuincenal.jsx",
+      14,
+      "*     ¿Algún ejercicio que te dé molestias o alguna máquina que no tengas?"
+     ],
+     [
+      "frontend/src/components/reports/ReporteQuincenal.jsx",
+      76,
+      "etiqueta=\"¿Algún ejercicio que te dé molestias o alguna máquina que no tengas?\""
+     ]
+    ],
+    "veces": 2
+   }
   ],
-  "estado": "abierto"
+  "faltan": [],
+  "estado": "cerrado"
  },
  {
   "doc": "validado",
@@ -967,11 +1072,31 @@
   "punto": "Paso 3 · Este tercer paso es cosa nuestra",
   "dice": "«Recibirás respuesta antes del viernes a las 3, hora de España.»",
   "esperado_en": "frontend/src/components/reports",
-  "pruebas": [],
-  "faltan": [
-   "Este tercer paso es cosa nuestra"
+  "pruebas": [
+   {
+    "frase": "Este tercer paso es cosa nuestra",
+    "donde": [
+     [
+      "frontend/src/components/reports/FormularioReporte.jsx",
+      355,
+      "// Y en el quincenal, el PASO 3: «Este tercer paso es cosa nuestra». Era una tarjeta"
+     ],
+     [
+      "frontend/src/components/reports/QuincenalPaso3.jsx",
+      7,
+      "*     Este tercer paso es cosa nuestra."
+     ],
+     [
+      "frontend/src/components/reports/QuincenalPaso3.jsx",
+      34,
+      "Este tercer paso es cosa nuestra."
+     ]
+    ],
+    "veces": 3
+   }
   ],
-  "estado": "abierto"
+  "faltan": [],
+  "estado": "cerrado"
  },
  {
   "doc": "validado",
@@ -979,11 +1104,31 @@
   "punto": "Las dos versiones del paso 1",
   "dice": "«No tengo todos los datos de tus check-in diarios, así que te lo pregunto aquí.»",
   "esperado_en": "frontend/src/components/reports",
-  "pruebas": [],
-  "faltan": [
-   "No tengo todos los datos de tus check-in"
+  "pruebas": [
+   {
+    "frase": "No tengo todos los datos de tus check-in",
+    "donde": [
+     [
+      "backend/core/actividad_mensual.py",
+      287,
+      "#     «No tengo todos los datos de tus check-in diarios, asi que te lo pregunto aqui.»"
+     ],
+     [
+      "backend/models/common.py",
+      197,
+      "# LAS CINCO DEL PASO 1 SIN CHECK-IN. «No tengo todos los datos de tus check-in diarios,"
+     ],
+     [
+      "frontend/src/components/reports/MensualPaso1.jsx",
+      157,
+      "<span className=\"font-bold\">No tengo todos los datos de tus check-in diarios</span>,"
+     ]
+    ],
+    "veces": 4
+   }
   ],
-  "estado": "abierto"
+  "faltan": [],
+  "estado": "cerrado"
  },
  {
   "doc": "validado",
@@ -991,11 +1136,31 @@
   "punto": "La tarjeta en Hecho",
   "dice": "«Respondiste a tiempo y ahora nos toca a nosotros. Te decimos algo antes del viernes a las tres…»",
   "esperado_en": "frontend/src",
-  "pruebas": [],
-  "faltan": [
-   "Respondiste a tiempo"
+  "pruebas": [
+   {
+    "frase": "Respondiste a tiempo",
+    "donde": [
+     [
+      "backend/core/promesa_del_reporte.py",
+      98,
+      "#     «Respondiste a tiempo y ahora nos toca a nosotros. Te decimos algo antes del viernes a"
+     ],
+     [
+      "backend/core/promesa_del_reporte.py",
+      119,
+      "\"\"\"«Respondiste a tiempo y ahora nos toca a nosotros. Te decimos algo antes del viernes"
+     ],
+     [
+      "backend/core/promesa_del_reporte.py",
+      127,
+      "return (\"Respondiste a tiempo y ahora nos toca a nosotros. Te decimos algo antes \""
+     ]
+    ],
+    "veces": 5
+   }
   ],
-  "estado": "abierto"
+  "faltan": [],
+  "estado": "cerrado"
  },
  {
   "doc": "validado",
@@ -1003,11 +1168,21 @@
   "punto": "El aviso de la apertura",
   "dice": "«Ya puedes rellenar el reporte quincenal. Tienes para hacerlo hasta mañana jueves a las ocho…»",
   "esperado_en": "backend",
-  "pruebas": [],
-  "faltan": [
-   "Ya puedes rellenar el reporte quincenal"
+  "pruebas": [
+   {
+    "frase": "Ya puedes rellenar el reporte quincenal",
+    "donde": [
+     [
+      "backend/core/avisos_cliente.py",
+      684,
+      "\"titulo\": \"Ya puedes rellenar el reporte quincenal\","
+     ]
+    ],
+    "veces": 1
+   }
   ],
-  "estado": "abierto"
+  "faltan": [],
+  "estado": "cerrado"
  },
  {
   "doc": "validado",
@@ -1015,11 +1190,26 @@
   "punto": "El recordatorio del último día",
   "dice": "«Solo recordarte que tienes hasta hoy a las ocho…»",
   "esperado_en": "backend",
-  "pruebas": [],
-  "faltan": [
-   "Solo recordarte que tienes hasta hoy"
+  "pruebas": [
+   {
+    "frase": "Solo recordarte que tienes hasta hoy",
+    "donde": [
+     [
+      "backend/core/avisos_cliente.py",
+      702,
+      "\"titulo\": \"Solo recordarte que tienes hasta hoy a las ocho\","
+     ],
+     [
+      "frontend/src/pages/ClientDashboard.jsx",
+      708,
+      "// último día dice «Solo recordarte que tienes hasta hoy a las ocho»."
+     ]
+    ],
+    "veces": 2
+   }
   ],
-  "estado": "abierto"
+  "faltan": [],
+  "estado": "cerrado"
  },
  {
   "doc": "validado",
@@ -1027,11 +1217,21 @@
   "punto": "El fuera de plazo",
   "dice": "«Se te pasó el plazo del reporte quincenal. Este ajuste se salta.»",
   "esperado_en": "backend",
-  "pruebas": [],
-  "faltan": [
-   "Se te pasó el plazo"
+  "pruebas": [
+   {
+    "frase": "Se te pasó el plazo",
+    "donde": [
+     [
+      "backend/core/avisos_cliente.py",
+      719,
+      "\"titulo\": \"Se te pasó el plazo del reporte quincenal\","
+     ]
+    ],
+    "veces": 1
+   }
   ],
-  "estado": "abierto"
+  "faltan": [],
+  "estado": "cerrado"
  },
  {
   "doc": "validado",
@@ -1045,8 +1245,8 @@
     "donde": [
      [
       "frontend/src/pages/ClientDashboard.jsx",
-      772,
-      "id: `reporte-${r.tipo}`, icono: FileText, titulo: r.tipo_label,"
+      717,
+      "id: `reporte-${r.tipo}`, icono: FileText,"
      ]
     ],
     "veces": 1
@@ -1069,26 +1269,21 @@
       "frontend/src/components/reports/PasosDelMensual.jsx",
       4,
       "* Del documento «El reporte mensual» (1-09-2026): «Con Son 4 pasos en la cabecera de las"
-     ],
-     [
-      "frontend/src/components/reports/PasosDelMensual.jsx",
-      54,
-      "Son 4 pasos"
      ]
     ],
-    "veces": 2
+    "veces": 1
    },
    {
     "frase": "Actualizar tus datos y confirmar que están bien",
     "donde": [
      [
       "frontend/src/components/reports/FormularioReporte.jsx",
-      126,
+      155,
       "// «Actualizar tus datos y confirmar que están bien»). El peso de la semana ya"
      ],
      [
       "frontend/src/components/reports/PasosDelMensual.jsx",
-      19,
+      22,
       "'Actualizar tus datos y confirmar que están bien',"
      ]
     ],
@@ -1119,9 +1314,9 @@
       "# «Sale de tus check-in. Si algo no cuadra o te falta, lo arreglas al final.»"
      ],
      [
-      "frontend/src/components/reports/FormularioReporte.jsx",
-      413,
-      "sub=\"Sale de tus check-in. Si algo no cuadra o te falta, lo arreglas al final.\" />"
+      "frontend/src/components/reports/MensualPaso1.jsx",
+      6,
+      "*     «Sale de tus check-in. Si algo no cuadra o te falta, lo arreglas al final.»"
      ]
     ],
     "veces": 4
@@ -1147,7 +1342,7 @@
      ],
      [
       "backend/routes/reports.py",
-      730,
+      739,
       "- `ultimo`    los 28 días del mensual («Desde tu último reporte»)."
      ],
      [
@@ -1168,16 +1363,16 @@
      ],
      [
       "backend/routes/reports.py",
-      731,
+      740,
       "- `principio` desde que arrancó («Desde que empezaste»)."
      ],
      [
-      "frontend/src/components/reports/InformeDelMes.jsx",
-      288,
-      "<Fila que=\"Desde que empezaste\" valor={peso.desde_el_principio_label} />"
+      "backend/routes/reports.py",
+      799,
+      "- SIN SELECTOR DE PERIODO. «Desde que empezaste» es del mensual: en quince días no hay"
      ]
     ],
-    "veces": 5
+    "veces": 7
    }
   ],
   "faltan": [],
@@ -1195,12 +1390,12 @@
     "donde": [
      [
       "backend/core/datos_reporte.py",
-      575,
+      655,
       "- En los 28 días: «El círculo es el peso de tu quincenal». Uno solo, el del reporte"
      ],
      [
       "backend/core/datos_reporte.py",
-      603,
+      683,
       "\"nota\": \"El círculo es el peso de tu quincenal.\"}"
      ]
     ],
@@ -1211,12 +1406,12 @@
     "donde": [
      [
       "backend/core/datos_reporte.py",
-      577,
+      657,
       "- En el programa entero: «Los círculos son tus reportes anteriores. El primero es tu"
      ],
      [
       "backend/core/datos_reporte.py",
-      615,
+      695,
       "\"nota\": \"Los círculos son tus reportes anteriores. El primero es tu cuestionario inicial.\"}"
      ]
     ],
@@ -1280,7 +1475,7 @@
      ],
      [
       "frontend/src/pages/CheckInsPage.jsx",
-      128,
+      126,
       "pon('Movimiento', MOVIMIENTO_VALOR[c.movimiento]);"
      ]
     ],
@@ -1406,7 +1601,7 @@
       "{\"value\": NO_LO_HICE, \"label\": \"No entrené\"},"
      ]
     ],
-    "veces": 6
+    "veces": 5
    },
    {
     "frase": "Sí entrené, pero no lo marqué",
@@ -1492,32 +1687,37 @@
      ],
      [
       "frontend/src/components/reports/MensualPaso1.jsx",
-      305,
+      376,
       "{modificando ? 'Ya está' : 'Modificar'}"
+     ],
+     [
+      "frontend/src/components/reports/QuincenalPaso1.jsx",
+      285,
+      "«Si algo no cuadra o te falta, lo modificas al final»: Modificar abre el"
      ]
     ],
-    "veces": 2
+    "veces": 4
    },
    {
     "frase": "Confirmar",
     "donde": [
      [
       "frontend/src/components/reports/FormularioReporte.jsx",
-      420,
+      455,
+      "onConfirmar={confirmarPaso1} />"
+     ],
+     [
+      "frontend/src/components/reports/FormularioReporte.jsx",
+      498,
       "onConfirmar={confirmarPaso1} />"
      ],
      [
       "frontend/src/components/reports/MensualPaso1.jsx",
       99,
       "onHueco, onConfirmar }) => {"
-     ],
-     [
-      "frontend/src/components/reports/MensualPaso1.jsx",
-      107,
-      "// 24-08). En ese caso, «Confirmar» sin nada que confirmar solo daría un aviso rojo:"
      ]
     ],
-    "veces": 12
+    "veces": 19
    }
   ],
   "faltan": [],
@@ -1535,7 +1735,7 @@
     "donde": [
      [
       "frontend/src/components/reports/ReporteMensual.jsx",
-      153,
+      127,
       "<Opciones testid=\"dieta-dificultad\" pregunta=\"¿Cuánto te ha costado la dieta?\""
      ]
     ],
@@ -1579,7 +1779,7 @@
     "donde": [
      [
       "frontend/src/components/reports/ReporteMensual.jsx",
-      372,
+      346,
       "pregunta=\"Si te bajo el número de sesiones, ¿sería viable para que cumplieras?\""
      ]
     ],
@@ -1595,7 +1795,7 @@
      ],
      [
       "frontend/src/components/reports/ReporteMensual.jsx",
-      377,
+      351,
       "{ value: 'quitar', label: 'Quítamelo, no lo voy a hacer' },"
      ]
     ],
@@ -1617,7 +1817,7 @@
     "donde": [
      [
       "frontend/src/components/reports/ReporteMensual.jsx",
-      389,
+      363,
       "No tomaste la suplementación {diasSinSuplementacion}{' '}"
      ]
     ],
@@ -1628,7 +1828,7 @@
     "donde": [
      [
       "frontend/src/components/reports/ReporteMensual.jsx",
-      407,
+      381,
       "{ value: 'se_me_olvidaba', label: 'Se me olvidaba' },"
      ]
     ],
@@ -1639,7 +1839,7 @@
     "donde": [
      [
       "frontend/src/components/reports/ReporteMensual.jsx",
-      410,
+      384,
       "{ value: 'no_quiero_seguir', label: 'No quiero seguir tomándola' },"
      ]
     ],
@@ -1661,7 +1861,7 @@
     "donde": [
      [
       "frontend/src/components/reports/ReporteMensual.jsx",
-      583,
+      557,
       "etiqueta=\"Estos son los que me diste. Quita los que ya no y añade los nuevos\""
      ]
     ],
@@ -1683,7 +1883,7 @@
     "donde": [
      [
       "frontend/src/components/reports/ReporteMensual.jsx",
-      444,
+      418,
       "<Bloque titulo=\"¿Y máquinas que no tienes?\""
      ]
     ],
@@ -1694,12 +1894,12 @@
     "donde": [
      [
       "backend/routes/reports.py",
-      232,
+      241,
       "# 1-09 dice «Actualiza aquí tu listado: si ha entrado alguna nueva, dímelo», y eso solo"
      ],
      [
       "frontend/src/components/reports/ReporteMensual.jsx",
-      445,
+      419,
       "sub=\"Actualiza aquí tu listado: si ha entrado alguna nueva, dímelo\""
      ]
     ],
@@ -1721,7 +1921,7 @@
     "donde": [
      [
       "frontend/src/components/reports/ReporteMensual.jsx",
-      460,
+      434,
       "pregunta=\"¿Cómo consideras que ha sido tu grado de compromiso con el programa hasta el momento?\""
      ]
     ],
@@ -1732,7 +1932,7 @@
     "donde": [
      [
       "frontend/src/components/reports/ReporteMensual.jsx",
-      464,
+      438,
       "{ value: 'maximo', label: 'Mi compromiso es máximo, dentro de mis posibilidades estoy dando lo mejor de mí' },"
      ]
     ],
@@ -1743,7 +1943,7 @@
     "donde": [
      [
       "frontend/src/components/reports/ReporteMensual.jsx",
-      467,
+      441,
       "{ value: 'no_he_podido', label: 'No he sido capaz de llevarlo a cabo, demasiado exigente para lo que puedo dar a día de hoy' },"
      ]
     ],
@@ -1765,22 +1965,37 @@
     "donde": [
      [
       "frontend/src/components/reports/ReporteMensual.jsx",
-      470,
+      444,
       "pregunta=\"En líneas generales, ¿el programa está cumpliendo tus expectativas?\""
+     ],
+     [
+      "frontend/src/components/reports/piezas.jsx",
+      179,
+      "* Vivía dentro de `ReporteMensual.jsx` («¿el programa está cumpliendo tus expectativas?»)"
      ]
     ],
-    "veces": 1
+    "veces": 2
    },
    {
     "frase": "Genial, mejor imposible",
     "donde": [
      [
+      "backend/models/common.py",
+      216,
+      "#     0 · Muy malas, demasiado exigente para mí   10 · Genial, mejor imposible"
+     ],
+     [
+      "backend/models/common.py",
+      218,
+      "#     0 · Mal, mucho esfuerzo para pocos avances  10 · Genial, mejor imposible"
+     ],
+     [
       "frontend/src/components/reports/ReporteMensual.jsx",
-      472,
+      446,
       "minLabel=\"0 · No, esperaba más\" maxLabel=\"10 · Genial, mejor imposible\" />"
      ]
     ],
-    "veces": 1
+    "veces": 7
    }
   ],
   "faltan": [],
@@ -1798,22 +2013,42 @@
     "donde": [
      [
       "frontend/src/components/reports/ReporteMensual.jsx",
-      511,
+      485,
       "<Bloque titulo=\"Dudas o lo que quieras contarme\" testid=\"mensual-libre\">"
+     ],
+     [
+      "frontend/src/components/reports/ReporteQuincenal.jsx",
+      15,
+      "*     Dudas o lo que quieras contarme · Ahora es el momento y el lugar"
+     ],
+     [
+      "frontend/src/components/reports/ReporteQuincenal.jsx",
+      85,
+      "<p className=\"text-sm text-foreground\">Dudas o lo que quieras contarme</p>"
      ]
     ],
-    "veces": 1
+    "veces": 3
    },
    {
     "frase": "Ahora es el momento y el lugar",
     "donde": [
      [
       "frontend/src/components/reports/ReporteMensual.jsx",
-      512,
+      486,
       "<TextoLibre testid=\"notes-textarea\" ayuda=\"Ahora es el momento y el lugar\""
+     ],
+     [
+      "frontend/src/components/reports/ReporteQuincenal.jsx",
+      15,
+      "*     Dudas o lo que quieras contarme · Ahora es el momento y el lugar"
+     ],
+     [
+      "frontend/src/components/reports/ReporteQuincenal.jsx",
+      81,
+      "{/* El campo libre, con su empujón: «Ahora es el momento y el lugar». Sin esa"
      ]
     ],
-    "veces": 1
+    "veces": 4
    }
   ],
   "faltan": [],
@@ -1900,7 +2135,7 @@
       "Motivacion: los formularios/cuestionarios de la app van a cambiar, asi que NO reescribimos"
      ]
     ],
-    "veces": 70
+    "veces": 72
    },
    {
     "frase": "Mi evolución",
@@ -1993,12 +2228,12 @@
      ],
      [
       "frontend/src/pages/ReportsPage.jsx",
-      548,
+      575,
       "// «Ver mi informe ›» del paso 4: abre el informe con el mismo"
      ],
      [
       "frontend/src/pages/ReportsPage.jsx",
-      651,
+      696,
       "{informeAbierto === report.id ? 'Ocultar mi informe' : 'Ver mi informe del mes'}"
      ]
     ],
@@ -2069,11 +2304,31 @@
   "punto": "Las cinco preguntas con estrellas",
   "dice": "«No tengo todos los datos de tus check-in diarios, así que te lo pregunto aquí.»",
   "esperado_en": "frontend/src/components/reports",
-  "pruebas": [],
-  "faltan": [
-   "No tengo todos los datos de tus check-in"
+  "pruebas": [
+   {
+    "frase": "No tengo todos los datos de tus check-in",
+    "donde": [
+     [
+      "backend/core/actividad_mensual.py",
+      287,
+      "#     «No tengo todos los datos de tus check-in diarios, asi que te lo pregunto aqui.»"
+     ],
+     [
+      "backend/models/common.py",
+      197,
+      "# LAS CINCO DEL PASO 1 SIN CHECK-IN. «No tengo todos los datos de tus check-in diarios,"
+     ],
+     [
+      "frontend/src/components/reports/MensualPaso1.jsx",
+      157,
+      "<span className=\"font-bold\">No tengo todos los datos de tus check-in diarios</span>,"
+     ]
+    ],
+    "veces": 4
+   }
   ],
-  "estado": "abierto"
+  "faltan": [],
+  "estado": "cerrado"
  },
  {
   "doc": "informe",
@@ -2087,7 +2342,7 @@
     "donde": [
      [
       "backend/routes/reports.py",
-      998,
+      1091,
       "# EL INFORME SE ENTREGA AL ENVIAR (documento «El informe del mes», 1-09-2026):"
      ]
     ],
@@ -2150,7 +2405,7 @@
       "\"Semana 2: 2 y 1\\nSemana 3 y 4: 2 y 2\"},"
      ]
     ],
-    "veces": 93
+    "veces": 101
    }
   ],
   "faltan": [],
@@ -2225,7 +2480,7 @@
       "sig = firma(a[\"alimento_id\"] for a in d.get(\"alimentos\") or [])"
      ]
     ],
-    "veces": 365
+    "veces": 378
    }
   ],
   "faltan": [],

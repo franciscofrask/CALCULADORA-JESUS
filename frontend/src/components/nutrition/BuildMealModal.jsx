@@ -358,20 +358,18 @@ const BuildMealModal = ({
         // LOS COLORES, LEGIBLES EN CLARO. A 11 px sobre fondo blanco, `amber-500` da 2,15:1
         // y `red-500` 3,3:1: por debajo de lo que se lee sin forzar la vista (QA del 15-08).
         // En oscuro mandan los tonos claros, que ahí son los que contrastan.
-        // LAS MISMAS PALABRAS QUE LA TARJETA (revisión del 2-09). Aquí decía «Cuadrado» por
-        // debajo de medio gramo y «Válido», en ámbar, hasta los 4. La tarjeta de la comida
-        // dice «cuadrado» por debajo de UN gramo (`SUELO_DE_LA_COMIDA`, «medio gramo de grasa
-        // no lo pesa nadie») y «cuadrado (+2,3)» dentro del margen, en verde. O sea que el
-        // mismo plato se leía distinto según se mirase la tarjeta o este diálogo: 20,6 de 20
-        // era «cuadrado» fuera y «Válido» dentro. Ahora los dos dicen lo mismo.
-        //
-        // Y en verde, no en ámbar: lo manda el punto 78, «de 1 a 4, falte o sobre, es válido
-        // y sale en verde». El ámbar era el único sitio de la app que le quedaba.
+        // LAS MISMAS PALABRAS QUE LA TARJETA. Y las palabras son las del 3-09 (Francisco,
+        // revirtiendo la revisión del 2-09): «cuadrado» SOLO cuando está exacto (por debajo
+        // de un gramo, `SUELO_DE_LA_COMIDA`); dentro del margen, «válido» con su desvío --
+        // la letra del punto 78/11.1: «de 1 a 4, falte o sobre, es válido y sale en verde» --
+        // y fuera, «faltan»/«sobran». Igual que `lib/estadoDelMacro`, para que el mismo
+        // plato no se lea distinto según la ventana.
         //
         // El signo va del lado del cliente, no del cálculo: aquí `r` es lo que FALTA
         // (objetivo − servido), así que un `r` negativo es que se ha pasado y lleva el «+».
         if (Math.abs(r) < SUELO_DE_LA_COMIDA) { status = 'cuadrado'; cls = 'text-green-700 dark:text-green-400'; }
-        else if (Math.abs(r) < MARGEN_VALIDO) { status = `cuadrado (${r < 0 ? '+' : '−'}${fmt1(Math.abs(r))})`; cls = 'text-green-700 dark:text-green-400'; }
+        // Inclusivo: «de 1 a 4» entra el 4 clavado (alineado el 3-09 con lib/estadoDelMacro).
+        else if (Math.abs(r) <= MARGEN_VALIDO) { status = `válido (${r < 0 ? '+' : '−'}${fmt1(Math.abs(r))})`; cls = 'text-green-700 dark:text-green-400'; }
         // LO QUE FALTA VA EN BLANCO, no en rojo (2-09). Es la regla del punto 77 -- «sin color
         // mientras vas por debajo», porque ir corto no es un error, es que no has terminado --
         // y la lista del 196 lo deja por escrito: «faltan 11 de proteína, en blanco, que es un
