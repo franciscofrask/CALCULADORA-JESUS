@@ -1132,7 +1132,25 @@ async def _montar_informe_del_reporte(reporte: dict, perfil: dict) -> dict:
     se genera solo en ese momento y se guarda con su estado, en vez de montarse cada vez
     que alguien abre la pantalla.
     """
+    from core.cycle import enrich_cycle
     from core.informe_mensual import montar_informe
+
+    # LA SEMANA DEL CICLO SE CALCULA, NO SE LEE (3-09-2026).
+    #
+    # El informe decía «Semana 1 de 12» a TODO EL MUNDO. El 1 no era la semana de nadie: es
+    # el literal que escribe el alta en `client_profiles.week` para que no reviente la
+    # validación, y desde entonces no lo mueve nada -- ni un cron, ni un `$inc`, ni una
+    # pantalla. Medido: 184 de 188 fichas de producción están en `week: 1`, y las otras 4 no
+    # tienen el campo. Nadie llega nunca a la semana 2.
+    #
+    # La semana de verdad se calcula desde `cycle_start` y ya lo hace `core/cycle`, que es
+    # lo que leen Mi perfil, el panel, la renovación y la cadencia de reportes. Aquí no se
+    # llamaba: el informe era el único sitio que se creía el campo muerto. `enrich_cycle`
+    # solo toca el dict en memoria, así que no escribe nada en la base.
+    #
+    # OJO: los informes YA GUARDADOS (`reports.informe`) seguirán diciendo «Semana 1» --
+    # se congelan al enviar el reporte y se devuelven tal cual, a propósito.
+    perfil = enrich_cycle(dict(perfil))
 
     anterior = await db.reports.find_one(
         {"client_id": reporte["client_id"], "created_at": {"$lt": reporte["created_at"]}},

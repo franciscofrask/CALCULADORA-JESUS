@@ -161,7 +161,12 @@ const TusFotos = ({ api, token }) => {
     return (
         <Tarjeta titulo="Tus fotos" testid="informe-fotos">
             <div className="flex gap-2">
-                {[['frente', 'Frente'], ['espaldas', 'Espaldas'], ['perfil', 'Perfil']].map(([v, l]) => {
+                {/* LA POSE SE GUARDA EN SINGULAR, «espalda». El botón decía «espaldas» y por
+                    eso salía apagado SIEMPRE: no hay ni habrá una sola foto con esa pose --
+                    `routes/checkins.py` solo acepta frente, espalda y perfil, y lo que no
+                    esté en esa lista lo guarda sin pose. El rótulo sí es «Espaldas», que es
+                    como se dice; lo que tenía que casar es la clave. */}
+                {[['frente', 'Frente'], ['espalda', 'Espaldas'], ['perfil', 'Perfil']].map(([v, l]) => {
                     const hay = (fotos || []).some(f => (f.pose || 'frente') === v);
                     const activo = pose === v;
                     return (
