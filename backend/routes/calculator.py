@@ -1695,13 +1695,104 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
             pins[elegido["alimento_id"]] = cant
             return pins, cant, max(0.0, resto + por_gramo * cant - objetivo_m[macro_m])
 
-        def _bajar_de_todos(macro_m, candidatos_m):
-            """Todos los candidatos por el mismo factor: la comida mantiene su equilibrio."""
-            puesto = sum(a["macros"][macro_m] for a in candidatos_m)
-            k = de_donde_bajo.factor_proporcional(
-                servido_ahora[macro_m] - objetivo_m[macro_m], puesto)
-            return {a["alimento_id"]: _pesable(a["_food"], a["cantidad_g"] * k)
-                    for a in candidatos_m}
+        def _bajar_de_todos(macro_m, candidatos_m, proteger=True):
+            """Todos los candidatos por el mismo factor: la comida mantiene su equilibrio.
+
+            Y SIN ROMPER UN MACRO QUE YA ESTABA BIEN (3-09-2026). El factor se calculaba
+            mirando SOLO el macro que sobra, y bajar es bajarlo todo: en una comida con la
+            grasa clavada en 15,0 «cuadrado» y 4,3 g de hidratos de más, arreglar los
+            hidratos bajaba el tomate frito en proporción y se llevaba 7,5 g de grasa por
+            delante. La comida entraba con un macro bien y salía con ese macro mal: cuadrar
+            dejaba la comida peor de lo que estaba en un eje para arreglarla en otro.
+
+            Así que antes de bajar se mira a quién se está bajando. Si la bajada saca de
+            rango un macro que estaba dentro, el alimento que más lo aporta por cada gramo
+            del que sobra se queda quieto -- clavado a lo que tiene, no suelto, que soltarlo
+            sería dejar que el dimensionado lo subiera -- y el resto absorbe la sobra. Se
+            repite mientras haya a quién sacar y quede más de uno.
+
+            `proteger=False` cuando el cliente ha elegido a mano «de todos, en la misma
+            proporción»: eso es una respuesta suya y se hace tal cual se le prometió.
+            """
+            def _factor(grupo):
+                puesto_ = sum(a["macros"][macro_m] for a in grupo)
+                return de_donde_bajo.factor_proporcional(
+                    servido_ahora[macro_m] - objetivo_m[macro_m], puesto_)
+
+            def _como_quedaria(grupo, k_):
+                return {m: servido_ahora[m] - sum(a["macros"][m] for a in grupo) * (1 - k_)
+                        for m in ("P", "H", "G")}
+
+            def _lo_que_rompe(estado, protegidos_):
+                """Gramos que se salen del margen en macros QUE ESTABAN BIEN.
+
+                Solo cuentan los protegidos: un macro que ya estaba corto o pasado no se
+                «rompe» al moverlo. Y solo se miran los que estaban dentro porque la regla
+                de la casa es que faltar no es un error y pasarse sí: dejar de bajar para no
+                empeorar un hueco que de todas formas no se puede tapar sería no bajar nunca.
+                """
+                total = 0.0
+                for m in protegidos_:
+                    fuera = abs(estado[m] - objetivo_m[m]) - de_donde_bajo.SOBRA_MINIMA
+                    if fuera > 0:
+                        total += fuera
+                return total
+
+            elegidos = list(candidatos_m)
+            quietos = []
+            if proteger and elegidos:
+                # 1 · Sacar del grupo a los que rompen un macro que estaba bien, mientras
+                #     quede alguien que pueda seguir bajando la sobra.
+                protegidos = [m for m in ("P", "H", "G")
+                              if m != macro_m
+                              and not math.isinf(objetivo_m.get(m, 0) or 0)
+                              and (objetivo_m.get(m) or 0) > 0
+                              and abs(servido_ahora[m] - objetivo_m[m]) <= de_donde_bajo.SOBRA_MINIMA]
+                for _ in range(len(candidatos_m)):
+                    if len(elegidos) <= 1 or not protegidos:
+                        break
+                    estado = _como_quedaria(elegidos, _factor(elegidos))
+                    roto = next((m for m in protegidos
+                                 if estado[m] < objetivo_m[m] - de_donde_bajo.SOBRA_MINIMA), None)
+                    if roto is None:
+                        break
+                    peor = max(elegidos,
+                               key=lambda a: a["macros"][roto] / max(a["macros"][macro_m], 0.01))
+                    elegidos = [a for a in elegidos if a is not peor]
+                    quietos.append(peor)
+                # 2 · Y CON UN SOLO CANDIDATO NO HAY A QUIÉN SACAR: o se baja o no se baja.
+                #
+                #     Ahí estaba el fallo. Una comida con la grasa clavada en 15,0 y 4,3 g
+                #     de hidratos de más se cuadraba bajando el tomate frito a la mitad: se
+                #     arreglaban 4,3 g de hidratos y se creaban 7,5 g de grasa que faltan.
+                #     La comida entraba con un macro bien y salía con ese macro mal.
+                #
+                #     La cuenta es esa: lo que se rompe contra lo que se arregla. Si romper
+                #     cuesta más que arreglar, no se toca. Y si el destrozo es pequeño al
+                #     lado de lo que sobra, se baja: dejar 60 g de hidratos pasados por no
+                #     mover 5 de grasa tampoco es cuadrar.
+                if elegidos and protegidos:
+                    # Las dos cuentas, MEDIDAS IGUAL: gramos que se salen del margen. Sin
+                    # esto se compararían la sobra entera contra el destrozo fuera de margen,
+                    # y el tomate volvía a bajar (3,5 de destrozo contra 4,3 de sobra, cuando
+                    # de esa sobra solo 0,3 estaban de más).
+                    rompe = _lo_que_rompe(_como_quedaria(elegidos, _factor(elegidos)), protegidos)
+                    arregla = max(0.0, (servido_ahora[macro_m] - objetivo_m[macro_m])
+                                  - de_donde_bajo.SOBRA_MINIMA)
+                    if rompe >= arregla:
+                        quietos, elegidos = list(candidatos_m), []
+            if not elegidos and not quietos:      # sin protección: se baja como siempre
+                elegidos = list(candidatos_m)
+            pins = {}
+            if elegidos:
+                k = _factor(elegidos)
+                pins = {a["alimento_id"]: _pesable(a["_food"], a["cantidad_g"] * k)
+                        for a in elegidos}
+            # Los que se quedan quietos van clavados a lo que tienen: si se dejaran fuera del
+            # reparto, el dimensionado los subiría y la sobra volvería por otro lado.
+            for a in quietos:
+                pins[a["alimento_id"]] = _pesable(a["_food"], a["cantidad_g"])
+            return pins
 
         def _candidatos_anchos(macro_m):
             """Para BAJAR en proporción valen todos los que aportan algo del macro.
@@ -1714,7 +1805,7 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
             return [a for a in aportes
                     if a["macros"][macro_m] - a["suelo"][macro_m] > 0.5]
 
-        def _pregunta_de_bajada(macro_m, candidatos_m, fijos_m):
+        def _pregunta_de_bajada(macro_m, candidatos_m):
             """La pregunta de «¿de dónde bajo?», con lo que quedaría en cada opción."""
             sobra_m = servido_ahora[macro_m] - objetivo_m[macro_m]
             opciones = []
@@ -1729,11 +1820,17 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
                     "queda_en": round(queda, 1),
                     "sobraria_aun": round(sobraria, 1),
                 })
+            # LO QUE SE ENSEÑA DE «de todos en la misma proporción» ES LO QUE HACE ESA OPCIÓN,
+            # no lo que hace la bajada automática. Desde el 3-09 no son lo mismo: la
+            # automática deja quieto al que rompería otro macro, y esta no, porque es una
+            # respuesta del cliente. Enseñar aquí las cantidades de la otra sería prometerle
+            # unos gramos y darle otros.
+            proporcional = _bajar_de_todos(macro_m, candidatos_m, proteger=False)
             opciones.append({
                 "modo": "proporcional",
                 "cantidades": [{"alimento_id": a["alimento_id"], "nombre": a["nombre"],
                                 "cantidad_ahora": round(a["cantidad_g"], 1),
-                                "queda_en": round(fijos_m[a["alimento_id"]], 1)}
+                                "queda_en": round(proporcional[a["alimento_id"]], 1)}
                                for a in candidatos_m],
             })
             return {
@@ -1777,7 +1874,9 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
             if modo == "solo" and elegido:
                 fijos, _, _ = _bajar_solo_de(elegido, macro_sobra, candidatos)
             elif modo == "proporcional":
-                fijos = _bajar_de_todos(macro_sobra, candidatos)
+                # Lo eligió él: «de todos, en la misma proporción». Se hace tal cual, sin
+                # dejar a nadie quieto, que la promesa de esa opción es esa.
+                fijos = _bajar_de_todos(macro_sobra, candidatos, proteger=False)
             elif len(candidatos) < 2:
                 # Un solo sitio de donde bajar (o ninguno que devuelva 4 g él solo): no hay
                 # decisión que tomar, se baja y ya (el contrato de de_donde_bajo) -- y se
@@ -1786,7 +1885,7 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
             else:
                 # Nadie ha contestado: se baja en proporción y se devuelve la pregunta.
                 fijos = _bajar_de_todos(macro_sobra, candidatos)
-                decision = _pregunta_de_bajada(macro_sobra, candidatos, fijos)
+                decision = _pregunta_de_bajada(macro_sobra, candidatos)
         else:
             # SOBRA PERO NO HAY PREGUNTA QUE HACER (Francisco, 3-09-2026, su Comida 4).
             #
@@ -1842,10 +1941,7 @@ async def refit_diet(data: dict, user = Depends(get_current_user)):
                 pins_extra[fid] = min(pins_extra.get(fid, cant), cant)
             candidatos_x = de_donde_bajo.de_donde_se_puede_bajar(aportes, m_extra)
             if decision is None and len(candidatos_x) >= 2:
-                decision = _pregunta_de_bajada(
-                    m_extra, candidatos_x,
-                    {a["alimento_id"]: nuevos.get(a["alimento_id"], a["cantidad_g"])
-                     for a in candidatos_x})
+                decision = _pregunta_de_bajada(m_extra, candidatos_x)
         if pins_extra:
             fijos = dict(fijos or {})
             for fid, cant in pins_extra.items():

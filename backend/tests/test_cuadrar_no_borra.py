@@ -180,3 +180,33 @@ def test_cuando_no_cuadra_se_dice_y_no_se_borra(headers):
     # Faltar hidratos es inevitable (no hay ninguno); pasarse de grasa, no.
     assert desfase["G"] <= 4, f"se pasa {desfase['G']}g de grasa para tapar el hueco"
     assert desfase["P"] <= 4, f"se pasa {desfase['P']}g de proteína para tapar el hueco"
+
+
+# ── CUADRAR NO PUEDE ROMPER UN MACRO QUE ESTABA BIEN (3-09-2026) ──────────────
+#
+# «La calculadora tiene que operar de forma correcta las dietas» (Jesus, minuto 30:06 del
+# video con Gonzalo). El factor de bajada se calculaba mirando SOLO el macro que sobra, y
+# bajar es bajarlo todo: una comida con la grasa clavada en 15,0 y 4,3 g de hidratos de mas
+# se «cuadraba» bajando el tomate frito a la mitad, o sea arreglando 4,3 g de hidratos y
+# creando 7,5 g de grasa que faltan. La comida entraba con un macro bien y salia con ese
+# macro mal.
+TOMATE_FRITO, LECHUGA, CALABACIN = 3187, 363, 110
+
+
+def test_no_rompe_un_macro_clavado_para_arreglar_otro_por_menos(headers):
+    """La C3 pide 40P · 10H · 15G. El tomate pone justo los 15 de grasa y 4,3 de mas de
+    hidratos: bajarlo cuesta mas de lo que arregla, asi que no se baja."""
+    alimentos, _, desfase = _cuadrar(
+        headers, [TOMATE_FRITO, LECHUGA, CALABACIN], meal="C3")
+    assert abs(desfase["G"]) <= 4, (
+        f"cuadrar ha roto la grasa, que entraba clavada: se queda en {desfase['G']}")
+    tomate = next(a for a in alimentos if a["alimento_id"] == TOMATE_FRITO)
+    assert tomate["cantidad_g"] == 100, (
+        f"ha bajado el tomate a {tomate['cantidad_g']} g y con el se lleva la grasa")
+
+
+def test_pero_si_el_destrozo_es_pequeno_al_lado_de_la_sobra_SI_baja(headers):
+    """Lo contrario tambien tiene que valer: no bajar nunca por no mover un gramo tampoco es
+    cuadrar. Tres grasas sin hidratos: la grasa se pasa muchisimo y ahi hay que bajar."""
+    _, _, desfase = _cuadrar(headers, [HUEVOS, CACAO, CLARAS])
+    assert desfase["G"] <= 4, f"deja {desfase['G']} g de grasa pasados por no bajar"
