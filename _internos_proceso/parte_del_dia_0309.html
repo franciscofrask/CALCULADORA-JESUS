@@ -164,7 +164,7 @@ ol.decisiones li b { color: var(--tinta); }
         <div class="dato"><b>5</b><span>documentos</span></div>
         <div class="dato"><b>11</b><span>fallos nuevos</span></div>
         <div class="dato"><b>3</b><span>bloqueos</span></div>
-        <div class="dato"><b>14 h 44</b><span>de 13:16 a 04:00</span></div>
+        <div class="dato"><b>10:00 · 21:30</b><span>la jornada</span></div>
     </div>
 </header>
 
@@ -177,8 +177,8 @@ ol.decisiones li b { color: var(--tinta); }
 <div class="doc">
     <div class="doc-cab">
         <h3>Aplicar una favorita</h3>
+        <span class="reloj">en el bloque de la mañana</span>
         <span class="fecha">artifact <span class="sha">e4915db7</span> · 3 sep</span>
-        <span class="reloj">10 min</span>
         <span class="chip ok">Cerrado</span>
     </div>
     <p class="pedia">«Aplica una favorita sobre un día que ya tiene comidas y se lo lleva por
@@ -193,15 +193,17 @@ ol.decisiones li b { color: var(--tinta); }
         <li>El aviso del tipo de día y el de lo que se pierde van <b>en ese orden</b> y juntos,
         como pide el documento: primero lo que se pierde, después el tipo.</li>
     </ul>
-    <p><span class="sha">ad9f220 · 5943905</span> · Comprobado a 1280 y a 390 px.
+    <p><span class="sha">ad9f220 · 5943905</span> · Comprobado a 1280 y a 390 px. Fue de la
+    tanda de la mañana, que se commiteó junta: ahí van también el margen de 1 a 4 plano en toda
+    la app y la calibración del día.
     <b>Quedan dos confirmaciones tuyas</b> sobre el texto exacto.</p>
 </div>
 
 <div class="doc">
     <div class="doc-cab">
         <h3>Cómo abre Inicio</h3>
+        <span class="reloj">39 min + 29 min</span>
         <span class="fecha">artifact <span class="sha">865cf38a</span> · 3 sep</span>
-        <span class="reloj">1 h 10</span>
         <span class="chip ok">21 de 21</span>
     </div>
     <p class="pedia">El aviso de la dieta sin terminar, dentro de la pestaña Dieta, y la marca
@@ -250,8 +252,8 @@ ol.decisiones li b { color: var(--tinta); }
 <div class="doc">
     <div class="doc-cab">
         <h3>El informe del mes</h3>
+        <span class="reloj">59 min</span>
         <span class="fecha">artifact <span class="sha">2f5f6de3</span> · 1 sep</span>
-        <span class="reloj">1 h</span>
         <span class="chip ok">Cerrado</span>
     </div>
     <p class="pedia">Los diez bloques del informe que recibe el cliente al mandar su reporte.</p>
@@ -272,8 +274,8 @@ ol.decisiones li b { color: var(--tinta); }
 <div class="doc">
     <div class="doc-cab">
         <h3>El reporte mensual</h3>
-        <span class="fecha">artifact <span class="sha">3b60d286</span> · 1 sep</span>
         <span class="reloj">2 h 45</span>
+        <span class="fecha">artifact <span class="sha">3b60d286</span> · 1 sep</span>
         <span class="chip ok">Cerrado</span>
     </div>
     <p class="pedia">Los cuatro pasos del formulario que rellena el cliente cada cuatro semanas.</p>
@@ -299,8 +301,8 @@ ol.decisiones li b { color: var(--tinta); }
 <div class="doc">
     <div class="doc-cab">
         <h3>La pantalla de Evolución</h3>
+        <span class="reloj">34 min de código</span>
         <span class="fecha">artifact <span class="sha">8c717864</span> · 2 sep</span>
-        <span class="reloj">4 h 20</span>
         <span class="chip malo">Parado</span>
     </div>
     <p class="pedia">Cómo queda Seguimiento: el ciclo y sus bloques, los puntos de control y el
@@ -616,29 +618,45 @@ ol.decisiones li b { color: var(--tinta); }
 </ol>
 
 <h2>6 · En qué se fue el día</h2>
+<p class="intro">
+    La jornada fue de <b>10:00 a 21:30</b>. Lo que hay debajo es <b>lo que pasó entre un commit
+    y el siguiente</b>: eso sí está medido. Es el techo de cada bloque, porque ahí dentro caben
+    las paradas, y por eso no se suma a un total redondo.
+</p>
 <div class="tabla-envoltorio">
 <table>
-<thead><tr><th>Tramo</th><th>En qué</th><th>Cuánto</th></tr></thead>
+<thead><tr><th>Bloque</th><th>Qué</th><th>Duración</th></tr></thead>
 <tbody>
-<tr><td class="hora">13:16 · 13:24</td><td>Doc «Aplicar una favorita»</td><td>10 min</td></tr>
-<tr><td class="hora">13:24 · 14:03</td><td>Doc «Cómo abre Inicio», primera vuelta</td><td>39 min</td></tr>
-<tr><td class="hora">14:03 · 15:02</td><td>Doc «El informe del mes»</td><td>59 min</td></tr>
-<tr><td class="hora">15:02 · 17:47</td><td>Doc «El reporte mensual»</td><td>2 h 45</td></tr>
-<tr><td class="hora">17:47 · 18:18</td><td>Fin de semana en descanso y «Ver rutina»</td><td>31 min</td></tr>
-<tr><td class="hora">18:18 · 18:47</td><td>«Cómo abre Inicio», el cartel y el «de 250»</td><td>29 min</td></tr>
-<tr><td class="hora">18:47 · 19:44</td><td>Los cuatro fallos del informe y del reporte</td><td>57 min</td></tr>
-<tr><td class="hora">19:44 · 21:08</td><td>El vídeo: transcribir, auditar 26 puntos y arreglar</td><td>1 h 24</td></tr>
-<tr><td class="hora">21:08 · 21:36</td><td>El motor de cuadrar</td><td>28 min</td></tr>
-<tr><td class="hora">21:36 · 22:10</td><td>El «Total» de las medidas</td><td>34 min</td></tr>
-<tr><td class="hora">22:10 · 02:20</td><td>Doc «La pantalla de Evolución»: leer y cotejar</td><td>4 h 10</td></tr>
-<tr><td class="hora">02:20 · 03:24</td><td>Documento, Word, Notion y despliegue</td><td>1 h 04</td></tr>
-<tr><td class="hora">03:24 · 04:00</td><td>Cómo abre Inicio, con tu decisión de esta noche</td><td>36 min</td></tr>
+<tr><td class="hora">La mañana</td><td>El arranque: el margen de 1 a 4 plano en toda la app, la
+    calibración del día y el aviso de «Aplicar una favorita». Estaba a medias en el árbol y se
+    cerró todo junto, así que no hay commits que lo troceen</td><td>2 h 25</td></tr>
+<tr><td class="hora">Bloque 2</td><td>«Cómo abre Inicio», primera vuelta: el aviso rojo dentro
+    de la pestaña Dieta y el punto</td><td>39 min</td></tr>
+<tr><td class="hora">Bloque 3</td><td>«El informe del mes»: «Guárdamela como plantilla»</td>
+    <td>59 min</td></tr>
+<tr><td class="hora">Bloque 4</td><td>«El reporte mensual»: el viernes y la pregunta 5</td>
+    <td>2 h 45</td></tr>
+<tr><td class="hora">Bloque 5</td><td>El fin de semana en descanso y «Ver rutina»</td>
+    <td>31 min</td></tr>
+<tr><td class="hora">Bloque 6</td><td>«Cómo abre Inicio», segunda vuelta: el cartel rojo, el
+    «Ahora» del peri y el «de 250»</td><td>29 min</td></tr>
+<tr><td class="hora">Bloque 7</td><td>Los cuatro fallos del informe y del reporte: la semana del
+    ciclo, «Espaldas», «Modificar» en blanco y el paso 4</td><td>57 min</td></tr>
+<tr><td class="hora">Bloque 8</td><td>El vídeo con Gonzalo: transcribir, auditar los 26 puntos y
+    arreglar</td><td>1 h 24</td></tr>
+<tr><td class="hora">Bloque 9</td><td>El motor de cuadrar, con el intento de proponer alimentos
+    que se revirtió</td><td>28 min</td></tr>
+<tr><td class="hora">Bloque 10</td><td>«La pantalla de Evolución»: leerla, transcribirla,
+    cotejarla en tres frentes y el arreglo del «Total» de las medidas</td><td>34 min de código,
+    el resto en leer y cotejar</td></tr>
 </tbody>
 </table>
 </div>
 <p class="intro" style="margin-top:14px">
-    Los tramos salen de la hora de los commits. El de Evolución y el de la entrega no tienen
-    commits, así que van medidos hasta el final del despliegue. <b>Total: 14 h 44.</b>
+    De los diez bloques, <b>nueve están medidos entre commits y suman 9 h 06</b>. La mañana y la
+    lectura de Evolución no tienen commits que los acoten: van estimados por diferencia contra
+    tus dos extremos, las 10:00 y las 21:30. <b>Lo de después</b> (este documento, el Word, la
+    daily y los dos despliegues) <b>cayó fuera de la jornada</b> y no se cuenta aquí.
 </p>
 
 <h2>7 · El despliegue</h2>
