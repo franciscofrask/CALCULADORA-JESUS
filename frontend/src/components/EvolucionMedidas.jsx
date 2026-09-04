@@ -1,5 +1,6 @@
 /**
- * LA EVOLUCIÓN DE CADA MEDIDA. La misma tabla para el coach y para el cliente.
+ * LA EVOLUCIÓN DE CADA MEDIDA. La misma pieza para el coach y para el cliente, con dos
+ * formas de leerla.
  *
  * Vivía suelta dentro de la ficha del panel (punto 35 del doc del 07-08). El doc del 16-08
  * (T6) la lleva también a la pantalla de Evolución del cliente: "la pantalla de Evolución
@@ -7,16 +8,32 @@
  * de copiarla, porque son la misma tabla y tienen que decir lo mismo: si un día cambia la
  * forma de leer la diferencia, cambia en los dos sitios a la vez.
  *
+ * EN EL PANEL (tono admin): la tabla de siempre, una fila por medida y una columna por
+ * toma, hasta ocho, con la diferencia con la anterior y el «Total» contra la primera.
  * Tabla y no gráfico a propósito: son diez series a la vez, y en un gráfico de diez líneas
- * no se lee ninguna. Aquí cada fila es una medida y cada columna una fecha.
+ * no se lee ninguna.
  *
- * Lo único que cambia entre los dos sitios es el `tono`: el panel es oscuro a pelo y la app
- * del cliente va con los colores del tema (que tiene modo claro). Y el pie de la tabla: en
- * el lado del cliente habla el entrenador en primera persona («eso te lo digo yo, no el
- * color», doc de Jesús del 2-09) y en el panel se dice en tercera, que ahí lo lee el coach.
+ * EN LA APP DEL CLIENTE (tono cliente): DOS TOMAS Y SU DIFERENCIA (doc de Jesús del 2-09,
+ * «Las medidas: comparar dos, como las fotos»; hecho el 4-09, fase 3). «La tabla de cuatro
+ * columnas se cambia por dos tomas y su diferencia, con el mismo selector que las fotos.»
+ * A la derecha la última toma («3 sept · hoy»), a la izquierda el inicio de este ciclo (o
+ * la primera toma si no hay ciclo), y «Elegir otra toma» abre el mismo selector que la
+ * comparativa de fotos. Si una medida falta en una de las dos se dice («no la mediste en
+ * esa toma»), nunca un hueco. Las tomas llegan de GET /reports/puntos (`tomas_medidas`),
+ * que ya funde las tres puertas por las que entra una medida.
+ *
+ * Lo único que cambia entre los dos sitios, aparte de la forma, es el `tono`: el panel es
+ * oscuro a pelo y la app del cliente va con los colores del tema (que tiene modo claro). Y
+ * el pie: en el lado del cliente habla el entrenador en primera persona («eso te lo digo
+ * yo, no el color», doc de Jesús del 2-09) y en el panel se dice en tercera, que ahí lo
+ * lee el coach.
  */
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { MEDIDAS, valorAnterior, diferencia } from '../lib/medidas';
+import { useAuth } from '../context/AuthContext';
+import usePuntos from '../hooks/usePuntos';
+import SelectorDeTomas from './seguimiento/SelectorDeTomas';
+import { prepararSelector, leerAtajoDe, fechaCorta } from '../lib/comparativaFotos';
 
 // Las columnas caben hasta cierto punto: se enseñan las últimas y se dice cuántas quedan
 // fuera, que es mejor que cortar en silencio.
@@ -85,6 +102,9 @@ const TONOS = {
  *
  * `medidas_sueltas` ya viajaba en el perfil, así que esto no necesitó backend. Una toma por
  * día: si el mismo día hay reporte y toma suelta, manda la del reporte, que es la revisada.
+ *
+ * Desde la fase 3 (4-09) el cliente lee `tomas_medidas` de /reports/puntos, que hace esta
+ * misma fusión en el servidor; esto se queda para el panel y como red si esa llamada falla.
  */
 const _tomasDelPerfil = (perfil) => {
     const fuera = [];
@@ -101,11 +121,166 @@ const _tomasDelPerfil = (perfil) => {
     return fuera;
 };
 
-const EvolucionMedidas = ({ reports, perfil = null, tono = 'cliente', titulo }) => {
+/** La caja vacía, la misma en los dos tonos. */
+const SinMedidas = ({ t, tono, cabecera }) => (
+    <div className={t.caja} data-testid="evolucion-medidas-vacio">
+        <p className={`${t.titulo} mb-2`}>{cabecera}</p>
+        {/* «Ningún reporte con medidas» era media verdad y sonaba a reproche: la serie mira
+            también las sueltas y las del alta, así que si sigue vacía es que no hay ninguna
+            por ninguna de las tres puertas. */}
+        <p className={t.vacio}>
+            {tono === 'admin'
+                ? 'Todavía no ha apuntado ninguna medida.'
+                : 'Todavía no has apuntado ninguna medida. Puedes hacerlo cuando quieras con «Añadir medidas».'}
+        </p>
+    </div>
+);
+
+/**
+ * EL LADO DEL CLIENTE: dos tomas y su diferencia.
+ *
+ * @param tomas   [{id, fecha, measurements, grupo, marca}] ordenadas de antigua a reciente
+ * @param puntos  lo de /reports/puntos (para los atajos y los ciclos del selector); null si
+ *                no llegó y las tomas vienen de la red local
+ */
+const MedidasEnDosTomas = ({ t, cabecera, tomas, puntos, sinHistorico }) => {
+    const [elegidaId, setElegidaId] = useState(null);
+    const [selectorAbierto, setSelectorAbierto] = useState(false);
+
+    const derecha = tomas[tomas.length - 1];
+    const datosSelector = useMemo(() => ({ ...(puntos || {}), tomas_medidas: tomas }), [puntos, tomas]);
+    const selector = useMemo(
+        () => prepararSelector({ tipo: 'medidas', datos: datosSelector, derechaId: derecha?.id || null }),
+        [datosSelector, derecha],
+    );
+
+    // LA DE LA IZQUIERDA: la elegida a mano; si no, el inicio de este ciclo; si no, la
+    // primera toma; y si nada de eso vale (o es la misma que la derecha), la anterior a
+    // la última. Con una sola toma no hay izquierda, y se dice.
+    const izquierda = useMemo(() => {
+        const atajos = puntos?.atajos_medidas || {};
+        const candidatas = [
+            elegidaId,
+            leerAtajoDe(atajos, 'inicio_de_este_ciclo').id,
+            leerAtajoDe(atajos, 'mi_primera_foto').id,
+            tomas.length > 1 ? tomas[tomas.length - 2].id : null,
+        ];
+        for (const id of candidatas) {
+            const e = id != null ? selector.buscar(id) : null;
+            if (e && e.id !== derecha.id) return e;
+        }
+        return null;
+    }, [elegidaId, puntos, tomas, selector, derecha]);
+
+    const filas = MEDIDAS
+        .map(({ key, label }) => ({
+            key,
+            label,
+            antes: izquierda ? valorAnterior(izquierda.toma.measurements, key) : null,
+            ahora: valorAnterior(derecha.measurements, key),
+        }))
+        .filter(f => f.antes != null || f.ahora != null);
+
+    // La fecha en una línea y el rótulo debajo: en un móvil «23 ago · inicio del ciclo» se
+    // partía en cuatro líneas dentro de una columna de 70 px.
+    const cabeceraDe = (entrada, esHoy) => (
+        <>
+            <span className="block whitespace-nowrap">{fechaCorta(entrada.fecha)}</span>
+            <span className="block text-[10px] font-normal">{esHoy ? 'hoy' : entrada.cabecera}</span>
+        </>
+    );
+    // Lo mismo con lo que falta: en dos líneas fijas, que a lo ancho de un móvil «no la
+    // mediste en esa toma» se rompía en cuatro y la tabla se hacía eterna.
+    const noLaMidio = (
+        <span className={`${t.igual} text-[10px] leading-tight`}>
+            <span className="block whitespace-nowrap">no la mediste</span>
+            <span className="block whitespace-nowrap">en esa toma</span>
+        </span>
+    );
+
+    return (
+        <div className={t.caja} data-testid="evolucion-medidas">
+            <div className="flex items-baseline justify-between gap-2 flex-wrap mb-3">
+                <p className={t.titulo}>{cabecera}</p>
+                <p className={t.apunte}>
+                    {tomas.length} {tomas.length === 1 ? 'toma' : 'tomas'} · en cm
+                </p>
+            </div>
+            <table className="w-full text-xs" data-testid="medidas-dos-tomas">
+                <thead>
+                    <tr className={t.cabecera}>
+                        <th className="text-left font-normal px-2 py-1.5 align-bottom">Medida</th>
+                        <th className="text-right font-normal px-2 py-1.5 align-bottom" data-testid="medidas-cabecera-antes">
+                            {izquierda ? cabeceraDe(izquierda, false) : 'antes'}
+                        </th>
+                        <th className="text-right font-normal px-2 py-1.5 align-bottom" data-testid="medidas-cabecera-ahora">
+                            {cabeceraDe(derecha, true)}
+                        </th>
+                        <th className="text-right font-normal px-2 py-1.5 align-bottom">Cambio</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {filas.map(({ key, label, antes, ahora }) => {
+                        const d = antes != null && ahora != null ? diferencia(ahora, antes) : null;
+                        return (
+                            <tr key={key} className={t.fila} data-testid={`medida-${key}`}>
+                                <td className="px-2 py-1.5 text-foreground/70">{label}</td>
+                                {/* Si falta en una de las dos se dice, nunca un hueco (doc de
+                                    Jesús del 2-09: «nunca enseñar un hueco»). */}
+                                <td className="px-2 py-1.5 text-right tabular-nums">
+                                    {antes != null ? <span className={t.valor}>{antes}</span> : noLaMidio}
+                                </td>
+                                <td className="px-2 py-1.5 text-right tabular-nums">
+                                    {ahora != null ? <span className={`${t.valor} font-bold`}>{ahora}</span> : noLaMidio}
+                                </td>
+                                <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap">
+                                    {d == null
+                                        ? <span className={`${t.igual} text-[10px]`}>sin comparar</span>
+                                        : d.signo === 0
+                                            ? <span className={t.igual}>igual</span>
+                                            : <span className={`font-bold ${d.signo > 0 ? t.sube : t.baja}`}>{d.texto}</span>}
+                                </td>
+                            </tr>
+                        );
+                    })}
+                </tbody>
+            </table>
+            {!izquierda && (
+                <p className={`${t.apunte} mt-2`} data-testid="medidas-falta-una">
+                    Con dos tomas te enseñamos la diferencia. Te falta una.
+                </p>
+            )}
+            {tomas.length > 1 && (
+                <button type="button" onClick={() => setSelectorAbierto(true)} data-testid="elegir-otra-toma"
+                    className="btn-outline-brand w-full mt-3 px-3 py-2.5 text-xs">
+                    Elegir otra toma
+                </button>
+            )}
+            <p className={t.pie}>{t.pieTexto}</p>
+
+            {selectorAbierto && (
+                <SelectorDeTomas tipo="medidas" datos={datosSelector}
+                    seleccionado={izquierda?.id || null} derechaId={derecha.id}
+                    aviso={sinHistorico ? 'No se pudo cargar tu histórico por ciclos. Prueba otra vez en un momento.' : null}
+                    onElegir={(id) => setElegidaId(id)}
+                    onCerrar={() => setSelectorAbierto(false)} />
+            )}
+        </div>
+    );
+};
+
+const EvolucionMedidas = ({ reports, perfil = null, tono = 'cliente', titulo, api = null }) => {
     const t = TONOS[tono] || TONOS.cliente;
     const cabecera = titulo || (tono === 'admin' ? 'Evolución de las medidas' : 'Tus medidas');
+    const esCliente = tono !== 'admin';
 
-    const sesiones = React.useMemo(() => {
+    // El `api` de la sesión, si no llega por prop: ReportsPage no lo pasa y no hace falta
+    // que lo haga. En el panel (tono admin) el hook se queda apagado: el que mira no es el
+    // cliente y no tiene /reports/puntos.
+    const { api: apiDeSesion } = useAuth();
+    const { datos: puntos, cargando, error } = usePuntos(api || apiDeSesion, { activo: esCliente });
+
+    const sesiones = useMemo(() => {
         const deReportes = (reports || [])
             .filter(r => r?.created_at && r?.measurements && Object.keys(r.measurements).length);
         const diasConReporte = new Set(deReportes.map(r => String(r.created_at).slice(0, 10)));
@@ -129,21 +304,46 @@ const EvolucionMedidas = ({ reports, perfil = null, tono = 'cliente', titulo }) 
         return { todas: conMedidas.length, vistas, conAnio: anios.size > 1, completas: conMedidas };
     }, [reports, perfil]);
 
-    if (sesiones.vistas.length === 0) {
+    // LAS TOMAS DEL CLIENTE: las de /reports/puntos. Si esa llamada falla, la serie local
+    // (las tres puertas) sigue valiendo para no dejar la pantalla en blanco; lo que no hay
+    // entonces son los atajos ni los ciclos, y el selector lo dice.
+    const tomasCliente = useMemo(() => {
+        if (!esCliente) return null;
+        if (puntos && Array.isArray(puntos.tomas_medidas)) {
+            return [...puntos.tomas_medidas]
+                .filter(x => x?.id && x?.fecha && x?.measurements && Object.keys(x.measurements).length)
+                .map(x => ({ ...x, fecha: String(x.fecha).slice(0, 10) }))
+                .sort((a, b) => a.fecha.localeCompare(b.fecha));
+        }
+        if (cargando) return null;
+        return sesiones.completas.map(r => ({
+            id: String(r.created_at).slice(0, 10),
+            fecha: String(r.created_at).slice(0, 10),
+            measurements: r.measurements,
+            grupo: null,
+            marca: null,
+        }));
+    }, [esCliente, puntos, cargando, sesiones]);
+
+    if (esCliente) {
+        if (tomasCliente == null) {
+            return (
+                <div className={t.caja} data-testid="evolucion-medidas-cargando">
+                    <p className={`${t.titulo} mb-2`}>{cabecera}</p>
+                    <p className={t.vacio}>Cargando tus medidas…</p>
+                </div>
+            );
+        }
+        if (!tomasCliente.length) return <SinMedidas t={t} tono={tono} cabecera={cabecera} />;
+        const sinHistorico = !(puntos && Array.isArray(puntos.tomas_medidas)) && Boolean(error);
         return (
-            <div className={t.caja} data-testid="evolucion-medidas-vacio">
-                <p className={`${t.titulo} mb-2`}>{cabecera}</p>
-                {/* «Ningún reporte con medidas» era media verdad y sonaba a reproche: ahora
-                    la tabla mira también las sueltas y las del alta, así que si sigue vacía
-                    es que no hay ninguna por ninguna de las tres puertas. */}
-                <p className={t.vacio}>
-                    {tono === 'admin'
-                        ? 'Todavía no ha apuntado ninguna medida.'
-                        : 'Todavía no has apuntado ninguna medida. Puedes hacerlo cuando quieras con «Añadir medidas».'}
-                </p>
-            </div>
+            <MedidasEnDosTomas t={t} cabecera={cabecera} tomas={tomasCliente}
+                puntos={puntos && Array.isArray(puntos.tomas_medidas) ? puntos : null}
+                sinHistorico={sinHistorico} />
         );
     }
+
+    if (sesiones.vistas.length === 0) return <SinMedidas t={t} tono={tono} cabecera={cabecera} />;
 
     const fuera = sesiones.todas - sesiones.vistas.length;
     return (

@@ -42,6 +42,7 @@
  * una línea («Tu objetivo: ganar masa») sacada del `goal` del cuestionario.
  */
 import React, { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
@@ -247,9 +248,14 @@ const TarjetaDelObjetivo = ({ objetivoActual, foco, ciclo, conCiclo }) => {
  *     ella se pinta la tarjeta sin «Vas por».
  * Con las dos, manda la ficha. Si la ficha trae `ciclo_actual` y no se pasan
  * `desdeElCiclo` / `semanasDelCiclo`, salen de ahí (`inicio` y `semanas`).
+ *
+ * `conComparador`: pinta «Comparar con cualquier punto ›» al pie de «Desde que entraste»
+ * (fase 3 del doc del 2-09, 4-09). Solo lo pasa la Evolución del cliente: en el panel del
+ * entrenador la misma gráfica no lleva el enlace, porque va a Seguimiento del que mira.
  */
 const GraficaDePeso = ({ puntos, alto = 'h-56', conResumen = true, objetivo = null, perfil = null,
-                         desdeElCiclo = null, semanasDelCiclo = null }) => {
+                         desdeElCiclo = null, semanasDelCiclo = null, conComparador = false }) => {
+    const navigate = useNavigate();
     const ciclo = perfil?.ciclo_actual || null;
     // El objetivo que manda para el color del cambio: el actual de la ficha (que matiza al
     // del ciclo), y si no hay ficha, la clave suelta. Sin nada, sin dirección.
@@ -384,10 +390,16 @@ const GraficaDePeso = ({ puntos, alto = 'h-56', conResumen = true, objetivo = nu
                     <Fila etiqueta="Cuando entraste pesabas">{kg(datos[0].peso)} kg</Fila>
                     <Fila etiqueta="Ahora">{kg(ultimoDeTodos)} kg</Fila>
                     <Fila etiqueta="Llevas con nosotros desde">{_mesYAnio(datos[0].ts)}</Fila>
-                    {/* AQUÍ VA «Comparar con cualquier punto ›» cuando exista el comparador
-                        de pesajes (doc del 2-09: «¿cómo estaba yo en el ciclo 1? ya se
-                        contesta en el comparador»). Es de una fase posterior; hasta entonces
-                        no se pinta un enlace que no lleva a ningún sitio. */}
+                    {/* «¿Cómo estaba yo en el ciclo 1?» se contesta en el comparador (doc
+                        del 2-09; fase 3, 4-09): este bloque acaba en el enlace que lo abre,
+                        con el punto de hoy ya elegido. Solo en la Evolución del cliente. */}
+                    {conComparador && (
+                        <button type="button" data-testid="comparar-con-cualquier-punto"
+                            onClick={() => navigate('/dashboard/reports?abrir=comparar')}
+                            className="text-sm font-bold text-brand hover:underline pt-1">
+                            Comparar con cualquier punto ›
+                        </button>
+                    )}
                 </div>
             )}
         </div>

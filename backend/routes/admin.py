@@ -3099,3 +3099,107 @@ async def admin_delete_food(food_id: str, user = Depends(solo_admin_borra_catalo
     invalidate_foods_cache()
     await audit(user, "baja", f"Eliminó el alimento {food_id}")
     return {"ok": True}
+
+
+# ==================== LOS PUNTOS DE CONTROL Y EL PICO DE FORMA (fase 3 del doc de Jesús del 2-09; 4-09) ====================
+
+@router.get("/clients/{client_id}/puntos")
+async def get_puntos_del_cliente(client_id: str, user = Depends(get_admin_user)):
+    """Lo mismo que ve el cliente en `GET /reports/puntos`, para la ficha del panel
+    (core/puntos.puntos_de): el equipo compara con los mismos puntos, fotos y medidas que
+    él. El mismo candado que el resto de la ficha: equipo, y `assert_client_access`."""
+    profile = await db.client_profiles.find_one({"id": client_id}, {"_id": 0})
+    assert_client_access(user, profile)
+    from core.puntos import puntos_de
+    return await puntos_de(profile)
+
+
+# Los dos «no» del pico de forma, con frase humana (regla de la casa: errores nunca técnicos).
+PICO_EN_CICLO_CERRADO = "Ese ciclo ya está cerrado: el pico de forma se marca mientras el ciclo está abierto"
+REPORTE_SIN_CICLO = "Este reporte no tiene ciclo apuntado"
+PICO_SOLO_EN_MENSUAL = "El pico de forma se marca en un reporte mensual, que es el que lleva fotos y medidas"
+
+
+async def _reporte_y_ciclo_para_el_pico(report_id: str, user: dict):
+    """El reporte, la ficha de su cliente y su ciclo del cuaderno, o el 404/409 que toque.
+
+    Jesús (doc del 2-09): «uno por ciclo, se marca cuando se ve, no cuando toca, y se puede
+    mover mientras el ciclo esté abierto». De ahí los candados: el reporte tiene que ser un
+    punto (mensual: es el que lleva fotos y medidas), caer en un ciclo del cuaderno (por el
+    campo escrito o, en los de antes del 4-09, por su fecha; un tramo aproximado no vale) y
+    ese ciclo tiene que seguir abierto. Un entrenador solo sobre los clientes que puede ver
+    (`assert_client_access`)."""
+    report = await db.reports.find_one(
+        {"id": report_id}, {"_id": 0, "id": 1, "client_id": 1, "ciclo_id": 1, "tipo": 1, "created_at": 1})
+    if not report:
+        raise HTTPException(status_code=404, detail="Reporte no encontrado")
+    profile = await db.client_profiles.find_one({"id": report["client_id"]}, {"_id": 0})
+    assert_client_access(user, profile)
+    from core.puntos import TIPOS_QUE_SON_PUNTO
+    if report.get("tipo") not in TIPOS_QUE_SON_PUNTO:
+        raise HTTPException(status_code=409, detail=PICO_SOLO_EN_MENSUAL)
+    ciclo_id = report.get("ciclo_id")
+    if not ciclo_id:
+        # EL MISMO CRITERIO QUE LA LISTA DE PUNTOS (4-09). `GET /puntos` resuelve por fecha el
+        # ciclo de los reportes anteriores al cuaderno (los de antes del 4-09 no llevan
+        # `ciclo_id` escrito) y aqui se miraba solo el campo: el panel enseñaba el reporte
+        # dentro del ciclo abierto y al marcarlo respondia «no tiene ciclo apuntado». Se
+        # resuelve igual que alli, mirando el cuaderno por el dia del reporte, y si cae en
+        # un ciclo apuntado se deja escrito en el reporte para las siguientes veces. Lo que
+        # no cae en ningun ciclo del cuaderno (tramos aproximados) sigue sin poder marcarse:
+        # ahi no hay ciclo de verdad donde colgar el pico.
+        from core.ciclos import ciclo_de
+        resuelto = await ciclo_de(profile, report.get("created_at"))
+        ciclo_id = resuelto.get("ciclo_id")
+        if ciclo_id:
+            await db.reports.update_one({"id": report_id}, {"$set": {
+                "ciclo_id": ciclo_id, "ciclo_numero": resuelto.get("ciclo_numero"),
+                "ciclo_inicio": resuelto.get("ciclo_inicio"),
+                "semana_del_ciclo": resuelto.get("semana_del_ciclo"), "bloque": resuelto.get("bloque")}})
+    if not ciclo_id:
+        raise HTTPException(status_code=409, detail=REPORTE_SIN_CICLO)
+    ciclo = await db.ciclos.find_one({"id": ciclo_id}, {"_id": 0})
+    if not ciclo:
+        raise HTTPException(status_code=409, detail=REPORTE_SIN_CICLO)
+    if ciclo.get("fin"):
+        raise HTTPException(status_code=409, detail=PICO_EN_CICLO_CERRADO)
+    return report, profile, ciclo
+
+
+async def _quien_es(profile: dict, client_id: str) -> str:
+    cliente = await db.users.find_one({"id": (profile or {}).get("user_id")}, {"_id": 0, "name": 1, "email": 1})
+    return (cliente or {}).get("name") or (cliente or {}).get("email") or client_id
+
+
+@router.put("/reports/{report_id}/pico-de-forma")
+async def marcar_pico_de_forma(report_id: str, user = Depends(get_admin_user)):
+    """Marca ese reporte como EL pico de forma de su ciclo (`ciclos.pico_de_forma`): uno
+    por ciclo, así que pisa el que hubiera. Se guarda quién y cuándo, y queda en la
+    auditoría como el resto del panel. Devuelve el ciclo tal y como queda."""
+    from core.ciclos import dia_de_espana
+    report, profile, ciclo = await _reporte_y_ciclo_para_el_pico(report_id, user)
+    await db.ciclos.update_one(
+        {"id": ciclo["id"]},
+        {"$set": {"pico_de_forma": report_id,
+                  "pico_de_forma_puesto_por": user.get("name") or user.get("email") or "el equipo",
+                  "pico_de_forma_puesto_en": datetime.now(timezone.utc).isoformat()}})
+    quien = await _quien_es(profile, report["client_id"])
+    await audit(user, "pico_de_forma",
+                f"Pico de forma de {quien}: reporte del {dia_de_espana(report.get('created_at'))} "
+                f"(ciclo {ciclo.get('numero')})")
+    return await db.ciclos.find_one({"id": ciclo["id"]}, {"_id": 0})
+
+
+@router.delete("/reports/{report_id}/pico-de-forma")
+async def quitar_pico_de_forma(report_id: str, user = Depends(get_admin_user)):
+    """Quita el pico de forma de ese ciclo, con el mismo candado (solo con el ciclo
+    abierto). Si ese reporte no era el pico, no hay nada que quitar y el ciclo vuelve tal
+    cual: pulsar dos veces no es un error."""
+    report, profile, ciclo = await _reporte_y_ciclo_para_el_pico(report_id, user)
+    if ciclo.get("pico_de_forma") == report_id:
+        await db.ciclos.update_one(
+            {"id": ciclo["id"]},
+            {"$set": {"pico_de_forma": None, "pico_de_forma_puesto_por": None, "pico_de_forma_puesto_en": None}})
+        quien = await _quien_es(profile, report["client_id"])
+        await audit(user, "pico_de_forma", f"Pico de forma de {quien}: quitado (ciclo {ciclo.get('numero')})")
+    return await db.ciclos.find_one({"id": ciclo["id"]}, {"_id": 0})

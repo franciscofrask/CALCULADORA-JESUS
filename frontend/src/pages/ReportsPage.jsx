@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
 import GraficaDePeso from '../components/GraficaDePeso';
@@ -10,6 +10,8 @@ import {
 import InformeMensual from '../components/reports/InformeMensual';
 import EvolucionMedidas from '../components/EvolucionMedidas';
 import ComparativaCliente from '../components/ComparativaCliente';
+import PuntosDeControl from '../components/puntos/PuntosDeControl';
+import Comparador from '../components/puntos/Comparador';
 import Diario from '../components/Diario';
 import TresFotos from '../components/reports/TresFotos';
 import TusFotosYMetricas from '../components/TusFotosYMetricas';
@@ -435,13 +437,30 @@ const ReportsPage = () => {
     // desde la fila «Hoy toca pesarte» de Inicio («Todo lo validado antes del 1 de
     // septiembre», bloque 4: «al tocarla le abre el campo en Seguimiento -- no le manda a
     // buscarlo»).
+    // Y «?abrir=comparar» aterriza en el comparador de puntos (fase 3 del doc del 2-09,
+    // 4-09): es a donde apuntan «Comparar con cualquier punto ›» de la gráfica de peso y
+    // «Comparar este punto con otro ›» del detalle de un punto (este con `&punto=ID`, el
+    // punto que ya va elegido).
     const abrirPedida = new URLSearchParams(window.location.search).get('abrir');
     const aplazarPedido = new URLSearchParams(window.location.search).get('aplazar') === '1';
     const pesarseHoy = abrirPedida === 'peso';
     const [seccionAbierta, setSeccionAbierta] = useState(
         tipoRevision || aplazarPedido ? 'form'
             : abrirPedida === 'evolucion' || abrirPedida === 'peso' ? 'evolution'
-                : abrirPedida === 'diario' ? 'diario' : null);
+                : abrirPedida === 'diario' ? 'diario'
+                    : abrirPedida === 'comparar' ? 'comparar' : null);
+    // LOS DOS ENLACES AL COMPARADOR SALEN DE DENTRO DE ESTA MISMA PANTALLA (la gráfica y el
+    // detalle de un punto viven en Evolución), así que navegan a la misma ruta con otra
+    // consulta y la página no se vuelve a montar: el estado inicial de arriba no se
+    // reevalúa. Aquí se escucha la consulta y se cambia de sección cuando cambia.
+    const location = useLocation();
+    const navigate = useNavigate();
+    const puntoPedido = new URLSearchParams(location.search).get('punto');
+    useEffect(() => {
+        const abrir = new URLSearchParams(location.search).get('abrir');
+        if (abrir === 'comparar') setSeccionAbierta('comparar');
+        else if (abrir === 'evolucion') setSeccionAbierta('evolution');
+    }, [location.search]);
     // EL FORMULARIO NO SE ABRE SIN LLAVE (24-08): ni por «?aplazar=1» ni por un enlace
     // viejo. Al que solo tiene Seguimiento en lectura se le deja en la portada.
     const vista = seccionAbierta === 'form' && !puedeMandarReporte ? null : seccionAbierta;
@@ -591,11 +610,20 @@ const ReportsPage = () => {
                 />
             )}
 
-            {/* Al entrar en una sección, la portada deja sitio y aparece la vuelta. */}
-            {vista && (
+            {/* Al entrar en una sección, la portada deja sitio y aparece la vuelta. El
+                comparador cuelga de Evolución (se entra desde ahí), así que su vuelta es a
+                Evolución y no a la portada; va por la URL para que la sección y la
+                consulta digan lo mismo si recarga. */}
+            {vista && vista !== 'comparar' && (
                 <button onClick={() => setSeccionAbierta(null)} data-testid="volver-seguimiento"
                     className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground">
                     <ChevronLeft className="w-4 h-4" /> Seguimiento
+                </button>
+            )}
+            {vista === 'comparar' && (
+                <button onClick={() => navigate('/dashboard/reports?abrir=evolucion', { replace: true })} data-testid="volver-evolucion"
+                    className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground">
+                    <ChevronLeft className="w-4 h-4" /> Evolución
                 </button>
             )}
 
@@ -699,7 +727,8 @@ const ReportsPage = () => {
                                     salían dos títulos seguidos para lo mismo. */}
                                 <GraficaDePeso puntos={weightData} perfil={profile}
                                     desdeElCiclo={profile?.cycle_start}
-                                    semanasDelCiclo={profile?.cycle_total_weeks} />
+                                    semanasDelCiclo={profile?.cycle_total_weeks}
+                                    conComparador={evolucionCompleta} />
                             </div>
                         ) : (
                             <div className="pt-4 border-t border-border text-center">
@@ -714,6 +743,11 @@ const ReportsPage = () => {
 
                     {evolucionCompleta && (
                         <>
+                            {/* TUS PUNTOS DE CONTROL (doc de Jesús del 2-09; fase 3, 4-09):
+                                uno por reporte, del más antiguo al de hoy, debajo del peso y
+                                antes de la comparativa. Al tocar uno se abre su detalle en el
+                                mismo sitio, y desde ahí se va al comparador. */}
+                            <PuntosDeControl api={api} />
                             <ComparativaCliente api={api} reports={reports} faseDesde={profile?.fase_desde} />
                             {/* La misma tabla que la ficha del panel, con el tono de la app del
                                 cliente: la diferencia con la toma anterior y la columna Total.
@@ -734,6 +768,21 @@ const ReportsPage = () => {
                         <UltimoAjuste api={api} />
                     )}
                 </div>
+            )}
+
+            {/* ── EL COMPARADOR DE PUNTOS (fase 3 del doc del 2-09, 4-09) ──
+                Dos puntos, nunca tres: se elige el otro (el de hoy ya va elegido, o el que
+                llega en `?punto=`), se ven las dos fotos con peso, medidas, grasa y macros,
+                y se genera la imagen si el cliente quiere. Va detrás del mismo interruptor
+                que el resto de la Evolución completa. */}
+            {vista === 'comparar' && (
+                evolucionCompleta ? (
+                    <Comparador api={api} puntoInicial={puntoPedido} />
+                ) : (
+                    <div className="bg-card border border-border rounded-2xl p-8 text-center">
+                        <p className="text-sm text-muted-foreground">El comparador todavía no está disponible.</p>
+                    </div>
+                )
             )}
 
             {/* ── EL DIARIO (T5) ──

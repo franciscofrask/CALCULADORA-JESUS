@@ -1631,3 +1631,21 @@ async def publicar_informe(report_id: str, user=Depends(get_admin_user)):
             await avisar_ajustes_nuevos(perfil["user_id"])
 
     return {"ok": True, "informe_estado": "entregado", "informe": informe}
+
+
+# ==================== LOS PUNTOS DE CONTROL (fase 3 del doc de Jesús del 2-09; 4-09) ====================
+
+@router.get("/puntos")
+async def get_mis_puntos(user = Depends(get_current_user)):
+    """Los puntos de control del cliente, el comparador y el selector de fotos y medidas,
+    en una sola respuesta (core/puntos.puntos_de). Fase 3 del doc de Jesús del 2-09:
+    «un punto es un reporte», «del más antiguo al de hoy», con sus etiquetas (pico de
+    forma, peso máximo, peso mínimo), sus fotos, sus medidas, su grasa y «los macros que
+    llevaba entonces». El equipo ve exactamente lo mismo por
+    `GET /admin/clients/{id}/puntos` (routes/admin.py). Sin candado de plan, como
+    `/reports/evolution`: la evolución es de todos."""
+    profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+    from core.puntos import puntos_de
+    return await puntos_de(profile)

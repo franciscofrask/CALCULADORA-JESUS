@@ -19,6 +19,7 @@ import { PlanBadge } from './ClientDashboard';
 import { sexoLabel, objetivoLabel, equipamientoLabel, suplementoCatLabel, EQUIPAMIENTO_OPCIONES, plural, estadoClienteLabel, estadoDeAcceso } from '../lib/labels';
 import { OBJETIVOS, nombreDelObjetivo, normalizarObjetivo } from '../lib/objetivos';
 import ObjetivoDelCliente from '../components/panel/ObjetivoDelCliente';
+import PicoDeForma, { EtiquetasDelPunto, puntoDelReporte } from '../components/panel/PicoDeForma';
 import { construirComparativa, TITULO_ETIQUETA } from '../lib/comparativaFotos';
 import { BIBLIOTECA_DE_CLIENTES } from '../lib/menuFuentes';
 import { MEDIDAS, valorAnterior, diferencia } from '../lib/medidas';
@@ -4571,6 +4572,17 @@ const ReportsFeedbackList = ({ initialReports, clientId, profile, onObjetivoApli
     const [savingId, setSavingId] = useState(null);
     const [showAll, setShowAll] = useState(false);
     const [detalleId, setDetalleId] = useState(null);   // reporte abierto en el modal
+    // LOS PUNTOS DE EVOLUCIÓN DE ESTE CLIENTE (fase 3 del doc de Jesús del 2-09; 4-09): qué
+    // reporte es un punto, de qué ciclo, y sus etiquetas (pico de forma, peso máximo, peso
+    // mínimo). Se piden UNA vez al montar la lista y los comparten las filas (las pastillas)
+    // y el modal (el bloque de marcar el pico). Si el servidor no los da, no se pinta nada.
+    const [puntos, setPuntos] = useState(null);
+    const cargarPuntos = useCallback(() => {
+        api.get(`/admin/clients/${clientId}/puntos`)
+            .then(r => setPuntos(r.data || null))
+            .catch(e => { console.error('No se pudieron cargar los puntos del cliente', e); });
+    }, [api, clientId]);
+    useEffect(() => { setPuntos(null); cargarPuntos(); }, [cargarPuntos]);
     // EL INFORME, AQUÍ DENTRO (T9 del doc 16-08). Se genera solo al enviar el reporte y
     // espera a que Jesús lo mire: hasta ahora el endpoint ya se lo permitía y no había
     // pantalla, así que el informe del cliente salía sin que nadie lo hubiera visto.
@@ -4642,6 +4654,9 @@ const ReportsFeedbackList = ({ initialReports, clientId, profile, onObjetivoApli
                             {new Date(r.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </span>
                         {r.weight != null && <span className="text-[#FF671F] font-bold text-sm tabular-nums">{r.weight} kg</span>}
+                        {/* Las etiquetas del punto (fase 3): pico de forma, peso máximo y
+                            peso mínimo. Solo si el reporte es un punto y las trae. */}
+                        <EtiquetasDelPunto punto={puntoDelReporte(puntos, r.id)} />
                         <span className="ml-auto flex items-center gap-2 flex-shrink-0">
                             {/* Lo primero que hay que ver de un reporte es si su informe
                                 está esperando: es trabajo pendiente, no un adorno. */}
@@ -4678,6 +4693,10 @@ const ReportsFeedbackList = ({ initialReports, clientId, profile, onObjetivoApli
                             {abierto.training_compliance != null && <span className="text-white/50">Entreno <b className="text-white">{abierto.training_compliance}%</b></span>}
                             {abierto.nutrition_compliance != null && <span className="text-white/50">Nutrición <b className="text-white">{abierto.nutrition_compliance}%</b></span>}
                         </div>
+                        {/* EL PICO DE FORMA SE MARCA AQUÍ, con la foto y el peso del reporte
+                            delante (fase 3 del doc de Jesús del 2-09; 4-09). Solo sale si el
+                            reporte es un punto de Evolución: un quincenal no lo es. */}
+                        <PicoDeForma api={api} reporte={abierto} puntos={puntos} onCambio={cargarPuntos} />
                         {/* Las tres preguntas del formulario de siempre (punto 5 del 05-08).
                             El objetivo que marca el cliente es una PROPUESTA (Francisco,
                             4-09): antes reescribía la ficha al mandar el reporte; ahora se
