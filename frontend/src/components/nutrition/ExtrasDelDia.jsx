@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Search, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Input } from '../ui/input';
+import { Textarea } from '../ui/textarea';
 import { num1 } from '../../lib/numeros';
 
 /**
@@ -36,9 +37,9 @@ import { num1 } from '../../lib/numeros';
  * falseado no se nota nunca.
  */
 
-// El tope de largo del texto (`_LARGO_MAX_EXTRA`, 300) vivía aquí para avisar antes de que el
-// campo dejara de responder. Con la caja de escribir fuera ya no hay nada que contar: el
-// servidor lo sigue aplicando a lo que le llegue por otros caminos.
+// Lo que cabe en un extra. El servidor corta en el mismo número (`_LARGO_MAX_EXTRA`), y
+// aquí se avisa antes de que el campo deje de responder sin decir nada.
+const LARGO_MAX = 300;
 
 const lineaMacros = (m) => ['P', 'H', 'G']
     .filter((k) => (m?.[k] || 0) > 0)
@@ -76,6 +77,7 @@ const detalleDelExtra = (e) => [
 const esPorUnidad = (food) => Boolean(food?.por_unidad ?? food?.unidades);
 
 const ExtrasDelDia = ({ api, fecha, extras = [], onAnadido, onQuitado, origen, plegable = true }) => {
+    const [texto, setTexto] = useState('');
     const [guardando, setGuardando] = useState(false);
     const [quitando, setQuitando] = useState(null);
     const [abierto, setAbierto] = useState(!plegable);
@@ -134,14 +136,24 @@ const ExtrasDelDia = ({ api, fecha, extras = [], onAnadido, onQuitado, origen, p
         }
     };
 
-    // EL TEXTO LIBRE SALE DE LA PANTALLA (Francisco, 2-09: «el textarea quitalo, no se va a
-    // usar»). Aquí vivía `apuntar()`, que mandaba `{texto}` al mismo endpoint. Un extra se
-    // apunta ahora buscándolo en el catálogo y diciendo cuánto, que además es el único camino
-    // que trae macros.
-    //
-    // LO QUE NO SE TOCA: los extras de texto que ya estén guardados se siguen pintando en la
-    // lista de abajo (`e.texto || e.nombre`), y el servidor sigue aceptando `{texto}` porque
-    // lo usa el asistente. Se quita la puerta, no lo que entró por ella.
+    const apuntar = async () => {
+        const limpio = texto.trim();
+        if (!limpio || guardando) return;
+        setGuardando(true);
+        try {
+            // Sin `origen` no se manda el campo: el servidor lo guarda vacío y se ve que
+            // ese sitio todavía no lo dice, en vez de apuntarlo donde no fue.
+            const r = await api.post(`/diets/${fecha}/extras`,
+                origen ? { texto: limpio, origen } : { texto: limpio });
+            onAnadido?.(r.data.extra);
+            setTexto('');
+        } catch (err) {
+            console.error('[extras] no se pudo apuntar el extra', err);
+            toast.error('No se pudo apuntar el extra. Prueba otra vez.');
+        } finally {
+            setGuardando(false);
+        }
+    };
 
     const quitar = async (extra) => {
         setQuitando(extra.id);
@@ -311,16 +323,59 @@ const ExtrasDelDia = ({ api, fecha, extras = [], onAnadido, onQuitado, origen, p
                     </div>
                 )}
 
-                {/* AQUÍ ESTABA LA CAJA DE ESCRIBIR A MANO, y sale entera (Francisco, 2-09):
-                    el campo, su contador de caracteres, su botón «Apuntarlo» y las tres frases
-                    que la explicaban («o si no está», el «a ojo» de dentro del campo y «lo que
-                    pongas a mano no cuenta en tus macros»).
+                {/* FUERA «o si no está» (Francisco, 2-09), junto con el «a ojo» del campo y
+                    la frase de qué cuenta y qué no. Eran tres explicaciones seguidas encima de
+                    dos controles que se entienden solos: se busca, o se escribe. */}
 
-                    Un extra se apunta ahora buscándolo y diciendo cuánto, que además es el
-                    único camino que trae macros: por eso la línea de «Además de tu dieta, hoy
-                    llevas ... en extras» ya no puede quedarse a cero teniendo cosas apuntadas.
+                {/* LA CAJA DE ESCRIBIR A MANO VUELVE (Francisco, 5-09: «ese text area tiene que
+                    volver»). El 2-09 salió entera («el textarea quítalo, no se va a usar») y
+                    tres días después la pidió de vuelta: se restauró tal cual estaba, sin las
+                    tres frases, que siguen fuera. Lo que se escribe aquí queda como registro
+                    y no cuenta en los macros, igual que antes. */}
+                {/* Tres filas porque en un móvil de 390 px el campo con dos se queda corto en
+                    cuanto apunta la comida de un domingo entero. */}
+                <Textarea rows={3} value={texto} maxLength={LARGO_MAX}
+                    onChange={(ev) => setTexto(ev.target.value)}
+                    /* Enter apunta; para partir la línea, Mayúsculas + Enter. Es una línea
+                       de lo que se ha comido, no un texto largo. */
+                    onKeyDown={(ev) => {
+                        if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); apuntar(); }
+                    }}
+                    /* Sin `placeholder`: decía «Escríbelo a mano. En cuanto pase, con la
+                       cantidad a ojo si no lo pesas», y sale (Francisco, 2-09). Lo que hay que
+                       poner ahí ya lo dice el rótulo del bloque, arriba. */
+                    /* El campo no tiene etiqueta encima (el rótulo es el del bloque), así que
+                       el nombre para quien lo lee con voz sale de aquí. */
+                    aria-label="Apunta un extra del día"
+                    className="rounded-xl bg-muted border-0 resize-none"
+                    /* `extras-` y no `extra-`: cada fila apuntada es `extra-{id}`, así que
+                       un guión que busque `[data-testid^="extra-"]` para contar lo apuntado
+                       se llevaría también el campo y la cuenta. */
+                    data-testid="extras-campo" />
+                {/* La cuenta sale al acercarse al tope. Sin ella el campo se queda mudo de
+                    golpe -- deja de aceptar letras y no dice por qué --, y quien está
+                    poniendo la comida del domingo entero se cree que se ha colgado. Es un
+                    número a secas y no una frase a propósito: los textos que lee el cliente
+                    los escribe Jesús, y éste no está en su documento. */}
+                {texto.length >= LARGO_MAX - 50 && (
+                    <p className="text-xs text-muted-foreground text-right font-data"
+                        data-testid="extras-cuenta">
+                        {texto.length} / {LARGO_MAX}
+                    </p>
+                )}
+                {/* El botón sale en cuanto escribe: con el campo vacío no pinta nada. */}
+                {texto.trim() && (
+                    <button onClick={apuntar} disabled={guardando} data-testid="apuntar-extra"
+                        className="w-full h-12 rounded-xl bg-brand text-white font-bold text-sm disabled:opacity-60 transition-opacity">
+                        {guardando ? 'Apuntando...' : 'Apuntarlo'}
+                    </button>
+                )}
 
-                    Lo que ya esté guardado como texto se sigue viendo en la lista de arriba. */}
+                {/* Aquí iba «Lo que pongas a mano no cuenta en tus macros, simplemente queda
+                    el registro. Lo que busques, sí» (punto 1.2 del 1-09). FUERA por decisión
+                    suya del 2-09. Lo que decía sigue siendo verdad y se sigue viendo donde
+                    importa: la línea «Además de tu dieta, hoy llevas ... en extras» solo suma
+                    lo buscado, porque lo escrito a mano no trae macros de ningún sitio. */}
             </div>
         </section>
     );

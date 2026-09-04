@@ -14,6 +14,7 @@
 const ANCHO = 1080;          // el ancho de una historia de móvil
 const MARGEN = 48;
 const NARANJA = '#FF671F';
+const VERDE = '#34D399';
 const FONDO = '#0B0B0B';
 const TEXTO = '#F4F4F4';
 const GRIS = '#9A9A9A';
@@ -119,7 +120,10 @@ export async function generarImagenComparacion({ izquierda, derecha, tiempo = nu
             _texto(ctx, f.nombre, MARGEN, y, { tam: 26, color: GRIS });
             _texto(ctx, f.antes, ANCHO - MARGEN - 300, y, { tam: 26, alinear: 'right' });
             _texto(ctx, f.despues, ANCHO - MARGEN - 150, y, { tam: 26, peso: 'bold', alinear: 'right' });
-            _texto(ctx, f.diferencia, ANCHO - MARGEN, y, { tam: 26, color: NARANJA, alinear: 'right' });
+            // Los colores de Jesús (Francisco, 5-09): verde lo que baja, naranja lo que sube.
+            const dif = String(f.diferencia || '');
+            const colorDif = dif.startsWith('−') || dif.startsWith('-') ? VERDE : dif.startsWith('+') ? NARANJA : GRIS;
+            _texto(ctx, f.diferencia, ANCHO - MARGEN, y, { tam: 26, color: colorDif, alinear: 'right' });
             y += 44;
         }
     }

@@ -99,12 +99,10 @@ export const diferencia = (antes, despues, decimales = 1) => {
     return { valor: d, texto: `${d > 0 ? '+' : '−'}${numero(Math.abs(d), decimales)}`, signo: Math.sign(d) };
 };
 
-// EL COLOR DE LA DIFERENCIA: los mismos de la tabla de medidas (`EvolucionMedidas`, tono
-// cliente): azul lo que sube, verde lo que baja, gris lo que no se mueve. Sin juzgar, que
-// subir de brazo y subir de cintura no son lo mismo. DECISIÓN PENDIENTE DE FRANCISCO: el
-// doc de Jesús del 2-09 pide verde/naranja y el informe usa verde/rojo según el objetivo;
-// cuando se decida, se cambia aquí y en EvolucionMedidas a la vez.
-export const colorDeLaDiferencia = (signo) => (signo > 0 ? 'text-blue-500' : signo < 0 ? 'text-emerald-500' : 'text-muted-foreground');
+// EL COLOR DE LA DIFERENCIA: los de Jesús (doc del 2-09: «verde baja, naranja sube»), que
+// Francisco eligió el 5-09 entre las tres reglas que había. Los mismos en la tabla de
+// medidas (`EvolucionMedidas`), aquí y en la imagen que se genera. Gris lo que no se mueve.
+export const colorDeLaDiferencia = (signo) => (signo > 0 ? 'text-brand' : signo < 0 ? 'text-emerald-500' : 'text-muted-foreground');
 
 /** Un bloque de macros en palabras: «180 g de proteína, 250 g de hidratos, 60 g de grasa».
  *  Las claves son las de `/macros/historial` (proteina/hidratos/grasa), las mismas que

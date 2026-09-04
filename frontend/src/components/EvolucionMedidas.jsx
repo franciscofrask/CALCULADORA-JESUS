@@ -58,10 +58,10 @@ const TONOS = {
         fondoFijo: 'bg-[#111]',
         valor: 'text-white font-medium',
         igual: 'text-white/30',
-        sube: 'text-blue-400',
+        sube: 'text-brand',
         baja: 'text-emerald-400',
         pie: 'text-[10px] text-white/25 mt-2',
-        pieTexto: 'En azul lo que sube y en verde lo que baja. Sin juzgar: subir de brazo y subir de cintura no son lo mismo, y eso lo pone el coach, no el color.',
+        pieTexto: 'En verde lo que baja y en naranja lo que sube. Sin juzgar: subir de brazo y subir de cintura no son lo mismo, y eso lo pone el coach, no el color.',
     },
     cliente: {
         caja: 'bg-card border border-border rounded-2xl p-4',
@@ -74,15 +74,16 @@ const TONOS = {
         fondoFijo: 'bg-card',
         valor: 'text-foreground font-medium',
         igual: 'text-muted-foreground',
-        sube: 'text-blue-500',
+        sube: 'text-brand',
         baja: 'text-emerald-500',
         pie: 'text-[10px] text-muted-foreground mt-2',
         // En primera persona del entrenador (doc de Jesús del 2-09): al cliente se lo dice
         // él, no «tu entrenador» en tercera.
-        pieTexto: 'En azul lo que sube y en verde lo que baja. Subir de brazo y subir de cintura no son lo mismo, y eso te lo digo yo, no el color.',
+        pieTexto: 'En verde lo que baja y en naranja lo que sube. Subir de brazo y subir de cintura no son lo mismo, y eso te lo digo yo, no el color.',
     },
 };
-// Colores: pendientes de decision (doc de Jesus del 2-09 pide verde/naranja; el informe usa verde/rojo segun objetivo).
+// Colores: los de Jesus (doc del 2-09, «verde baja, naranja sube»), elegidos por Francisco el
+// 5-09 entre las tres reglas que habia. El informe del mes sigue con verde/rojo segun objetivo.
 
 /**
  * LAS TRES PUERTAS POR LAS QUE ENTRA UNA MEDIDA, en una sola serie (2-09).
