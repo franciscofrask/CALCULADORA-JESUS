@@ -115,12 +115,17 @@ async def get_current_protocol(ctx=Depends(require_access("suplementacion"))):
         "client_id": profile["id"], "actual": [], "siguiente": [], "versiones": [],
     }
 
-    # Las dos cosas que se resuelven AL SERVIR y no se guardan: con qué comida sale cada uno
-    # (punto 174) y con qué nombre lo ve el cliente (el vídeo del 27-08). Ninguna se escribe en
-    # la base porque las dos salen de datos que el coach puede cambiar mañana, y una copia
-    # guardada se quedaría vieja sin que nadie lo vea.
+    # Las TRES cosas que se resuelven AL SERVIR y no se guardan: con qué comida sale cada uno
+    # (punto 174), con qué nombre lo ve el cliente (el vídeo del 27-08) y su foto (el vídeo
+    # del 3-09: «falta la foto, Francisco»). Ninguna se escribe en la base porque las tres
+    # salen de datos que el coach puede cambiar mañana, y una copia guardada se quedaría vieja
+    # sin que nadie lo vea. La foto es justamente eso: la copia congelada al pautar dejó 5.435
+    # de 5.445 líneas sin imagen, y las que se subieron después no llegaban nunca.
+    from core.foto_del_suplemento import ponerles_la_foto
+
     await _colocar_en_las_comidas(resuelto)
     _con_el_nombre_del_cliente(resuelto)
+    await ponerles_la_foto(db, resuelto)
 
     # SIN PROTOCOLO PROPIO YA NO SE COMPONE NADA (doc 19-08, bloque 08). La general de
     # cinco líneas -- base + intra por sexo -- era el apaño del 18-08, y la respuesta de
