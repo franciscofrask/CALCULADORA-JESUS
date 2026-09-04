@@ -4,7 +4,8 @@
  * que «ayer, 21:40» diga ayer.
  */
 import {
-    aFecha, diaEnEspana, horaEnEspana, hoyEnEspana, diasDesdeHoy, etiquetaMomento, textoPlazo,
+    aFecha, diaEnEspana, horaEnEspana, hoyEnEspana, hoyLocal, diasDesdeHoy, etiquetaMomento,
+    textoPlazo,
 } from './horaEspana';
 
 describe('el dia y la hora del cliente', () => {
@@ -33,12 +34,22 @@ describe('el dia y la hora del cliente', () => {
 });
 
 describe('el ultimo registro', () => {
-    const mediodiaDe = (dia) => `${dia}T10:00:00Z`;
+    // MEDIODIA DEL RELOJ DE QUIEN MIRA, y el dia contado con SU calendario.
+    //
+    // `etiquetaMomento` dice «hoy» y «ayer» por el reloj del NAVEGADOR, que es la regla del
+    // dia vivido; el fixture los construia con `hoyEnEspana()`. Mientras las dos zonas caen
+    // en el mismo dia no se nota, pero entre las 00:00 y las 02:00 de Madrid un ejecutor en
+    // America esta todavia en el dia de antes: «ayer» segun Madrid es «hoy» para el, y el
+    // test se ponia rojo sin que nada estuviera mal. Cazado el 3-09 a las 00:30 de Madrid.
+    const mediodiaDe = (dia) => {
+        const [y, m, d] = dia.split('-').map(Number);
+        return new Date(y, m - 1, d, 12, 0, 0).toISOString();
+    };
     const diaMas = (dia, n) => new Date(Date.parse(`${dia}T00:00:00Z`) + n * 86400000)
         .toISOString().slice(0, 10);
 
     test('hoy, ayer y una fecha de antes', () => {
-        const hoy = hoyEnEspana();
+        const hoy = hoyLocal();
         expect(etiquetaMomento(mediodiaDe(hoy))).toMatch(/^hoy, \d{2}:\d{2}$/);
         expect(etiquetaMomento(mediodiaDe(diaMas(hoy, -1)))).toMatch(/^ayer, \d{2}:\d{2}$/);
         expect(etiquetaMomento(mediodiaDe(diaMas(hoy, -5)))).toMatch(/^\d{1,2} de \w+, \d{2}:\d{2}$/);

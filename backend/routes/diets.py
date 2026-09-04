@@ -1306,12 +1306,27 @@ async def get_diet(fecha: str, user = Depends(get_current_user)):
 
     if not diet:
         return {"fecha": fecha, "exists": False, "objetivo_comidas": objetivo,
-                "servido_comidas": {"P": 0.0, "H": 0.0, "G": 0.0}}
+                "servido_comidas": {"P": 0.0, "H": 0.0, "G": 0.0},
+                "servido_por_comida": {}}
 
     await _adjuntar_urls(diet)
     diet["exists"] = True
     diet["objetivo_comidas"] = objetivo
-    diet["servido_comidas"] = await _servido_de_las_comidas(diet)
+
+    # Y TAMBIÉN COMIDA A COMIDA (Francisco, 3-09-2026: «que muestre también en el global, así
+    # no hay desfase»).
+    #
+    # Es el punto 3 del 17-08 otra vez, y en el último sitio que le quedaba. Aquel arregló el
+    # TOTAL del día -- lo cuenta el servidor, calibrado, y las pantallas pintan --, pero la
+    # fila de cada comida en Inicio seguía sumándose `macros_efectivos` por su cuenta. Con
+    # todo en enteros no se veía; con el decimal puesto, sí: el mismo día decía «73,2H» en la
+    # fila y «73,1» arriba, porque el campo guardado y la calibración no dan lo mismo.
+    #
+    # Se calibra UNA vez y de ahí salen los dos números, así que el total es exactamente la
+    # suma de lo que se lee en las filas. No hay dos cuentas que puedan discrepar.
+    por_comida = await _servido_por_comida(diet)
+    diet["servido_por_comida"] = por_comida
+    diet["servido_comidas"] = _suma_de_las_regulares(por_comida)
     return diet
 
 
@@ -1428,13 +1443,21 @@ async def _servido_por_comida(diet: dict, fichas: Optional[dict] = None) -> dict
             "no se pudo calibrar el día %s: %s", diet.get("fecha"), e)
         return {}
 
+    # SE REDONDEA CADA ALIMENTO Y LUEGO SE SUMA, no al reves (Francisco, 3-09-2026).
+    #
+    # Es la misma calibracion que `/calculator/calibrar-dia`, y aquella devuelve cada alimento
+    # ya redondeado a la decima: es lo que Nutricion pinta en cada linea. Aqui se sumaban los
+    # valores exactos y se redondeaba al final, asi que la MISMA comida daba 73,1 aqui y 73,2
+    # en Nutricion. Con todo en enteros no se veia; con el decimal puesto, si.
+    #
+    # Manda la del cliente: si suma las lineas que tiene delante le tiene que dar el total.
     por_comida = {}
     for k in orden:
         suma = {"P": 0.0, "H": 0.0, "G": 0.0}
         for m in macros_dia.get(k, []):
-            suma["P"] += m.get("P", 0) or 0
-            suma["H"] += m.get("H", 0) or 0
-            suma["G"] += m.get("G", 0) or 0
+            suma["P"] += round(m.get("P", 0) or 0, 1)
+            suma["H"] += round(m.get("H", 0) or 0, 1)
+            suma["G"] += round(m.get("G", 0) or 0, 1)
         por_comida[k] = {j: round(v, 1) for j, v in suma.items()}
     return por_comida
 
@@ -1454,8 +1477,18 @@ async def _servido_de_las_comidas(diet: dict, fichas: Optional[dict] = None) -> 
     Con esto el servidor lo cuenta una vez, con la misma función que usa el chat
     (`calibracion_dia.calibrar_dia`), y las pantallas solo pintan. Una fuente, un número.
     """
+    return _suma_de_las_regulares(await _servido_por_comida(diet, fichas))
+
+
+def _suma_de_las_regulares(por_comida: dict) -> dict:
+    """El total del día a partir del detalle por comida, sin el perientreno.
+
+    Aparte para que quien ya tenga el detalle no vuelva a calibrar, y sobre todo para que el
+    total sea SIEMPRE la suma exacta de lo que se lee en las filas: si cada comida se redondea
+    a la décima y luego se suman los redondeados, la fila y el total no pueden discrepar.
+    """
     total = {"P": 0.0, "H": 0.0, "G": 0.0}
-    for k, m in (await _servido_por_comida(diet, fichas)).items():
+    for k, m in (por_comida or {}).items():
         if k in _PERI:
             continue
         total["P"] += m["P"]

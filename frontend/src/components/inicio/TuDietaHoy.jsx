@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, CheckSquare, ChevronRight, Circle, Square, X, Zap } from 'lucide-react';
 import { leer as leerLocal, escribir as escribirLocal } from '../../lib/almacenLocal';
 import { MARGEN } from '../../lib/exceso';
-import { num0, num1, numMedio } from '../../lib/numeros';
+import { num1, alDecima } from '../../lib/numeros';
 import { leerMacro, claseDelMacro, fondoDelMacro, llevaPunto } from '../../lib/estadoDelMacro';
 import { suplementosPorComida } from '../../lib/suplementosDelDia';
 import ExtrasDelDia from '../nutrition/ExtrasDelDia';
@@ -75,37 +75,46 @@ const contarLoMarcado = (comidas, peris) => {
     return losDos ? `${deComidas}, ${dePeri}` : `${deComidas} y ${dePeri}`;
 };
 
-// Suma de `macros_efectivos` de los alimentos de una comida guardada. Es el mismo campo
-// que suma el Inicio viejo; cuando falta en filas antiguas, esa comida cuenta 0 y el
-// total del día lo sigue diciendo el servidor (`servido_comidas`), que calibra de verdad.
+// LO QUE SUMA UNA COMIDA, Y LO DICE EL SERVIDOR (punto 3 del 17-08, rematado el 3-09).
+//
+// `servido_por_comida` viene calibrado en `GET /diets/{fecha}`, y el total del día es la
+// suma de esos mismos números: por construcción, la fila no puede discrepar de arriba.
+//
+// El respaldo es la suma de `macros_efectivos` de lo guardado, que es lo que se hacía antes.
+// Se queda por si la calibración no llega, pero NO es la buena: ese campo a veces no está en
+// filas antiguas, y cuando está no siempre coincide con la calibración. Con todo en enteros
+// no se notaba; con el decimal puesto, la misma comida decía «73,2H» abajo y «73,1» arriba.
 const montadoDe = (comida) => (comida?.alimentos || []).reduce((acc, a) => {
     const m = a.macros_efectivos || {};
     return { P: acc.P + (m.P || 0), H: acc.H + (m.H || 0), G: acc.G + (m.G || 0) };
 }, { P: 0, H: 0, G: 0 });
 
-// REDONDOS Y CON LETRA (punto 173 del 27-08). El 25-08 (punto 98) se quitaron las letras
-// porque el orden ya está escrito arriba, en los rótulos de los tres números. Mirando la
-// app, Jesús lo revierte: «en el resto de la app llevan letra; aquí no, y es la misma
-// pantalla». Manda la coherencia, así que «32P · 19H · 6G».
+const servidoDe = (dieta, k) => {
+    const s = dieta?.servido_por_comida?.[k];
+    if (s) return { P: s.P || 0, H: s.H || 0, G: s.G || 0 };
+    return montadoDe(dieta?.comidas?.[k]);
+};
+
+// CON LETRA (punto 173 del 27-08). El 25-08 (punto 98) se quitaron las letras porque el
+// orden ya está escrito arriba, en los rótulos de los tres números. Mirando la app, Jesús lo
+// revierte: «en el resto de la app llevan letra; aquí no, y es la misma pantalla». Manda la
+// coherencia, así que «32P · 19H · 6G».
 //
-// LO MONTADO VA REDONDO Y EL OBJETIVO AL MEDIO GRAMO (punto 80 y su excepción del 29). El
-// punto 80 es el de esta pantalla -- «ni un decimal en Inicio, ni arriba ni en las comidas» --
-// y el 29 le pone una sola excepción: «lo único que lleva decimal es el objetivo de una
-// comida cuando cae en medio gramo, y sólo entonces. Está contado en el 115».
+// Y CON DECIMAL, LO MONTADO Y EL OBJETIVO (Francisco, 3-09-2026: «que muestre también en el
+// global, así no hay desfase, tal cual lo hace Calma»). Esto REVIERTE el punto 80 -- «ni un
+// decimal en Inicio, ni arriba ni en las comidas» -- y su excepción del 29, que dejaba pasar
+// el medio gramo sólo en el objetivo.
 //
-// Y no es cosmética, es la misma cuenta que arregló el 115 en la ficha de la comida: con los
-// objetivos escritos en entero, los seis del día suman 236 sobre un día de 235. Con el medio
-// gramo puesto, la suma da el día exacto.
-//
-// Lo montado sigue redondo, que es lo que pedía el 98: «61P · 30,2H · 19,6G» queda «61 · 30
-// · 20». Ahí el decimal no decide nada; en el objetivo sí, porque es contra lo que se resta.
-const lineaMacros = (m, sinGrasa = false, n = num0) => [
+// El motivo es el desfase: con la fila de Inicio en entero y la comida a la décima, el mismo
+// plato salía «16G» aquí, «15,7» abierto y «válido +1» plegado. Tres cifras del mismo gramo.
+// Y el medio gramo del objetivo (punto 115) entró para que los seis objetivos sumaran el día;
+// a la décima suman igual de bien y además cuadran con lo que se lee al lado.
+const lineaMacros = (m, sinGrasa = false, n = num1) => [
     `${n(m.P || 0)}P`, `${n(m.H || 0)}H`, ...(sinGrasa ? [] : [`${n(m.G || 0)}G`]),
 ].join(' · ');
 
-//: El objetivo de una comida, al medio gramo. `numMedio` no escribe «48,0»: los enteros
-//  salen enteros y sólo el medio gramo trae coma.
-const lineaObjetivo = (m, sinGrasa = false) => lineaMacros(m, sinGrasa, numMedio);
+//: El objetivo va con el mismo `num1`, que no escribe «48,0»: los enteros salen enteros.
+const lineaObjetivo = (m, sinGrasa = false) => lineaMacros(m, sinGrasa);
 
 const nombreComida = (k, unica) => (unica ? 'Comida única' : `Comida ${k.slice(1)}`);
 
@@ -258,8 +267,8 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
         : objetivo;
 
     const periMontado = useMemo(() => {
-        const intra = montadoDe(comidasGuardadas.Intra);
-        const post = montadoDe(comidasGuardadas.Post);
+        const intra = servidoDe(dieta, 'Intra');
+        const post = servidoDe(dieta, 'Post');
         return { P: intra.P + post.P, H: intra.H + post.H };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [dieta]);
@@ -285,7 +294,7 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
         [suplementos, claves.join(',')]);
 
     const montadoPorComida = useMemo(() => Object.fromEntries(
-        claves.map((k) => [k, montadoDe(comidasGuardadas[k])])),
+        claves.map((k) => [k, servidoDe(dieta, k)])),
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [dieta, numComidas]);
 
@@ -306,7 +315,7 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
             const tiene = (guardada?.alimentos || []).length > 0;
             const obj = objetivos[k];
             if (!tiene && !obj) continue;
-            const montado = montadoDe(guardada);
+            const montado = servidoDe(dieta, k);
             res[k] = {
                 tiene,
                 montado,
@@ -387,7 +396,7 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
     // al gramo». Así que la línea la deciden las MISMAS reglas que el color, preguntándole a
     // `leerMacro`, y no una comparación aparte que nadie volvió a mirar.
     const pasadas = conPeri ? ['P', 'H', 'G'].filter((k) => leerMacro({
-        vista: 'falta', hay: llevas[k], objetivo: conPeri[k],
+        vista: 'falta', hay: alDecima(llevas[k]), objetivo: alDecima(conPeri[k]),
     }).color === 'pasado') : [];
 
     // EL PERIENTRENO, DENTRO O APARTE (puntos 86 a 88). Los dos números salen del MISMO
@@ -434,16 +443,15 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
     // el día creado SE PASA, y ahí «te faltan» sería mentira: se dice cada cosa por su
     // nombre y, si se dan las dos, las dos.
     //
-    // EL NÚMERO SALE DE LOS NÚMEROS QUE ÉL LEE, no del desvío exacto (la regla del punto 80,
-    // la misma que ya cumple `leerMacro`). Con 193,4 de 200,9 el desvío exacto redondea a 8
-    // y debajo pone «faltan 7»: el aviso diría un número distinto del que tiene justo
-    // debajo, que es exactamente lo que este aviso viene a evitar. Se resta lo pintado.
+    // EL NÚMERO SALE DE LOS NÚMEROS QUE ÉL LEE, no del desvío exacto: el aviso no puede decir
+    // una cifra distinta de la que tiene justo debajo, que es lo que viene a evitar. Se resta
+    // lo pintado, y desde el 3-09 lo pintado va a la décima en toda la pantalla.
     const desvioQueSeVe = desvioDeLaDieta
         ? Object.fromEntries(['P', 'H', 'G'].map((k) =>
-            [k, Math.round(totalDieta[k] || 0) - Math.round(conPeri[k] || 0)]))
+            [k, alDecima(totalDieta[k] || 0) - alDecima(conPeri[k] || 0)]))
         : null;
     const enPalabras = (claves) => claves
-        .map((k) => `${num0(Math.abs(desvioQueSeVe[k]))} g de ${NOMBRE_LLANO[k]}`)
+        .map((k) => `${num1(Math.abs(desvioQueSeVe[k]))} g de ${NOMBRE_LLANO[k]}`)
         .reduce((a, t, i, l) => (i === 0 ? t : i === l.length - 1 ? `${a} y ${t}` : `${a}, ${t}`), '');
     const loQueFalta = fueraDeMargen.filter((k) => desvioDeLaDieta[k] < 0);
     const loQueSobra = fueraDeMargen.filter((k) => desvioDeLaDieta[k] > 0);
@@ -491,7 +499,7 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
     // EL PIE DE FALTA CAMBIA CUANDO EL DÍA ESTÁ HECHO: los tres ceros en verde son el final
     // del día, y el pie lo dice en vez de seguir pidiendo lo que ya no queda.
     const diaCuadrado = Boolean(conPeri) && ['P', 'H', 'G'].every((k) => leerMacro({
-        vista: 'falta', hay: llevas[k], objetivo: conPeri[k],
+        vista: 'falta', hay: alDecima(llevas[k]), objetivo: alDecima(conPeri[k]),
     }).color === 'ok');
     const pieDeFalta = diaCuadrado ? 'Día cuadrado. Mañana seguimos.' : PIE_DE_VISTA.falta;
 
@@ -627,14 +635,21 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
                                 y la barra (puntos 82 y 83); el número solo dice cuánto. */}
                             <div className="grid grid-cols-3 gap-3 mt-4">
                                 {['P', 'H', 'G'].map((k) => {
-                                    const crudo = valores ? Math.round(valores[k] || 0) : null;
-                                    const objetivoK = conPeri ? Math.round(conPeri[k] || 0) : 0;
+                                    /* EL NÚMERO GRANDE, CON SU DECIMAL (Francisco, 3-09-2026:
+                                       «que muestre también en el global, así no hay desfase,
+                                       tal cual lo hace Calma»). Iba a `Math.round`, y ése era
+                                       el desfase de verdad: la comida decía 15,7 y el día la
+                                       contaba como 16. Ahora los tres -- lo que hay, el objetivo
+                                       y lo que se escribe -- van a la décima, que es el único
+                                       redondeo que queda en toda la app. */
+                                    const crudo = valores ? alDecima(valores[k] || 0) : null;
+                                    const objetivoK = conPeri ? alDecima(conPeri[k] || 0) : 0;
                                     /* LO QUE HAY YA, que es de donde sale el estado: lo creado
                                        en Dieta y lo comido en Llevas y en Falta (Falta enseña
                                        el mismo dato del revés, así que su estado es el mismo).
                                        En Macros no hay estado: el número ES el objetivo. */
-                                    const hayK = vista === 'dieta' ? Math.round(totalDieta[k] || 0)
-                                        : Math.round(llevas[k] || 0);
+                                    const hayK = vista === 'dieta' ? alDecima(totalDieta[k] || 0)
+                                        : alDecima(llevas[k] || 0);
                                     const lectura = leerMacro({ vista, hay: hayK, objetivo: objetivoK });
                                     /* En Falta, el negativo NO se deja en cero (doc 21-08,
                                        apartado 5): se enseña lo pasado. La bronca no existe:
@@ -658,7 +673,7 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
                                                 y es en el móvil donde dice que se nota. El
                                                 peso lo pone `.numero-grande`. */}
                                             <p className="numero-grande font-data leading-none text-[44px] mt-1.5 text-foreground">
-                                                {impreso == null ? '·' : impreso}
+                                                {impreso == null ? '·' : num1(impreso)}
                                             </p>
                                             {/* CONTRA QUÉ SE MIDE, y siempre (bloque 06 de su
                                                 documento: «250 / de 250 / ya lo tienes»). Va
@@ -689,9 +704,10 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
                                     );
                                 })}
                             </div>
-                            {/* LA LÍNEA DE AVISO, que es donde vive el ÚNICO decimal de todo
-                                el Inicio (punto 80): «el decimal exacto sólo aparece en la
-                                línea de aviso: Te has pasado 13,7 g de hidratos».
+                            {/* LA LÍNEA DE AVISO: «Te has pasado 13,7 g de hidratos» (punto
+                                80). Era el único decimal de todo el Inicio; desde el 3-09 lo
+                                lleva la pantalla entera, así que ya no es la excepción, es
+                                una más.
 
                                 Ojo con confundirla con la del punto 90, que es otra: aquella
                                 era la línea de ARRIBA, la que iba encima de los números, y
@@ -744,7 +760,7 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
                                     <span>
                                         {periDentro
                                             ? 'Perientreno incluido'
-                                            : `Perientreno aparte · ${num0(periTotal.P)} P · ${num0(periTotal.H)} H`}
+                                            : `Perientreno aparte · ${num1(periTotal.P)} P · ${num1(periTotal.H)} H`}
                                     </span>
                                 </button>
                             )}
@@ -775,7 +791,7 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
                             <span className="font-bold text-foreground">
                                 {hechas.length === 1 ? '1 hecha' : `${hechas.length} hechas`}
                             </span>
-                            {' '}{num0(llevas.P)}P · {num0(llevas.H)}H · {num0(llevas.G)}G
+                            {' '}{num1(llevas.P)}P · {num1(llevas.H)}H · {num1(llevas.G)}G
                         </p>
                         <button onClick={() => setVerHechas((v) => !v)} data-testid="ver-hechas"
                             className="text-sm font-semibold text-brand flex items-center gap-0.5">

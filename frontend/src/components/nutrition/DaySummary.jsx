@@ -1,6 +1,7 @@
 import React from 'react';
 import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { seExcede, fmtGramos } from '../../lib/exceso';
+import { num1 } from '../../lib/numeros';
 
 const MACRO = { P: '#FF671F', H: '#2196F3', G: '#FFA500' };
 
@@ -51,6 +52,9 @@ export const StatusDot = ({ status, className = '' }) => (
  * Tabla del día: lo que lleva cada comida, el total y el objetivo. Extraída para que
  * la cabecera nueva (DayHeader) la pueda desplegar sin duplicarla.
  */
+// LA MISMA DÉCIMA QUE EL RESTO DE LA APP (Francisco, 3-09-2026). Esta tabla escribía
+// `toFixed(0)`, así que la comida que arriba dice «73,2» aquí salía «73» y el TOTAL no era la
+// suma de sus filas. Es la única regla de redondeo que queda: la décima, en todas partes.
 export const DayDetailTable = ({
     mealOrder, mealInfo, calculateMealMacros, tipoDia, opcionPeri,
     mainP, mainH, mainG, tgtP, tgtH, tgtG, totalPeriP, totalPeriH,
@@ -75,9 +79,9 @@ export const DayDetailTable = ({
                         return (
                             <tr key={mealKey} className="border-t border-border">
                                 <td className="py-1.5 text-foreground">{mealInfo[mealKey].name}</td>
-                                <td className="text-right font-data text-muted-foreground">{served.P.toFixed(0)}</td>
-                                <td className="text-right font-data text-muted-foreground">{served.H.toFixed(0)}</td>
-                                <td className="text-right font-data text-muted-foreground">{served.G.toFixed(0)}</td>
+                                <td className="text-right font-data text-muted-foreground">{num1(served.P)}</td>
+                                <td className="text-right font-data text-muted-foreground">{num1(served.H)}</td>
+                                <td className="text-right font-data text-muted-foreground">{num1(served.G)}</td>
                             </tr>
                         );
                     })}
@@ -87,15 +91,15 @@ export const DayDetailTable = ({
                         por que. El peri tiene su propio objetivo y va debajo, aparte. */}
                     <tr className="border-t-2 border-border font-bold text-foreground">
                         <td className="py-1.5">TOTAL</td>
-                        <td className="text-right font-data">{mainP.toFixed(0)}</td>
-                        <td className="text-right font-data">{mainH.toFixed(0)}</td>
-                        <td className="text-right font-data">{mainG.toFixed(0)}</td>
+                        <td className="text-right font-data">{num1(mainP)}</td>
+                        <td className="text-right font-data">{num1(mainH)}</td>
+                        <td className="text-right font-data">{num1(mainG)}</td>
                     </tr>
                     <tr className="text-muted-foreground">
                         <td className="py-1">OBJETIVO</td>
-                        <td className="text-right font-data">{(tgtP || 0).toFixed(0)}</td>
-                        <td className="text-right font-data">{(tgtH || 0).toFixed(0)}</td>
-                        <td className="text-right font-data">{(tgtG || 0).toFixed(0)}</td>
+                        <td className="text-right font-data">{num1(tgtP)}</td>
+                        <td className="text-right font-data">{num1(tgtH)}</td>
+                        <td className="text-right font-data">{num1(tgtG)}</td>
                     </tr>
                 </tbody>
             </table>
@@ -110,16 +114,16 @@ export const DayDetailTable = ({
                                 return (
                                     <tr key={mealKey}>
                                         <td className="py-1 text-foreground">{mealInfo[mealKey].name}</td>
-                                        <td className="text-right font-data text-muted-foreground w-14">{served.P.toFixed(0)}</td>
-                                        <td className="text-right font-data text-muted-foreground w-14">{served.H.toFixed(0)}</td>
+                                        <td className="text-right font-data text-muted-foreground w-14">{num1(served.P)}</td>
+                                        <td className="text-right font-data text-muted-foreground w-14">{num1(served.H)}</td>
                                         <td className="text-right font-data text-muted-foreground w-14">-</td>
                                     </tr>
                                 );
                             })}
                             <tr className="border-t border-border text-muted-foreground">
                                 <td className="py-1">OBJETIVO PERI</td>
-                                <td className="text-right font-data w-14">{(totalPeriP || 0).toFixed(0)}</td>
-                                <td className="text-right font-data w-14">{(totalPeriH || 0).toFixed(0)}</td>
+                                <td className="text-right font-data w-14">{num1(totalPeriP)}</td>
+                                <td className="text-right font-data w-14">{num1(totalPeriH)}</td>
                                 <td className="text-right font-data w-14">-</td>
                             </tr>
                         </tbody>
@@ -195,7 +199,7 @@ const DaySummary = ({
                                     statusColor={over ? '#EF4444' : color} />
                             </div>
                             <span className={`font-data text-[11px] w-[72px] text-right ${over ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>
-                                {val.toFixed(0)}/{(tgt || 0).toFixed(0)} g
+                                {num1(val)}/{num1(tgt)} g
                             </span>
                             {over && <span className="font-data text-[11px] text-red-500 font-bold flex-shrink-0">+{fmtGramos(val - (tgt || 0))} g</span>}
                         </div>
@@ -208,7 +212,7 @@ const DaySummary = ({
                 {tipoDia === 'entrenamiento' && opcionPeri !== 'sin_peri' ? (
                     <span className="text-[11px] text-muted-foreground font-data">
                         {/* «Perientreno», no «Peri» (punto 4.18). */}
-                        Perientreno {servedPeriP.toFixed(0)}/{totalPeriP.toFixed(0)}P · {servedPeriH.toFixed(0)}/{totalPeriH.toFixed(0)}H
+                        Perientreno {num1(servedPeriP)}/{num1(totalPeriP)}P · {num1(servedPeriH)}/{num1(totalPeriH)}H
                     </span>
                 ) : <span />}
                 <div className="flex items-center gap-2.5 flex-wrap">
@@ -237,9 +241,9 @@ const DaySummary = ({
                                 return (
                                     <tr key={mealKey} className="border-t border-border">
                                         <td className="py-1.5 text-foreground">{mealInfo[mealKey].name}</td>
-                                        <td className="text-right font-data text-muted-foreground">{served.P.toFixed(0)}</td>
-                                        <td className="text-right font-data text-muted-foreground">{served.H.toFixed(0)}</td>
-                                        <td className="text-right font-data text-muted-foreground">{served.G.toFixed(0)}</td>
+                                        <td className="text-right font-data text-muted-foreground">{num1(served.P)}</td>
+                                        <td className="text-right font-data text-muted-foreground">{num1(served.H)}</td>
+                                        <td className="text-right font-data text-muted-foreground">{num1(served.G)}</td>
                                     </tr>
                                 );
                             })}
@@ -249,15 +253,15 @@ const DaySummary = ({
                                 por que. El peri tiene su propio objetivo y va debajo, aparte. */}
                             <tr className="border-t-2 border-border font-bold text-foreground">
                                 <td className="py-1.5">TOTAL</td>
-                                <td className="text-right font-data">{mainP.toFixed(0)}</td>
-                                <td className="text-right font-data">{mainH.toFixed(0)}</td>
-                                <td className="text-right font-data">{mainG.toFixed(0)}</td>
+                                <td className="text-right font-data">{num1(mainP)}</td>
+                                <td className="text-right font-data">{num1(mainH)}</td>
+                                <td className="text-right font-data">{num1(mainG)}</td>
                             </tr>
                             <tr className="text-muted-foreground">
                                 <td className="py-1">OBJETIVO</td>
-                                <td className="text-right font-data">{(tgtP || 0).toFixed(0)}</td>
-                                <td className="text-right font-data">{(tgtH || 0).toFixed(0)}</td>
-                                <td className="text-right font-data">{(tgtG || 0).toFixed(0)}</td>
+                                <td className="text-right font-data">{num1(tgtP)}</td>
+                                <td className="text-right font-data">{num1(tgtH)}</td>
+                                <td className="text-right font-data">{num1(tgtG)}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -272,16 +276,16 @@ const DaySummary = ({
                                         return (
                                             <tr key={mealKey}>
                                                 <td className="py-1 text-foreground">{mealInfo[mealKey].name}</td>
-                                                <td className="text-right font-data text-muted-foreground w-14">{served.P.toFixed(0)}</td>
-                                                <td className="text-right font-data text-muted-foreground w-14">{served.H.toFixed(0)}</td>
+                                                <td className="text-right font-data text-muted-foreground w-14">{num1(served.P)}</td>
+                                                <td className="text-right font-data text-muted-foreground w-14">{num1(served.H)}</td>
                                                 <td className="text-right font-data text-muted-foreground w-14">-</td>
                                             </tr>
                                         );
                                     })}
                                     <tr className="border-t border-border text-muted-foreground">
                                         <td className="py-1">OBJETIVO PERI</td>
-                                        <td className="text-right font-data w-14">{(totalPeriP || 0).toFixed(0)}</td>
-                                        <td className="text-right font-data w-14">{(totalPeriH || 0).toFixed(0)}</td>
+                                        <td className="text-right font-data w-14">{num1(totalPeriP)}</td>
+                                        <td className="text-right font-data w-14">{num1(totalPeriH)}</td>
                                         <td className="text-right font-data w-14">-</td>
                                     </tr>
                                 </tbody>

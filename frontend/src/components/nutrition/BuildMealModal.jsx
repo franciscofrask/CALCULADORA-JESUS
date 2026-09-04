@@ -9,8 +9,8 @@ import { Input } from '../ui/input';
 import { toast } from 'sonner';
 import { Search, X, Plus, Minus, Star, ChevronUp } from 'lucide-react';
 import { seExcede } from '../../lib/exceso';
-import { SUELO_DE_LA_COMIDA } from '../../lib/estadoDelMacro';
-import { num1, numMedio } from '../../lib/numeros';
+import { SUELO_CUADRADO } from '../../lib/estadoDelMacro';
+import { num1 } from '../../lib/numeros';
 import { leerCantidad, avisoRazonable, TOPE_GRAMOS, AVISO_TOPE, AVISO_NEGATIVO } from '../../lib/cantidades';
 import { FOOD_FAVORITES_UI } from './SearchFoodModal';
 import SinResultados from './SinResultados';
@@ -336,10 +336,11 @@ const BuildMealModal = ({
         } catch (e) { /* ignore */ }
     };
 
-    // Calma rounds the per-meal target to the nearest 0.5 g FOR DISPLAY ONLY (stepRedondeo):
-    // an internal H target of 46.8 shows as "47". The status math below stays UNROUNDED so
-    // "Faltan 10.5g" = 46.8 - 36.3, matching Calma exactly.
-    const fmtHalf = numMedio;   // coma decimal, como todo lo que se ve en Nutrición
+    // EL OBJETIVO, A LA DÉCIMA COMO TODO LO DEMÁS (Francisco, 3-09). Iba al medio gramo
+    // (el `stepRedondeo` de Calma: un objetivo de 46,8 se escribía «47»), y con lo servido a
+    // la décima el mismo plato daba dos objetivos distintos según la ventana. Se deja el
+    // nombre porque lo usan dos líneas, pero ya apunta a `num1`.
+    const fmtHalf = num1;   // coma decimal, como todo lo que se ve en Nutrición
 
     // Calma "Macros para Comida X" per macro (margenValido = 4), r = target - served UNROUNDED:
     //   served > 0  -> num "served/target g" + status:
@@ -360,15 +361,15 @@ const BuildMealModal = ({
         // En oscuro mandan los tonos claros, que ahí son los que contrastan.
         // LAS MISMAS PALABRAS QUE LA TARJETA. Y las palabras son las del 3-09 (Francisco,
         // revirtiendo la revisión del 2-09): «cuadrado» SOLO cuando está exacto (por debajo
-        // de un gramo, `SUELO_DE_LA_COMIDA`); dentro del margen, «válido» con su desvío --
+        // de medio gramo, `SUELO_CUADRADO`); dentro del margen, «válido» con su desvío --
         // la letra del punto 78/11.1: «de 1 a 4, falte o sobre, es válido y sale en verde» --
         // y fuera, «faltan»/«sobran». Igual que `lib/estadoDelMacro`, para que el mismo
         // plato no se lea distinto según la ventana.
         //
         // El signo va del lado del cliente, no del cálculo: aquí `r` es lo que FALTA
         // (objetivo − servido), así que un `r` negativo es que se ha pasado y lleva el «+».
-        if (Math.abs(r) < SUELO_DE_LA_COMIDA) { status = 'cuadrado'; cls = 'text-green-700 dark:text-green-400'; }
-        // Inclusivo: «de 1 a 4» entra el 4 clavado (alineado el 3-09 con lib/estadoDelMacro).
+        if (Math.abs(r) < SUELO_CUADRADO) { status = 'cuadrado'; cls = 'text-green-700 dark:text-green-400'; }
+        // Inclusivo: hasta 4 entra el 4 clavado (alineado el 3-09 con lib/estadoDelMacro).
         else if (Math.abs(r) <= MARGEN_VALIDO) { status = `válido (${r < 0 ? '+' : '−'}${fmt1(Math.abs(r))})`; cls = 'text-green-700 dark:text-green-400'; }
         // LO QUE FALTA VA EN BLANCO, no en rojo (2-09). Es la regla del punto 77 -- «sin color
         // mientras vas por debajo», porque ir corto no es un error, es que no has terminado --

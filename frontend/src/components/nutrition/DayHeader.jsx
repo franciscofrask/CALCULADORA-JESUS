@@ -18,6 +18,7 @@ import { Calendar, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'luc
 import ConfigSection from './ConfigSection';
 import { DayDetailTable, StatusDot } from './DaySummary';
 import { leerMacro, claseDelMacro, fondoDelMacro, llevaPunto } from '../../lib/estadoDelMacro';
+import { num1, alDecima } from '../../lib/numeros';
 
 
 const DayHeader = ({
@@ -166,8 +167,13 @@ const DayHeader = ({
                             el margen de 4 y las palabras son los mismos de la parte 2». */}
                         <div className="grid grid-cols-3 gap-3 max-w-md">
                             {macros.map(({ key, label, valDia, tgtDia }) => {
-                                const creado = Math.round(valDia);
-                                const lectura = leerMacro({ vista: 'dieta', hay: valDia, objetivo: tgtDia });
+                                // CON SU DECIMAL, Y LA PALABRA CONTADA CONTRA ÉL (Francisco,
+                                // 3-09). El número iba redondeado a entero y la palabra se
+                                // calculaba con el valor exacto: se leía «47» y debajo «faltan
+                                // 188,5». Los dos a la décima, como en el resto de la app.
+                                const creado = alDecima(valDia);
+                                const meta = alDecima(tgtDia);
+                                const lectura = leerMacro({ vista: 'dieta', hay: creado, objetivo: meta });
                                 return (
                                     // Centrado dentro de su columna, como en Inicio: los tres
                                     // números tienen anchos distintos (235, 60) y alineados a
@@ -191,7 +197,7 @@ const DayHeader = ({
                                             tamaño. Sin `sm:`: en Inicio tampoco lo hay, y era
                                             justo el escalón el que metía el tercer número. */}
                                         <p className="numero-grande font-data leading-none text-[44px] mt-1.5 text-foreground">
-                                            {creado}
+                                            {num1(creado)}
                                         </p>
                                         <p data-testid={`dia-palabra-${key}`}
                                             className={`text-xs mt-1 ${claseDelMacro(lectura.color)}`}>

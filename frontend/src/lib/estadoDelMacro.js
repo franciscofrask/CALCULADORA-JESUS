@@ -28,13 +28,19 @@
  * está corta y la del que sobra está llena a tope (punto 83). Ahora, además, el color.
  */
 import { MARGEN } from './exceso';
-import { num0, num1 } from './numeros';
+import { num1 } from './numeros';
 
-// DENTRO DE UNA COMIDA SÍ VAN DECIMALES (puntos 121 y 122 del artifact del 26-08): «es la
-// pantalla donde se afina. En el resto de la app, redondos». Y con el decimal hace falta un
-// suelo, porque si no la palabra se pone a cantar medios gramos: «medio gramo de grasa no lo
-// pesa nadie, y no se pueden cortar 0,2 g de una nuez». Por debajo de 1 g, cuadrado.
-export const SUELO_DE_LA_COMIDA = 1;
+// EL SUELO DEL «CUADRADO»: MEDIO GRAMO, EL DE CALMA (Francisco, 3-09-2026: «tal cual lo
+// hace Calma»). No es una elección nuestra: está en su bundle, en `macros.stepRedondeo = 0.5`,
+// y en la función que pinta cada fila -- `Math.round(objetivo − servido) == 0` saca
+// «Cuadrado», o sea por debajo de medio gramo; hasta `margenValido = 4`, «Válido»; más allá,
+// «faltan» o «sobran». Es la misma escalera que la de abajo.
+//
+// Estaba en 1 g, que venía de cuando el día iba en enteros y sólo la comida llevaba decimal.
+// Con el decimal puesto en todas partes ese suelo SE VE: «249,2 de 250» rotulado «cuadrado»
+// vuelve a ser un número que no cuadra con su palabra. Con medio gramo eso se lee
+// «válido (−0,8)», que es lo que el cliente tiene delante.
+export const SUELO_CUADRADO = 0.5;
 
 /**
  * LOS CUATRO COLORES, en un solo sitio para que las dos pantallas que leen esto pinten igual.
@@ -114,9 +120,10 @@ PALABRA.comida = PALABRA.dieta;
  * @param hay       lo que hay YA (lo creado en Dieta, lo comido en Llevas y en Falta)
  * @param objetivo  el total del día para ese macro
  *
- * Los dos entran REDONDEADOS (punto 80): si la palabra se calculara con decimales, diría
- * «válido −4» debajo de un número que ya se ve clavado, y el cliente creería que la app
- * miente. La palabra tiene que salir de lo mismo que él está leyendo.
+ * Los dos entran A LA DÉCIMA, y la palabra se calcula con esos mismos: la regla de siempre
+ * («quien escriba una diferencia al lado de dos cifras redondeadas tiene que restar ESAS»),
+ * sólo que desde el 3-09 la cifra que se lee lleva decimal en las cuatro pestañas y no sólo
+ * dentro de la comida. La palabra tiene que salir de lo que el cliente está leyendo.
  */
 export function leerMacro({ vista, hay, objetivo, margen }) {
     if (vista === 'macros') {
@@ -129,12 +136,21 @@ export function leerMacro({ vista, hay, objetivo, margen }) {
         return { estado: SIN_ESTADO, palabra: PALABRA.macros(), color: 'apagado',
                  referencia: null, barra: null };
     }
-    // DENTRO DE UNA COMIDA NO SE REDONDEA, ni el número ni la palabra (punto 121). En el
-    // resto de la app sí: un decimal en un total del día no decide nada y ensucia.
-    const conDecimales = vista === 'comida';
-    const n = conDecimales ? num1 : num0;
-    const meta = conDecimales ? (objetivo || 0) : Math.round(objetivo || 0);
-    const tiene = conDecimales ? (hay || 0) : Math.round(hay || 0);
+    // EL DECIMAL, TAMBIÉN EN EL GLOBAL (Francisco, 3-09-2026): «que muestre también en el
+    // global, así no hay desfase, tal cual lo hace Calma».
+    //
+    // Esto REVIERTE el punto 80 del 07-08 («ni un decimal en Inicio, ni arriba ni en las
+    // comidas»), y con motivo. Con el día redondeado y la comida a la décima, la MISMA comida
+    // decía tres cosas a la vez: la fila de Inicio «16G», la tarjeta abierta «15,7» y la
+    // plegada «válido +1». Tres cifras del mismo gramo, y el cliente no tiene forma de saber
+    // cuál es la buena. Vale más un decimal de más que tres números que no cuadran.
+    //
+    // Y con el decimal hace falta el mismo SUELO en todas partes, o el día no diría
+    // «cuadrado» casi nunca: 249,7 sobre 250 no es un fallo, es que no se puede pesar la
+    // diferencia. Así que la regla del gramo, que era de la comida, pasa a ser de la casa.
+    const n = num1;
+    const meta = objetivo || 0;
+    const tiene = hay || 0;
     // Lo que hay MENOS lo que debería haber: negativo es que falta, positivo es que sobra.
     const desvio = tiene - meta;
     const fuera = Math.abs(desvio);
@@ -143,8 +159,9 @@ export function leerMacro({ vista, hay, objetivo, margen }) {
     const tope = margen != null ? margen : MARGEN;
 
     let estado;
-    // Clavado: exacto en el resto de la app; por debajo de 1 g dentro de una comida.
-    if (conDecimales ? fuera < SUELO_DE_LA_COMIDA : desvio === 0) estado = CLAVADO;
+    // Clavado: por debajo de medio gramo, en cualquier pantalla. Es el `Math.round(l) == 0`
+    // de Calma, y con el decimal delante es lo más ajustado que se puede decir sin mentir.
+    if (fuera < SUELO_CUADRADO) estado = CLAVADO;
     else if (fuera <= tope) estado = VALIDO;
     else if (desvio > 0) estado = PASADO;
     else estado = CORTO;

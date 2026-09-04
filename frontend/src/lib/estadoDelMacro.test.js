@@ -58,3 +58,35 @@ describe('cuadrado es el exacto; dentro del margen, válido', () => {
         expect(leerMacro({ vista: 'dieta', hay: 255, objetivo: 250 }).palabra).toBe('sobran 5');
     });
 });
+
+// UNA SOLA REGLA DE REDONDEO (Francisco, 3-09: «que muestre también en el global, así no hay
+// desfase, tal cual lo hace Calma»). El día iba en enteros y la comida a la décima, así que la
+// misma comida decía «16G» en la fila de Inicio, «15,7» abierta y «válido +1» plegada.
+describe('la décima, también en el global', () => {
+    it('el número que se lee lleva su decimal', () => {
+        const r = leerMacro({ vista: 'dieta', hay: 245.4, objetivo: 250 });
+        expect(r.palabra).toBe('faltan 4,6');
+        expect(r.referencia).toBe('de 250');
+    });
+
+    it('y la referencia también, cuando el objetivo lo tiene', () => {
+        expect(leerMacro({ vista: 'llevas', hay: 0, objetivo: 200.9 }).referencia).toBe('de 200,9');
+    });
+
+    it('el desvío se cuenta contra lo que se ve, no contra el entero', () => {
+        // Lo que hacía saltar el desfase: 193,4 de 200,9 son 7,5, no 8 ni 7.
+        expect(leerMacro({ vista: 'dieta', hay: 193.4, objetivo: 200.9 }).palabra).toBe('faltan 7,5');
+    });
+
+    it('«cuadrado» es el medio gramo de Calma, no el gramo', () => {
+        // `Math.round(objetivo − servido) == 0` en su bundle. Con el suelo viejo de 1 g, 0,7
+        // salía «cuadrado» debajo de un «249,3 de 250» que se ve que no lo está.
+        expect(leerMacro({ vista: 'dieta', hay: 249.7, objetivo: 250 }).palabra).toBe('cuadrado');
+        expect(leerMacro({ vista: 'dieta', hay: 249.3, objetivo: 250 }).palabra).toBe('válido (−0,7)');
+    });
+
+    it('y el margen sigue siendo 4, inclusivo', () => {
+        expect(leerMacro({ vista: 'dieta', hay: 254, objetivo: 250 }).palabra).toBe('válido (+4)');
+        expect(leerMacro({ vista: 'dieta', hay: 254.1, objetivo: 250 }).palabra).toBe('sobran 4,1');
+    });
+});

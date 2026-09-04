@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { plural } from '../lib/labels';
+import { num1 } from '../lib/numeros';
 import { Dumbbell, Moon, Utensils, ChevronRight, HelpCircle } from 'lucide-react';
 
 // Mi semana (tarea 5.1 del rediseño, doc de Jesús del 21-08): los siete días de la
@@ -213,12 +214,15 @@ const LineaDieta = ({ dia }) => {
                             : dia.is_cuadrado === false ? 'Sin cuadrar' : 'Creada'}
                     </span>
                     <span className="text-muted-foreground">·</span>
+                    {/* CON SU DECIMAL, COMO EN INICIO Y EN NUTRICIÓN (Francisco, 3-09-2026):
+                        una sola regla de redondeo en toda la app. Iba a entero, así que el
+                        mismo día se leía «73» aquí y «73,2» en las otras dos pantallas. */}
                     <span className="whitespace-nowrap">
-                        <span className="text-orange-400 font-semibold">{Math.round(m.P || 0)}</span>
+                        <span className="text-orange-400 font-semibold">{num1(m.P || 0)}</span>
                         <span className="text-muted-foreground"> · </span>
-                        <span className="text-blue-400 font-semibold">{Math.round(m.H || 0)}</span>
+                        <span className="text-blue-400 font-semibold">{num1(m.H || 0)}</span>
                         <span className="text-muted-foreground"> · </span>
-                        <span className="text-yellow-400 font-semibold">{Math.round(m.G || 0)}</span>
+                        <span className="text-yellow-400 font-semibold">{num1(m.G || 0)}</span>
                     </span>
                 </span>
             )}

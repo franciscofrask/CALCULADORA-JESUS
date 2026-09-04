@@ -1,8 +1,8 @@
 import React from 'react';
 import { StatusDot } from './DaySummary';
 import { margenDe, seExcede } from '../../lib/exceso';
-import { leerMacro, claseDelMacro, fondoDelMacro, llevaPunto } from '../../lib/estadoDelMacro';
-import { num1, numMedio, alMedio, alDecima } from '../../lib/numeros';
+import { leerMacro, claseDelMacro, fondoDelMacro, llevaPunto, SUELO_CUADRADO } from '../../lib/estadoDelMacro';
+import { num1, alDecima } from '../../lib/numeros';
 import { TOPE_GRAMOS } from '../../lib/cantidades';
 import ContadorFamilia from './ContadorFamilia';
 import MenuDeLaPantalla from './MenuDeLaPantalla';
@@ -60,7 +60,7 @@ const estadoDeLaComida = (status, target, served, cuantosAlimentos, esPeri = fal
     // tiene que restar esas»). Aquí se restaban los valores exactos, así que el mismo dato
     // salía como «faltan 7,6» fuera y «faltan 7,8» dentro. Se cuenta igual en los dos
     // sitios, con el mismo margen, o la lista y la comida se contradicen.
-    const meta = (k) => alMedio(target[k] || 0);
+    const meta = (k) => alDecima(target[k] || 0);
     const desvios = claves.map((k) => ({ k, d: alDecima(served[k] || 0) - meta(k) }));
     const fuera = desvios.filter((x) => Math.abs(x.d) > margenDe(meta(x.k)));
 
@@ -135,10 +135,15 @@ const estadoDeLaComida = (status, target, served, cuantosAlimentos, esPeri = fal
     }
     // Cuadrada. Si clava, se dice y ya; si baila dentro del margen, se dice cuánto, con las
     // palabras de la parte 2: «válido +2».
-    const mayor = desvios.map((x) => ({ ...x, d: Math.round(x.d) }))
-        .sort((a, b) => Math.abs(b.d) - Math.abs(a.d))[0];
-    if (!mayor || mayor.d === 0) return { texto: 'cuadrada', color: 'ok' };
-    return { texto: `válido ${mayor.d > 0 ? '+' : '−'}${Math.abs(mayor.d)}`, color: 'ok' };
+    //
+    // CON EL MISMO SUELO Y EL MISMO DECIMAL QUE LA COMIDA ABIERTA (Francisco, 3-09). Aquí el
+    // desvío se redondeaba a entero, así que la MISMA comida decía «válido +1» plegada y
+    // «cuadrado» abierta: 0,7 g redondea a 1 en esta línea y no llegaba al suelo en la otra.
+    // Dos criterios midiendo lo mismo, que es justo lo que se vino a quitar. Manda
+    // `SUELO_CUADRADO`, que es de donde sale la palabra en el resto de la app.
+    const mayor = desvios.slice().sort((a, b) => Math.abs(b.d) - Math.abs(a.d))[0];
+    if (!mayor || Math.abs(mayor.d) < SUELO_CUADRADO) return { texto: 'cuadrada', color: 'ok' };
+    return { texto: `válido ${mayor.d > 0 ? '+' : '−'}${num1(Math.abs(mayor.d))}`, color: 'ok' };
 };
 
 // El punto de color que va delante de la palabra del estado (punto 116).
@@ -171,7 +176,11 @@ const claseDelEstado = (color) => (
 
 // Los números con coma decimal y sin decimales cuando son cero, en un solo sitio para toda
 // la pantalla (Jesús, 15-08, fallo 43: «34.2/37.5g»).
-const fmtHalf = numMedio;
+// UNA SOLA REGLA DE REDONDEO: la décima, para lo servido y para el objetivo (Francisco,
+// 3-09). `fmtHalf` era el medio gramo de Calma y por eso el objetivo de una comida salía
+// «32,5» aquí y «32,6» en la fila de Inicio. Se deja el nombre porque lo usan varias
+// líneas, pero ya apunta al mismo sitio que `fmt1`.
+const fmtHalf = num1;
 const fmt1 = num1;
 
 // «NO APORTA MACROS», NO «SIN MACROS» (Jesús, en la reunión con Gonzalo, minuto 11:59):
@@ -295,9 +304,9 @@ const MealProgressBars = ({ mealKey, getMealTarget, calculateMealMacros, hasFood
             {claves.map((k) => {
                 // LO QUE FALTA SE CUENTA CONTRA EL OBJETIVO QUE SE ESTÁ VIENDO (17-08-2026).
                 // La línea decía «54/63,5 g · faltan 9,3 g», y 54 + 9,3 son 63,3, no 63,5:
-                // el objetivo se enseña redondeado al medio gramo (como en Calma) y el
-                // restante salía del valor exacto. Se cuenta contra lo que lee.
-                const meta = alMedio(target[k] || 0);
+                // el objetivo se enseñaba redondeado y el restante salía del valor exacto.
+                // Se cuenta contra lo que lee, y desde el 3-09 los dos van a la décima.
+                const meta = alDecima(target[k] || 0);
                 const tiene = alDecima(served[k] || 0);
                 const lectura = leerMacro({ vista: 'comida', hay: tiene, objetivo: meta, margen: margenDe(meta) });
                 return (
@@ -512,19 +521,22 @@ const MealCard = ({
     // decisión del 29-08 dentro del punto 115).
     //
     // El 115 quitó las dos cosas -- «53 · 10 · 15» --; las letras volvieron con la parte 6, y
-    // el medio gramo vuelve ahora: «cuando el objetivo cae en medio gramo, se escribe -- 52,5P
+    // el decimal vuelve ahora: «cuando el objetivo cae en medio gramo, se escribe -- 52,5P
     // ·10H · 15G, nunca 53,0P». Aquí ponía `num0`, que redondea a entero, y este comentario
     // decía que el documento no tocaba los decimales: lo tocó el 29.
     //
     // Y NO ES COSMÉTICA, son dos cuentas que no cuadraban. Con 53 escrito, los seis objetivos
     // del día suman 176 sobre un día de 175; y el «faltan 11,2» de debajo está restado contra
     // un 52,5 que no aparecía en ninguna parte, así que la resta que hace el cliente no le
-    // daba. `numMedio` es justo eso -- el redondeo de Calma al medio gramo, sin escribir
-    // «53,0» -- y su gemelo `alMedio` es el que ya usan las restas.
+    // daba.
+    //
+    // A LA DÉCIMA Y NO AL MEDIO GRAMO (Francisco, 3-09). Era `numMedio`, y con lo servido a
+    // la décima el mismo objetivo se leía «32,5» aquí y «32,6» en Inicio. `num1` sigue sin
+    // escribir «53,0»: los enteros salen enteros.
     // La grasa del peri no cuenta en el método, así que ahí son dos números.
     const lineaObjetivo = isPeri
-        ? `${numMedio(target.P)}P · ${numMedio(target.H)}H`
-        : `${numMedio(target.P)}P · ${numMedio(target.H)}H · ${numMedio(target.G)}G`;
+        ? `${num1(target.P)}P · ${num1(target.H)}H`
+        : `${num1(target.P)}P · ${num1(target.H)}H · ${num1(target.G)}G`;
 
     // SE APAGA LO HECHO, EN VEZ DE PINTAR LO QUE FALTA (punto 197 del 27-08).
     //
