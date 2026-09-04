@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, CheckSquare, ChevronRight, Circle, Square, X, Zap } from 'lucide-react';
 import { leer as leerLocal, escribir as escribirLocal } from '../../lib/almacenLocal';
 import { MARGEN } from '../../lib/exceso';
@@ -124,7 +124,20 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
     //
     // Sin nada marcado, Llevas no sacaba tres ceros pelados sino «Todavía no has marcado
     // nada»; eso sigue estando y funciona igual cuando se entra a esa pestaña.
+    //
+    // Y DESDE EL 3-09 DEPENDE DEL DÍA (decisión de Francisco, que cierra las tres versiones
+    // que había): «la app tiene que abrir en la pestaña de Llevas, pero si hay al menos una
+    // comida guardada; si no, se abre en Dieta».
+    //
+    // Es la regla que tiene sentido de las dos puntas: con el día sin montar lo que toca es
+    // montarlo, y para eso está Dieta; con el día ya montado lo que se viene a mirar es por
+    // dónde vas, que es Llevas. Antes era un valor fijo y por eso hubo tres decisiones
+    // seguidas: cada una acertaba en un caso y fallaba en el otro.
+    //
+    // `vistaFijada` guarda que el cliente ya ha tocado las pestañas: a partir de ahí manda
+    // él y la regla no vuelve a moverle la vista debajo de los dedos cuando llegue el día.
     const [vista, setVista] = useState('dieta');
+    const vistaFijada = useRef(false);
     // Las comidas ya marcadas se CONTRAEN («2 hechas · ocultas — Ver», punto 1 del doc
     // del 23-08): la lista enseña solo lo que queda por comer, y el «Ver» las despliega.
     const [verHechas, setVerHechas] = useState(false);
@@ -143,6 +156,28 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
     useEffect(() => { setExtrasDia((dieta?.exists && dieta.extras) || []); }, [dieta]);
 
     const comidasGuardadas = (dieta?.exists && dieta.comidas) || {};
+
+    // CON EL DÍA MONTADO SE ABRE EN LLEVAS; SIN MONTAR, EN DIETA (Francisco, 3-09).
+    //
+    // «Al menos una comida guardada» es una comida con alimentos dentro, no una marcada: lo
+    // que decide es si hay dieta que seguir. El peri cuenta como comida, que también es una
+    // toma del día.
+    //
+    // Solo mientras el cliente no haya tocado las pestañas. Si ya eligió una, mandar la vista
+    // cuando llegue el día de otra petición sería moverle la pantalla debajo de los dedos.
+    useEffect(() => {
+        if (vistaFijada.current) return;
+        const hayComidaGuardada = Object.values(comidasGuardadas)
+            .some((c) => (c?.alimentos || []).length > 0);
+        setVista(hayComidaGuardada ? 'llevas' : 'dieta');
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [dieta, fecha]);
+
+    // Al cambiar de día se vuelve a decidir sola: la elección era para el día que estaba
+    // mirando, no para siempre.
+    useEffect(() => { vistaFijada.current = false; }, [fecha]);
+
+    const elegirVista = (cual) => { vistaFijada.current = true; setVista(cual); };
 
     // La marca de cada comida: manda el servidor (`comidas.{k}.marcada`, la escribe
     // PATCH /diets/{fecha}/comida-marcada) y el navegador queda de red por si la
@@ -481,7 +516,7 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
                         data-testid="deslizador-dieta">
                         {VISTAS.map((v) => (
                             <button key={v.id} role="tab" aria-selected={vista === v.id}
-                                onClick={() => setVista(v.id)} data-testid={`vista-${v.id}`}
+                                onClick={() => elegirVista(v.id)} data-testid={`vista-${v.id}`}
                                 /* `min-w-0` para que las 4 columnas sean de verdad iguales: sin él,
                                    la celda no baja del ancho de su texto y «Macros» ensancha su
                                    columna y su pastilla invadía la de «Dieta» en pantalla estrecha.
