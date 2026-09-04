@@ -20,6 +20,7 @@ from .config import (
 )
 from .database import db
 from .dias_de_entreno import DIAS_DE_ENTRENO_POR_DEFECTO
+from .ciclos import abrir_ciclo, dia_de_espana
 from models.user import PLAN_TYPES
 
 try:
@@ -454,6 +455,30 @@ async def get_payment_method_from_invoice(invoice: Dict[str, Any]):
 
 # ==================== Sincronización suscripción / pagos ====================
 
+async def _apuntar_ciclo_si_cambia(profile, inicio_nuevo, *, origen, plan=None, semanas=None) -> None:
+    """Apunta en el cuaderno de ciclos (`core/ciclos.py`) el ciclo que acaba de arrancar,
+    SOLO si el ancla se ha movido de dia (doc de Jesus del 2-09; Francisco, 4-09: «cuando
+    renueva no podemos perder el ciclo anterior»).
+
+    Se compara por DIA DE ESPAÑA y no por instante: un `customer.subscription.updated`
+    llega varias veces con el mismo periodo, y el mismo dia escrito con otra hora no es
+    un ciclo nuevo. El modulo ademas es idempotente por (cliente, dia), pero no hace falta
+    ni llamarlo si el dia no cambio. El motivo (alta, renovacion, vuelta) lo decide el
+    modulo mirando lo que ya habia en el cuaderno.
+
+    El cuaderno es secundario: cuando esto se llama la ficha ya esta escrita, y si esto
+    falla se deja aviso y se sigue, para que el webhook no se reintente por ello (el mismo
+    patron que `anotar_cobro_en_historicos` en `upsert_payment_from_invoice`)."""
+    try:
+        dia_nuevo = dia_de_espana(inicio_nuevo)
+        if not dia_nuevo or dia_nuevo == dia_de_espana((profile or {}).get("cycle_start")):
+            return
+        await abrir_ciclo(profile, inicio=inicio_nuevo, origen=origen, plan=plan, semanas=semanas)
+    except Exception:
+        logger.exception("No se pudo apuntar el ciclo en el cuaderno (perfil %s, origen %s)",
+                         (profile or {}).get("id"), origen)
+
+
 async def sync_profile_from_subscription(subscription, *, profile_id=None, user_id=None, customer_id=None):
     metadata = subscription.get("metadata", {}) or {}
     items = subscription.get("items", {}).get("data", [])
@@ -525,6 +550,12 @@ async def sync_profile_from_subscription(subscription, *, profile_id=None, user_
         update["current_period_end"] = stripe_timestamp_to_iso(subscription.get("ended_at")) or update["current_period_end"]
 
     await db.client_profiles.update_one({"id": profile["id"]}, {"$set": update})
+    # Y EL CICLO NUEVO, AL CUADERNO (doc de Jesus del 2-09; Francisco, 4-09). La linea de
+    # arriba pisa `cycle_start` con el periodo nuevo y del anterior no quedaba nada;
+    # `core/ciclos.py` apunta el que arranca y cierra el que estaba abierto. Las semanas
+    # las deduce el modulo del plan (la misma cuenta que la semana viva).
+    await _apuntar_ciclo_si_cambia(profile, update.get("cycle_start"), origen="stripe_suscripcion",
+                                   plan=update.get("plan") or plan_code)
     return await db.client_profiles.find_one({"id": profile["id"]}, {"_id": 0})
 
 
@@ -542,6 +573,18 @@ async def sync_profile_from_one_time_session(session, *, user_id=None):
     if not profile:
         logger.warning("No se encontró perfil para checkout de pago único %s", session.get("id"))
         return None
+
+    # LA MISMA SESION LLEGA DOS VECES Y SOLO PUEDE CONTAR UNA (4-09). Una sesion pagada
+    # entra por dos puertas: la vuelta a la app (`checkout-session/sync` en routes/billing)
+    # y el webhook de Stripe, y ademas Stripe reintenta. Aqui no se recordaba cual se habia
+    # procesado ya, asi que la segunda llegada veia «mismo plan y ciclo sin vencer» (abajo)
+    # y ENCADENABA otro ciclo: con UN pago, `cycle_start`, `current_period_end` y
+    # `access_until` se iban ocho semanas mas alla. Lo destapo el test del cuaderno de
+    # ciclos al repetir la sesion (le abria un segundo ciclo porque la ficha movia el
+    # ancla). La ficha guarda el id de la ultima sesion procesada y una repetida no toca
+    # nada: devuelve la ficha tal cual, como si ya estuviera hecho, que es lo que esta.
+    if session.get("id") and profile.get("stripe_ultima_sesion") == session.get("id"):
+        return profile
 
     plan_info = get_plan_info(metadata.get("plan") or profile.get("plan"))
     # El acceso se ancla a la FECHA DEL PAGO (created de la sesión), no a cuándo se
@@ -627,6 +670,8 @@ async def sync_profile_from_one_time_session(session, *, user_id=None):
             # El acceso corre desde que paga (Semana 0 incluida) hasta el fin del ciclo.
             "access_until": end.isoformat(),
             "fecha_pago": pago.isoformat(),
+            # El candado de arriba: que sesion fue la que activo este ciclo.
+            "stripe_ultima_sesion": session.get("id"),
             "next_payment": None,
             "cancel_at_period_end": False,
             "billing_cycle_days": plan_info["billing_cycle_weeks"] * 7,
@@ -634,6 +679,12 @@ async def sync_profile_from_one_time_session(session, *, user_id=None):
         }},
     )
     await db.users.update_one({"id": profile["user_id"]}, {"$set": {"plan": plan_info["code"]}})
+    # Y AL CUADERNO DE CICLOS (doc de Jesus del 2-09; Francisco, 4-09). `start` puede estar
+    # en el FUTURO -- el que renueva antes de vencer encadena, arriba --: bien, el ciclo
+    # nuevo arranca ese dia y el modulo cierra el anterior la vispera. Las semanas van
+    # explicitas porque el pago unico las tiene en el catalogo; no hay que deducirlas.
+    await _apuntar_ciclo_si_cambia(profile, start, origen="stripe_pago_unico",
+                                   plan=plan_info["code"], semanas=plan_info["billing_cycle_weeks"])
     return await db.client_profiles.find_one({"id": profile["id"]}, {"_id": 0})
 
 

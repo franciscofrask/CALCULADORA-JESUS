@@ -71,6 +71,15 @@ async def create_indexes():
     # Las filas sustituidas: no se pintan en ningun sitio, se consultan cuando hace falta
     # saber quien escribio que.
     await _ensure("macro_history_auditoria", [("client_id", 1), ("effective_date", -1)])
+    # EL CUADERNO DE CICLOS (`core/ciclos.py`; doc de Jesus del 2-09, Francisco el 4-09:
+    # «cuando renueva no podemos perder el ciclo anterior»). UNA fila por (cliente, dia de
+    # inicio): los avisos de Stripe se repiten -- un `customer.subscription.updated` llega
+    # varias veces con el mismo periodo, y dos pueden llegar a la vez --. `abrir_ciclo` mira
+    # antes si ya esta, pero mirar-y-escribir no cierra la carrera; este unico si.
+    await _ensure("ciclos", [("client_id", 1), ("inicio", 1)], unique=True,
+                  name="un_ciclo_por_cliente_y_dia")
+    # El ciclo abierto del cliente (`fin: None`) y el de un dia concreto se buscan por aqui.
+    await _ensure("ciclos", [("client_id", 1), ("fin", 1)])
     await _ensure("routines", [("client_id", 1), ("status", 1)])        # rutina activa, overview
     await _ensure("diet_favorites", "user_id")                          # dietas favoritas
     await _ensure("food_favorites", "user_id", unique=True)             # alimentos favoritos

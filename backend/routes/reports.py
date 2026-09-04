@@ -4,6 +4,7 @@ Rutas de reportes: crear, listar, evolución.
 from fastapi import APIRouter, Body, HTTPException, Depends
 from datetime import date, datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
+import logging
 import uuid
 
 from core.database import db
@@ -15,6 +16,7 @@ from core.tiempo import a_madrid, hoy_madrid
 from models.common import ReportCreate, ReportResponse
 
 router = APIRouter(prefix="/reports", tags=["reports"])
+logger = logging.getLogger(__name__)
 
 # CUÁNTO PERIODO MIRA CADA REPORTE (doc 16-08, T7 y T8).
 #
@@ -26,6 +28,84 @@ router = APIRouter(prefix="/reports", tags=["reports"])
 DIAS_DEL_PERIODO = {"quincenal": 14, "mensual": 28, "semanal": 7}
 # Rutas del equipo sobre el reporte de un cliente (punto 45): meterlo en su nombre.
 admin_router = APIRouter(prefix="/admin", tags=["admin-reports"])
+
+# EL REPORTE SABE SU CICLO Y SU BLOQUE (doc de Jesús del 2-09, fase 1; Francisco, 4-09).
+#
+# Jesús: «un punto de control es un reporte; cada uno se llama bloque y ciclo». Hasta hoy el
+# reporte no guardaba ni ciclo, ni semana, ni bloque, y la semana del informe se
+# RECALCULABA a posteriori sobre el perfil de hoy (ver `_montar_informe_del_reporte`), que
+# es la de ahora y no la del reporte. Y el ancla del ciclo (`cycle_start`) se pisa en cada
+# renovación, así que un reporte de hace tres meses ya no se puede situar. Por eso los
+# cinco se CONGELAN al crearlo, en las dos vías, y de ahí los leerá Evolución.
+CAMPOS_CICLO = ("ciclo_id", "ciclo_numero", "ciclo_inicio", "semana_del_ciclo", "bloque")
+# Cuántos días atrás mira la vía del equipo buscando las fotos sueltas del reporte que
+# está pasando a la app (los Premium mandan por WhatsApp y alguien las sube días después).
+DIAS_DE_FOTOS_PARA_EL_EQUIPO = 14
+# Cuántas fotos se cosen como mucho a un reporte, en las dos vías (tres poses, con margen).
+TOPE_FOTOS_POR_REPORTE = 6
+
+
+async def _ciclo_del_reporte(profile: dict, dia) -> dict:
+    """Los cinco campos del ciclo para el día del reporte. Si el cuaderno de ciclos falla,
+    los cinco a None y un aviso: el reporte nunca se pierde por esto. El import va dentro
+    por lo mismo: si `core.ciclos` no carga, los reportes se siguen mandando."""
+    try:
+        from core.ciclos import ciclo_de
+        return await ciclo_de(profile or {}, dia)
+    except Exception as e:      # noqa: BLE001 - el cuaderno de ciclos es secundario
+        logger.warning("reporte de %s sin ciclo (se guarda igual): %s",
+                       (profile or {}).get("id"), e)
+        return {k: None for k in CAMPOS_CICLO}
+
+
+async def _fotos_sueltas_de(client_id: str, *, desde: str, hasta: Optional[str] = None,
+                            tope: int = TOPE_FOTOS_POR_REPORTE, mas_recientes: bool = False) -> List[str]:
+    """Las fotos de progreso del cliente que todavía no son de ningún reporte, subidas
+    entre `desde` y `hasta` (ISO), hasta `tope`, en orden cronológico.
+
+    Fuera las del alta (`uso`: la del carrusel de grasa y la de su mejor forma, que
+    core/fotos ya deja fuera al listar) y fuera las que otro reporte ya se llevó
+    (`report_id`): sin esto una foto subida en la ventana podía acabar en dos reportes.
+    `report_id: None` casa también con las de antes de este código, que no tienen el campo.
+
+    Con `mas_recientes` se quedan las últimas `tope` (lo que hacía la vía del cliente:
+    lo que acaba de subir); sin él, las primeras `tope` de la ventana."""
+    filtro = {"client_id": client_id, "uploaded_at": {"$gte": desde},
+              "uso": {"$exists": False}, "report_id": None}
+    if hasta:
+        filtro["uploaded_at"]["$lte"] = hasta
+    cursor = db.client_photos.find(filtro, {"_id": 0, "id": 1}).sort(
+        "uploaded_at", -1 if mas_recientes else 1).limit(tope)
+    ids = [d["id"] async for d in cursor]
+    if mas_recientes:
+        ids.reverse()
+    return ids
+
+
+async def _atar_fotos_al_reporte(report: dict) -> None:
+    """LA FOTO Y EL REPORTE, ATADOS EN LOS DOS SENTIDOS (4-09).
+
+    El reporte ya lleva sus fotos en `photos`; aquí se les escribe a ellas el `report_id`,
+    que es lo que deja preguntar «¿de qué reporte es esta foto?» sin recorrer los reportes.
+    Y si la foto se subió sin poder situarla en su ciclo (los cinco a None), se le ponen
+    los del reporte, campo a campo: son de la misma ventana.
+
+    Solo fotos DE ESTE CLIENTE: un body con ids ajenos no puede apropiárselos. Y si esto
+    falla, el reporte ya está guardado y no se pierde nada del cliente; el detalle, a
+    consola.
+    """
+    ids = [f for f in (report.get("photos") or []) if f]
+    if not ids:
+        return
+    de_este_cliente = {"id": {"$in": ids}, "client_id": report["client_id"]}
+    try:
+        await db.client_photos.update_many(de_este_cliente, {"$set": {"report_id": report["id"]}})
+        for campo in CAMPOS_CICLO:
+            if report.get(campo) is not None:
+                await db.client_photos.update_many(
+                    {**de_este_cliente, campo: None}, {"$set": {campo: report[campo]}})
+    except Exception as e:      # noqa: BLE001
+        logger.warning("no se pudieron atar las fotos al reporte %s: %s", report.get("id"), e)
 
 @router.post("")
 async def create_report(data: ReportCreate, user = Depends(get_current_user)):
@@ -104,13 +184,13 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
     # Se recogen aqui y no se le pide nada al front: las fotos ya estan subidas y fechadas, y
     # lo que faltaba era la costura. Se cogen las de la ventana de este reporte, que es
     # exactamente lo que el cliente acaba de hacer.
+    #
+    # Desde el 4-09 solo las de progreso y solo las sueltas (ver `_fotos_sueltas_de`): ni
+    # las del alta ni las que ya se llevó otro reporte.
     fotos = [f for f in (data.photos or []) if f]
     if not fotos:
-        desde = state["window_open"].isoformat()
-        fotos = [d["id"] async for d in db.client_photos.find(
-            {"client_id": profile["id"], "uploaded_at": {"$gte": desde}},
-            {"_id": 0, "id": 1}).sort("uploaded_at", -1).limit(6)]
-        fotos.reverse()
+        fotos = await _fotos_sueltas_de(
+            profile["id"], desde=state["window_open"].isoformat(), mas_recientes=True)
 
     # NO SE MANDA MEDIO MENSUAL (caso 51 de los 85, punto 21 del repaso del 23-08): las
     # diez medidas y las tres fotos son obligatorias, y hasta hoy solo las miraba el
@@ -127,9 +207,19 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
                 detail=f"Para mandar el reporte del mes te faltan {' y '.join(falta)}.")
 
     report_id = str(uuid.uuid4())
+    creado = datetime.now(timezone.utc).isoformat()
+    # El día del reporte es el de `created_at` (el mismo instante del que abajo sale
+    # `dia_reporte` para la serie de peso): el reporte no lleva otro día del cliente.
+    ciclo = await _ciclo_del_reporte(profile, creado)
     report = {
         "id": report_id,
         "client_id": profile["id"],
+        # De qué ciclo, semana y bloque es (ver CAMPOS_CICLO arriba; 4-09).
+        "ciclo_id": ciclo.get("ciclo_id"),
+        "ciclo_numero": ciclo.get("ciclo_numero"),
+        "ciclo_inicio": ciclo.get("ciclo_inicio"),
+        "semana_del_ciclo": ciclo.get("semana_del_ciclo"),
+        "bloque": ciclo.get("bloque"),
         "weight": data.weight,
         "measurements": data.measurements,
         "photos": fotos or None,
@@ -180,9 +270,11 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
         "sensaciones_0a10": data.sensaciones_0a10,
         "esfuerzo_resultados": data.esfuerzo_resultados,
         "trainer_feedback": None,
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "created_at": creado,
     }
     await db.reports.insert_one(report)
+    # Y a las fotos, su reporte (4-09).
+    await _atar_fotos_al_reporte(report)
 
     # El objetivo que marca el cliente MANDA sobre la fase del perfil: es lo que dispara el
     # cambio de fase, y sin esto un Nivel 1 no cambiaria de fase nunca (no tiene coach que se
@@ -467,12 +559,32 @@ async def crear_reporte_por_el_cliente(client_id: str, data: ReportCreate,
     profile = await db.client_profiles.find_one({"id": client_id})
     assert_client_access(user, profile)
 
+    creado = datetime.now(timezone.utc).isoformat()
+    # LA MISMA COSTURA QUE EN LA VÍA DEL CLIENTE (4-09). Aquí no hay ventana: si el body no
+    # trae fotos, se cogen las del cliente que todavía no son de ningún reporte y sin `uso`,
+    # subidas en los DIAS_DE_FOTOS_PARA_EL_EQUIPO anteriores al reporte (el equipo sube por
+    # WhatsApp y pasa el reporte días después), las más antiguas primero y hasta el tope.
+    fotos = [f for f in (data.photos or []) if f]
+    if not fotos:
+        desde = (datetime.fromisoformat(creado)
+                 - timedelta(days=DIAS_DE_FOTOS_PARA_EL_EQUIPO)).isoformat()
+        fotos = await _fotos_sueltas_de(client_id, desde=desde, hasta=creado)
+    # El día del reporte es el de `created_at`: el equipo no pasa otra fecha (es la misma
+    # que abajo se convierte en `dia_reporte` para la serie de peso).
+    ciclo = await _ciclo_del_reporte(profile, creado)
+
     report = {
         "id": str(uuid.uuid4()),
         "client_id": client_id,
+        # De qué ciclo, semana y bloque es (ver CAMPOS_CICLO arriba; 4-09).
+        "ciclo_id": ciclo.get("ciclo_id"),
+        "ciclo_numero": ciclo.get("ciclo_numero"),
+        "ciclo_inicio": ciclo.get("ciclo_inicio"),
+        "semana_del_ciclo": ciclo.get("semana_del_ciclo"),
+        "bloque": ciclo.get("bloque"),
         "weight": data.weight,
         "measurements": data.measurements,
-        "photos": data.photos,
+        "photos": fotos or None,
         "training_compliance": data.training_compliance,
         "nutrition_compliance": data.nutrition_compliance,
         "sleep_quality": data.sleep_quality,
@@ -488,9 +600,11 @@ async def crear_reporte_por_el_cliente(client_id: str, data: ReportCreate,
         # aparecio fuera de su ventana.
         "metido_por": user.get("name", user.get("email", "equipo")),
         "origen": "lo metio el equipo",
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": creado,
     }
     await db.reports.insert_one(report)
+    # Y a las fotos, su reporte (4-09), igual que en la vía del cliente.
+    await _atar_fotos_al_reporte(report)
 
     # El dia en España, no el UTC del instante (bloque F, 23-08; igual que en la via del
     # cliente).
@@ -1150,6 +1264,13 @@ async def _montar_informe_del_reporte(reporte: dict, perfil: dict) -> dict:
     #
     # OJO: los informes YA GUARDADOS (`reports.informe`) seguirán diciendo «Semana 1» --
     # se congelan al enviar el reporte y se devuelven tal cual, a propósito.
+    #
+    # PENDIENTE (4-09, doc de Jesús del 2-09, fase 1): desde hoy el reporte nace con
+    # `semana_del_ciclo`, `bloque`, `ciclo_id`, `ciclo_numero` y `ciclo_inicio` congelados
+    # al crearlo (ver CAMPOS_CICLO). El informe debería leer la semana DEL REPORTE cuando
+    # la tenga y calcularla solo para los de antes: esto de aquí abajo sigue calculándola
+    # sobre el perfil de hoy, que es la del momento de montarlo, no la del reporte si se
+    # monta después. Es de otra tarea; aquí no se toca.
     perfil = enrich_cycle(dict(perfil))
 
     anterior = await db.reports.find_one(

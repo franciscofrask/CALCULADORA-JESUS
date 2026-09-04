@@ -512,7 +512,21 @@ async def _guardar_foto_del_alta(user: dict, profile: dict, data_url: str, uso: 
             # La marca que las separa de las fotos de progreso: estas son del alta y las
             # listas del cliente las dejan fuera (core/fotos.listar_fotos_de).
             "uso": _USOS_FOTO_ALTA.get(uso, uso),
+            # Nunca se cosen a un reporte (tienen `uso`): el campo va a None y se queda.
+            "report_id": None,
         }
+        # QUE LA FOTO SEPA DE QUÉ CICLO ES (doc de Jesús del 2-09, fase 1; Francisco, 4-09):
+        # los mismos cinco campos que llevan las fotos de progreso (routes/checkins.py),
+        # congelados ahora, porque `cycle_start` se pisa en cada renovación. Las del alta
+        # casi siempre caen en la semana 1 del primer ciclo, pero no se da por hecho: se
+        # calcula. Si el cuaderno falla, la foto se guarda igual con ellos a None.
+        try:
+            from core.ciclos import ciclo_de
+            doc.update(await ciclo_de(profile, now_iso))
+        except Exception as e:      # noqa: BLE001 - el ciclo es secundario; la foto no
+            logger.warning("foto del alta (%s) sin ciclo (se guarda igual): %s", uso, e)
+            doc.update({"ciclo_id": None, "ciclo_numero": None, "ciclo_inicio": None,
+                        "semana_del_ciclo": None, "bloque": None})
         clave_r2 = await fotos_core.subir_foto_nueva(
             user_id=user["id"], client_id=profile.get("id"), photo_id=doc["id"],
             contenido=contenido, content_type=content_type)

@@ -296,6 +296,16 @@ def _meta_app(doc: dict) -> dict:
         "uploaded_at":  doc.get("uploaded_at"),
         "pose":         doc.get("pose"),
         "inicial":      bool(doc.get("inicial")),
+        # DE QUE CICLO ES LA FOTO (doc de Jesus del 2-09, fase 1; Francisco, 4-09): los
+        # cinco se congelan al subirla (routes/checkins.py) y `report_id` lo pone el envio
+        # del reporte al coserla (routes/reports.py). Viajan para que Evolucion agrupe las
+        # tomas por ciclo. Las de antes de este codigo no los tienen: salen a None.
+        "ciclo_id":         doc.get("ciclo_id"),
+        "ciclo_numero":     doc.get("ciclo_numero"),
+        "ciclo_inicio":     doc.get("ciclo_inicio"),
+        "semana_del_ciclo": doc.get("semana_del_ciclo"),
+        "bloque":           doc.get("bloque"),
+        "report_id":        doc.get("report_id"),
     }
 
 
@@ -333,6 +343,14 @@ def _meta_calma(entrada: dict, con_r2: bool = False) -> Optional[dict]:
         "uploaded_at":  None,
         "pose":         _pose_de_kind(entrada.get("kind")),
         "inicial":      False,
+        # Las de Calma no saben de ciclos ni de reportes de esta app: van a None, con las
+        # mismas claves que las de la app para que el front no tenga que preguntar la fuente.
+        "ciclo_id":         None,
+        "ciclo_numero":     None,
+        "ciclo_inicio":     None,
+        "semana_del_ciclo": None,
+        "bloque":           None,
+        "report_id":        None,
     }
 
 

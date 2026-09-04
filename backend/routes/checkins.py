@@ -12,6 +12,7 @@ colección dedicada `client_photos` para no inflar los documentos de check-in).
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Query, Response
 from datetime import date, datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any
+import logging
 import uuid
 
 from bson import Binary
@@ -27,6 +28,7 @@ from core.tiempo import hoy_madrid
 from models.common import CheckInCreate, CheckInResponse
 
 router = APIRouter(tags=["checkins"])
+logger = logging.getLogger(__name__)
 
 VALID_CHECKIN_TYPES = {"daily", "weekly", "monthly"}
 
@@ -760,6 +762,17 @@ def _photo_meta(doc: dict) -> dict:
         # meses distintos, que es lo único que se puede comparar.
         "pose":         doc.get("pose"),
         "inicial":      bool(doc.get("inicial")),
+        # DE QUÉ CICLO ES LA FOTO (doc de Jesús del 2-09, fase 1; Francisco, 4-09). Los cinco
+        # se congelan al subirla (ver `_ciclo_de_la_foto`) y viajan para que la pantalla de
+        # Evolución pueda agrupar las tomas por ciclo. `report_id` es el reporte al que quedó
+        # cosida (routes/reports.py) o None si está suelta. Las de antes de este código no
+        # los tienen y salen a None: no se inventan.
+        "ciclo_id":         doc.get("ciclo_id"),
+        "ciclo_numero":     doc.get("ciclo_numero"),
+        "ciclo_inicio":     doc.get("ciclo_inicio"),
+        "semana_del_ciclo": doc.get("semana_del_ciclo"),
+        "bloque":           doc.get("bloque"),
+        "report_id":        doc.get("report_id"),
     }
 
 
@@ -768,12 +781,50 @@ async def _resolve_client_id_for_user(user: dict) -> Optional[str]:
     return profile["id"] if profile else None
 
 
+# Lo que `ciclo_de` necesita del perfil para situar un día en su ciclo: nada más.
+_PROYECCION_PERFIL_PARA_EL_CICLO = {
+    "_id": 0, "id": 1, "user_id": 1, "plan": 1, "cycle_start": 1, "created_at": 1}
+
+_CICLO_VACIO = {"ciclo_id": None, "ciclo_numero": None, "ciclo_inicio": None,
+                "semana_del_ciclo": None, "bloque": None}
+
+
+async def _ciclo_de_la_foto(client_id: str, profile: Optional[dict], dia) -> dict:
+    """A qué ciclo, semana y bloque pertenece la foto, para CONGELARLO en su documento.
+
+    QUE LA FOTO SEPA DE QUÉ CICLO ES (doc de Jesús del 2-09, fase 1; Francisco, 4-09).
+    Jesús daba por hecho que «las fotos suben con el reporte, así que la app ya sabe si es
+    el mes 1, 2 o 3 de ese ciclo». Medido: no era verdad. Una foto guardaba `taken_at` y
+    `pose` y nada más, y el ciclo del cliente (`cycle_start`) se pisa en cada renovación,
+    así que meses después no hay forma de saber en qué ciclo cayó. Sin eso el selector de
+    fotos por ciclo de Evolución no se puede hacer.
+
+    Se pregunta por el DÍA DE LA FOTO (`taken_at`), no por el de la subida: el equipo sube
+    por WhatsApp fotos de días atrás (punto 45). Si algo falla, la foto se guarda igual con
+    los cinco a None y un aviso: una foto nunca se pierde por esto. El import va dentro por
+    lo mismo: si el cuaderno de ciclos no carga, las fotos se siguen subiendo.
+    """
+    try:
+        from core.ciclos import ciclo_de
+        if profile is None:
+            profile = await db.client_profiles.find_one(
+                {"id": client_id}, _PROYECCION_PERFIL_PARA_EL_CICLO)
+        return await ciclo_de(profile or {}, dia)
+    except Exception as e:      # noqa: BLE001 - el cuaderno de ciclos es secundario
+        logger.warning("foto de %s sin ciclo (se guarda igual): %s", client_id, e)
+        return dict(_CICLO_VACIO)
+
+
 async def _guardar_foto_de_progreso(*, client_id: str, user_id: Optional[str],
                                     file: UploadFile, taken_at: Optional[str],
-                                    pose: Optional[str], subida_por: Optional[str] = None) -> dict:
+                                    pose: Optional[str], subida_por: Optional[str] = None,
+                                    profile: Optional[dict] = None) -> dict:
     """Valida y guarda una foto de progreso. La usan las dos vías: la del cliente y la del
     equipo subiéndola por él (punto 45). Las comprobaciones tienen que ser las mismas en
-    las dos, y por eso están aquí y no repetidas."""
+    las dos, y por eso están aquí y no repetidas.
+
+    `profile` es el perfil del cliente si quien llama ya lo tiene (la vía del equipo); si
+    no, se lee aquí lo justo para situar la foto en su ciclo."""
     content_type = (file.content_type or "").lower()
     if content_type not in ALLOWED_PHOTO_TYPES:
         raise HTTPException(
@@ -821,7 +872,14 @@ async def _guardar_foto_de_progreso(*, client_id: str, user_id: Optional[str],
         "uploaded_at":  now_iso,
         "pose":         pose_norm,
         "inicial":      es_inicial,
+        # A qué reporte quedó cosida. Nace suelta; la costura la hace el envío del reporte
+        # (routes/reports.py, 4-09). Las subidas fuera de ventana desde «Subir fotos, cuando
+        # quieras» se quedan así, sueltas y visibles: decisión de Francisco del 4-09.
+        "report_id":    None,
     }
+    # El ciclo, la semana y el bloque de la foto, congelados ahora (4-09). Por el día de la
+    # foto, que ya está saneado arriba (o el de la subida si no vino).
+    doc.update(await _ciclo_de_la_foto(client_id, profile, doc["taken_at"]))
     if subida_por:
         # Quien la subio, cuando no fue el cliente (punto 45).
         doc["subida_por"] = subida_por
@@ -885,7 +943,8 @@ async def subir_foto_por_el_cliente(
     assert_client_access(user, profile)
     doc = await _guardar_foto_de_progreso(
         client_id=client_id, user_id=profile.get("user_id"), file=file,
-        taken_at=taken_at, pose=pose, subida_por=user.get("name", user.get("email", "equipo")))
+        taken_at=taken_at, pose=pose, subida_por=user.get("name", user.get("email", "equipo")),
+        profile=profile)
     return _photo_meta(doc)
 
 

@@ -26,6 +26,7 @@ from models.user import (
     precio_de_ciclo,
 )
 from core.cycle import enrich_cycle, compute_cycle
+from core.ciclos import abrir_ciclo
 from core.seguimiento import (marcar_ajuste, dias_desde, fecha_de_vigencia,
                               feedback_al_informe)
 from core.series_cliente import anotar_peso, anotar_grasa, actual as actual_de_serie
@@ -2136,6 +2137,22 @@ async def admin_update_user(user_id: str, data: dict, user=Depends(get_admin_onl
         await db.users.update_one({"id": user_id}, {"$set": set_user})
     if set_prof:
         await db.client_profiles.update_one({"user_id": user_id}, {"$set": set_prof})
+    if set_prof.get("cycle_start"):
+        # EL CICLO QUE ARRANCA VA TAMBIEN AL CUADERNO (doc de Jesus del 2-09; Francisco,
+        # 4-09: «cuando renueva no podemos perder el ciclo anterior»). Solo se llega aqui
+        # cuando se le da plan a quien no tenia, que es la unica vez que el panel mueve el
+        # ancla (punto 70, arriba); cambiar de plan a quien ya lo tiene no abre ciclo. El
+        # motivo lo pone `core/ciclos.py` mirando el cuaderno: «alta» si no habia nada y
+        # «vuelta» si tenia uno cerrado hace tiempo. Va con el PERFIL recien escrito y no
+        # con `target`, que es la fila de users: el cuaderno se apunta por el id del perfil.
+        # Y es secundario: si falla, la ficha ya esta cambiada y solo queda aviso en el log.
+        try:
+            perfil = await db.client_profiles.find_one({"user_id": user_id}, {"_id": 0})
+            await abrir_ciclo(perfil, inicio=set_prof["cycle_start"], origen="panel",
+                              plan=set_prof.get("plan"))
+        except Exception:
+            logging.getLogger("uvicorn.error").exception(
+                "No se pudo apuntar en el cuaderno el ciclo de %s", user_id)
     if set_user or set_prof:
         cambios = ", ".join(sorted(set(list(set_user.keys()) + list(set_prof.keys()))))
         await audit(user, "usuario", f"Editó a {target.get('name') or target.get('email')} ({cambios})")
