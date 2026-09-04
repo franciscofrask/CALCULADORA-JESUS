@@ -25,6 +25,8 @@ llama trae las dietas, los pesajes y los extras ya leídos.
 """
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from core.objetivos import motor_de, nombre_de
+
 # Cómo se le dice su objetivo. En el reporte se marca «definición / volumen /
 # mantenimiento», que son las palabras del oficio; en el informe se le habla a él.
 OBJETIVO = {
@@ -32,6 +34,21 @@ OBJETIVO = {
     "volumen": "Ganar músculo",
     "mantenimiento": "Mantener lo conseguido",
 }
+
+
+def objetivo_del_perfil(perfil: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
+    """(la clave que entiende el informe, el rótulo que se le enseña).
+
+    Fase 2 del doc de Jesús del 2-09 (Francisco, 4-09): el objetivo lo pone el entrenador
+    de una lista cerrada y vive en `objetivo_actual`; `goal` queda como la clave del motor.
+    Con `objetivo_actual`, la clave es la de su motor (`motor_de`, para el color de las
+    medidas) y el rótulo, el nombre de la lista («Perder grasa», «Tonificación»). Sin él,
+    lo de siempre: `goal` y el rótulo de OBJETIVO, que no cambia para nadie."""
+    actual = (perfil or {}).get("objetivo_actual")
+    if actual and nombre_de(actual):
+        return motor_de(actual), nombre_de(actual)
+    goal = (perfil or {}).get("goal")
+    return goal, OBJETIVO.get(goal or "") or None
 
 # El momento del día, tal y como lo rotula la maqueta: a la izquierda la hora («Tarde»,
 # «Noche», «Al terminar») y al lado el nombre de la comida.
@@ -100,16 +117,20 @@ def _enumerar(xs: Sequence[str]) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def donde_estas(objetivo: Optional[str], semana: Optional[int],
-                semanas_totales: Optional[int]) -> Dict[str, Any]:
+                semanas_totales: Optional[int], etiqueta: Optional[str] = None) -> Dict[str, Any]:
     """«TU OBJETIVO Bajar grasa · TU CICLO Semana 8 de 12».
 
     El objetivo faltaba en el informe de antes, que solo decía la semana. Y sin objetivo la
     semana no significa nada: la octava de doce es media cosa según se esté bajando grasa o
     ganando músculo.
+
+    `etiqueta` es el rótulo ya decidido (`objetivo_del_perfil`, fase 2 del doc del 2-09: el
+    nombre de la lista cerrada cuando el entrenador ha puesto el objetivo); sin él, el de
+    siempre por `goal`.
     """
     return {
         "objetivo": objetivo,
-        "objetivo_label": OBJETIVO.get(objetivo or "") or None,
+        "objetivo_label": etiqueta or OBJETIVO.get(objetivo or "") or None,
         "semana": semana,
         "semanas_totales": semanas_totales,
         # «Semana 8 de 12», o «Semana 8» a secas cuando el plan no tiene ciclo cerrado.

@@ -26,7 +26,8 @@ from models.user import (
     precio_de_ciclo,
 )
 from core.cycle import enrich_cycle, compute_cycle
-from core.ciclos import abrir_ciclo
+from core.ciclos import abrir_ciclo, ciclo_abierto
+from core.objetivos import OBJETIVOS, es_valido, nombre_de, normalizar
 from core.seguimiento import (marcar_ajuste, dias_desde, fecha_de_vigencia,
                               feedback_al_informe)
 from core.series_cliente import anotar_peso, anotar_grasa, actual as actual_de_serie
@@ -811,6 +812,10 @@ async def get_client_detail(client_id: str, user = Depends(get_admin_user)):
     profile = await db.client_profiles.find_one({"id": client_id}, {"_id": 0})
     assert_client_access(user, profile)
     enrich_cycle(profile)
+    # Su ciclo abierto del cuaderno, para la ficha (fase 2 del doc de Jesús del 2-09): el
+    # mismo objeto que ve el cliente en GET /clients/profile.
+    from routes.users import ciclo_actual_de
+    profile["ciclo_actual"] = await ciclo_actual_de(profile)
 
     user_data = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "password": 0})
     routines = await db.routines.find({"client_id": client_id}, {"_id": 0}).sort("created_at", -1).to_list(10)
@@ -1442,11 +1447,104 @@ async def update_client_admin(client_id: str, data: ClientProfileUpdate, user = 
     # existe para evitar.
     if data.excepcion is not None:
         update_data["excepcion"] = data.excepcion.strip()
+    # EL OBJETIVO, TAMBIÉN POR AQUÍ CON SUS REGLAS (fase 2 del doc de Jesús del 2-09; 4-09).
+    # La puerta buena es PUT /clients/{id}/objetivo, pero si la ficha lo manda en el PUT
+    # general no puede colarse sin validar ni dejar `goal` desacompasado del motor.
+    if "objetivo_actual" in update_data:
+        clave = normalizar(update_data["objetivo_actual"])
+        if not es_valido(clave):
+            raise HTTPException(status_code=400, detail=OBJETIVO_FUERA_DE_LISTA)
+        from routes.users import ficha_con_objetivo
+        update_data.update(ficha_con_objetivo(clave, user, profile))
+    if data.foco is not None:
+        update_data["foco"] = data.foco.strip() or None
     if update_data:
         await db.client_profiles.update_one({"id": client_id}, {"$set": update_data})
 
     updated = await db.client_profiles.find_one({"id": client_id}, {"_id": 0})
     return ClientProfile(**updated)
+
+
+# La frase para el que manda un objetivo que no está en la lista; se arma con los nombres
+# de la lista misma para que, si Francisco la amplía en código, la frase vaya sola.
+OBJETIVO_FUERA_DE_LISTA = ("Ese objetivo no está en la lista: elige uno de estos: "
+                           + ", ".join(o["nombre"].lower() for o in OBJETIVOS) + ".")
+# Lo más largo que admite el foco: es una zona («glúteo», «hombros y espalda»), no un texto.
+FOCO_MAXIMO = 80
+
+
+@router.put("/clients/{client_id}/objetivo", response_model=ClientProfile)
+async def poner_objetivo_del_cliente(client_id: str, data: Dict[str, Any] = Body(...),
+                                     user=Depends(get_admin_user)):
+    """El objetivo de ESTE cliente, puesto por el equipo (fase 2 del doc de Jesús del 2-09;
+    decisiones de Francisco del 4-09).
+
+    Jesús: «los objetivos los pones tú, no él», de una lista cerrada de seis
+    (core/objetivos.py) y en dos niveles: el del CICLO, que se pone al abrirlo y vive en el
+    cuaderno (`ciclos.objetivo`), y el ACTUAL, que se pone en cada feedback y matiza al
+    otro. Y «tonificación con foco glúteo» se parte en dos campos, el objetivo y el foco.
+
+    Body `{objetivo_actual?, foco?, objetivo_ciclo?}`: se escribe solo lo que viene, y
+    `foco` vacío lo quita. `goal` se deriva del objetivo (`motor_de`): el motor de macros y
+    el informe siguen leyendo la clave de siempre y no se tocan. Sin ciclo abierto en el
+    cuaderno, `objetivo_ciclo` no tiene dónde ir y se dice (409).
+
+    El mismo candado que el resto de la ficha: equipo, y un entrenador solo sobre los suyos.
+    Devuelve el perfil como lo vería el cliente en GET /clients/profile, con `ciclo_actual`.
+    """
+    profile = await db.client_profiles.find_one({"id": client_id}, {"_id": 0})
+    assert_client_access(user, profile)
+    from routes.users import ficha_con_objetivo, perfil_del_cliente
+
+    set_: Dict[str, Any] = {}
+    if "objetivo_actual" in data:
+        clave = normalizar(data.get("objetivo_actual"))
+        if not es_valido(clave):
+            raise HTTPException(status_code=400, detail=OBJETIVO_FUERA_DE_LISTA)
+        set_.update(ficha_con_objetivo(clave, user, profile))
+    if "foco" in data:
+        foco = data.get("foco")
+        if foco is not None and not isinstance(foco, str):
+            raise HTTPException(status_code=400, detail="El foco es una zona, en una palabra o dos («glúteo»).")
+        foco = (foco or "").strip()
+        if len(foco) > FOCO_MAXIMO:
+            raise HTTPException(status_code=400,
+                                detail="El foco es una zona, en una palabra o dos («glúteo»), no un texto largo.")
+        set_["foco"] = foco or None
+
+    objetivo_ciclo, abierto = None, None
+    if "objetivo_ciclo" in data:
+        objetivo_ciclo = normalizar(data.get("objetivo_ciclo"))
+        if not es_valido(objetivo_ciclo):
+            raise HTTPException(status_code=400, detail=OBJETIVO_FUERA_DE_LISTA)
+        abierto = await ciclo_abierto(client_id)
+        if not abierto:
+            raise HTTPException(status_code=409, detail="Este cliente no tiene un ciclo abierto todavía")
+    if not set_ and objetivo_ciclo is None:
+        raise HTTPException(status_code=400, detail="No hay nada que cambiar")
+
+    if set_:
+        await db.client_profiles.update_one({"id": client_id}, {"$set": set_})
+    if objetivo_ciclo is not None:
+        await db.ciclos.update_one(
+            {"id": abierto["id"]},
+            {"$set": {"objetivo": objetivo_ciclo,
+                      "objetivo_puesto_por": user.get("name") or user.get("email") or "el equipo",
+                      "objetivo_puesto_en": datetime.now(timezone.utc).isoformat()}})
+
+    cliente = await db.users.find_one({"id": profile["user_id"]}, {"_id": 0, "password": 0})
+    quien = (cliente or {}).get("name") or (cliente or {}).get("email") or client_id
+    partes = []
+    if "objetivo_actual" in set_:
+        partes.append(f"actual={nombre_de(set_['objetivo_actual'])}")
+    if "foco" in set_:
+        partes.append(f"foco={set_['foco'] or 'ninguno'}")
+    if objetivo_ciclo:
+        partes.append(f"ciclo={nombre_de(objetivo_ciclo)}")
+    await audit(user, "objetivo", f"Objetivo de {quien}: {', '.join(partes)}")
+
+    fresco = await db.client_profiles.find_one({"id": client_id}, {"_id": 0})
+    return await perfil_del_cliente(fresco, cliente or {})
 
 
 @router.put("/clients/{client_id}/trainer")

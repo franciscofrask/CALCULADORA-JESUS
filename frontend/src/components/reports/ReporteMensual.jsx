@@ -20,6 +20,7 @@
  */
 import React from 'react';
 import { Bloque, Dato, DosBotones, Escala0a10, Estrellas, EstrellasMedia, Opciones, TextoLibre, enumerarFechas } from './piezas';
+import { OBJETIVOS, definicionDelObjetivo, nombreDelObjetivo } from '../../lib/objetivos';
 
 const ORANGE = '#FF671F';
 
@@ -77,12 +78,11 @@ const costeDeLaDieta = (valores) => (COSTE_DE_LA_DIETA.find(
     o => o.dificultad === valores.dieta_dificultad
         && o.viabilidad === valores.viabilidad_ajuste) || {}).value || '';
 
-/** El objetivo que tiene puesto, dicho como se dice. */
-const FRASE_DEL_OBJETIVO = {
-    definicion: 'Bajar mis niveles de grasa al máximo',
-    volumen: 'Ganar la máxima masa muscular',
-    mantenimiento: 'Mantener lo que he conseguido',
-};
+/* EL OBJETIVO YA NO SE DICE AQUÍ CON TRES FRASES («Bajar mis niveles de grasa al máximo»,
+   «Ganar la máxima masa muscular», «Mantener lo que he conseguido»): el nombre y la
+   definición salen de la lista cerrada de `lib/objetivos` (doc de Jesús del 2-09, fase 2),
+   que es la misma que ve en Evolución y la que pone el entrenador. Seis objetivos, un solo
+   sitio donde se llaman. */
 
 /* LA ESCALA DE 0 A 10 vive ahora en `piezas.jsx`: el paso 2 del quincenal la usa
    dos veces más («Todo lo validado antes del 1 de septiembre»), y dos copias de la
@@ -419,15 +419,22 @@ const ReporteMensual = ({ datos, perfil, bloques, valores, set, setEntreno }) =>
                     minLabel="0 · No, esperaba más" maxLabel="10 · Genial, mejor imposible" />
             </Bloque>
 
-            {/* ── TU OBJETIVO AHORA · es el que dispara el cambio de fase ──
+            {/* ── TU OBJETIVO AHORA · primero el que tiene, luego si ha cambiado ──
                 El documento le enseña primero el que tiene y solo le pregunta si ha
                 cambiado. Es la regla de siempre (primero el dato, luego la pregunta) y
-                además evita que cambie de fase sin querer al pasar por encima: para
-                cambiarlo hay que decir «Sí» a propósito. */}
+                además evita que pida un cambio sin querer al pasar por encima: para
+                pedirlo hay que decir «Sí» a propósito. */}
+            {/* Y YA NO DISPARA NADA (doc de Jesús del 2-09: «los objetivos los pones tú, no
+                él»; decisión de Francisco del 4-09): la pregunta SE QUEDA, pero su respuesta
+                no cambia el objetivo sola. Se le cuenta al entrenador con el reporte y él
+                decide; por eso debajo de las opciones se le dice a quién va. Las opciones
+                son las seis de la lista cerrada, no las tres de antes, y se manda en
+                `proximo_objetivo` con la clave nueva. */}
             <Bloque titulo="Tu objetivo ahora" testid="mensual-objetivo">
                 {valores.objetivo_actual && (
                     <Dato testid="dato-objetivo" encabezado="TU OBJETIVO AHORA"
-                        cifra={FRASE_DEL_OBJETIVO[valores.objetivo_actual] || valores.objetivo_actual} />
+                        cifra={nombreDelObjetivo(valores.objetivo_actual) || valores.objetivo_actual}
+                        nota={definicionDelObjetivo(valores.objetivo_actual)} />
                 )}
                 <div>
                     <p className="text-sm text-foreground">¿Ha cambiado en algo respecto al mes pasado?</p>
@@ -437,20 +444,21 @@ const ReporteMensual = ({ datos, perfil, bloques, valores, set, setEntreno }) =>
                     valor={valores.objetivo_cambio}
                     onChange={(v) => {
                         set('objetivo_cambio', v);
-                        // Con «No» se manda el que ya tenía: el servidor compara contra su
-                        // fase y no cambia nada, pero el reporte queda diciendo cuál era.
+                        // Con «No» se manda el que ya tenía: el reporte queda diciendo cuál
+                        // era, y el entrenador ve que no pide cambio.
                         set('proximo_objetivo', v === 'no' ? (valores.objetivo_actual || '') : '');
                     }}
                     opciones={[{ value: 'si', label: 'Sí' }, { value: 'no', label: 'No' }]} />
                 {valores.objetivo_cambio === 'si' && (
-                    <Opciones testid="proximo-objetivo" columnas={3}
-                        pregunta="¿Cuál es ahora?"
-                        valor={valores.proximo_objetivo} onChange={(v) => set('proximo_objetivo', v)}
-                        opciones={[
-                            { value: 'definicion', label: 'Definición' },
-                            { value: 'volumen', label: 'Volumen' },
-                            { value: 'mantenimiento', label: 'Mantenimiento' },
-                        ]} />
+                    <>
+                        <Opciones testid="proximo-objetivo" columnas={2}
+                            pregunta="¿Cuál es ahora?"
+                            valor={valores.proximo_objetivo} onChange={(v) => set('proximo_objetivo', v)}
+                            opciones={OBJETIVOS.map(o => ({ value: o.clave, label: o.nombre }))} />
+                        <p className="text-[13px] text-muted-foreground" data-testid="proximo-objetivo-aviso">
+                            Se lo contamos a tu entrenador, que es quien lo cambia.
+                        </p>
+                    </>
                 )}
             </Bloque>
 

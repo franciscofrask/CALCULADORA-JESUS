@@ -34,6 +34,9 @@ from core.seguimiento import marcar_ajuste, fecha_de_vigencia
 from core.series_cliente import anotar_peso, anotar_grasa
 from core.cambios_macros import marcar_cambios
 from core.historial_macros import guardar as guardar_en_historial
+from core.ciclos import ciclo_abierto, ciclo_de
+from core.objetivos import desde_goal, motor_de
+from core.tiempo import hoy_madrid
 
 router = APIRouter(tags=["users"])
 
@@ -60,11 +63,71 @@ async def get_client_profile(user = Depends(get_current_user)):
     profile = await db.client_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
     if not profile:
         raise HTTPException(status_code=404, detail="Perfil no encontrado")
+    return await perfil_del_cliente(profile, user)
+
+
+async def ciclo_actual_de(profile: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """El ciclo ABIERTO del cuaderno (core/ciclos), como lo enseñan Evolución y la ficha:
+    `{numero, inicio, semanas, semana, bloque, objetivo}`, o None si no hay ninguno abierto.
+
+    Fase 2 del doc de Jesús del 2-09 (Francisco, 4-09): el objetivo del ciclo vive en el
+    cuaderno, no en la ficha, y la semana y el bloque se cuentan desde el inicio apuntado
+    (`ciclo_de`), no desde `cycle_start`, que la renovación pisa. Si el ciclo abierto
+    todavía no ha empezado (renovó antes de vencer y encadena), semana y bloque van a None.
+    El cuaderno es secundario: si falla, None y un aviso, y el perfil se sirve igual."""
+    try:
+        abierto = await ciclo_abierto((profile or {}).get("id"))
+        if not abierto:
+            return None
+        hoy = await ciclo_de(profile)
+        es_este = hoy.get("ciclo_id") == abierto.get("id")
+        return {
+            "numero": abierto.get("numero"),
+            "inicio": abierto.get("inicio"),
+            "semanas": abierto.get("semanas"),
+            "semana": hoy.get("semana_del_ciclo") if es_este else None,
+            "bloque": hoy.get("bloque") if es_este else None,
+            "objetivo": abierto.get("objetivo"),
+        }
+    except Exception as e:      # noqa: BLE001 - el cuaderno nunca tumba el perfil
+        logger.warning("perfil de %s sin ciclo_actual: %s", (profile or {}).get("id"), e)
+        return None
+
+
+def ficha_con_objetivo(clave: str, quien: Dict[str, Any], profile: Dict[str, Any]) -> Dict[str, Any]:
+    """Lo que se escribe en la ficha cuando el EQUIPO pone un objetivo (fase 2 del doc del
+    2-09; 4-09): la clave de la lista, el `goal` que entiende el motor de macros (`motor_de`,
+    el motor no se toca: se le da lo que entiende), y quién y cuándo. Y si con eso cambia la
+    fase del motor, `fase_desde` a hoy, que es lo que el informe usa para la foto de «inicio
+    de fase» (hasta hoy lo fechaba el propio cliente desde el reporte). Lo usan el
+    PUT del objetivo, la ficha y el reporte metido por el equipo, para que los tres
+    escriban lo mismo."""
+    motor = motor_de(clave)
+    cambio = {
+        "objetivo_actual": clave,
+        "goal": motor,
+        "objetivo_puesto_por": quien.get("name") or quien.get("email") or "el equipo",
+        "objetivo_puesto_en": datetime.now(timezone.utc).isoformat(),
+    }
+    if motor != (profile or {}).get("goal"):
+        cambio["fase_desde"] = hoy_madrid().isoformat()
+    return cambio
+
+
+async def perfil_del_cliente(profile: Dict[str, Any], user: Dict[str, Any]) -> ClientProfile:
+    """El perfil tal y como lo recibe el cliente en GET /clients/profile, con todo lo que se
+    calcula al leer. Separado de la ruta (4-09) para que el panel, al ponerle el objetivo
+    (PUT /admin/clients/{id}/objetivo), devuelva exactamente lo que vería él. `user` es el
+    usuario DEL CLIENTE: solo se mira si es una cuenta de pruebas."""
     # Si tiene acceso y, si no, por que (punto 41): el front necesita distinguir al que
     # nunca contrato del que se le acabo, porque no se les puede decir lo mismo.
     from core.plan_access import estado_de_acceso
     from core.series_cliente import grasa_vigente
     datos = enrich_cycle(profile)
+    # SU CICLO ABIERTO, del cuaderno (fase 2 del doc del 2-09). `objetivo_actual` y `foco`
+    # ya vienen en la ficha tal cual: aquí no se le inventa un objetivo a quien no lo tiene;
+    # eso lo hace la migración (_objetivos_desde_goal.py) y después el entrenador.
+    datos["ciclo_actual"] = await ciclo_actual_de(profile)
     datos["acceso"] = estado_de_acceso(profile)
     # Su % graso vigente y si toca volver a pedirlo (punto 47). Lo decide el servidor para
     # que las pantallas no tengan cada una su version de "cuanto hace de esto".
@@ -353,9 +416,18 @@ async def update_client_profile(data: ClientProfileUpdate, user = Depends(get_cu
     # cual, con lo que un cliente podia saltarse a su coach).
     # `farmacologia` mueve la proteina de descanso: la fija el coach desde la ficha del
     # cliente, nunca el propio cliente desde su perfil.
+    # Y el objetivo y el foco tampoco (fase 2 del doc de Jesús del 2-09: «los objetivos los
+    # pones tú, no él»; para el cliente pasan a ser de solo lectura). `goal` se queda como
+    # estaba: es lo que usa el que se calcula los macros solo.
     for campo in ("macros_training", "macros_rest", "macros_periworkout", "macros_source",
-                  "plan", "price", "week", "status", "trainer_id", "farmacologia"):
+                  "plan", "price", "week", "status", "trainer_id", "farmacologia",
+                  "objetivo_actual", "foco"):
         update_data.pop(campo, None)
+    # Pero si el cliente cambia su `goal` por aquí (el que se calcula los macros solo), su
+    # objetivo lo sigue con el equivalente literal, salvo que un entrenador se lo haya puesto
+    # a mano: lo del entrenador manda (fase 2 del doc de Jesús del 2-09, 4-09).
+    if update_data.get("goal") and not profile.get("objetivo_puesto_por"):
+        update_data["objetivo_actual"] = desde_goal(update_data["goal"])
 
     # Auto-calculate macros if body data is provided and macros_source is not 'manual'
     #
@@ -593,6 +665,12 @@ async def submit_questionnaire(data: QuestionnaireSubmit, user = Depends(get_cur
         "goal": data.goal,
         "sex": sexo,
     }
+    # NACE CON SU OBJETIVO, LITERAL (fase 2 del doc de Jesús del 2-09; Francisco, 4-09):
+    # volumen pasa a ganar volumen y definición a perder grasa, hasta que el entrenador lo
+    # afine. Solo si no lo tiene ya: si el entrenador se lo puso antes de que completara el
+    # cuestionario largo (?completar=1), lo suyo manda.
+    if not profile.get("objetivo_actual"):
+        update["objetivo_actual"] = desde_goal(data.goal)
     if data.height is not None:
         update["height"] = float(data.height)
     if data.birthdate:
@@ -2003,6 +2081,14 @@ async def update_macros(data: MacrosUpdate, user = Depends(get_current_user)):
         update["sex"] = data.sexo
     if data.objetivo:
         update["goal"] = data.objetivo
+        # EL QUE SE CALCULA LOS MACROS SOLO ARRASTRA SU OBJETIVO (fase 2 del doc de Jesús
+        # del 2-09, 4-09). Aquí solo se escribía `goal`, el del motor, y el informe ahora
+        # prefiere `objetivo_actual`: a este cliente se le quedaba el rótulo viejo cada vez
+        # que cambiaba de objetivo en su calculadora. Se le pone el equivalente literal,
+        # pero SOLO si ningún entrenador se lo ha puesto a mano (`objetivo_puesto_por`):
+        # lo que pone el entrenador manda.
+        if not profile.get("objetivo_puesto_por"):
+            update["objetivo_actual"] = desde_goal(data.objetivo)
 
     # Motor v2: ultima version de las preguntas 5-8 al perfil (precarga de la
     # pantalla y recalculos futuros). La revision se recalcula en SERVIDOR (no

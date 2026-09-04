@@ -51,6 +51,15 @@ RITMO_VOLUMEN = (
 RITMO_RECOMPOSICION = (-0.20, 0.20)   # mantenerse es el objetivo
 
 
+def objetivo_de_ritmo(perfil: Dict[str, Any]) -> Optional[str]:
+    """La familia de ritmo que le toca. Con `objetivo_actual` (fase 2 del doc de Jesús del
+    2-09: el objetivo lo pone el entrenador de una lista cerrada) sale de
+    `core/objetivos.ritmo_de` («volumen», «definicion» o «recomposicion»); sin él, `goal`,
+    como siempre. Los tramos de abajo no cambian."""
+    from core.objetivos import ritmo_de
+    return ritmo_de((perfil or {}).get("objetivo_actual")) or (perfil or {}).get("goal")
+
+
 def ritmo_objetivo(objetivo: Optional[str], porcentaje_graso: Optional[float]) -> Dict[str, Any]:
     """Cuanto deberia moverse el peso por semana, en % del peso corporal."""
     obj = (objetivo or "").lower().strip()
@@ -390,7 +399,7 @@ def montar_informe(*, perfil: Dict[str, Any], reporte: Dict[str, Any],
         peso_antes=(reporte_anterior or {}).get("weight"),
         desde=(reporte_anterior or {}).get("created_at"),
         hasta=reporte.get("created_at"),
-        objetivo=perfil.get("goal"),
+        objetivo=objetivo_de_ritmo(perfil),
         porcentaje_graso=perfil.get("body_fat"),
     )
     cumplimiento = evaluar_cumplimiento(

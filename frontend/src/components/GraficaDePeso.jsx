@@ -34,12 +34,19 @@
  *     pesa hoy y desde cuándo está. «La historia entera sigue estando, pero deja de ser el
  *     primer número que ve.» Solo se pinta si hay pesajes anteriores al ciclo: si toda su
  *     historia cabe en el ciclo no hay nada que contar dos veces.
+ *
+ * Y ENCIMA DE TODO, SU OBJETIVO, DE SOLO LECTURA (doc de Jesús del 2-09, «Los ciclos, los
+ * bloques y los objetivos»; decisión de Francisco del 4-09). Los objetivos los pone el
+ * ENTRENADOR, no el cliente, y aquí se le enseñan tal cual: el del ciclo, el actual si lo
+ * matiza, el foco si lo hay y por dónde va («Bloque 3 · semana 12 de 12»). Hasta aquí era
+ * una línea («Tu objetivo: ganar masa») sacada del `goal` del cuestionario.
  */
 import React, { useMemo } from 'react';
 import {
     CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import { kg } from '../lib/pesoValido';
+import { definicionDelObjetivo, nombreDelObjetivo, normalizarObjetivo, objetivoVisible } from '../lib/objetivos';
 
 const NARANJA = '#FF671F';
 // Del tema, no a pelo: es lo que hacía que en el lado del cliente no se leyeran.
@@ -51,19 +58,17 @@ const LINEA_TENUE = 'hsl(var(--border))';
 // +7 es la buena noticia. El color solo dice algo si sabe hacia dónde va el cliente:
 // verde si el cambio va hacia su objetivo, rojo si va en contra, y neutro si mantiene
 // (o si su objetivo no marca dirección, como recomposición).
-const OBJETIVO_TEXTO = {
-    volumen: 'ganar masa', definicion: 'perder grasa',
-    perdida_grasa: 'perder grasa', 'perdida-grasa': 'perder grasa',
-    recomposicion: 'recomposición', mantenimiento: 'mantener tu peso',
-};
+//
 // +1 = el peso debe subir; -1 = debe bajar; 0 = sin dirección (mantener, recomposición
-// o sin objetivo en el perfil).
-const _direccion = (objetivo) => {
-    const o = String(objetivo || '').toLowerCase();
-    if (o === 'volumen') return 1;
-    if (o === 'definicion' || o.startsWith('perdida')) return -1;
-    return 0;
+// o sin objetivo en el perfil). Las claves son las de la lista cerrada de objetivos
+// (`lib/objetivos`, doc de Jesús del 2-09); el `goal` viejo del cuestionario (volumen /
+// definicion) sigue entrando porque `normalizarObjetivo` lo traduce.
+const DIRECCION = {
+    ganar_volumen: 1,
+    perder_grasa: -1, maxima_definicion: -1, tonificacion: -1,
+    recomposicion: 0, mantenimiento: 0,
 };
+const _direccion = (objetivo) => DIRECCION[normalizarObjetivo(objetivo) || ''] || 0;
 const _colorDelCambio = (delta, objetivo) => {
     const dir = _direccion(objetivo);
     if (!delta || !dir) return 'text-foreground';
@@ -162,13 +167,96 @@ const Fila = ({ etiqueta, children }) => (
 );
 
 /**
+ * LA TARJETA DEL OBJETIVO, tal como la dibujó Jesús en la maqueta del 2-09:
+ *
+ *     OBJETIVO DEL CICLO            VAS POR
+ *     Perder grasa                  Bloque 3
+ *     OBJETIVO ACTUAL               semana 12 de 12
+ *     Recomposición
+ *
+ * Todo de SOLO LECTURA: los objetivos los pone el entrenador (Jesús: «es un cambio de
+ * fondo, no de copy»; Francisco, 4-09). El actual va en naranja y SOLO si es distinto del
+ * del ciclo: el mismo nombre dos veces no dice nada. El foco («tonificación con foco
+ * glúteo» son dos campos) y la definición del objetivo, si la tiene («Bajar del 14 % de
+ * grasa.»), en gris debajo. Y «Vas por» solo si viene `ciclo_actual`: sin él no se
+ * inventa un bloque.
+ *
+ * Sin ciclo abierto (ni `ciclo_actual` ni fecha de arranque) el rótulo es «Tu objetivo»,
+ * por lo mismo que abajo se dice «Tu curva» y no «Este ciclo».
+ */
+const TarjetaDelObjetivo = ({ objetivoActual, foco, ciclo, conCiclo }) => {
+    const delCiclo = normalizarObjetivo(ciclo?.objetivo) || objetivoActual;
+    if (!delCiclo) return null;
+    const actualDistinto = objetivoActual && objetivoActual !== delCiclo ? objetivoActual : null;
+    // La definición es la del objetivo que manda ahora: el actual si matiza, el del ciclo si no.
+    const definicion = definicionDelObjetivo(actualDistinto || delCiclo);
+    const vasPor = ciclo != null && (ciclo.bloque != null || ciclo.semana != null);
+    return (
+        <div className="flex items-start justify-between gap-4 pb-3 border-b border-border"
+             data-testid="objetivo-del-peso">
+            <div className="space-y-1.5 min-w-0">
+                <div>
+                    <p className="caption">{conCiclo ? 'Objetivo del ciclo' : 'Tu objetivo'}</p>
+                    <p className="text-base font-bold text-foreground leading-tight" data-testid="objetivo-del-ciclo">
+                        {nombreDelObjetivo(delCiclo)}
+                    </p>
+                </div>
+                {actualDistinto && (
+                    <div>
+                        <p className="caption">Objetivo actual</p>
+                        <p className="text-base font-bold text-brand leading-tight" data-testid="objetivo-actual">
+                            {nombreDelObjetivo(actualDistinto)}
+                        </p>
+                    </div>
+                )}
+                {foco && (
+                    <p className="text-xs text-muted-foreground" data-testid="objetivo-foco">foco: {foco}</p>
+                )}
+                {definicion && <p className="text-xs text-muted-foreground">{definicion}</p>}
+            </div>
+            {vasPor && (
+                <div className="text-right shrink-0" data-testid="vas-por">
+                    <p className="caption">Vas por</p>
+                    {ciclo.bloque != null && (
+                        <p className="text-base font-bold text-foreground leading-tight tabular-nums">
+                            Bloque {ciclo.bloque}
+                        </p>
+                    )}
+                    {ciclo.semana != null && (
+                        <p className="text-xs text-muted-foreground tabular-nums">
+                            semana {ciclo.semana}{ciclo.semanas ? ` de ${ciclo.semanas}` : ''}
+                        </p>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
+/**
  * `puntos`: [{fecha|date, peso|value}]. Se acepta cualquiera de los dos nombres porque las
  * dos pantallas los traían distintos, y unificarlos aquí es más barato que tocar las dos.
  * `desdeElCiclo`: el `cycle_start` del perfil. `semanasDelCiclo`: su `cycle_total_weeks`,
  * para decir «En estas 12 semanas»; sin él se dice «En este ciclo».
+ *
+ * EL OBJETIVO ENTRA DE DOS FORMAS (fase 2 del doc del 2-09, 4-09):
+ *   - `perfil`: la ficha entera del cliente, con `objetivo_actual`, `foco` y `ciclo_actual`
+ *     ({numero, inicio, semanas, semana, bloque, objetivo}). Es la que usa Evolución.
+ *   - `objetivo`: la prop de antes, una clave sola (el `goal` viejo o una de la lista
+ *     nueva). Sigue valiendo para que el panel del entrenador no tenga que cambiar; con
+ *     ella se pinta la tarjeta sin «Vas por».
+ * Con las dos, manda la ficha. Si la ficha trae `ciclo_actual` y no se pasan
+ * `desdeElCiclo` / `semanasDelCiclo`, salen de ahí (`inicio` y `semanas`).
  */
-const GraficaDePeso = ({ puntos, alto = 'h-56', conResumen = true, objetivo = null,
+const GraficaDePeso = ({ puntos, alto = 'h-56', conResumen = true, objetivo = null, perfil = null,
                          desdeElCiclo = null, semanasDelCiclo = null }) => {
+    const ciclo = perfil?.ciclo_actual || null;
+    // El objetivo que manda para el color del cambio: el actual de la ficha (que matiza al
+    // del ciclo), y si no hay ficha, la clave suelta. Sin nada, sin dirección.
+    const objetivoActual = perfil ? objetivoVisible(perfil) : normalizarObjetivo(objetivo);
+    const foco = perfil?.foco || null;
+    const arranque = desdeElCiclo ?? ciclo?.inicio ?? null;
+    const semanas = semanasDelCiclo ?? ciclo?.semanas ?? null;
     const datos = useMemo(() => {
         const limpio = (puntos || [])
             .map(p => {
@@ -203,7 +291,7 @@ const GraficaDePeso = ({ puntos, alto = 'h-56', conResumen = true, objetivo = nu
     //
     // Sin fecha de ciclo se sigue leyendo la historia entera como hasta ahora, con el
     // rótulo «Tu curva»: es mejor que quedarse sin resumen.
-    const arranqueCiclo = desdeElCiclo ? new Date(desdeElCiclo).getTime() : null;
+    const arranqueCiclo = arranque ? new Date(arranque).getTime() : null;
     const hayCiclo = arranqueCiclo != null && Number.isFinite(arranqueCiclo);
     const serie = hayCiclo ? datos.filter(p => p.ts >= arranqueCiclo) : datos;
     // Pesajes de ANTES del ciclo: son los que justifican el segundo bloque.
@@ -211,35 +299,30 @@ const GraficaDePeso = ({ puntos, alto = 'h-56', conResumen = true, objetivo = nu
 
     if (!conResumen) {
         return serie.length >= 2
-            ? <div data-testid="grafica-de-peso"><Curva serie={serie} alto={alto} objetivo={objetivo} /></div>
+            ? <div data-testid="grafica-de-peso"><Curva serie={serie} alto={alto} objetivo={objetivoActual} /></div>
             : null;
     }
 
     const ultimoDeTodos = datos[datos.length - 1].peso;
     const cambioTotal = Math.round((ultimoDeTodos - datos[0].peso) * 10) / 10;
-    // El objetivo del perfil, contado en cristiano. Sin objetivo conocido no se inventa.
-    const objetivoTexto = OBJETIVO_TEXTO[String(objetivo || '').toLowerCase()] || null;
 
     // Las tres líneas del primer bloque, o el texto de «te falta uno» si no hay curva.
     const conCurva = serie.length >= 2;
     const cambio = conCurva ? Math.round((serie[serie.length - 1].peso - serie[0].peso) * 10) / 10 : null;
-    const colorCambio = cambio === 0 ? 'text-foreground' : _colorDelCambio(cambio, objetivo);
+    const colorCambio = cambio === 0 ? 'text-foreground' : _colorDelCambio(cambio, objetivoActual);
     const rotuloCiclo = hayCiclo ? 'Este ciclo' : 'Tu curva';
     // «En estas 12 semanas» es la duración del ciclo del perfil (`cycle_total_weeks`); los
     // planes mensuales sin tope no la tienen, y ahí se dice «En este ciclo».
     const etiquetaCambio = !hayCiclo ? 'Desde entonces'
-        : semanasDelCiclo ? `En estas ${semanasDelCiclo} semanas` : 'En este ciclo';
+        : semanas ? `En estas ${semanas} semanas` : 'En este ciclo';
 
     return (
         <div data-testid="grafica-de-peso" className="space-y-4">
             {/* Encima de todo, hacia dónde va: sin esto un +7 no se puede leer, porque no
-                es lo mismo en volumen que en definición (doc 23-08, bloque 10). */}
-            {objetivoTexto && (
-                <p className="text-sm" data-testid="objetivo-del-peso">
-                    <span className="text-muted-foreground text-xs mr-1">Tu objetivo:</span>
-                    <span className="text-foreground font-bold">{objetivoTexto}</span>
-                </p>
-            )}
+                es lo mismo en volumen que en definición (doc 23-08, bloque 10). Desde el
+                4-09 es la tarjeta de la maqueta de Jesús, de solo lectura. */}
+            <TarjetaDelObjetivo objetivoActual={objetivoActual} foco={foco} ciclo={ciclo}
+                                conCiclo={ciclo != null || hayCiclo} />
 
             {/* BLOQUE 1: este ciclo (o su curva entera, si no hay fecha de ciclo). */}
             <div className="space-y-2">
@@ -254,7 +337,7 @@ const GraficaDePeso = ({ puntos, alto = 'h-56', conResumen = true, objetivo = nu
                 </Rotulo>
                 {conCurva ? (
                     <>
-                        <Curva serie={serie} alto={alto} objetivo={objetivo} />
+                        <Curva serie={serie} alto={alto} objetivo={objetivoActual} />
                         <div className="space-y-1.5 pt-1">
                             <Fila etiqueta={hayCiclo ? 'Empezaste el ciclo en' : 'Empezaste en'}>
                                 {kg(serie[0].peso)} kg

@@ -15,6 +15,7 @@
 import React from 'react';
 import { ChevronLeft, Send } from 'lucide-react';
 import { MEDIDAS } from '../../lib/medidas';
+import { nombreDelObjetivo } from '../../lib/objetivos';
 import { enumerar, kg } from './piezas';
 
 const ORANGE = '#FF671F';
@@ -43,7 +44,9 @@ const ENERGIA = {
     duermo_poco: 'duermo poco', estres_trabajo: 'estrés del trabajo',
     como_poco: 'como poco', no_lo_se: 'no lo sé',
 };
-const OBJETIVO = { definicion: 'definición', volumen: 'volumen', mantenimiento: 'mantenimiento' };
+// El objetivo se traduce con la lista de seis (lib/objetivos.js, doc de Jesús del 2-09); las
+// tres claves viejas del reporte entran igual por ahí. Antes había aquí un mapa de tres y con
+// las nuevas este paso decía «sin poner».
 const REGULARIDAD = {
     a_mi_manera_sigo: 'a mi manera, sigo así',
     a_mi_manera_quiero_rutina: 'a mi manera, quiero probar tu rutina',
@@ -196,7 +199,7 @@ const RevisaAntesDeEnviar = ({ valores, datos, bloques, perfil, prev, enviando, 
                     <Renglon testid="rev-motivacion" que="Motivación" valor={estrellas(valores.motivacion)} />
                 )}
                 <Renglon testid="rev-objetivo" que="Tu objetivo ahora"
-                    valor={OBJETIVO[valores.proximo_objetivo]}
+                    valor={nombreDelObjetivo(valores.proximo_objetivo) || null}
                     extra={valores.proximo_objetivo && valores.proximo_objetivo === valores.objetivo_actual ? 'no cambia' : null} />
                 <Renglon testid="rev-notas" que="Notas" valor={(valores.notes || '').trim() ? 'escritas' : null} />
             </div>

@@ -60,6 +60,11 @@ TIPOS_EQUIPO: Dict[str, Dict[str, Any]] = {
     "lead_pagado": {"etiqueta": "Lead que ha pagado", "dinero": True},
     "macros_propuestos": {"etiqueta": "Macros propuestos por el cuestionario", "dinero": False},
     "perfil_completo": {"etiqueta": "Cuestionario largo relleno", "dinero": False},
+    # EL CLIENTE PROPONE OTRO OBJETIVO EN SU REPORTE (fase 2 del doc de Jesus del 2-09;
+    # Francisco, 4-09): la pregunta «¿ha cambiado tu objetivo?» se queda, pero su respuesta
+    # ya no escribe la ficha. Llega aqui, y el entrenador la aplica, o no, al contestar el
+    # reporte. El aviso lleva en `extra` la clave propuesta y el id del reporte.
+    "objetivo_propuesto": {"etiqueta": "Propone otro objetivo en su reporte", "dinero": False},
 }
 
 # Los que hay que mirar antes que nada, en el orden en que se pintan.

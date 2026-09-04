@@ -1316,6 +1316,23 @@ class ClientProfile(BaseModel):
     age: Optional[int] = None
     sex: Optional[str] = None
     goal: Optional[str] = None
+    # EL OBJETIVO LO PONE EL ENTRENADOR (doc de Jesús del 2-09, fase 2; decisiones de
+    # Francisco del 4-09). Lista cerrada de seis (core/objetivos.py) y dos niveles:
+    # `objetivo_actual` es el de la ficha, el que se matiza en cada feedback; el del CICLO
+    # vive en el cuaderno (`ciclos.objetivo`) y viaja aquí dentro de `ciclo_actual`.
+    # `goal` NO se va: es la clave que entiende el motor de macros y se deriva del objetivo
+    # (`motor_de`) cada vez que el entrenador lo cambia. `foco` es la zona («glúteo»):
+    # Jesús parte «tonificación con foco glúteo» en dos campos para no acabar con un
+    # objetivo nuevo por cada zona.
+    objetivo_actual: Optional[str] = None
+    foco: Optional[str] = None
+    # Quién lo puso y cuándo (el entrenador desde el panel, o el equipo al meter un reporte
+    # en nombre del cliente).
+    objetivo_puesto_por: Optional[str] = None
+    objetivo_puesto_en: Optional[str] = None
+    # El ciclo ABIERTO del cuaderno, calculado al leer (routes/users.ciclo_actual_de):
+    # {numero, inicio, semanas, semana, bloque, objetivo}, o None si no tiene ninguno.
+    ciclo_actual: Optional[Dict[str, Any]] = None
     body_fat: Optional[float] = None
     porcentajes_grasos: Optional[List[Dict[str, Any]]] = None    # [{fecha, valor, origen}]
     equipment: Optional[List[str]] = None
@@ -1527,6 +1544,11 @@ class ClientProfileUpdate(BaseModel):
     age: Optional[int] = Field(None, ge=RANGOS_PERFIL["age"][0], le=RANGOS_PERFIL["age"][1])
     sex: Optional[str] = None
     goal: Optional[str] = None
+    # Fase 2 del doc del 2-09 (4-09): los pone el EQUIPO (PUT /admin/clients/{id}/objetivo,
+    # o la ficha por el PUT general, que valida igual). En el PUT del propio cliente se
+    # descartan: desde que lo pone el entrenador, para él son de solo lectura.
+    objetivo_actual: Optional[str] = None
+    foco: Optional[str] = None
     body_fat: Optional[float] = Field(None, ge=RANGOS_PERFIL["body_fat"][0], le=RANGOS_PERFIL["body_fat"][1])
     equipment: Optional[List[str]] = None
     injuries: Optional[List[str]] = None

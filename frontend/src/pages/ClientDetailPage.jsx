@@ -17,6 +17,8 @@ import { toast } from 'sonner';
 import { useConfirm } from '../components/ui/confirm';
 import { PlanBadge } from './ClientDashboard';
 import { sexoLabel, objetivoLabel, equipamientoLabel, suplementoCatLabel, EQUIPAMIENTO_OPCIONES, plural, estadoClienteLabel, estadoDeAcceso } from '../lib/labels';
+import { OBJETIVOS, nombreDelObjetivo, normalizarObjetivo } from '../lib/objetivos';
+import ObjetivoDelCliente from '../components/panel/ObjetivoDelCliente';
 import { construirComparativa, TITULO_ETIQUETA } from '../lib/comparativaFotos';
 import { BIBLIOTECA_DE_CLIENTES } from '../lib/menuFuentes';
 import { MEDIDAS, valorAnterior, diferencia } from '../lib/medidas';
@@ -1312,8 +1314,15 @@ const ClientDetailPage = () => {
                                 if (g) return <>{g.valor}% <span className="text-white/40 font-normal">· {_haceCuanto(g.fecha)}</span></>;
                                 return profile?.body_fat != null ? `${profile.body_fat}%` : '-';
                             })()} />
-                            <InfoItem icon={Target} label="Objetivo" value={objetivoLabel(profile?.goal)} />
                         </div>
+
+                        {/* EL OBJETIVO LO PONE EL ENTRENADOR (doc de Jesús del 2-09, fase 2;
+                            Francisco, 4-09). Aquí se leía `goal` a secas, que venía del
+                            cuestionario y el cliente reescribía cada mes desde el reporte.
+                            Ahora son tres campos que se guardan desde aquí: el objetivo del
+                            ciclo, el actual y el foco. */}
+                        <ObjetivoDelCliente api={api} clientId={clientId} profile={profile}
+                            ciclo={profile?.ciclo_actual || client?.ciclo_actual} onGuardado={fetchClient} />
 
                         {/* LO QUE LLEVA Y LO QUE NO (Francisco, 25-08). Antes había que
                             saberse el catálogo de memoria para responder a las dos preguntas
@@ -2034,13 +2043,16 @@ const ClientDetailPage = () => {
                     {(profile?.goal || profile?.weight || profile?.equipment?.length) ? (
                         <Card className="bg-[#111] border-[#222]"><CardContent className="p-5">
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                <InfoItem icon={Target} label="Objetivo" value={objetivoLabel(profile?.goal)} />
                                 <InfoItem icon={Scale} label="Peso inicial" value={profile?.weight ? `${profile.weight} kg` : '-'} />
                                 <InfoItem icon={User} label="Sexo" value={sexoLabel(profile?.sex)} />
                                 <InfoItem icon={Activity} label="% Graso" value={profile?.body_fat ? `${profile.body_fat}%` : '-'} />
                                 <InfoItem icon={Calendar} label="Edad" value={profile?.age || '-'} />
                                 <InfoItem icon={Scale} label="Altura" value={profile?.height ? `${profile.height} cm` : '-'} />
                             </div>
+                            {/* El objetivo ya no es una respuesta del cuestionario: lo pone el
+                                entrenador (fase 2 del 2-09). Es el mismo bloque que en Resumen. */}
+                            <ObjetivoDelCliente api={api} clientId={clientId} profile={profile}
+                                ciclo={profile?.ciclo_actual || client?.ciclo_actual} onGuardado={fetchClient} />
                             {Array.isArray(profile?.equipment) && profile.equipment.length > 0 && (
                                 <div className="mt-4"><p className="text-xs text-white/40 uppercase tracking-wider mb-2">Equipamiento</p>
                                     <div className="flex flex-wrap gap-1.5">{profile.equipment.map((e, i) => <Badge key={i} className="bg-[#FF671F]/10 text-[#FF671F] border-0 text-xs">{equipamientoLabel(e)}</Badge>)}</div>
@@ -2487,7 +2499,7 @@ const ClientDetailPage = () => {
                 {/* ========== TAB: SEGUIMIENTO (evolución de peso + check-ins + reportes) ========== */}
                 <TabsContent value="seguimiento" className="space-y-4">
                     <WeightEvolution reports={reports} objetivo={profile?.goal}
-                        desdeElCiclo={profile?.cycle_start} />
+                        desdeElCiclo={profile?.cycle_start} perfil={profile} />
                     {/* Las diez medidas comparadas en el tiempo (punto 35): hasta ahora solo
                         se veía el último dato. Con el perfil van también las que el cliente
                         apuntó por su cuenta y las del alta, que antes no llegaban aquí: el
@@ -2503,7 +2515,7 @@ const ClientDetailPage = () => {
                     <CoachCheckins clientId={clientId} />
                     {/* Meter el reporte de un cliente que lo mandó por WhatsApp (punto 45) */}
                     <ReportePorElCliente api={api} clientId={clientId} onHecho={fetchClient} />
-                    <ReportsFeedbackList initialReports={reports} />
+                    <ReportsFeedbackList initialReports={reports} clientId={clientId} profile={profile} onObjetivoAplicado={fetchClient} />
                 </TabsContent>
             </Tabs>
         </div>
@@ -2935,10 +2947,11 @@ const ReportePorElCliente = ({ api, clientId, onHecho }) => {
                         <select value={datos.proximo_objetivo}
                             onChange={e => setDatos(d => ({ ...d, proximo_objetivo: e.target.value }))}
                             className="w-full bg-[#0A0A0A] border border-[#333] text-white text-sm rounded-lg px-2 py-2 mt-1">
+                            {/* Las seis de la lista cerrada (fase 2 del 2-09), no las tres de
+                                antes: es la misma pregunta que contesta el cliente en su
+                                reporte, y las dos listas tienen que ser la misma. */}
                             <option value="">Sin cambio</option>
-                            <option value="definicion">Definición</option>
-                            <option value="volumen">Volumen</option>
-                            <option value="mantenimiento">Mantenimiento</option>
+                            {OBJETIVOS.map(o => <option key={o.clave} value={o.clave}>{o.nombre}</option>)}
                         </select>
                     </div>
                 </div>
@@ -3036,7 +3049,10 @@ const CeldaHistorial = ({ texto, hueco, testid }) => (
     </td>
 );
 
-const OBJETIVO_REPORTE = { definicion: 'Definición', volumen: 'Volumen', mantenimiento: 'Mantenimiento' };
+// Lo que el cliente marcó en el reporte, con su nombre de la lista (fase 2 del 2-09): los
+// reportes viejos traen «definicion» o «volumen» y los nuevos las seis claves nuevas. Se lee
+// con el nombre que tendría al aplicarse, para que lo que se ve sea lo que se aplica.
+const nombreDeLaPropuesta = (clave) => nombreDelObjetivo(clave) || objetivoLabel(clave);
 const VIABILIDAD_REPORTE = {
     me_adapto: 'se adapta a lo que le pongas',
     necesito_mas: 'necesita comer MÁS para cumplir',
@@ -3152,7 +3168,7 @@ const ReporteParaDecidir = ({ reporte, reportes, pesoUltimoAjuste, onVerReportes
                     <div className="space-y-1 text-sm bg-[#0A0A0A] rounded-lg p-3 border border-[#222]">
                         {reporte.proximo_objetivo && (
                             <p className="text-white/50">Próximo objetivo{' '}
-                                <b className="text-[#FF671F] uppercase">{OBJETIVO_REPORTE[reporte.proximo_objetivo] || reporte.proximo_objetivo}</b></p>
+                                <b className="text-[#FF671F] uppercase">{nombreDeLaPropuesta(reporte.proximo_objetivo)}</b></p>
                         )}
                         {reporte.viabilidad_ajuste && (
                             <p className="text-white/50">Margen para ajustar{' '}
@@ -4378,7 +4394,7 @@ const CalmaSuplementos = ({ sup }) => {
 // La MISMA gráfica que ve el cliente (punto 4.13). Antes eran dos, con los mismos fallos
 // escritos dos veces: el eje por categorías juntando todos los «9 ago» de cuatro años y los
 // colores a pelo. Ahora hay una sola y las dos pantallas enseñan lo mismo.
-const WeightEvolution = ({ reports, objetivo, desdeElCiclo = null }) => {
+const WeightEvolution = ({ reports, objetivo, desdeElCiclo = null, perfil = null }) => {
     const puntos = (reports || [])
         .filter(r => r.weight != null)
         .map(r => ({ fecha: r.created_at, peso: r.weight }));
@@ -4388,8 +4404,11 @@ const WeightEvolution = ({ reports, objetivo, desdeElCiclo = null }) => {
             <CardHeader className="pb-2"><CardTitle className="text-sm text-white/40 uppercase tracking-wider flex items-center gap-2"><Scale className="w-4 h-4" />Evolución del peso ({puntos.length})</CardTitle></CardHeader>
             <CardContent>
                 {/* El color del cambio, contra el objetivo del cliente (P46 del 23-08):
-                    el coach tampoco tiene que leer un +2 en volumen como alarma. */}
-                <GraficaDePeso puntos={puntos} objetivo={objetivo} desdeElCiclo={desdeElCiclo} />
+                    el coach tampoco tiene que leer un +2 en volumen como alarma. Y con la
+                    ficha entera (doc de Jesús del 2-09, fase 2): la tarjeta del objetivo
+                    enseña el del ciclo, el actual, el foco y «vas por el bloque N», lo
+                    mismo que ve el cliente. */}
+                <GraficaDePeso puntos={puntos} objetivo={objetivo} desdeElCiclo={desdeElCiclo} perfil={perfil} />
             </CardContent>
         </Card>
     );
@@ -4531,9 +4550,23 @@ const RespuestasDelReporte = ({ reporte: r }) => {
 };
 
 // Reportes del cliente con feedback editable por el coach (cierra el circuito de ReportsPage)
-const ReportsFeedbackList = ({ initialReports }) => {
+const ReportsFeedbackList = ({ initialReports, clientId, profile, onObjetivoAplicado }) => {
     const { api } = useAuth();
     const [reports, setReports] = useState(initialReports || []);
+    // LA PROPUESTA DEL CLIENTE YA NO ESCRIBE LA FICHA SOLA (Francisco, 4-09). La pregunta del
+    // reporte se queda, pero su respuesta la ve el entrenador al contestar y la aplica si le
+    // parece: el objetivo lo pone él (doc de Jesús del 2-09, fase 2).
+    const [aplicando, setAplicando] = useState(false);
+    const aplicarObjetivo = async (clave) => {
+        setAplicando(true);
+        try {
+            await api.put(`/admin/clients/${clientId}/objetivo`, { objetivo_actual: clave });
+            toast.success('Objetivo actual actualizado', { description: `Ahora es ${nombreDelObjetivo(clave)}.` });
+            onObjetivoAplicado?.();
+        } catch (e) {
+            toast.error(mensajeDeError(e, 'No se pudo aplicar el objetivo'));
+        } finally { setAplicando(false); }
+    };
     const [drafts, setDrafts] = useState({});
     const [savingId, setSavingId] = useState(null);
     const [showAll, setShowAll] = useState(false);
@@ -4646,15 +4679,29 @@ const ReportsFeedbackList = ({ initialReports }) => {
                             {abierto.nutrition_compliance != null && <span className="text-white/50">Nutrición <b className="text-white">{abierto.nutrition_compliance}%</b></span>}
                         </div>
                         {/* Las tres preguntas del formulario de siempre (punto 5 del 05-08).
-                            El próximo objetivo es el que dispara el cambio de fase, así que se
-                            marca cuando cambia respecto a la fase que tenía. */}
+                            El objetivo que marca el cliente es una PROPUESTA (Francisco,
+                            4-09): antes reescribía la ficha al mandar el reporte; ahora se
+                            enseña aquí y el entrenador la aplica con el botón si le parece. */}
                         {(abierto.proximo_objetivo || abierto.viabilidad_ajuste || abierto.cumplimiento_entreno) && (
                             <div className="space-y-1.5 text-sm bg-[#0A0A0A] rounded-lg p-3 border border-[#222]">
-                                {abierto.proximo_objetivo && (
-                                    <p className="text-white/50">Próximo objetivo{' '}
-                                        <b className="text-[#FF671F] uppercase">{OBJETIVO_REPORTE[abierto.proximo_objetivo] || abierto.proximo_objetivo}</b>
-                                    </p>
-                                )}
+                                {abierto.proximo_objetivo && (() => {
+                                    const propuesto = normalizarObjetivo(abierto.proximo_objetivo);
+                                    const yaLoTiene = !!propuesto && propuesto === normalizarObjetivo(profile?.objetivo_actual);
+                                    return (
+                                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1" data-testid="propuesta-objetivo">
+                                            <p className="text-white/50">El cliente dice que su objetivo ahora es{' '}
+                                                <b className="text-[#FF671F]">{nombreDeLaPropuesta(abierto.proximo_objetivo)}</b>
+                                            </p>
+                                            {propuesto && (yaLoTiene
+                                                ? <span className="text-emerald-400 text-xs" data-testid="objetivo-ya-lo-tiene">Es el que ya tiene</span>
+                                                : <Button size="sm" variant="outline" onClick={() => aplicarObjetivo(propuesto)} disabled={aplicando}
+                                                    data-testid="aplicar-objetivo"
+                                                    className="bg-transparent border-[#FF671F]/50 text-[#FF671F] hover:bg-[#FF671F]/10 h-7 text-xs">
+                                                    {aplicando ? 'Aplicando...' : 'Aplicar como objetivo actual'}
+                                                </Button>)}
+                                        </div>
+                                    );
+                                })()}
                                 {abierto.viabilidad_ajuste && (
                                     <p className="text-white/50">Margen para ajustar{' '}
                                         <b className="text-white">{VIABILIDAD_REPORTE[abierto.viabilidad_ajuste] || abierto.viabilidad_ajuste}</b>

@@ -1,12 +1,18 @@
 // Etiquetas legibles para valores enum/token que se guardan en la BD.
 // Evita que se filtren a la UI cosas como "male" o "pesas_libres".
 
+import { OBJETIVOS, nombreDelObjetivo } from './objetivos';
+
 const SEXO = { male: 'Hombre', female: 'Mujer', hombre: 'Hombre', mujer: 'Mujer', ambos: 'Ambos' };
 
+// Las claves viejas del cuestionario y del reporte (siguen en la base y en el motor) y las
+// seis de la lista cerrada de Jesús (fase 2 del doc del 2-09), con el nombre que dice
+// lib/objetivos para no tener dos listas que se separen.
 const OBJETIVO = {
     definicion: 'Definición', volumen: 'Volumen', recomposicion: 'Recomposición',
     perdida_grasa: 'Pérdida de grasa', 'perdida-grasa': 'Pérdida de grasa',
     mantenimiento: 'Mantenimiento',
+    ...Object.fromEntries(OBJETIVOS.map((o) => [o.clave, nombreDelObjetivo(o.clave)])),
 };
 
 const EQUIPAMIENTO = {

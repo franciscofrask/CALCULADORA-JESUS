@@ -685,14 +685,19 @@ const ReportsPage = () => {
                                     blanca en tema claro: eran fechas y kilos escritos en blanco
                                     sobre blanco. */}
                                 {/* Con su objetivo al lado: el color del cambio se decide
-                                    contra él (doc 23-08, bloque 10). */}
+                                    contra él (doc 23-08, bloque 10). Desde el 4-09 (fase 2
+                                    del doc del 2-09) la gráfica recibe la FICHA ENTERA, no
+                                    solo el `goal`: pinta encima la tarjeta del objetivo del
+                                    ciclo, el actual, el foco y por dónde va (`objetivo_actual`,
+                                    `foco`, `ciclo_actual`), todo de solo lectura porque lo
+                                    pone el entrenador. */}
                                 {/* EN DOS BLOQUES (doc de Jesús del 2-09): arriba «Este ciclo»,
                                     con la curva solo desde `cycle_start` y los kilos de estas
                                     N semanas (`cycle_total_weeks`); debajo «Desde que entraste»,
                                     en texto y sin la gráfica larga. Los rótulos los pone la
                                     propia gráfica, por eso ya no va el título «Tu curva» aquí:
                                     salían dos títulos seguidos para lo mismo. */}
-                                <GraficaDePeso puntos={weightData} objetivo={profile?.goal}
+                                <GraficaDePeso puntos={weightData} perfil={profile}
                                     desdeElCiclo={profile?.cycle_start}
                                     semanasDelCiclo={profile?.cycle_total_weeks} />
                             </div>

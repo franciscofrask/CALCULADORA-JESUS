@@ -121,14 +121,23 @@ class ReportCreate(BaseModel):
     notes: Optional[str] = None
     # Las tres preguntas del formulario de siempre de Jesus que faltaban (punto 5 del
     # documento del 05-08):
-    #  - `proximo_objetivo` DISPARA EL CAMBIO DE FASE: sin ella un Nivel 1 no puede cambiar
-    #    de fase nunca, porque no tiene coach que se la cambie. Ademas es la que permite
-    #    fechar el inicio de la fase (foto de "inicio de fase" del informe).
+    #  - `proximo_objetivo` era lo que DISPARABA EL CAMBIO DE FASE. Desde la fase 2 del doc
+    #    de Jesus del 2-09 (Francisco, 4-09) ya no: «los objetivos los pones tu, no el». La
+    #    pregunta se queda, pero lo que marca el cliente NO escribe su ficha: le llega al
+    #    entrenador como aviso y lo aplica al contestar el reporte. Por la via del equipo
+    #    (el entrenador mete el reporte en nombre del cliente) si escribe, porque ahi lo
+    #    esta poniendo el entrenador.
     #  - `viabilidad_ajuste` es el margen de la persona preguntado directamente: hasta ahora
     #    solo se sabia del cuestionario inicial, que se responde una vez y envejece.
     #  - `cumplimiento_entreno` devuelve la fuente a la barra de entrenos del informe, que
     #    se quedo sin dato en julio al recortar el check-in diario.
-    proximo_objetivo: Optional[str] = None       # definicion | volumen | mantenimiento
+    #
+    # `proximo_objetivo` acepta las seis claves de la lista cerrada (core/objetivos.py:
+    # ganar_volumen | perder_grasa | maxima_definicion | recomposicion | mantenimiento |
+    # tonificacion) y los tres valores viejos del formulario (definicion | volumen |
+    # mantenimiento), que se normalizan al guardar. Sin validador estricto A PROPOSITO: los
+    # clientes con la app vieja en el movil siguen mandando los valores viejos.
+    proximo_objetivo: Optional[str] = None
     viabilidad_ajuste: Optional[str] = None      # me_adapto | necesito_mas | necesito_menos
     cumplimiento_entreno: Optional[str] = None   # todos | casi_todos | la_mitad | pocos | ninguno
 

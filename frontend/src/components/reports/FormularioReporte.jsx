@@ -27,6 +27,7 @@ import {
 } from './PasosDelMensual';
 import RevisaAntesDeEnviar from './RevisaAntesDeEnviar';
 import { MEDIDAS } from '../../lib/medidas';
+import { objetivoVisible } from '../../lib/objetivos';
 import { revisarPeso } from '../../lib/pesoValido';
 import { useConfirm } from '../ui/confirm';
 import { mensajeDeError } from '../../lib/mensajeDeError';
@@ -113,7 +114,10 @@ const FormularioReporte = ({ api, token, tipoRevision, windowState, prev, perfil
     const { confirm } = useConfirm();
     const [cargando, setCargando] = useState(true);
     const [ficha, setFicha] = useState(null);          // lo que manda el servidor
-    const [valores, setValores] = useState(() => valoresIniciales(perfilCliente?.goal));
+    // El objetivo que se le enseña en el mensual es el ACTUAL de la ficha (lo pone el
+    // entrenador, doc de Jesús del 2-09, fase 2), y si la ficha no lo trae todavía, el
+    // `goal` viejo traducido a la lista nueva. Antes era el `goal` a pelo.
+    const [valores, setValores] = useState(() => valoresIniciales(objetivoVisible(perfilCliente)));
     const [paso, setPaso] = useState('form');          // form | resumen | enviado
     // LOS DOS VAN POR PASOS, y son los mismos primeros dos.
     //

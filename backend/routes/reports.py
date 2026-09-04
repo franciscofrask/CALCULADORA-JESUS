@@ -13,6 +13,7 @@ from core.plan_access import plan_grants_feature
 from core.series_cliente import anotar_peso
 from core.sin_futuro import hasta_hoy
 from core.tiempo import a_madrid, hoy_madrid
+from core.objetivos import nombre_de, normalizar
 from models.common import ReportCreate, ReportResponse
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -43,6 +44,33 @@ CAMPOS_CICLO = ("ciclo_id", "ciclo_numero", "ciclo_inicio", "semana_del_ciclo", 
 DIAS_DE_FOTOS_PARA_EL_EQUIPO = 14
 # Cuántas fotos se cosen como mucho a un reporte, en las dos vías (tres poses, con margen).
 TOPE_FOTOS_POR_REPORTE = 6
+
+
+def _objetivo_propuesto(valor: Optional[str]) -> Optional[str]:
+    """Lo que el cliente marcó en «¿ha cambiado tu objetivo?», en la clave de la lista
+    cerrada (core/objetivos; fase 2 del doc del 2-09): acepta las seis claves y los tres
+    valores viejos del formulario («definicion», «volumen», «mantenimiento»). Lo que no se
+    reconoce se guarda tal cual, para no perder lo que dijo, pero no dispara nada."""
+    return normalizar(valor) or ((valor or "").strip() or None)
+
+
+async def _avisar_objetivo_propuesto(profile: dict, user: dict, propuesto: str, report_id: str) -> None:
+    """El cliente dice en su reporte que su objetivo ha cambiado: al entrenador, por la
+    campanita (fase 2 del doc de Jesús del 2-09; Francisco, 4-09: «le llega al entrenador
+    como aviso y la ve al contestar el reporte con un botón para aplicarla»). En `extra`
+    van la clave propuesta y el reporte, que es lo que ese botón necesita."""
+    from core.avisos_equipo import avisar_al_equipo
+    nombre = user.get("name") or user.get("email") or "Un cliente"
+    etiqueta = nombre_de(propuesto) or propuesto
+    etiqueta = etiqueta[:1].lower() + etiqueta[1:]
+    await avisar_al_equipo(
+        db, tipo="objetivo_propuesto",
+        titulo="Propone otro objetivo en su reporte",
+        mensaje=f"{nombre} dice que su objetivo ahora es {etiqueta}. Lo aplicas al contestar su reporte.",
+        client_id=profile["id"], trainer_id=profile.get("trainer_id"),
+        extra={"objetivo_propuesto": propuesto, "report_id": report_id,
+               "objetivo_actual": profile.get("objetivo_actual")},
+    )
 
 
 async def _ciclo_del_reporte(profile: dict, dia) -> dict:
@@ -231,8 +259,9 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
         "energy_level": data.energy_level,
         "stress_level": data.stress_level,
         "notes": data.notes,
-        # Las tres preguntas del formulario de siempre (punto 5 del 05-08)
-        "proximo_objetivo": data.proximo_objetivo,
+        # Las tres preguntas del formulario de siempre (punto 5 del 05-08). El objetivo,
+        # ya en la clave de la lista cerrada (fase 2 del doc del 2-09).
+        "proximo_objetivo": _objetivo_propuesto(data.proximo_objetivo),
         "viabilidad_ajuste": data.viabilidad_ajuste,
         "cumplimiento_entreno": data.cumplimiento_entreno,
         # Lo que trae el formulario nuevo (T7 y T8). El `tipo` que manda es el del
@@ -276,10 +305,8 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
     # Y a las fotos, su reporte (4-09).
     await _atar_fotos_al_reporte(report)
 
-    # El objetivo que marca el cliente MANDA sobre la fase del perfil: es lo que dispara el
-    # cambio de fase, y sin esto un Nivel 1 no cambiaria de fase nunca (no tiene coach que se
-    # la cambie). `fase_desde` guarda CUANDO empezo, que es lo que necesita el informe para
-    # la foto de "inicio de fase".
+    # El objetivo que marca el cliente YA NO manda sobre su ficha (fase 2 del doc de Jesús
+    # del 2-09): ver más abajo, donde se le avisa al entrenador.
     # `ultimo_reporte` va aqui a proposito duplicado (punto 29 del 07-08, ver
     # core/seguimiento.py): es lo que deja ordenar la lista de clientes por "quien lleva
     # mas sin que le toquen" sin recorrer los reportes de todos para pintar una tabla.
@@ -314,10 +341,19 @@ async def create_report(data: ReportCreate, user = Depends(get_current_user)):
         from core.series_cliente import anotar_grasa
         await anotar_grasa(profile["id"], data.body_fat, dia_reporte,
                            origen="reporte")
-    if data.proximo_objetivo in ("definicion", "volumen", "mantenimiento"):
-        if profile.get("goal") != data.proximo_objetivo:
-            set_perfil["goal"] = data.proximo_objetivo
-            set_perfil["fase_desde"] = dia_reporte
+    # EL OBJETIVO QUE MARCA YA NO ESCRIBE SU FICHA (fase 2 del doc de Jesús del 2-09;
+    # Francisco, 4-09). Hasta hoy `proximo_objetivo` pisaba `goal` y fechaba `fase_desde`
+    # (era lo que dejaba a un Nivel 1 cambiar de fase sin coach). Jesús: «los objetivos los
+    # pones tú, no él». La pregunta se queda, y si lo que marca no es lo que tiene puesto,
+    # le llega al entrenador como aviso y lo aplica (o no) al contestar el reporte. Se
+    # compara en la clave nueva; sin `objetivo_actual` en la ficha (todavía sin migrar), con
+    # lo que diga `goal`. Si el aviso falla, el reporte se guarda igual: a consola y ya.
+    propuesto = normalizar(data.proximo_objetivo)
+    if propuesto and propuesto != normalizar(profile.get("objetivo_actual") or profile.get("goal")):
+        try:
+            await _avisar_objetivo_propuesto(profile, user, propuesto, report_id)
+        except Exception as e:      # noqa: BLE001 - el aviso nunca tumba el reporte
+            logger.warning("no se pudo avisar del objetivo que propone %s: %s", profile.get("id"), e)
 
     # LAS LESIONES SE QUEDAN EN EL PERFIL, NO SOLO EN EL REPORTE (T8, bloque 06).
     # Es lo que hace que el mes que viene salga "LO QUE YA ME CONTASTE" en vez de una
@@ -591,7 +627,7 @@ async def crear_reporte_por_el_cliente(client_id: str, data: ReportCreate,
         "energy_level": data.energy_level,
         "stress_level": data.stress_level,
         "notes": data.notes,
-        "proximo_objetivo": data.proximo_objetivo,
+        "proximo_objetivo": _objetivo_propuesto(data.proximo_objetivo),
         "viabilidad_ajuste": data.viabilidad_ajuste,
         "cumplimiento_entreno": data.cumplimiento_entreno,
         "trainer_feedback": None,
@@ -615,10 +651,15 @@ async def crear_reporte_por_el_cliente(client_id: str, data: ReportCreate,
     except (ValueError, TypeError):
         dia_reporte = str(report["created_at"])[:10]
     set_perfil = {"ultimo_reporte": dia_reporte}
-    if data.proximo_objetivo in ("definicion", "volumen", "mantenimiento"):
-        if profile.get("goal") != data.proximo_objetivo:
-            set_perfil["goal"] = data.proximo_objetivo
-            set_perfil["fase_desde"] = dia_reporte
+    # AQUÍ SÍ SE ESCRIBE EL OBJETIVO (fase 2 del doc de Jesús del 2-09; Francisco, 4-09): el
+    # que mete el reporte es el equipo, o sea que el objetivo lo está poniendo el
+    # entrenador. La misma escritura que PUT /admin/clients/{id}/objetivo: la clave de la
+    # lista, el `goal` que entiende el motor y quién y cuándo. Lo viejo («definicion»,
+    # «volumen») entra normalizado; lo que no se reconoce no toca la ficha.
+    propuesto = normalizar(data.proximo_objetivo)
+    if propuesto and propuesto != profile.get("objetivo_actual"):
+        from routes.users import ficha_con_objetivo
+        set_perfil.update(ficha_con_objetivo(propuesto, user, profile))
     await db.client_profiles.update_one({"id": client_id}, {"$set": set_perfil})
     # El peso, a su serie con la fecha del reporte (punto 30), y sin pisar un pesaje de
     # verdad de ese dia: mismo motivo que en la via del cliente (fallo 5 del 24-08), y aqui
@@ -1356,8 +1397,8 @@ async def _bloques_del_informe(reporte: dict, perfil: dict,
     from core.informe_del_mes import (ETIQUETAS_MEDIDAS, dia_tipo, donde_estas,
                                       extras_registrados, feedback_del_informe,
                                       grasa_del_informe, lo_que_has_hecho,
-                                      medidas_del_informe, peso_del_mes,
-                                      preferencias_de_alimentos)
+                                      medidas_del_informe, objetivo_del_perfil,
+                                      peso_del_mes, preferencias_de_alimentos)
     from core.series_cliente import grasa_vigente
 
     # EL PERIODO ES EL DE ESTE REPORTE, NO EL DE HOY. `_periodo_del_reporte` cuenta hacia
@@ -1413,12 +1454,18 @@ async def _bloques_del_informe(reporte: dict, perfil: dict,
             {"id": perfil.get("trainer_id")}, {"_id": 0, "name": 1}) if perfil.get("trainer_id") else None
         firmante = (entrenador or {}).get("name") or "Jesús Gallego"
 
+    # Su objetivo como lo pone el entrenador (fase 2 del doc del 2-09): la clave del motor
+    # para el color de las medidas y el nombre de la lista para el rótulo; sin
+    # `objetivo_actual`, `goal` y el rótulo de siempre.
+    clave_objetivo, etiqueta_objetivo = objetivo_del_perfil(perfil)
+
     return {
         "periodo": {"desde": d0.isoformat(), "hasta": d1.isoformat(),
                     "dias": (d1 - d0).days + 1,
                     "label": (f"Del {fecha_larga(d0.isoformat())} al "
                               f"{fecha_larga(d1.isoformat())} · {(d1 - d0).days + 1} días")},
-        "donde_estas": donde_estas(perfil.get("goal"), perfil.get("week"), semanas_ciclo),
+        "donde_estas": donde_estas(clave_objetivo, perfil.get("week"), semanas_ciclo,
+                                   etiqueta=etiqueta_objetivo),
         "feedback": feedback_del_informe(
             reporte.get("trainer_feedback"), firmante,
             fecha_larga(reporte.get("informe_publicado_at") or reporte.get("created_at")),
@@ -1429,7 +1476,7 @@ async def _bloques_del_informe(reporte: dict, perfil: dict,
         "medidas": medidas_del_informe(
             reporte.get("measurements"), (anterior or {}).get("measurements"),
             (primera_medida or {}).get("measurements"),
-            ETIQUETAS_MEDIDAS, objetivo=perfil.get("goal")),
+            ETIQUETAS_MEDIDAS, objetivo=clave_objetivo),
         "grasa": grasa_del_informe(grasa.get("valor"), fecha_larga(grasa.get("fecha")),
                                    grasa.get("semanas")),
         "hecho": lo_que_has_hecho(dieta, entreno, cierres),

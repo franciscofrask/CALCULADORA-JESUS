@@ -185,8 +185,11 @@ async def abrir_ciclo(profile: Dict[str, Any], *, inicio, origen: str, motivo: O
         "plan": plan,
         "motivo": motivo,
         "origen": origen,
-        # Fase 2 del doc: el objetivo del ciclo lo pone el entrenador al abrirlo.
-        "objetivo": None,
+        # Fase 2 del doc: el objetivo del ciclo lo pone el entrenador al abrirlo. Nace con
+        # el objetivo ACTUAL de la ficha (`client_profiles.objetivo_actual`), que es el que
+        # el entrenador ya tenía puesto; si después lo cambia, va por
+        # PUT /admin/clients/{id}/objetivo con `objetivo_ciclo` (Francisco, 4-09).
+        "objetivo": (profile or {}).get("objetivo_actual"),
         # Fase 3: el pico de forma, uno por ciclo, marcado desde el panel al contestar un
         # reporte. Se guarda aquí el id del reporte que lo lleva.
         "pico_de_forma": None,
