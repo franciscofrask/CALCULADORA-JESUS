@@ -121,7 +121,10 @@ const EvolucionMedidas = ({ reports, perfil = null, tono = 'cliente', titulo }) 
         // engañaba era esconder el año. Solo se añade cuando hace falta, para no ensanchar
         // la tabla en el caso normal (todas del mismo año).
         const anios = new Set(vistas.map(r => String(r.created_at).slice(0, 4)));
-        return { todas: conMedidas.length, vistas, conAnio: anios.size > 1 };
+        // Y LA PRIMERA DE VERDAD, NO LA PRIMERA QUE CABE (3-09-2026). El «Total» decía
+        // comparar «con la primera» y comparaba con la primera de las OCHO que se ven, que
+        // con más tomas no es la misma toma. Ver abajo.
+        return { todas: conMedidas.length, vistas, conAnio: anios.size > 1, completas: conMedidas };
     }, [reports, perfil]);
 
     if (sesiones.vistas.length === 0) {
@@ -175,7 +178,25 @@ const EvolucionMedidas = ({ reports, perfil = null, tono = 'cliente', titulo }) 
                         {MEDIDAS.map(({ key, label }) => {
                             const valores = sesiones.vistas.map(r => valorAnterior(r.measurements, key));
                             if (valores.every(v => v == null)) return null;   // esa medida no la ha dado nunca
-                            const primero = valores.find(v => v != null);
+                            // EL «TOTAL» VA CONTRA LA PRIMERA TOMA DE VERDAD (3-09-2026).
+                            //
+                            // Salía de `valores`, que son las OCHO que caben en la tabla, así
+                            // que con más de ocho tomas comparaba contra la primera de las
+                            // últimas ocho y llamaba a eso «la primera». Medido con un cliente
+                            // de 28 tomas: la cintura decía «+2» y contra su primera toma de
+                            // verdad son «+7». El informe del mes sí usa la primera absoluta,
+                            // así que las dos pantallas daban números distintos del mismo
+                            // cliente el mismo día.
+                            //
+                            // Si esa medida no está en la toma más antigua, se busca la más
+                            // antigua QUE LA TENGA: no todas las tomas traen las diez, y un
+                            // «Total» contra nada no es un total.
+                            let primero = null;
+                            for (const toma of (sesiones.completas || [])) {
+                                const v = valorAnterior(toma.measurements, key);
+                                if (v != null) { primero = v; break; }
+                            }
+                            if (primero == null) primero = valores.find(v => v != null);
                             const ultimo = [...valores].reverse().find(v => v != null);
                             const total = diferencia(ultimo, primero);
                             return (
