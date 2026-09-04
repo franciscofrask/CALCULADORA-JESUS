@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { Star, Trash2, Download, ChevronDown, ChevronUp } from 'lucide-react';
+import { Star, Trash2, Download, ChevronDown, ChevronUp, Pencil } from 'lucide-react';
 import { ListaDeAlimentos } from './FavoritasDeComida';
 
 const NOMBRE_COMIDA = {
@@ -63,13 +63,18 @@ const TipoDiaBadge = ({ tipo }) => (
     </span>
 );
 
-const FavoritesModal = ({ open, onClose, favorites, onSave, onApply, onDelete, tipoDia = 'entrenamiento', diaVacio = false, comidasDelDia = 0, periDelDia = [] }) => {
+const FavoritesModal = ({ open, onClose, favorites, onSave, onApply, onDelete, onRename, tipoDia = 'entrenamiento', diaVacio = false, comidasDelDia = 0, periDelDia = [] }) => {
     const [name, setName] = useState('');
     const [saving, setSaving] = useState(false);
     // Favorita con el panel "adaptar o aplicar como se guardó" desplegado.
     const [confirmId, setConfirmId] = useState(null);
     // Favorita desplegada para ver lo que lleva dentro, comida a comida.
     const [detalleId, setDetalleId] = useState(null);
+    // RENOMBRAR (Gonzalo, minuto 25:10): «no me aparece la opción ni de editar ni de
+    // renombrar, solo borrar o aplicar». La favorita cuyo nombre se está cambiando, y lo que
+    // se está escribiendo.
+    const [renombrandoId, setRenombrandoId] = useState(null);
+    const [nombreNuevo, setNombreNuevo] = useState('');
 
     // DOS FAVORITAS CON EL MISMO NOMBRE NO SIRVEN DE NADA (Jesús, 15-08, fallo 35): «dos
     // "dieta nueva", una de 4 comidas y otra de 6, sin fecha ni macros que las distingan».
@@ -88,6 +93,20 @@ const FavoritesModal = ({ open, onClose, favorites, onSave, onApply, onDelete, t
         await onSave(n);
         setSaving(false);
         setName('');
+    };
+
+    /** El nombre nuevo, con el mismo cuidado que al guardarla: ni vacío ni repetido. */
+    const guardarNombre = async (fav) => {
+        const n = nombreNuevo.trim();
+        if (!n || n === (fav.name || '').trim()) { setRenombrandoId(null); return; }
+        const chocaConOtra = (favorites || []).some(
+            f => f.id !== fav.id && (f.name || '').trim().toLowerCase() === n.toLowerCase());
+        if (chocaConOtra) {
+            toast.error(`Ya tienes otra favorita que se llama "${n}". Ponle otro nombre para distinguirlas.`);
+            return;
+        }
+        await onRename(fav.id, n);
+        setRenombrandoId(null);
     };
 
     // SE PREGUNTA TAMBIÉN CUANDO EL DÍA YA TIENE COMIDAS (revisión del 2-09).
@@ -185,11 +204,37 @@ const FavoritesModal = ({ open, onClose, favorites, onSave, onApply, onDelete, t
                                         onClick={() => handleApplyClick(fav)} title="Aplicar a este día" data-testid={`fav-apply-${fav.id}`}>
                                         <Download className="w-4 h-4 mr-1" /> Aplicar
                                     </Button>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0"
+                                        onClick={() => { setRenombrandoId(fav.id); setNombreNuevo(fav.name || ''); }}
+                                        title="Cambiarle el nombre" data-testid={`fav-rename-${fav.id}`}>
+                                        <Pencil className="w-4 h-4" />
+                                    </Button>
                                     <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-red-500 shrink-0"
                                         onClick={() => onDelete(fav.id)} title="Eliminar">
                                         <Trash2 className="w-4 h-4" />
                                     </Button>
                                 </div>
+
+                                {/* EL NOMBRE, EDITABLE AHÍ MISMO. Sin sacar otro diálogo por
+                                    encima de éste: es un campo y dos botones. */}
+                                {renombrandoId === fav.id && (
+                                    <div className="mt-2 pt-2 border-t border-border flex gap-2"
+                                        data-testid={`fav-rename-panel-${fav.id}`}>
+                                        <Input value={nombreNuevo} maxLength={80} autoFocus
+                                            onChange={(e) => setNombreNuevo(e.target.value)}
+                                            onKeyDown={(e) => { if (e.key === 'Enter') guardarNombre(fav); }}
+                                            data-testid={`fav-rename-input-${fav.id}`}
+                                            className="flex-1 min-w-0" />
+                                        <Button size="sm" onClick={() => guardarNombre(fav)}
+                                            data-testid={`fav-rename-ok-${fav.id}`}>
+                                            Guardar
+                                        </Button>
+                                        <Button size="sm" variant="ghost"
+                                            onClick={() => setRenombrandoId(null)}>
+                                            Cancelar
+                                        </Button>
+                                    </div>
+                                )}
 
                                 {detalleId === fav.id && <DetalleDelDia comidas={fav.comidas} />}
 

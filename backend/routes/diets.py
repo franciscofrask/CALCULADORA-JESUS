@@ -314,6 +314,34 @@ async def list_favorites(ambito: Optional[str] = None, user = Depends(get_curren
     return {"favorites": favs}
 
 
+@router.patch("/favorites/{fav_id}")
+async def rename_favorite(fav_id: str, data: dict, user = Depends(get_current_user)):
+    """Cambiarle el nombre a una favorita.
+
+    NO EXISTÍA (Gonzalo, minuto 25:10 del vídeo del 3-09): «a mí no me aparece la opción ni
+    de editar ni de renombrar, solo borrar o aplicar». Y no era solo la pantalla: aquí abajo
+    había `POST`, `GET` y `DELETE` y ni un solo camino para tocar lo guardado, así que la
+    única forma de arreglar un nombre mal puesto era borrar la favorita y volver a montar el
+    día entero para guardarla otra vez.
+
+    Solo el nombre. El contenido ya se cambia por el camino de siempre: aplicar la favorita,
+    tocar el día y guardarla encima; y una favorita es una foto de un día, así que editarle
+    los alimentos desde una lista sería montar un segundo editor de dietas al lado del que
+    ya hay.
+    """
+    nombre = data.get("name") if isinstance(data, dict) else None
+    nombre = nombre.strip() if isinstance(nombre, str) else ""
+    if not nombre:
+        raise HTTPException(status_code=400, detail="Nombre requerido")
+    # El mismo tope que al guardarla: un nombre que no se puede leer no sirve de nada.
+    nombre = nombre[:80]
+    res = await db.diet_favorites.update_one(
+        {"id": fav_id, "user_id": user["id"]}, {"$set": {"name": nombre}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Favorita no encontrada")
+    return {"id": fav_id, "name": nombre}
+
+
 @router.delete("/favorites/{fav_id}")
 async def delete_favorite(fav_id: str, user = Depends(get_current_user)):
     """Eliminar una plantilla favorita."""

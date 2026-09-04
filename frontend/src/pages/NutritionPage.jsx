@@ -2700,6 +2700,20 @@ const NutritionPage = () => {
         }
     };
 
+    /** Cambiarle el nombre a una favorita, sin tocar lo que lleva dentro. */
+    const renombrarDietFavorite = async (id, nombre) => {
+        try {
+            await api(`/api/diets/favorites/${id}`, {
+                method: 'PATCH', body: JSON.stringify({ name: nombre }),
+            });
+            setDietFavorites(prev => prev.map(f => (f.id === id ? { ...f, name: nombre } : f)));
+            toast.success(`Ahora se llama "${nombre}"`);
+        } catch (err) {
+            console.error('[renombrar favorita]', err);
+            toast.error('No hemos podido cambiarle el nombre. Inténtalo de nuevo.');
+        }
+    };
+
     // ── Favoritas de UNA comida (25-08) ───────────────────────────────────────
     const abrirFavoritasDeComida = async (mealKey) => {
         setFavComidaModal({ open: true, mealKey });
@@ -3718,6 +3732,7 @@ const NutritionPage = () => {
                 onSave={saveDietFavorite}
                 onApply={applyDietFavorite}
                 onDelete={deleteDietFavorite}
+                onRename={renombrarDietFavorite}
                 tipoDia={tipoDia}
                 // Para no dejar guardar un día sin comidas como favorita.
                 diaVacio={diaVacio}
