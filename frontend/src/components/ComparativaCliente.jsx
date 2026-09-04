@@ -1,51 +1,82 @@
 /**
- * TU COMPARATIVA (T6 del doc 16-08). La comparativa de fotos del panel, traída al lado del
- * cliente con los dos cambios que pide el doc:
+ * TU COMPARATIVA. La comparativa de fotos del panel, traída al lado del cliente.
  *
- *   - DOS FOTOS POR DEFECTO, no cuatro: "de dónde vengo" y "cómo estoy hoy", con un botón
- *     para añadir la del medio y otro para verlas todas. El coach compara fases; el cliente
- *     quiere ver de dónde viene y cómo está hoy, y con cuatro fotos de 1/4 de ancho en un
- *     teléfono no se ve ninguna.
- *   - FUERA EL % GRASO: lo estima Jesús mirando las fotos, y el cliente no lo toca.
+ * DOS FOTOS Y YA (doc de Jesús del 2-09, «Y la comparativa de fotos»). Abrió «+ La del
+ * medio», vio que metía una tercera foto en el centro con un rótulo fijo que no decía de
+ * qué, y lo dejó escrito: «Dos fotos, siempre. Inicio del ciclo contra hoy, las dos con su
+ * peso». Así que aquí van dos, izquierda y derecha, y nada más:
  *
- * Las etiquetas son las de siempre (`lib/comparativaFotos.js`), las mismas que ve el coach:
- * si un día cambia el nombre de una foto, cambia en los dos sitios.
+ *   - IZQUIERDA: la del INICIO DEL CICLO, la más cercana a `cycle_start`. Si en ese ciclo no
+ *     subió fotos «ese hito no existe»: se coge la más cercana y se dice debajo de la fecha
+ *     («la más próxima al inicio del ciclo»). Sin ciclo o sin con qué elegir, la primera de
+ *     la historia con el rótulo «Mi primera foto», que nunca miente.
+ *   - DERECHA: la de HOY, la más reciente. Debajo, sus medidas.
+ *   - MISMO ÁNGULO: si la de hoy es de frente, la del inicio es de frente. «Comparar un
+ *     frente con un perfil no dice nada.» Si no hay foto de ese ángulo se avisa.
+ *   - Las dos con su fecha y su peso. La de hoy no se queda sin él: si no hay pesaje cerca
+ *     de la foto, va el último peso conocido diciendo de qué día es.
+ *
+ * La regla de elegir vive en `lib/comparativaFotos.elegirDosFotos`; el panel del entrenador
+ * y el informe siguen con sus cuatro fotos de siempre (`construirComparativa`), que son
+ * otra pantalla y otro documento.
+ *
+ * FUERA EL % GRASO: lo estima Jesús mirando las fotos, y el cliente no lo toca.
  *
  * Las fotos van con la sesión, así que se piden con el token y se pintan desde el blob (el
  * mismo camino que `TresFotos`): el token no viaja nunca en una URL de imagen.
  *
- * La lista de /reports/photos viene ahora FUNDIDA (tarea 1.1): las de la app y las importadas
- * de Calma, cada una con su `ref` y su fecha. Aquí no se distingue nada: se pide cada foto
- * por su ref a /reports/foto/{ref} y se ordena todo junto, que es justo lo que el cliente
+ * La lista de /reports/photos viene FUNDIDA (tarea 1.1): las de la app y las importadas de
+ * Calma, cada una con su `ref`, su fecha y su `pose` (frente | perfil | espalda, o nada si
+ * la de Calma no la trae en el nombre). Aquí no se distingue nada: se pide cada foto por
+ * su ref a /reports/foto/{ref} y se ordena todo junto, que es justo lo que el cliente
  * espera ver (su histórico entero, no solo lo subido en la app nueva).
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import VisorDeFoto from './ui/VisorDeFoto';
 import { Camera } from 'lucide-react';
-import { construirComparativa, TITULO_ETIQUETA } from '../lib/comparativaFotos';
+import { useAuth } from '../context/AuthContext';
+import { elegirDosFotos, ordenarPorPose, ROTULO_DOS_FOTOS } from '../lib/comparativaFotos';
 import { MEDIDAS, valorAnterior } from '../lib/medidas';
 
-const POSE_ORDEN = ['frente', 'perfil', 'espalda'];
-
+// Con el año cuando no es el de ahora: «Mi primera foto» puede ser de hace dos años y un
+// «3 may» a secas mentiría con la fecha, que es justo lo que Jesús pide que no pase.
 const _fecha = (f) => {
     if (!f) return '';
     const d = new Date(`${f}T12:00:00`);
-    return isNaN(d) ? f : d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+    if (isNaN(d)) return f;
+    const conAnyo = d.getFullYear() !== new Date().getFullYear();
+    return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', ...(conAnyo ? { year: 'numeric' } : {}) });
 };
 
 const _kilos = (v) => `${String(v).replace('.', ',')} kg`;
 
-// El peso más cercano a una fecha (dentro de tres semanas). Es el mismo criterio que en la
-// ficha del panel: la foto se anota con el peso de ese momento, no con el de hoy.
-const _pesoCercano = (pesos, fecha) => {
+// Hasta cuántos días de la foto vale un pesaje para decir «este es el peso de esa foto».
+// Es el mismo criterio que en la ficha del panel: tres semanas.
+const DIAS_DE_PESAJE_VALIDO = 21;
+
+// El pesaje más cercano a una fecha, con su día, o null si no hay ninguno a menos de tres
+// semanas. La foto se anota con el peso de ese momento, no con el de hoy.
+const _pesajeCercano = (pesos, fecha) => {
     if (!fecha || !pesos?.length) return null;
     const objetivo = new Date(`${fecha}T12:00:00`).getTime();
     let mejor = null, distancia = Infinity;
     for (const p of pesos) {
-        const d = Math.abs(new Date(`${String(p.date).slice(0, 10)}T12:00:00`).getTime() - objetivo);
-        if (d < distancia) { distancia = d; mejor = p.w; }
+        const d = Math.abs(new Date(`${p.fecha}T12:00:00`).getTime() - objetivo);
+        if (d < distancia) { distancia = d; mejor = p; }
     }
-    return distancia <= 21 * 864e5 ? mejor : null;
+    return distancia <= DIAS_DE_PESAJE_VALIDO * 864e5 ? mejor : null;
+};
+
+// El peso que va debajo de una foto. La de hoy no se queda sin él (Jesús, 2-09: «la de hoy
+// no lleva su peso; la otra sí»): si el último pesaje queda a más de tres semanas de la
+// foto, se enseña el último peso conocido y se dice de qué día es. La del inicio no: un
+// peso de meses después no es «su peso», y mejor callar que mentir.
+const _pesoDeLaFoto = (pesos, fecha, esLaDeHoy) => {
+    const cerca = _pesajeCercano(pesos, fecha);
+    if (cerca) return { peso: cerca.peso, deOtroDia: null };
+    if (!esLaDeHoy || !pesos?.length) return null;
+    const ultimo = pesos[pesos.length - 1];
+    return { peso: ultimo.peso, deOtroDia: ultimo.fecha };
 };
 
 /** Una foto del cliente, descargada con su sesión. La ref de las de Calma lleva una
@@ -103,10 +134,46 @@ const MedidasDeLaFoto = ({ medidas }) => {
     );
 };
 
-const ComparativaCliente = ({ api, reports, faseDesde }) => {
+/** Un lado de la comparativa: la foto, su rótulo, su fecha (con lo que haya que decir de
+ *  ella), su peso y, en la de hoy, sus medidas. */
+const LadoDeLaComparativa = ({ api, lado, pesos, esLaDeHoy, testid }) => {
+    const { sesion, foto, rotulo, nota, aviso } = lado;
+    const peso = _pesoDeLaFoto(pesos, sesion.fecha, esLaDeHoy);
+    return (
+        <div className="space-y-1" data-testid={testid}>
+            <FotoDelCliente api={api} foto={foto} pie={_fecha(sesion.fecha)} />
+            <p className="text-[10px] font-bold uppercase tracking-wider text-brand leading-tight">
+                {ROTULO_DOS_FOTOS[rotulo] || rotulo}
+            </p>
+            <p className="text-[11px] text-muted-foreground leading-tight">
+                {_fecha(sesion.fecha)}
+                {/* Lo que no es exacto se dice debajo de la fecha, en pequeño: «nunca enseñar
+                    un hueco ni mentir con la fecha» (doc de Jesús del 2-09). */}
+                {nota && <span className="block text-[10px]">{nota}</span>}
+                {aviso && <span className="block text-[10px]">{aviso}</span>}
+                {peso && <span className="block font-bold text-foreground">{_kilos(peso.peso)}</span>}
+                {peso?.deOtroDia && <span className="block text-[10px]">tu último peso, del {_fecha(peso.deOtroDia)}</span>}
+            </p>
+            {/* Las medidas van con la de hoy: es la que se mira para saber dónde está, y
+                debajo de la del inicio no dicen nada que la tabla de aquí abajo no cuente
+                mejor. */}
+            {esLaDeHoy && sesion.medidas && <MedidasDeLaFoto medidas={sesion.medidas} />}
+        </div>
+    );
+};
+
+/**
+ * @param desdeElCiclo  Día en que arrancó el ciclo (perfil.cycle_start). Si no llega por
+ *                      prop se lee del perfil de la sesión, que es el mismo dato.
+ * @param serieDePeso   La curva de peso, [{fecha, peso}], la misma que pinta la gráfica de
+ *                      arriba. Si no llega por prop se pide a /reports/evolution, para que
+ *                      la foto y la gráfica digan el mismo peso.
+ */
+const ComparativaCliente = ({ api, reports, desdeElCiclo = null, serieDePeso = null }) => {
+    const { profile } = useAuth();
     const [fotos, setFotos] = useState([]);
-    const [conLaDelMedio, setConLaDelMedio] = useState(false);
     const [verTodas, setVerTodas] = useState(false);
+    const [serieCargada, setSerieCargada] = useState(null);
 
     const cargar = useCallback(() => {
         api.get('/reports/photos')
@@ -115,10 +182,33 @@ const ComparativaCliente = ({ api, reports, faseDesde }) => {
     }, [api]);
     useEffect(() => { cargar(); }, [cargar]);
 
-    // El peso de cada momento sale de sus propios reportes: es la serie que él ya conoce.
-    const pesos = useMemo(() => (reports || [])
-        .filter(r => r?.weight != null && r?.created_at)
-        .map(r => ({ date: r.created_at, w: r.weight })), [reports]);
+    // EL PESO SALE DE LA CURVA, NO DE LOS REPORTES. Los reportes son uno al mes; la curva
+    // lleva también los pesajes semanales y los importados. Con solo los reportes, la foto
+    // de hoy se quedaba sin peso en cuanto el reporte caía a más de tres semanas de ella,
+    // que es lo que vio Jesús el 2-09.
+    useEffect(() => {
+        if (serieDePeso) return undefined;
+        let vivo = true;
+        api.get('/reports/evolution')
+            .then(r => {
+                if (!vivo) return;
+                setSerieCargada((r.data?.weight || []).map(w => ({ fecha: w.date, peso: w.value })));
+            })
+            .catch((e) => { console.error('No se pudo cargar la curva de peso para la comparativa:', e); });
+        return () => { vivo = false; };
+    }, [api, serieDePeso]);
+
+    const pesos = useMemo(() => {
+        // Si la curva no ha llegado (o falló), los reportes siguen valiendo: es la serie
+        // que había hasta ahora.
+        const fuente = serieDePeso || serieCargada || (reports || [])
+            .filter(r => r?.weight != null && r?.created_at)
+            .map(r => ({ fecha: r.created_at, peso: r.weight }));
+        return fuente
+            .filter(p => p?.peso != null && p?.fecha)
+            .map(p => ({ fecha: String(p.fecha).slice(0, 10), peso: p.peso }))
+            .sort((a, b) => a.fecha.localeCompare(b.fecha));
+    }, [serieDePeso, serieCargada, reports]);
 
     const medidasPorFecha = useMemo(() => {
         const m = {};
@@ -140,27 +230,15 @@ const ComparativaCliente = ({ api, reports, faseDesde }) => {
         }
         return [...porDia.entries()].map(([fecha, suyas]) => ({
             fecha,
-            peso: _pesoCercano(pesos, fecha),
             medidas: medidasPorFecha[fecha] || null,
-            fotos: [...suyas].sort((a, b) => POSE_ORDEN.indexOf(a.pose) - POSE_ORDEN.indexOf(b.pose)),
+            fotos: ordenarPorPose(suyas),
         }));
-    }, [fotos, pesos, medidasPorFecha]);
+    }, [fotos, medidasPorFecha]);
 
-    const comparativa = useMemo(() => construirComparativa(sesiones, faseDesde), [sesiones, faseDesde]);
+    const inicioCiclo = desdeElCiclo || profile?.cycle_start || null;
+    const dos = useMemo(() => elegirDosFotos(sesiones, inicioCiclo), [sesiones, inicioCiclo]);
 
-    // LAS DOS DEL DOC: la primera y la última, con sus nombres fijos. Cuando solo hay una
-    // sesión sale una sola foto con las dos etiquetas, que es la regla de siempre (nunca la
-    // misma foto dos veces).
-    const aLaVista = useMemo(() => {
-        if (conLaDelMedio || comparativa.length <= 1) return comparativa;
-        const primera = { ...comparativa[0], etiquetas: ['inicial'] };
-        const ultima = { ...comparativa[comparativa.length - 1], etiquetas: ['actual'] };
-        return [primera, ultima];
-    }, [comparativa, conLaDelMedio]);
-
-    const hayDelMedio = comparativa.length > 2;
-
-    if (!fotos.length) {
+    if (!fotos.length || !dos) {
         return (
             <div className="bg-card border border-border rounded-2xl p-5 flex items-start gap-3" data-testid="comparativa-sin-fotos">
                 <Camera className="w-5 h-5 text-foreground/25 shrink-0 mt-0.5" />
@@ -194,47 +272,37 @@ const ComparativaCliente = ({ api, reports, faseDesde }) => {
                     )))}
                 </div>
             ) : (
-                /* COLUMNAS FIJAS, aunque haya menos fotos. Con el reparto automático, el
-                   cliente que solo tiene una sesión -- o sea, todo el que empieza -- se
+                /* DOS COLUMNAS FIJAS, aunque solo haya una foto. Con el reparto automático,
+                   el cliente que solo tiene una sesión -- o sea, todo el que empieza -- se
                    encontraba la foto a pantalla completa y había que hacer scroll para
-                   pasar de ella. Dos columnas (las dos del doc) y tres cuando pide la del
-                   medio: cada foto ocupa siempre lo mismo y la primera se queda a la
-                   izquierda, que es la regla de Jesús. */
-                <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${conLaDelMedio ? Math.max(aLaVista.length, 3) : 2}, minmax(0, 1fr))` }}>
-                    {aLaVista.map((c, i) => {
-                        const esLaDeHoy = i === aLaVista.length - 1;
-                        return (
-                            <div key={c.fecha} className="space-y-1">
-                                {c.fotos[0] && <FotoDelCliente api={api} foto={c.fotos[0]} pie={_fecha(c.fecha)} />}
-                                <p className="text-[10px] font-bold uppercase tracking-wider text-brand leading-tight">
-                                    {c.etiquetas.map(e => TITULO_ETIQUETA[e] || e).join(' · ')}
-                                </p>
-                                <p className="text-[11px] text-muted-foreground leading-tight">
-                                    {_fecha(c.fecha)}
-                                    {c.peso != null && <span className="block font-bold text-foreground">{_kilos(c.peso)}</span>}
-                                </p>
-                                {/* Las medidas van con la de hoy: es la que se mira para saber
-                                    dónde está, y debajo de la primera no dicen nada que la tabla
-                                    de aquí abajo no cuente mejor. */}
-                                {esLaDeHoy && c.medidas && <MedidasDeLaFoto medidas={c.medidas} />}
-                            </div>
-                        );
-                    })}
+                   pasar de ella. La del inicio a la izquierda y la de hoy a la derecha,
+                   que es la regla de Jesús; y con una sola, esa a la izquierda y al lado
+                   lo que falta. */
+                <div className="grid grid-cols-2 gap-3">
+                    {dos.inicio ? (
+                        <>
+                            <LadoDeLaComparativa api={api} lado={dos.inicio} pesos={pesos} esLaDeHoy={false} testid="comparativa-inicio" />
+                            <LadoDeLaComparativa api={api} lado={dos.hoy} pesos={pesos} esLaDeHoy testid="comparativa-hoy" />
+                        </>
+                    ) : (
+                        <>
+                            <LadoDeLaComparativa api={api} lado={dos.hoy} pesos={pesos} esLaDeHoy testid="comparativa-hoy" />
+                            <p className="text-xs text-muted-foreground self-center leading-snug" data-testid="comparativa-falta-una">
+                                Con dos fotos te enseñamos la comparativa. Te falta una.
+                            </p>
+                        </>
+                    )}
                 </div>
             )}
 
-            <div className="flex gap-2">
-                {hayDelMedio && !verTodas && (
-                    <button type="button" onClick={() => setConLaDelMedio(!conLaDelMedio)} data-testid="la-del-medio"
-                        className="flex-1 py-2 text-xs font-bold text-muted-foreground hover:text-brand border border-border rounded-xl transition-colors">
-                        {conLaDelMedio ? 'Solo el antes y el ahora' : '+ La del medio'}
-                    </button>
-                )}
-                <button type="button" onClick={() => setVerTodas(!verTodas)} data-testid="mostrar-todas-fotos"
-                    className="flex-1 py-2 text-xs font-bold text-muted-foreground hover:text-brand border border-border rounded-xl transition-colors">
-                    {verTodas ? 'Volver a la comparativa' : 'Mostrar todas'}
-                </button>
-            </div>
+            {/* «Elegir otra foto» y «Generar comparación» (doc de Jesús del 2-09) van con el
+                selector de fotos, que es de otra fase: hasta entonces no se pinta ningún
+                botón que no haga nada. «Mostrar todas» se queda porque hoy es la única
+                forma de ver el histórico entero. */}
+            <button type="button" onClick={() => setVerTodas(!verTodas)} data-testid="mostrar-todas-fotos"
+                className="w-full py-2 text-xs font-bold text-muted-foreground hover:text-brand border border-border rounded-xl transition-colors">
+                {verTodas ? 'Volver a la comparativa' : 'Mostrar todas'}
+            </button>
         </div>
     );
 };

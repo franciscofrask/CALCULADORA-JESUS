@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
 import GraficaDePeso from '../components/GraficaDePeso';
 import {
-    FileText, TrendingUp, Scale,
+    FileText, TrendingUp,
     Activity, ChevronRight, ChevronLeft, Calendar
 } from 'lucide-react';
 import InformeMensual from '../components/reports/InformeMensual';
@@ -14,18 +15,46 @@ import TresFotos from '../components/reports/TresFotos';
 import TusFotosYMetricas from '../components/TusFotosYMetricas';
 import CampoDePeso from '../components/CampoDePeso';
 import FormularioReporte from '../components/reports/FormularioReporte';
-import HistorialDeMacros from '../components/HistorialDeMacros';
 import { verComo } from '../lib/modoRevision';
 import { plazoEnPalabras } from '../lib/horaEspana';
 
 const ORANGE = '#FF671F';
 
+// «22 de agosto», y con el año solo si no es el de hoy: un ajuste del año pasado sin año
+// parece de este.
+const _fechaDelAjuste = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso + 'T12:00:00');
+    if (Number.isNaN(d.getTime())) return '';
+    const conAnio = d.getFullYear() !== new Date().getFullYear();
+    return d.toLocaleDateString('es-ES', {
+        day: 'numeric', month: 'long', ...(conAnio ? { year: 'numeric' } : {}),
+    });
+};
+// Un bloque de macros en palabras: «180 g de proteína, 250 g de hidratos, 60 g de grasa».
+// Los nombres son los que devuelve `/macros/historial` (proteina/hidratos/grasa).
+const _macrosEnPalabras = (bloque) => {
+    if (!bloque) return '';
+    return [['proteina', 'proteína'], ['hidratos', 'hidratos'], ['grasa', 'grasa']]
+        .filter(([k]) => bloque[k] != null)
+        .map(([k, nombre]) => `${bloque[k]} g de ${nombre}`)
+        .join(', ');
+};
+
 /**
- * LOS AJUSTES DE MACROS DENTRO DE EVOLUCIÓN (doc 19-08, bloque 09): para el cliente con
- * entrenador, que ya no tiene la pestaña de Mis macros. Trae su historial y pinta la misma
- * tabla que verían los demás allí.
+ * EL ÚLTIMO AJUSTE DE MACROS DENTRO DE EVOLUCIÓN, para el cliente con entrenador (doc 19-08,
+ * bloque 09). Hasta el 2-09 aquí se pintaba la tabla ENTERA de ajustes, la misma de Mis
+ * macros. Jesús, en el doc del 2-09: «En Mis macros está el mismo histórico entero, así que
+ * en Evolución se queda solo el último ajuste y un enlace. La tabla vive en un sitio, no en
+ * dos». Se queda la fecha, sus macros de entreno y descanso, y el enlace a Mis macros (que
+ * para él abre en lectura, con el histórico entero).
+ *
+ * Se pide lo mismo que antes (`/macros/historial`) y se usa solo la primera entrada, que es
+ * la vigente: el servidor ya las manda de la más nueva a la más vieja y sin las de fecha
+ * futura.
  */
-const HistorialDeAjustes = ({ api }) => {
+const UltimoAjuste = ({ api }) => {
+    const navigate = useNavigate();
     const [entradas, setEntradas] = useState(null);
     useEffect(() => {
         let vivo = true;
@@ -34,8 +63,29 @@ const HistorialDeAjustes = ({ api }) => {
             .catch(() => { if (vivo) setEntradas([]); });
         return () => { vivo = false; };
     }, [api]);
+    // El mismo corte que tenía la tabla: con una sola entrada no hay «ajuste», hay los
+    // macros de partida, y ya los ve en Mis macros y en su calculadora.
     if (!entradas || entradas.length < 2) return null;
-    return <HistorialDeMacros entradas={entradas} />;
+    const ultimo = entradas[0];
+    const entreno = _macrosEnPalabras(ultimo.entreno);
+    const descanso = _macrosEnPalabras(ultimo.descanso);
+    const peri = _macrosEnPalabras(ultimo.peri);
+    return (
+        <div className="bg-card border border-border rounded-2xl p-4 space-y-2" data-testid="ultimo-ajuste">
+            <p className="caption">Tu último ajuste</p>
+            <p className="text-sm font-bold text-foreground">{_fechaDelAjuste(ultimo.fecha)}</p>
+            <div className="text-sm text-muted-foreground space-y-0.5">
+                {entreno && <p><span className="text-foreground font-medium">Entreno:</span> {entreno}</p>}
+                {peri && <p><span className="text-foreground font-medium">Perientreno:</span> {peri}</p>}
+                {descanso && <p><span className="text-foreground font-medium">Descanso:</span> {descanso}</p>}
+            </div>
+            <button type="button" data-testid="ver-mis-macros"
+                onClick={() => navigate('/dashboard/macro-calculator')}
+                className="text-sm font-bold text-brand inline-flex items-center gap-1 hover:underline">
+                Ver mis macros y los {entradas.length} ajustes <ChevronRight className="w-4 h-4" />
+            </button>
+        </div>
+    );
 };
 
 // Estado de la ventana de envío. Cada cadencia tiene la suya (el semanal, viernes 10:00
@@ -629,21 +679,22 @@ const ReportsPage = () => {
                             ultimo={ultimoPesaje} abrir={pesarseHoy}
                             onGuardado={fetchData} />
                         {weightData.length > 0 ? (
-                            <div className="pt-1 border-t border-border">
-                                <div className="flex items-center gap-2 my-4">
-                                    <Scale className="w-4 h-4" style={{ color: ORANGE }} />
-                                    <p className="text-sm font-bold text-foreground uppercase tracking-wider">Tu curva</p>
-                                </div>
+                            <div className="pt-4 border-t border-border">
                                 {/* La gráfica es la MISMA que ve su entrenador (punto 4.13). Aquí
                                     los ejes iban pintados de blanco a pelo, y esta tarjeta es
                                     blanca en tema claro: eran fechas y kilos escritos en blanco
                                     sobre blanco. */}
                                 {/* Con su objetivo al lado: el color del cambio se decide
                                     contra él (doc 23-08, bloque 10). */}
-                                {/* Y con el arranque de su ciclo: el resumen de arriba habla
-                                    de este ciclo, no de los tres años de historia (2-09). */}
+                                {/* EN DOS BLOQUES (doc de Jesús del 2-09): arriba «Este ciclo»,
+                                    con la curva solo desde `cycle_start` y los kilos de estas
+                                    N semanas (`cycle_total_weeks`); debajo «Desde que entraste»,
+                                    en texto y sin la gráfica larga. Los rótulos los pone la
+                                    propia gráfica, por eso ya no va el título «Tu curva» aquí:
+                                    salían dos títulos seguidos para lo mismo. */}
                                 <GraficaDePeso puntos={weightData} objetivo={profile?.goal}
-                                    desdeElCiclo={profile?.cycle_start} />
+                                    desdeElCiclo={profile?.cycle_start}
+                                    semanasDelCiclo={profile?.cycle_total_weeks} />
                             </div>
                         ) : (
                             <div className="pt-4 border-t border-border text-center">
@@ -669,13 +720,13 @@ const ReportsPage = () => {
                         </>
                     )}
 
-                    {/* SUS AJUSTES DE MACROS, AQUÍ, para el que se los lleva un entrenador
-                        (doc 19-08, bloque 09): la pestaña de Mis macros ya no existe para él
-                        y su histórico va «al lado de su peso, sus medidas y sus fotos. Que
-                        es donde se ve que estás trabajando». La misma tabla que ve el que
-                        se los calcula, del mismo componente. */}
+                    {/* SU ÚLTIMO AJUSTE DE MACROS, AQUÍ, para el que se los lleva un
+                        entrenador (doc 19-08, bloque 09): su histórico va «al lado de su
+                        peso, sus medidas y sus fotos. Que es donde se ve que estás
+                        trabajando». Desde el doc del 2-09 ya no es la tabla entera, que
+                        vive en Mis macros: solo el último ajuste y el enlace. */}
                     {profile?.macros_ajustables?.puede === false && (
-                        <HistorialDeAjustes api={api} />
+                        <UltimoAjuste api={api} />
                     )}
                 </div>
             )}

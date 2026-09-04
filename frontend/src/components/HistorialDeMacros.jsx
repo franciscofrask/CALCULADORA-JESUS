@@ -8,6 +8,9 @@
  *
  * También sale de aquí la frase del último ajuste de la cabecera del doc:
  * «Último ajuste: −20 g de hidratos en entreno, −10 g de grasa en descanso».
+ *
+ * Desde el doc de Jesús del 2-09 (duda 37) se llama «Tus macros, ajuste a ajuste» y enseña
+ * los cuatro últimos de entrada; el resto, detrás de «Ver los N ajustes».
  */
 import React, { useState } from 'react';
 import { MACRO } from '../pages/ClientDashboard';
@@ -66,8 +69,12 @@ const Celdas = ({ macros, cambios, conGrasa = true }) => {
     });
 };
 
-// Cuántos ajustes se enseñan de entrada; el resto a un clic.
-const AJUSTES_A_LA_VISTA = 12;
+// Cuántos ajustes se enseñan de entrada; el resto a un clic («Ver los 14 ajustes»).
+// Eran doce, y con diez columnas cada uno la tabla se comía la pantalla. Jesús, doc del
+// 2-09 (duda 37): «que salgan los cuatro últimos y el resto detrás de Ver los 14 ajustes,
+// como ya está». Los cuatro últimos son los que cuentan la historia reciente; el resto
+// sigue a un clic.
+const AJUSTES_A_LA_VISTA = 4;
 
 const HistorialDeMacros = ({ entradas }) => {
     const [todo, setTodo] = useState(false);
@@ -78,7 +85,9 @@ const HistorialDeMacros = ({ entradas }) => {
     return (
         <section className="space-y-2" data-testid="mis-macros-historico">
             <div className="flex items-baseline justify-between gap-2 flex-wrap">
-                <p className="caption">Tu histórico</p>
+                {/* «Tu histórico no dice de qué» (Jesús, doc del 2-09, duda 37): el nombre
+                    dice ahora qué es lo que se está mirando. */}
+                <p className="caption">Tus macros, ajuste a ajuste</p>
                 <p className="text-[11px] text-muted-foreground">En rojo, lo que cambió en cada ajuste</p>
             </div>
             <div className="surface p-2 overflow-x-auto">

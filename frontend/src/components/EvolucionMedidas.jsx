@@ -11,8 +11,9 @@
  * no se lee ninguna. Aquí cada fila es una medida y cada columna una fecha.
  *
  * Lo único que cambia entre los dos sitios es el `tono`: el panel es oscuro a pelo y la app
- * del cliente va con los colores del tema (que tiene modo claro). Y el pie de la tabla, que
- * en el lado del cliente dice "tu entrenador" porque es a él a quien se lo dice.
+ * del cliente va con los colores del tema (que tiene modo claro). Y el pie de la tabla: en
+ * el lado del cliente habla el entrenador en primera persona («eso te lo digo yo, no el
+ * color», doc de Jesús del 2-09) y en el panel se dice en tercera, que ahí lo lee el coach.
  */
 import React from 'react';
 import { MEDIDAS, valorAnterior, diferencia } from '../lib/medidas';
@@ -20,8 +21,6 @@ import { MEDIDAS, valorAnterior, diferencia } from '../lib/medidas';
 // Las columnas caben hasta cierto punto: se enseñan las últimas y se dice cuántas quedan
 // fuera, que es mejor que cortar en silencio.
 const SESIONES_A_LA_VISTA = 8;
-
-const _fechaCorta = (f) => (f ? f.split('-').reverse().join('/') : '-');
 
 /** dd/mm, y con el año en dos cifras cuando las tomas no son del mismo año. */
 const _cabeceraFecha = (iso, conAnio) => {
@@ -45,7 +44,7 @@ const TONOS = {
         sube: 'text-blue-400',
         baja: 'text-emerald-400',
         pie: 'text-[10px] text-white/25 mt-2',
-        quienLoPone: 'el coach',
+        pieTexto: 'En azul lo que sube y en verde lo que baja. Sin juzgar: subir de brazo y subir de cintura no son lo mismo, y eso lo pone el coach, no el color.',
     },
     cliente: {
         caja: 'bg-card border border-border rounded-2xl p-4',
@@ -61,9 +60,12 @@ const TONOS = {
         sube: 'text-blue-500',
         baja: 'text-emerald-500',
         pie: 'text-[10px] text-muted-foreground mt-2',
-        quienLoPone: 'tu entrenador',
+        // En primera persona del entrenador (doc de Jesús del 2-09): al cliente se lo dice
+        // él, no «tu entrenador» en tercera.
+        pieTexto: 'En azul lo que sube y en verde lo que baja. Subir de brazo y subir de cintura no son lo mismo, y eso te lo digo yo, no el color.',
     },
 };
+// Colores: pendientes de decision (doc de Jesus del 2-09 pide verde/naranja; el informe usa verde/rojo segun objetivo).
 
 /**
  * LAS TRES PUERTAS POR LAS QUE ENTRA UNA MEDIDA, en una sola serie (2-09).
@@ -225,10 +227,7 @@ const EvolucionMedidas = ({ reports, perfil = null, tono = 'cliente', titulo }) 
                     </tbody>
                 </table>
             </div>
-            <p className={t.pie}>
-                En azul lo que sube y en verde lo que baja. Sin juzgar: subir de brazo y subir de
-                cintura no son lo mismo, y eso lo pone {t.quienLoPone}, no el color.
-            </p>
+            <p className={t.pie}>{t.pieTexto}</p>
         </div>
     );
 };
