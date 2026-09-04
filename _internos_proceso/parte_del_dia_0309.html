@@ -1,0 +1,659 @@
+<title>12EN12 · El parte del 3 de septiembre</title>
+
+<style>
+:root {
+    --tinta: #16130f; --media: #554e40; --suave: #8a8171;
+    --fondo: #faf7f2; --papel: #fff; --linea: #e7e1d5; --recia: #d2c9b9;
+    --marca: #d4531a; --marca-flojo: #fdf0e8;
+    --verde: #2f6b46; --verde-flojo: #e5f2ea;
+    --ambar: #8a6410; --ambar-flojo: #fbf1da;
+    --rojo: #a83a2a; --rojo-flojo: #fbe9e6;
+    --azul: #3f4a9c; --azul-flojo: #eceef9;
+}
+@media (prefers-color-scheme: dark) {
+    :root {
+        --tinta: #f3efe7; --media: #b2a996; --suave: #8a8070;
+        --fondo: #131110; --papel: #1c1a17; --linea: #2d2a24; --recia: #423d34;
+        --marca: #ff7c40; --marca-flojo: #2a1910;
+        --verde: #6ecf96; --verde-flojo: #13291d;
+        --ambar: #e3b45c; --ambar-flojo: #2a2211;
+        --rojo: #f08a76; --rojo-flojo: #2c1613;
+        --azul: #98a0f0; --azul-flojo: #1a1c2e;
+    }
+}
+:root[data-theme="dark"] {
+    --tinta: #f3efe7; --media: #b2a996; --suave: #8a8070;
+    --fondo: #131110; --papel: #1c1a17; --linea: #2d2a24; --recia: #423d34;
+    --marca: #ff7c40; --marca-flojo: #2a1910;
+    --verde: #6ecf96; --verde-flojo: #13291d;
+    --ambar: #e3b45c; --ambar-flojo: #2a2211;
+    --rojo: #f08a76; --rojo-flojo: #2c1613;
+    --azul: #98a0f0; --azul-flojo: #1a1c2e;
+}
+:root[data-theme="light"] {
+    --tinta: #16130f; --media: #554e40; --suave: #8a8171;
+    --fondo: #faf7f2; --papel: #fff; --linea: #e7e1d5; --recia: #d2c9b9;
+    --marca: #d4531a; --marca-flojo: #fdf0e8;
+    --verde: #2f6b46; --verde-flojo: #e5f2ea;
+    --ambar: #8a6410; --ambar-flojo: #fbf1da;
+    --rojo: #a83a2a; --rojo-flojo: #fbe9e6;
+    --azul: #3f4a9c; --azul-flojo: #eceef9;
+}
+
+body { margin: 0; background: var(--fondo); color: var(--tinta);
+    font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+    font-size: 16px; line-height: 1.58; -webkit-font-smoothing: antialiased; }
+.hoja { max-width: 960px; margin: 0 auto; padding: 44px 20px 90px; }
+
+header { border-bottom: 3px solid var(--tinta); padding-bottom: 24px; margin-bottom: 20px; }
+.sello { font-size: 11px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase;
+         color: var(--marca); margin: 0 0 12px; }
+h1 { font-size: clamp(32px, 6vw, 50px); line-height: 1.02; margin: 0 0 16px;
+     letter-spacing: -.025em; font-weight: 800; text-wrap: balance; }
+.bajada { font-size: 17.5px; color: var(--media); margin: 0; max-width: 62ch; }
+
+.cifras { display: flex; flex-wrap: wrap; gap: 10px; margin: 26px 0 0; }
+.dato { flex: 1 1 120px; background: var(--papel); border: 1px solid var(--linea);
+        border-radius: 10px; padding: 13px 15px; }
+.dato b { display: block; font-size: 26px; line-height: 1; letter-spacing: -.02em;
+          font-variant-numeric: tabular-nums; }
+.dato span { display: block; font-size: 11px; color: var(--suave); margin-top: 6px;
+             text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+
+h2 { font-size: 12.5px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase;
+     color: var(--suave); margin: 52px 0 6px; padding-bottom: 8px;
+     border-bottom: 1px solid var(--recia); }
+h2 + .intro { color: var(--media); margin: 0 0 18px; }
+
+.doc { background: var(--papel); border: 1px solid var(--linea); border-radius: 12px;
+       padding: 22px 24px; margin: 0 0 22px; }
+.doc-cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px;
+           border-bottom: 1px solid var(--linea); padding-bottom: 12px; margin-bottom: 14px; }
+.doc-cab h3 { margin: 0; font-size: 21px; letter-spacing: -.015em; flex: 1 1 auto; }
+.doc-cab .fecha { font-size: 12.5px; color: var(--suave); }
+.reloj { display: inline-flex; align-items: baseline; gap: 5px; font-size: 12px; font-weight: 700;
+         color: var(--marca); background: var(--marca-flojo); padding: 4px 10px;
+         border-radius: 999px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.doc h4 { margin: 16px 0 4px; font-size: 14px; letter-spacing: .02em; }
+.doc h4:first-of-type { margin-top: 0; }
+.doc p { margin: 0 0 9px; }
+.doc ul { margin: 0 0 10px; padding-left: 20px; }
+.doc li { margin: 0 0 6px; }
+.doc .pedia { color: var(--media); font-style: italic; }
+
+blockquote { margin: 10px 0; padding: 2px 0 2px 16px; border-left: 3px solid var(--recia);
+             color: var(--media); font-style: italic; }
+code { font-family: "Cascadia Mono", Consolas, monospace; font-size: .86em;
+       background: var(--marca-flojo); padding: 1px 5px; border-radius: 4px; color: var(--tinta); }
+.sha { font-family: "Cascadia Mono", Consolas, monospace; font-size: 11.5px; color: var(--suave); }
+
+.punto { border-left: 3px solid var(--linea); padding: 0 0 2px 18px; margin: 0 0 24px; }
+.punto.ok { border-left-color: var(--verde); }
+.punto.malo { border-left-color: var(--rojo); }
+.punto.medio { border-left-color: var(--ambar); }
+.punto h3 { margin: 0 0 6px; font-size: 18.5px; letter-spacing: -.01em; }
+.punto p { margin: 0 0 9px; }
+.punto p:last-child { margin-bottom: 0; }
+
+.medida { display: inline-flex; align-items: baseline; gap: 7px; background: var(--papel);
+          border: 1px solid var(--linea); border-radius: 8px; padding: 7px 12px;
+          margin: 3px 6px 3px 0; font-size: 13.5px; }
+.medida b { font-variant-numeric: tabular-nums; font-size: 16px; }
+.medida.mal b { color: var(--rojo); }
+.medida.bien b { color: var(--verde); }
+
+.tabla-envoltorio { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; min-width: 540px; margin: 6px 0 0; }
+th { text-align: left; font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+     color: var(--suave); font-weight: 700; padding: 0 12px 8px 0; white-space: nowrap; }
+td { padding: 11px 12px 11px 0; border-top: 1px solid var(--linea); vertical-align: top; }
+td.min { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--marca);
+         white-space: nowrap; width: 56px; }
+td.hora { font-variant-numeric: tabular-nums; color: var(--suave); white-space: nowrap;
+          font-size: 13px; width: 96px; }
+.chip { display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
+        text-transform: uppercase; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+.chip.ok { color: var(--verde); background: var(--verde-flojo); }
+.chip.medio { color: var(--ambar); background: var(--ambar-flojo); }
+.chip.malo { color: var(--rojo); background: var(--rojo-flojo); }
+
+.bloqueo { background: var(--papel); border: 1px solid var(--recia);
+           border-left: 4px solid var(--rojo); border-radius: 10px; padding: 20px 22px;
+           margin: 18px 0; }
+.bloqueo h3 { margin: 0 0 10px; font-size: 19px; }
+.bloqueo > p { margin: 0 0 10px; color: var(--media); }
+.bloqueo b { color: var(--tinta); }
+.opcion { border-top: 1px solid var(--linea); padding: 13px 0 3px; }
+.opcion .cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 9px; margin-bottom: 5px; }
+.opcion .letra { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+                 color: #fff; background: var(--suave); padding: 3px 9px; border-radius: 999px; }
+.opcion.reco .letra { background: var(--marca); }
+.opcion .nombre { font-weight: 700; font-size: 15.5px; }
+.opcion .coste { font-size: 12px; color: var(--suave); font-weight: 600;
+                 background: var(--marca-flojo); padding: 3px 9px; border-radius: 999px;
+                 white-space: nowrap; }
+.opcion p { margin: 0 0 6px; color: var(--media); font-size: 15px; }
+.opcion .pega { color: var(--rojo); }
+.opcion.reco { background: var(--marca-flojo); margin: 0 -12px; padding: 13px 12px 6px;
+               border-radius: 8px; border-top-color: transparent; }
+
+ol.decisiones { counter-reset: d; list-style: none; padding: 0; margin: 14px 0 0; }
+ol.decisiones li { counter-increment: d; position: relative; padding: 12px 0 12px 42px;
+                   border-top: 1px solid var(--linea); color: var(--media); }
+ol.decisiones li::before { content: counter(d); position: absolute; left: 0; top: 12px;
+    width: 26px; height: 26px; border-radius: 999px; background: var(--marca); color: #fff;
+    font-size: 12.5px; font-weight: 700; display: grid; place-items: center; }
+ol.decisiones li b { color: var(--tinta); }
+
+.pie { margin-top: 60px; padding-top: 18px; border-top: 1px solid var(--linea);
+       font-size: 13px; color: var(--suave); }
+</style>
+
+<div class="hoja">
+
+<header>
+    <p class="sello">12EN12 · Jueves 3 de septiembre de 2026</p>
+    <h1>El parte del día</h1>
+    <p class="bajada">
+        Cinco documentos de Jesús trabajados, la reunión con Gonzalo repasada punto por punto,
+        y once fallos que no estaba buscando nadie. Con lo que costó cada cosa, y con opciones
+        para lo que quedó parado.
+    </p>
+    <div class="cifras">
+        <div class="dato"><b>27</b><span>commits</span></div>
+        <div class="dato"><b>5</b><span>documentos</span></div>
+        <div class="dato"><b>11</b><span>fallos nuevos</span></div>
+        <div class="dato"><b>3</b><span>bloqueos</span></div>
+        <div class="dato"><b>14 h 44</b><span>de 13:16 a 04:00</span></div>
+    </div>
+</header>
+
+<h2>1 · Los cinco documentos de Jesús, uno a uno</h2>
+<p class="intro">
+    Cada uno leído entero, comprobado punto por punto en el navegador y cerrado o dejado con su
+    motivo. Los tiempos salen de la hora de los commits.
+</p>
+
+<div class="doc">
+    <div class="doc-cab">
+        <h3>Aplicar una favorita</h3>
+        <span class="fecha">artifact <span class="sha">e4915db7</span> · 3 sep</span>
+        <span class="reloj">10 min</span>
+        <span class="chip ok">Cerrado</span>
+    </div>
+    <p class="pedia">«Aplica una favorita sobre un día que ya tiene comidas y se lo lleva por
+    delante sin preguntar nada.»</p>
+    <h4>Qué se hizo</h4>
+    <ul>
+        <li>Al aplicar sobre un día con comidas, ahora sale <b>«Este día ya tiene comidas. Al
+        aplicar la favorita se reemplazan»</b>, con dos botones: <b>Aplicar y reemplazar</b> y
+        <b>Cancelar</b>. Se aplica directo solo cuando no hay nada que perder.</li>
+        <li>El dato para saberlo (<code>diaVacio</code>) <b>ya llegaba al modal y no se
+        usaba</b>: solo se miraba si coincidía el tipo de día.</li>
+        <li>El aviso del tipo de día y el de lo que se pierde van <b>en ese orden</b> y juntos,
+        como pide el documento: primero lo que se pierde, después el tipo.</li>
+    </ul>
+    <p><span class="sha">ad9f220 · 5943905</span> · Comprobado a 1280 y a 390 px.
+    <b>Quedan dos confirmaciones tuyas</b> sobre el texto exacto.</p>
+</div>
+
+<div class="doc">
+    <div class="doc-cab">
+        <h3>Cómo abre Inicio</h3>
+        <span class="fecha">artifact <span class="sha">865cf38a</span> · 3 sep</span>
+        <span class="reloj">1 h 10</span>
+        <span class="chip ok">21 de 21</span>
+    </div>
+    <p class="pedia">El aviso de la dieta sin terminar, dentro de la pestaña Dieta, y la marca
+    de la comida de ahora.</p>
+    <h4>Los cinco bloques que pedía</h4>
+    <ul>
+        <li><b>El aviso rojo, dentro de la pestaña Dieta.</b> Caja roja con «Te faltan 12 g de
+        hidratos por meter», botón <b>Terminarla</b> que baja a la comida donde falta, y una
+        <b>×</b> que lo quita por ese día dejando el punto. El rojo queda fuera de la regla
+        verde/naranja a propósito: «no es un estado de la dieta, es algo sin terminar».</li>
+        <li><b>El punto de la pestaña Dieta</b>, en rojo fuerte.</li>
+        <li><b>Las barras con el color del estado</b> y el número grande siempre en blanco.</li>
+        <li><b>La línea de lo hecho dice qué llevas:</b> «6 hechas 390P · 334H · 38G», donde
+        antes ponía «· ocultas».</li>
+        <li><b>El chip «Ahora»</b>, con la regla que corregiste sobre la marcha: no es la
+        primera comida sin marcar de la lista, es que <b>la barra naranja del peri se convierte
+        en el chip cuando le llega su turno</b>. Todo marcado, no sale; solo el Intra sin
+        marcar, sale en el Intra y su barra se apaga; una comida normal sin marcar por delante,
+        no sale.</li>
+    </ul>
+    <h4>Y lo que salió de tu maqueta del bloque 06</h4>
+    <p><b>El «de 250» se ve siempre.</b> Son dos líneas debajo del número, no una que se turna:
+    arriba contra qué se mide y abajo cómo va. Antes el objetivo desaparecía justo cuando el
+    estado tenía algo que decir, que es cuando más falta hace. Vive en un campo propio y solo
+    en Dieta y Llevas: en Macros el número ya es el objetivo, y en Falta es lo que queda.</p>
+    <h4>Un arreglo de fondo que no se ve</h4>
+    <p><code>dietaNoCuadra</code> usaba un margen de 5 g propio y con «mayor que», mientras el
+    resto de la casa usa 4 g inclusivo. Unificado, o sea que <b>el aviso y la palabra ya no
+    pueden decir cosas distintas del mismo día</b>.</p>
+    <p><span class="sha">959f198 · 0acbf4f · 4b88fc0</span> · El cartel rojo se recolocó a mano
+    después de tu captura: en móvil se apila y el botón y la × van juntos en su fila.</p>
+    <h4>Dos choques con decisiones tuyas</h4>
+    <p>Sus maquetas ponen <b>«cuadrado (+2)»</b> dentro del margen, cuando tu decisión del
+    mismo día es «cuadrado solo el exacto, dentro del margen válido». Se implementó con
+    «válido» y hay que decírselo.</p>
+    <h4>Y el otro choque quedó cerrado esta noche</h4>
+    <p>Cómo abre Inicio llevaba <b>tres versiones</b>: Macros el 27-08, Llevas el 1-09, Dieta el
+    2-09. Tu decisión de esta noche las cierra y <b>depende del día</b>: «abre en Llevas, pero
+    si hay al menos una comida guardada; si no, se abre en Dieta». Es la regla que acierta por
+    las dos puntas, porque con el día sin montar lo que toca es montarlo y con el día montado lo
+    que se viene a mirar es por dónde vas. Implementado y comprobado en pantalla en los tres
+    casos, incluido que si el cliente toca una pestaña manda él.
+    <span class="sha">5cebaf4</span></p>
+</div>
+
+<div class="doc">
+    <div class="doc-cab">
+        <h3>El informe del mes</h3>
+        <span class="fecha">artifact <span class="sha">2f5f6de3</span> · 1 sep</span>
+        <span class="reloj">1 h</span>
+        <span class="chip ok">Cerrado</span>
+    </div>
+    <p class="pedia">Los diez bloques del informe que recibe el cliente al mandar su reporte.</p>
+    <h4>Qué quedaba y qué se hizo</h4>
+    <ul>
+        <li><b>«Guárdamela como plantilla»</b> era lo único que faltaba del documento: el botón
+        del bloque «Tu día tipo» que convierte el desayuno que más repite en una favorita.</li>
+        <li>Se repasó bloque a bloque contra la pantalla: el hueco del feedback en gris con su
+        día y su hora, el peso con el porcentaje por semana, las medidas a dos columnas, la
+        grasa, las fotos, lo que ha hecho, el día tipo, las preferencias y los extras.</li>
+        <li><b>Un bloque sin datos no se pinta</b>, y eso es la regla 1 del documento: «el
+        informe no le pide nada». Si falta, desaparece; no sale vacío ni te pide que subas
+        algo.</li>
+    </ul>
+    <p><span class="sha">abdb904 · b263ccc</span></p>
+</div>
+
+<div class="doc">
+    <div class="doc-cab">
+        <h3>El reporte mensual</h3>
+        <span class="fecha">artifact <span class="sha">3b60d286</span> · 1 sep</span>
+        <span class="reloj">2 h 45</span>
+        <span class="chip ok">Cerrado</span>
+    </div>
+    <p class="pedia">Los cuatro pasos del formulario que rellena el cliente cada cuatro semanas.</p>
+    <h4>Lo que se cerró</h4>
+    <ul>
+        <li><b>La promesa pasa al viernes.</b> Cuatro documentos suyos dicen viernes y el
+        código decía sábado. Ahora el día vive en un solo sitio, el mismo del que sale el aviso
+        que le salta al equipo si ese día llega sin contestar.</li>
+        <li><b>La pregunta 5, los ejercicios que te molestan, por fin llega a la rutina.</b>
+        Este es el gordo: lo que contestaba el cliente cada mes se guardaba en un campo y
+        <b>el generador de rutinas mira otro</b>. O sea que llevaba meses preguntándose algo
+        que no servía para nada. Ahora se escribe donde el generador lo lee.</li>
+        <li>Se repasó el documento entero por segunda vez: <b>no estaba roto</b>, pero la
+        medida sí, y de ahí salió el arreglo de las tomas.</li>
+    </ul>
+    <p><span class="sha">e0ad166 · 6d67c11 · b263ccc</span></p>
+    <h4>Y cuatro fallos que salieron mirándolo</h4>
+    <p>El paso 4 no se podía mirar, «Modificar» abría la casilla del peso en blanco, el rótulo
+    «Y mientras tanto, mírate» no llevaba nada debajo, y la semana del ciclo mentía. Los cuatro
+    están abajo, en su sección.</p>
+</div>
+
+<div class="doc">
+    <div class="doc-cab">
+        <h3>La pantalla de Evolución</h3>
+        <span class="fecha">artifact <span class="sha">8c717864</span> · 2 sep</span>
+        <span class="reloj">4 h 20</span>
+        <span class="chip malo">Parado</span>
+    </div>
+    <p class="pedia">Cómo queda Seguimiento: el ciclo y sus bloques, los puntos de control y el
+    comparador de dos puntos.</p>
+    <h4>Qué se hizo</h4>
+    <ul>
+        <li><b>Leído entero</b>, de la cabecera al pie. Costó: hay que estirar el marco una sola
+        vez y no volver a tocarlo, porque cada cambio de altura deja la página en negro. Queda
+        apuntado para el siguiente.</li>
+        <li><b>Transcrito</b> a un documento del repo, para no depender de volver a abrirlo.</li>
+        <li><b>Cotejado contra la app</b> en tres frentes a la vez: el peso y las medidas, las
+        fotos y el comparador, y los ciclos y objetivos.</li>
+        <li>De ahí salió <b>un fallo real</b>, el «Total» de las medidas, que sí se arregló.</li>
+    </ul>
+    <h4>Lo que pide, separado por lo que cuesta</h4>
+    <p><b>Ya está y solo hay que moverlo:</b> la tabla de macros sale hoy en las dos pantallas
+    y en las dos se llama «Tu histórico»; la frase del último ajuste ya existe; y el feedback
+    escrito también, en Mis macros, con el nombre exacto que él dice.</p>
+    <p><b>Sale de lo que hay, sin datos nuevos:</b> el bloque es la semana partida por cuatro;
+    los puntos de control se arman con lo que ya guarda cada reporte (peso, medidas y fotos) y
+    los macros de ese día se resuelven por fecha, probado al 25 de julio; y el peso máximo y el
+    mínimo salen del propio conjunto.</p>
+    <p><b>Y hay tres cosas que no se pueden hacer todavía.</b> Están abajo, con sus opciones.</p>
+</div>
+
+<h2>2 · La reunión con Jesús y Gonzalo</h2>
+<p class="intro">
+    Un vídeo de 33 minutos. No hay forma de verlo, así que se parte en dos: los fotogramas con
+    ffmpeg y la voz con Whisper. De ahí salieron <b>26 puntos con su minuto exacto</b>, todos
+    comprobados contra la app antes de tocar nada. <b>1 h 25</b> entre transcribir, auditar y
+    arreglar.
+</p>
+
+<div class="tabla-envoltorio">
+<table>
+<thead><tr><th>Min</th><th>Qué dijo, y qué se hizo</th><th>Hoy</th></tr></thead>
+<tbody>
+<tr><td class="min">10:59</td><td><b>«Le doy a cuadrar y no se cuadra.»</b> Eran cinco fallos
+    encadenados. Tres cerrados: la frase hablaba de <b>quitar</b> cuando lo que pasaba era que
+    <b>faltaba</b>, y se contradecía dos palabras después diciendo «te falta añadir algo»;
+    decía «no se ha quitado ninguno» justo después de quitar lo que acababas de marcar; y
+    «déjalo como está» se iba sin pintar nada, así que el botón parecía muerto.</td>
+    <td><span class="chip ok">Cerrado</span></td></tr>
+<tr><td class="min">11:59</td><td>«En las verduras que ponga <b>no aporta macro</b>.» La app
+    decía las dos cosas según la pantalla: «sin macros» en la tarjeta y «No aporta macros» en
+    el modal de construir.</td><td><span class="chip ok">Cerrado</span></td></tr>
+<tr><td class="min">12:45</td><td><b>«Los avisos naranjas no se van.»</b> El color no se
+    calculaba.</td><td><span class="chip ok">Cerrado</span></td></tr>
+<tr><td class="min">16:06</td><td>«Entran en el día, no entran en la comida.» El peri sí
+    aterrizaba en su sitio desde marzo; las comidas normales iban a Nutrición sin decir cuál.
+    Era una línea, y el destino ya sabía recibirla.</td>
+    <td><span class="chip ok">Cerrado</span></td></tr>
+<tr><td class="min">25:10</td><td>«No me aparece la opción ni de editar ni de renombrar.» No
+    era solo la pantalla: en el backend había <code>POST</code>, <code>GET</code> y
+    <code>DELETE</code> y <b>ningún camino para tocar lo guardado</b>.</td>
+    <td><span class="chip ok">Cerrado</span></td></tr>
+<tr><td class="min">25:59</td><td>«Quité aves y me añadió el pollo igualmente.» El filtro
+    existe y funciona (el buscador pasa de 29 resultados a 0), pero muerde donde la app
+    <b>sugiere</b>, no donde tú aplicas algo <b>tuyo</b>.</td>
+    <td><span class="chip medio">Ahora avisa</span></td></tr>
+<tr><td class="min">28:22</td><td>«Falta la foto. La foto no está.»</td>
+    <td><span class="chip medio">3.669 de 5.445</span></td></tr>
+<tr><td class="min">30:06</td><td><b>«Cuando cuadre, esa parte lo tiene que hacer bien al
+    100 %.»</b> El motor rompía un macro que estaba bien.</td>
+    <td><span class="chip ok">Cerrado</span></td></tr>
+<tr><td class="min">16:43</td><td>El sábado y el domingo salían como entreno.</td>
+    <td><span class="chip ok">Cerrado</span></td></tr>
+<tr><td class="min">27:54</td><td>«Yo no quiero PDFs. Ver en rutina y ya está.» El rótulo ya
+    lo dice, pero al pulsarlo abre el visor del navegador.</td>
+    <td><span class="chip medio">A medias</span></td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="punto malo">
+    <h3>El naranja no era un color: era una marca vieja <span class="sha">235986f · 7 min</span></h3>
+    <p>Gonzalo dijo «no hay ninguna diferencia cuando está cuadrado y cuando no», y tenía razón
+    por un motivo más gordo del que él veía. El color salía de una marca guardada que
+    <b>solo escribe la pantalla de Nutrición al grabar</b>: el chat la pone en falso fijo, el
+    montador automático no la toca, copiar un día se lleva la del día de origen y los tres
+    importadores la dejan apagada. Así que un día montado con Marco nacía naranja aunque
+    cuadrara.</p>
+    <p><span class="medida mal">días de dieta en dev <b>42.747</b></span>
+       <span class="medida mal">en verde <b>3</b></span>
+       <span class="medida mal">y uno de esos tres se pasa <b>71 g</b></span></p>
+    <p>Ahora se calcula, con los macros vigentes de <b>ese</b> día y no con los de hoy, que es
+    la trampa que ya mordió una vez. La regla vive en un solo sitio y la comparten los tres que
+    la necesitan: el recuento del informe, Mi semana y el calendario. Y el día a medias deja de
+    llevar el aviso naranja: va en gris, porque ir corto no es un error.</p>
+</div>
+
+<div class="punto ok">
+    <h3>El motor de cuadrar <span class="sha">5b81f3d · 30 min</span></h3>
+    <p>El factor de bajada miraba <b>solo el macro que sobra</b>, y bajar es bajarlo todo. Una
+    comida con la grasa clavada en 15,0 y 4,3 g de hidratos de más se «cuadraba» bajando el
+    tomate frito a la mitad: arreglaba 4,3 de hidratos y creaba <b>7,5 de grasa que faltan</b>.
+    Entraba con un macro bien y salía con ese macro mal.</p>
+    <p>Ahora, antes de bajar, mira a quién está bajando; y con un solo candidato la cuenta es
+    <b>lo que se rompe contra lo que se arregla</b>, las dos medidas igual. Solo se protege lo
+    que estaba dentro del margen: un macro que ya venía corto no se «rompe», y contarlo habría
+    dejado el motor sin bajar nunca.</p>
+    <p>Se probó también una tercera pregunta que <b>proponía alimentos</b> cuando falta un macro
+    y ninguno de los que hay puede darlo. Funcionaba y cerraba el caso, pero lo cortaste
+    («no quiero que proponga alimentos») y se revirtió entera.</p>
+</div>
+
+<div class="punto ok">
+    <h3>La foto del suplemento: de 10 a 3.669 <span class="sha">6f5f39f · 5 min</span></h3>
+    <p>No era la pantalla: ya sabía pintarla. Al pautar se <b>congela una copia</b> de la ficha
+    dentro del protocolo, y los 100 protocolos se guardaron antes de que se importaran las
+    fotos. Encima los identificadores casi no existen ya en el catálogo, <b>6 de 85</b>, así que
+    buscar solo por identificador no arreglaba nada: había que cruzar también por nombre.</p>
+    <p>Se resuelve al servir, como el nombre del cliente y la comida en la que va, por el mismo
+    motivo: sale de datos que el coach puede cambiar mañana. Y se ignoran las imágenes que no
+    son una dirección de verdad, que en el catálogo hay 14.</p>
+</div>
+
+<h2>3 · Once fallos que no pedía nadie</h2>
+<p class="intro">Salieron cotejando. Ninguno estaba en un documento. <b>1 h</b> los del informe.</p>
+
+<div class="punto malo">
+    <h3>Nadie estaba en la semana 1 <span class="sha">46223d7 · 19 min</span></h3>
+    <p>El informe del mes decía <b>«Semana 1 de 12» a todo el mundo</b>. Ese 1 no es la semana
+    de nadie: es el número que escribe el alta para que no reviente la validación, y desde
+    entonces no lo mueve nada. Ni un cron, ni un contador, ni una pantalla.</p>
+    <p><span class="medida mal">fichas en producción <b>188</b></span>
+       <span class="medida mal">con la semana 1 <b>184</b></span>
+       <span class="medida bien">y de verdad no están en la 1 <b>144</b></span></p>
+    <p>La semana buena ya se calculaba desde el arranque del ciclo y la usan Mi perfil, el panel
+    y la renovación. El informe era el único sitio que se creía el campo muerto. Verificado en
+    producción después de desplegar.</p>
+</div>
+
+<div class="punto malo">
+    <h3>La pestaña «Espaldas» no podía funcionar nunca <span class="sha">46223d7</span></h3>
+    <p>Filtraba por la pose en plural y la pose se guarda en singular, así que el botón salía
+    apagado siempre y <b>las fotos de espaldas de cualquier cliente no se veían en el
+    informe</b>. Salió probando: mandé «espaldas» al subir y las fotos entraron sin pose.</p>
+</div>
+
+<div class="punto malo">
+    <h3>El «Total» de las medidas <span class="sha">ca05791 · 34 min</span></h3>
+    <p>La tabla enseña las ocho últimas tomas y el pie promete que el «Total» va contra la
+    primera. Iba contra la primera <b>de las ocho que se ven</b>. En un cliente de 43 tomas la
+    cintura decía <b>−1</b> y son <b>+5</b>. Y el informe del mes sí usa la primera absoluta,
+    así que las dos pantallas daban números distintos del mismo cliente el mismo día, que es
+    justo lo que el documento de Evolución pide evitar.</p>
+</div>
+
+<div class="punto medio">
+    <h3>Y cuatro más, pequeños <span class="sha">b127349 · 561e7a7 · d73351b · 38 min</span></h3>
+    <p><b>«Modificar» abría la casilla del peso en blanco.</b> Es una casilla de tipo número y
+    ahí se metía el peso con coma; el navegador tira el valor entero. Confirmar funcionaba, pero
+    el cliente no veía el número que estaba corrigiendo.</p>
+    <p><b>El paso 4 no se podía mirar.</b> El modo revisión existe para ver un reporte fuera de
+    su semana, y el último paso, que es donde se le entrega algo al cliente, era el único que no
+    se podía abrir, porque solo aparece tras un envío y el servidor lo rechaza fuera de ventana.</p>
+    <p><b>«Y mientras tanto, mírate» no llevaba nada debajo:</b> un título que no presenta nada.
+    Ahora van las tres fotos, la primera, una del medio y la última.</p>
+    <p><b>La pregunta del descanso llevaba una raya larga</b>, que en esta casa no va en nada
+    que lea un cliente.</p>
+</div>
+
+<h2>4 · Los tres bloqueos, con opciones</h2>
+<p class="intro">
+    Lo que para la pantalla de Evolución. Para cada uno, lo que se puede hacer y lo que cuesta.
+</p>
+
+<div class="bloqueo">
+    <h3>Bloqueo 1 · La foto no sabe de qué ciclo es</h3>
+    <p>Su premisa es que el selector <b>sale gratis</b> porque «las fotos suben con el reporte».
+    Medido: de <b>3.417 reportes, cero</b> llevan sus fotos, y ninguna foto tiene reporte. La
+    foto solo guarda fecha y pose. La costura existe en el código pero <b>no ha corrido
+    nunca</b>, y encima la app deja subir fotos con la ventana cerrada.</p>
+    <p>Y hay una segunda capa: <b>el ciclo tampoco se guarda</b>. El arranque es un campo único
+    que se pisa en cada renovación, así que de los ciclos anteriores no queda rastro. De sus
+    cuatro atajos, «mi primera foto» y «hoy» son gratis; «inicio de este ciclo» solo vale para
+    el ciclo en curso; y <b>«fin del ciclo anterior» y el agrupado por ciclos no se pueden
+    hacer</b>.</p>
+
+    <div class="opcion reco">
+        <div class="cab"><span class="letra">Opción A</span>
+            <span class="nombre">Entregar ya el selector corto, y abrir el dato en paralelo</span>
+            <span class="coste">medio día + el dato aparte</span></div>
+        <p>El selector sale ahora con lo que sí existe: «mi primera foto», «hoy» y la lista de
+        fechas de sus reportes. Los dos atajos de ciclo aparecen cuando el dato exista, sin
+        rehacer nada.</p>
+        <p><b>A favor:</b> el cliente tiene comparador esta semana, y no se promete un agrupado
+        que hoy sería mentira.</p>
+        <p class="pega"><b>En contra:</b> hay que decirle a Jesús que su documento sale en dos
+        tiempos.</p>
+    </div>
+
+    <div class="opcion">
+        <div class="cab"><span class="letra">Opción B</span>
+            <span class="nombre">Escribir el dato primero y sacarlo todo de una vez</span>
+            <span class="coste">2 o 3 días</span></div>
+        <p>Congelar el ciclo en la foto al subirla, llevar un histórico de ciclos, y atar la
+        foto al reporte en los dos sentidos. Después, el selector completo.</p>
+        <p><b>A favor:</b> sale como él lo pide, de una pieza, y el histórico de ciclos hace
+        falta igual para el Punto 0 y para los puntos de control.</p>
+        <p class="pega"><b>En contra:</b> nada visible en varios días, y el histórico solo se
+        llena hacia adelante: los ciclos viejos siguen sin existir.</p>
+    </div>
+
+    <div class="opcion">
+        <div class="cab"><span class="letra">Opción C</span>
+            <span class="nombre">Atar solo la foto al reporte y derivar de ahí</span>
+            <span class="coste">medio día</span></div>
+        <p>Lo mínimo: que la foto guarde su reporte y arreglar que se puedan subir fuera de la
+        ventana.</p>
+        <p class="pega"><b>En contra:</b> <b>no desbloquea el agrupado por ciclos</b>, porque el
+        reporte tampoco sabe de qué ciclo es. Resuelve la mitad y deja la otra igual.</p>
+    </div>
+</div>
+
+<div class="bloqueo">
+    <h3>Bloqueo 2 · Los objetivos, y dos minas debajo</h3>
+    <p>Pide seis objetivos, que los ponga el entrenador y que en la pantalla del cliente sean de
+    solo lectura. Hoy son dos y el campo <b>no valida nada</b>: en la base conviven
+    <code>mantener</code>, <code>perder_grasa</code> y <code>perder grasa</code>.</p>
+    <p><b>Las dos minas, y hay que desactivarlas antes de tocar nada:</b> el calculador de
+    macros <b>revienta con «mantenimiento»</b> al recalcular, y un endpoint del perfil
+    <b>reescribe a «definición»</b> cualquier objetivo que no sea volumen, sin avisar. Meter
+    cuatro valores nuevos sin cerrar eso deja clientes que no pueden recalcular sus macros.</p>
+
+    <div class="opcion reco">
+        <div class="cab"><span class="letra">Opción A</span>
+            <span class="nombre">Los seis valores en código, y el selector en el panel</span>
+            <span class="coste">1 día, minas incluidas</span></div>
+        <p>Se amplía la lista a los seis que él nombra, se cierran las dos minas, se le pone al
+        entrenador un selector en la ficha y la pantalla del cliente pasa a solo lectura.</p>
+        <p><b>A favor:</b> es el 90 % de lo que pide, y lo que falta («ampliable por ti») no lo
+        necesita hoy: los seis cubren su método.</p>
+        <p class="pega"><b>En contra:</b> añadir un objetivo nuevo será un despliegue, no un
+        formulario.</p>
+    </div>
+
+    <div class="opcion">
+        <div class="cab"><span class="letra">Opción B</span>
+            <span class="nombre">Catálogo de objetivos editable, como el de planes</span>
+            <span class="coste">2 días</span></div>
+        <p>Una tabla de objetivos con código, etiqueta, orden y activo, y una pantalla para que
+        el entrenador los amplíe. Más la autoría, para saber quién lo puso y poder bloquear la
+        del cliente.</p>
+        <p><b>A favor:</b> es literalmente lo que dice el documento, y el «foco» de
+        «tonificación con foco glúteo» cabe como segundo campo.</p>
+        <p class="pega"><b>En contra:</b> el doble de trabajo por una necesidad que puede no
+        aparecer nunca. Y cuidado: cuanto más abierta la lista, menos se puede comparar después,
+        que es justo lo que él quiere evitar.</p>
+    </div>
+
+    <div class="opcion">
+        <div class="cab"><span class="letra">Opción C</span>
+            <span class="nombre">Solo bloquear la pantalla del cliente</span>
+            <span class="coste">2 horas</span></div>
+        <p>Dejar los dos valores y quitarle al cliente las dos puertas por las que hoy se lo
+        cambia.</p>
+        <p class="pega"><b>En contra:</b> no resuelve nada de fondo y deja el campo sin validar,
+        que es de donde salen las tres basuras que ya hay.</p>
+    </div>
+</div>
+
+<div class="bloqueo">
+    <h3>Bloqueo 3 · Las fotos viejas y el plan de seis meses</h3>
+    <p>Hay <b>5.144 fotos</b> del histórico y solo el <b>54 %</b> se puede atar a un reporte; y
+    ese reporte tampoco sabe su ciclo. Y el plan de 6 meses son 26 semanas, que <b>no son
+    bloques enteros</b>: 6,5.</p>
+
+    <div class="opcion reco">
+        <div class="cab"><span class="letra">Opción A</span>
+            <span class="nombre">Agrupar por tramos de cuatro semanas desde el alta, y decirlo</span>
+            <span class="coste">medio día</span></div>
+        <p>Las fotos viejas se agrupan por tramos de cuatro semanas contados desde su alta, y el
+        rótulo lo dice: «antes de que empezáramos a guardar los ciclos». Para el plan de 6 meses,
+        seis bloques de cuatro y una cola de dos semanas, dicha.</p>
+        <p><b>A favor:</b> el cliente ve su historia agrupada y la app no finge saber lo que no
+        sabe, que es la regla que él mismo pone para los huecos.</p>
+    </div>
+
+    <div class="opcion">
+        <div class="cab"><span class="letra">Opción B</span>
+            <span class="nombre">Solo el 54 % atable, y el resto en un cajón</span>
+            <span class="coste">2 horas</span></div>
+        <p>Las que cruzan con un reporte de Calma van a su sitio; las otras 2.342 quedan en un
+        grupo «anteriores».</p>
+        <p class="pega"><b>En contra:</b> casi la mitad de sus fotos en un cajón sin nombre.</p>
+    </div>
+
+    <div class="opcion">
+        <div class="cab"><span class="letra">Opción C</span>
+            <span class="nombre">El histórico sin agrupar</span>
+            <span class="coste">nada</span></div>
+        <p>El selector solo agrupa por ciclo a partir del día en que se empiece a escribir el
+        dato. Lo de antes, por fecha.</p>
+        <p class="pega"><b>En contra:</b> hoy son casi todas sus fotos, y durante meses el
+        selector se verá pobre.</p>
+    </div>
+</div>
+
+<h2>5 · Lo que espera una decisión tuya</h2>
+<ol class="decisiones">
+    <li><b>Los decimales.</b> La misma comida dice «válido +1», «15,7 cuadrado» y «16G» según
+    dónde mires. Hace falta una sola regla de redondeo para el mismo número.</li>
+    <li><b>Si una favorita con algo que evitas debe avisarse o quitarse.</b> Hoy avisa, porque
+    la app no borra lo que ha puesto el cliente y una favorita es suya.</li>
+    <li><b>Los nueve suplementos sin foto:</b> Omega 3 de hombre y de mujer, Hydropeptides o MAP
+    en tres dosis, Ursobilane en tres y PRO-H. No hay de dónde sacarla: hay que subirlas.</li>
+    <li><b>El PDF de la rutina.</b> Ojo: la vista dentro de la app existió y se quitó a propósito
+    el 27-08 porque en iOS solo pintaba la primera página. Cerrarlo bien es servir la rutina como
+    datos, no reactivar aquello.</li>
+    <li><b>Máxima definición = bajar del 14 %.</b> Él pregunta si en mujeres el número es otro.</li>
+</ol>
+
+<h2>6 · En qué se fue el día</h2>
+<div class="tabla-envoltorio">
+<table>
+<thead><tr><th>Tramo</th><th>En qué</th><th>Cuánto</th></tr></thead>
+<tbody>
+<tr><td class="hora">13:16 · 13:24</td><td>Doc «Aplicar una favorita»</td><td>10 min</td></tr>
+<tr><td class="hora">13:24 · 14:03</td><td>Doc «Cómo abre Inicio», primera vuelta</td><td>39 min</td></tr>
+<tr><td class="hora">14:03 · 15:02</td><td>Doc «El informe del mes»</td><td>59 min</td></tr>
+<tr><td class="hora">15:02 · 17:47</td><td>Doc «El reporte mensual»</td><td>2 h 45</td></tr>
+<tr><td class="hora">17:47 · 18:18</td><td>Fin de semana en descanso y «Ver rutina»</td><td>31 min</td></tr>
+<tr><td class="hora">18:18 · 18:47</td><td>«Cómo abre Inicio», el cartel y el «de 250»</td><td>29 min</td></tr>
+<tr><td class="hora">18:47 · 19:44</td><td>Los cuatro fallos del informe y del reporte</td><td>57 min</td></tr>
+<tr><td class="hora">19:44 · 21:08</td><td>El vídeo: transcribir, auditar 26 puntos y arreglar</td><td>1 h 24</td></tr>
+<tr><td class="hora">21:08 · 21:36</td><td>El motor de cuadrar</td><td>28 min</td></tr>
+<tr><td class="hora">21:36 · 22:10</td><td>El «Total» de las medidas</td><td>34 min</td></tr>
+<tr><td class="hora">22:10 · 02:20</td><td>Doc «La pantalla de Evolución»: leer y cotejar</td><td>4 h 10</td></tr>
+<tr><td class="hora">02:20 · 03:24</td><td>Documento, Word, Notion y despliegue</td><td>1 h 04</td></tr>
+<tr><td class="hora">03:24 · 04:00</td><td>Cómo abre Inicio, con tu decisión de esta noche</td><td>36 min</td></tr>
+</tbody>
+</table>
+</div>
+<p class="intro" style="margin-top:14px">
+    Los tramos salen de la hora de los commits. El de Evolución y el de la entrega no tienen
+    commits, así que van medidos hasta el final del despliegue. <b>Total: 14 h 44.</b>
+</p>
+
+<h2>7 · El despliegue</h2>
+<p>Todo en producción, verificado dentro del pod y no solo con el health, porque un import
+diferido convierte un fallo de arranque en un fallo silencioso. Los módulos nuevos importan,
+la app responde y la semana del ciclo ya sale calculada: <b>144 clientes de producción no
+estaban en la semana 1</b> y ahora la app lo sabe.</p>
+<p><b>Y un aviso:</b> el despliegue lleva el árbol entero, así que a producción no fue solo lo
+de hoy: fue todo lo que estaba commiteado y sin desplegar de los días anteriores.</p>
+<p><b>Queda una cosa fuera:</b> la regla nueva de cómo abre Inicio se hizo después del
+despliegue, así que está en GitHub y <b>todavía no en producción</b>. Es un despliegue más
+cuando lo digas.</p>
+
+<p class="pie">
+    Todo comprobado reproduciendo cada caso en la app, no leyendo el código. 27 commits en GitHub; 26 en producción.
+</p>
+
+</div>
