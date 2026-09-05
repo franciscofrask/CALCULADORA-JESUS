@@ -21,18 +21,20 @@ import ExtrasDelDia from '../nutrition/ExtrasDelDia';
  *              interruptor que lo separa, y solo aquí.
  *  - Dieta   · la suma de lo montado: `servido_comidas` (lo cuenta el servidor, calibrado)
  *              más lo montado en el peri (P/H; la grasa del peri va fuera, como arriba).
- *  - Llevas  · la suma de lo MARCADO con su casilla, comidas y peri. Los Extras del día NO
- *              entran (punto 28 del doc del 24-08): ver abajo.
+ *  - Llevas  · la suma de lo MARCADO con su casilla, comidas y peri, MÁS los Extras del día
+ *              que traen macros (Francisco, 5-09; revierte el punto 28 del 24-08): ver abajo.
  *  - Falta   · Macros menos Llevas. PUEDE quedar en negativo y se dice tal cual («te pasas
  *              14»), en el naranja de pasarse y sin bronca: es un dato.
  *
  * QUÉ COLOR LLEVA CADA COSA NO SE DECIDE AQUÍ: la regla entera está en
  * lib/estadoDelMacro, y las cuatro pestañas le preguntan lo mismo.
  *
- * LOS EXTRAS NO TOCAN NADA DE ESTO. Hasta el 24-08 se sumaban en Llevas y por eso le
- * encogían el Falta: si se comía una tarta a media tarde, la app le decía «ya no te comas
- * la comida 4». Eso es enseñarle a compensar, que es justo lo contrario del método. Van en
- * su lista, aparte (nutrition/ExtrasDelDia), y aquí solo se pintan.
+ * LOS EXTRAS SUMAN EN LLEVAS (Francisco, 5-09). Del 24-08 al 5-09 estuvieron fuera: se
+ * quitaron porque encogían el Falta (si se comía una tarta a media tarde, la app le decía
+ * «ya no te comas la comida 4», que es enseñarle a compensar). El repaso del 4-09 (punto 09)
+ * pidió que Llevas los sumara y Francisco lo decidió así. Solo suman los que traen macros
+ * (los del catálogo); el texto a mano no tiene macros. Siguen en su lista, aparte
+ * (nutrition/ExtrasDelDia), y Dieta no los cuenta: son lo comido FUERA de la dieta.
  *
  * LA CASILLA POR COMIDA vive en el servidor: `PATCH /diets/{fecha}/comida-marcada`
  * escribe `comidas.{k}.marcada` dentro del día, así la marca viaja con la cuenta a
@@ -160,7 +162,8 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
     const [marcadas, setMarcadas] = useState({});
     // Los Extras del día: lo comido fuera de la dieta. Llegan con el documento del día
     // (`extras`) y el estado se queda aquí, en el padre, para que la lista sobreviva a un
-    // repintado del bloque; añadir o quitar avisa hacia arriba. No se suman en ningún sitio.
+    // repintado del bloque; añadir o quitar avisa hacia arriba. Los que traen macros suman en
+    // Llevas (5-09), por eso el estado vive aquí y no dentro de la lista.
     const [extrasDia, setExtrasDia] = useState([]);
     useEffect(() => { setExtrasDia((dieta?.exists && dieta.extras) || []); }, [dieta]);
 
@@ -370,14 +373,28 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
     // Con el día entero marcado no toca ninguna, que es lo correcto.
     const siguienteSinMarcar = filas.find((f) => !marcadas[f.clave]) || null;
     const laDeAhora = siguienteSinMarcar?.esPeri ? siguienteSinMarcar.clave : null;
-    // «Llevas» son las comidas marcadas y nada más: los extras NO se suman (punto 28 del
-    // doc del 24-08). Ya mordió una vez -- sumarlos encogía el «Falta» del resto del día y
-    // la app acababa diciéndole que se saltara una comida por haberse comido una tarta --,
-    // así que si alguien vuelve a plantearlo, la respuesta es que no.
-    const llevas = hechas.reduce((acc, f) => {
+    // «LLEVAS» SUMA LAS COMIDAS MARCADAS Y LOS EXTRAS (Francisco, 5-09: «Llevas sume los
+    // extras»). REVIERTE el punto 28 del doc del 24-08, que los dejaba fuera para que un
+    // extra no encogiera el «Falta» y la app no le enseñara a compensar. El punto 09 del
+    // repaso del 4-09 pedía lo contrario («lleva 80 de hidratos apuntados y Falta sigue
+    // pidiendo 120»), y Francisco eligió sumarlos. Cuentan los extras que traen macros, los
+    // del catálogo; los escritos a mano no tienen macros y siguen sin contar, como dice el
+    // propio bloque de Extras.
+    const llevasDeLasComidas = hechas.reduce((acc, f) => {
         const m = f.esPeri ? periPorBloque[f.clave].suma : montadoPorComida[f.clave];
         return { P: acc.P + m.P, H: acc.H + m.H, G: acc.G + (m.G || 0) };
     }, { P: 0, H: 0, G: 0 });
+    const llevasDeLosExtras = (extrasDia || []).reduce((acc, e) => {
+        const m = e?.macros;
+        if (!m) return acc;
+        return { P: acc.P + (m.P || 0), H: acc.H + (m.H || 0), G: acc.G + (m.G || 0) };
+    }, { P: 0, H: 0, G: 0 });
+    const hayExtrasConMacros = llevasDeLosExtras.P + llevasDeLosExtras.H + llevasDeLosExtras.G > 0;
+    const llevas = {
+        P: llevasDeLasComidas.P + llevasDeLosExtras.P,
+        H: llevasDeLasComidas.H + llevasDeLosExtras.H,
+        G: llevasDeLasComidas.G + llevasDeLosExtras.G,
+    };
 
     // Lo que falta, redondeado, que es lo que se pinta. El desvío EXACTO se guarda aparte:
     // es el único decimal que sobrevive en todo el Inicio (punto 80), y solo para la línea
@@ -418,9 +435,10 @@ const TuDietaHoy = ({ api, userId, fecha, dieta, objetivo, servido, navigate, su
         dieta: totalDieta, llevas, falta,
     };
     const valores = valoresDeVista[vista];
-    // Con un extra apuntado y ninguna comida marcada, Llevas vuelve a decir «Todavía no
-    // has marcado nada»: desde que los extras no suman, el número sería un 0 pelado.
-    const nadaMarcado = hechas.length === 0;
+    // Con un extra con macros apuntado y ninguna comida marcada, Llevas ya no dice «Todavía
+    // no has marcado nada»: enseña lo que suman los extras (5-09; antes, con los extras
+    // fuera, el número habría sido un 0 pelado y por eso se tapaba).
+    const nadaMarcado = hechas.length === 0 && !hayExtrasConMacros;
 
     // SI LA DIETA DEL DÍA NO LLEGA A SUS MACROS, QUE SE VEA (revisión del 2-09, y el aviso
     // entero con el doc «Cómo abre Inicio» del 3-09).
