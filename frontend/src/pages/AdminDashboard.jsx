@@ -12,6 +12,7 @@ import { PlanBadge, JG12Logo } from './ClientDashboard';
 import LimiteDeError from '../components/LimiteDeError';
 import { AvisosDelEquipo, PeticionesDeCompra } from '../components/AvisosDelEquipo';
 import { prettyToken } from '../lib/labels';
+import { verComo } from '../lib/modoRevision';
 import { estadoClienteLabel, estadoDeAcceso } from '../lib/labels';
 import { contarClientes, contarRegistrosSinTerminar, cuentaComoCliente } from '../lib/cuentaClientes';
 import AsignarTarea from '../components/AsignarTarea';
@@ -42,7 +43,9 @@ const PLAN_COLORS = {
 
 // Panel "Por hacer esta semana": tres columnas accionables (sin macros / sin rutina /
 // reporte pendiente), con filtro por clientes al corriente de pago (tarea 19).
-const TodoSemana = ({ todo, soloAlCorriente, setSoloAlCorriente, navigate }) => {
+const TodoSemana = ({ todo, soloAlCorriente, setSoloAlCorriente, navigate, forzarRutina }) => {
+    // Qué columnas plegadas se han abierto con su «verlos» (punto 134, ver abajo).
+    const [desplegadas, setDesplegadas] = useState({});
     if (!todo) return null;
     const flt = (arr) => (arr || []).filter(c => !soloAlCorriente || c.al_corriente);
     // «SIN RUTINA» NO ES UNA LISTA DE PENDIENTES SI ESTÁN TODOS.
@@ -55,7 +58,10 @@ const TodoSemana = ({ todo, soloAlCorriente, setSoloAlCorriente, navigate }) => 
     // diez. Y no se esconde nada, porque la pantalla de Rutinas la lista entera.
     const conRutinaEnPlan = Number(todo.con_rutina_en_plan || 0);
     const sinRutina = todo.sin_rutina || [];
-    const rutinaEsLoNormal = conRutinaEnPlan > 0 && sinRutina.length >= conRutinaEnPlan * 0.9;
+    // `forzarRutina` es el modo revisión (`/admin?ver=sin_rutina`, solo equipo): en dev le
+    // falta a 154 de 156 y la columna se esconde sola, así que sin esto no había forma de
+    // mirar cómo queda la caja (4-09). No toca ningún dato.
+    const rutinaEsLoNormal = !forzarRutina && conRutinaEnPlan > 0 && sinRutina.length >= conRutinaEnPlan * 0.9;
 
     const cols = [
         { key: 'macros', label: 'Sin macros', icon: Apple, color: '#FF671F', sub: 'Necesitan macros del entrenador', items: flt(todo.sin_macros) },
@@ -65,7 +71,13 @@ const TodoSemana = ({ todo, soloAlCorriente, setSoloAlCorriente, navigate }) => 
                Rutinas, así que «sin una activa» describía la cuenta vieja: al que tiene su
                PDF no le falta rutina, le falta estar en la tabla de rutinas estructuradas,
                que es otra cosa y no es trabajo pendiente de nadie. */
-            { key: 'rutina', label: 'Sin rutina', icon: Dumbbell, color: '#3B82F6', sub: 'Plan con rutina y ninguna puesta', items: flt(sinRutina) },
+            /* Y DESDE EL 4-09 ES EL MISMO NÚMERO QUE EN RUTINAS (punto 103 del artefacto «La
+               app, pantalla por pantalla»: «el Inicio del panel sigue diciendo Sin rutina: 93
+               como si no tuviera ninguno»): la lista sale de la misma función del backend
+               (`core.rutina_puesta`), con las mismas personas y el mismo criterio de qué plan
+               la lleva. Y va PLEGADA: el número, y los nombres detrás de un «verlos»
+               (punto 134), que ciento veinte nombres seguidos no se leen, se cuentan. */
+            { key: 'rutina', label: 'Sin rutina', icon: Dumbbell, color: '#3B82F6', sub: 'Plan con rutina y ninguna puesta, igual que en Rutinas', items: flt(sinRutina), plegada: true },
         ]),
         { key: 'reportes', label: 'Reporte pendiente', icon: FileText, color: '#EAB308', sub: 'No enviado esta semana', items: flt(todo.reporte_pendiente) },
         // «No puedo esta semana»: avisaron con el botón, así que no ensucian la lista de
@@ -99,7 +111,18 @@ const TodoSemana = ({ todo, soloAlCorriente, setSoloAlCorriente, navigate }) => 
                                 <span className="ml-auto text-sm font-bold" style={{ color: col.color }}>{col.items.length}</span>
                             </div>
                             <p className="text-[10px] text-white/30 mb-2">{col.sub}</p>
+                            {/* La plegada enseña solo el número hasta que se pide verlos (punto 134). */}
+                            {col.plegada && col.items.length > 0 && !desplegadas[col.key] ? (
+                                <button onClick={() => setDesplegadas(d => ({ ...d, [col.key]: true }))}
+                                    data-testid={`todo-ver-${col.key}`}
+                                    className="text-[#FF671F] text-xs hover:underline py-1">verlos</button>
+                            ) : (
                             <div className="space-y-0.5 max-h-64 overflow-y-auto">
+                                {col.plegada && col.items.length > 0 && (
+                                    <button onClick={() => setDesplegadas(d => ({ ...d, [col.key]: false }))}
+                                        data-testid={`todo-ocultar-${col.key}`}
+                                        className="text-white/40 text-xs hover:underline py-1">ocultar</button>
+                                )}
                                 {col.items.length === 0 && <p className="text-white/25 text-xs py-3 text-center">Nada pendiente</p>}
                                 {col.items.map(c => (
                                     <button key={c.client_id} onClick={() => navigate(`/admin/clients/${c.client_id}`)}
@@ -118,6 +141,7 @@ const TodoSemana = ({ todo, soloAlCorriente, setSoloAlCorriente, navigate }) => 
                                     </button>
                                 ))}
                             </div>
+                            )}
                         </div>
                     ))}
                 </div>
@@ -684,6 +708,7 @@ const AdminDashboard = () => {
 
             {/* Por hacer esta semana (tarea 19) */}
             <TodoSemana todo={todo} soloAlCorriente={soloAlCorriente} setSoloAlCorriente={setSoloAlCorriente}
+                forzarRutina={verComo(user) === 'sin_rutina'}
                 navigate={navigate} />
 
             {/* Plan Distribution */}

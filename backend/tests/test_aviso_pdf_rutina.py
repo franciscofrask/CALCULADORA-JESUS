@@ -169,3 +169,96 @@ def test_el_panel_deja_de_pedir_rutina_a_quien_ya_tiene_su_pdf(
     assert _subir(cabeceras_admin, cid).status_code == 200
     assert cid not in sin_rutina(), (
         "con su PDF subido, el panel sigue pidiéndole rutina: es el punto 69 otra vez")
+
+
+# ── UNA SOLA RESPUESTA A «¿TIENE RUTINA?» (4-09) ──────────────────────────────────────
+#
+# Puntos 80 y 103 del artefacto «La app, pantalla por pantalla», confirmados por Gonzalo en
+# producción ese día: «Montalvo tiene rutina-152.pdf entregada y el cliente la ve y la abre.
+# La ficha, en Resumen, dice Sin rutina» y «se corrigió el conteo en Rutinas y el Inicio
+# sigue con el suyo». Desde hoy las tres pantallas leen `core.rutina_puesta`.
+
+def test_la_ficha_dice_en_pdf_con_la_misma_funcion_que_el_panel(
+        cabeceras_admin, cliente_desechable, entreno_encendido):
+    """Punto 80: el Resumen de la ficha pinta `rutina_puesta`, que viene del backend con la
+    misma función que el panel. Antes miraba solo `routines` (las estructuradas)."""
+    cid = cliente_desechable["client_id"]
+
+    def ficha():
+        r = requests.get(f"{API}/admin/clients/{cid}", headers=cabeceras_admin, timeout=120)
+        assert r.status_code == 200, r.text
+        return r.json().get("rutina_puesta") or {}
+
+    antes = ficha()
+    assert antes.get("estado") == "ninguna" and antes.get("tiene") is False, antes
+
+    assert _subir(cabeceras_admin, cid).status_code == 200
+    despues = ficha()
+    assert despues.get("estado") == "pdf", despues
+    assert despues.get("tiene") is True and despues.get("en_pdf") is True
+    assert despues.get("pdf_uploaded_at"), "la fecha del PDF es lo que pinta Entreno"
+
+
+def test_el_inicio_y_rutinas_cuentan_a_los_mismos_sin_rutina(cabeceras_admin):
+    """Punto 103: dos números de la misma sesión que no pueden discrepar. El Inicio decía
+    93 y Rutinas 70 (23 + 47) porque el Inicio contaba como prometida la rutina «opcional»
+    de Bronze y Mantenimiento. Ahora los dos salen de `clientes_y_su_rutina`."""
+    todo = requests.get(f"{API}/admin/todo-semana", headers=cabeceras_admin, timeout=120)
+    assert todo.status_code == 200, todo.text
+    inicio = {c["client_id"] for c in todo.json().get("sin_rutina") or []}
+
+    ov = requests.get(f"{API}/admin/routines/overview", headers=cabeceras_admin, timeout=120)
+    assert ov.status_code == 200, ov.text
+    filas = ov.json()
+    rutinas = {c["client_id"] for c in filas if c["la_lleva_en_su_plan"] and not c["has_routine"]}
+    assert inicio == rutinas, (
+        f"solo en el Inicio: {len(inicio - rutinas)} · solo en Rutinas: {len(rutinas - inicio)}")
+    assert todo.json()["con_rutina_en_plan"] == sum(1 for c in filas if c["la_lleva_en_su_plan"])
+    # Y la pantalla de Rutinas no se rompió: las claves de siempre siguen ahí.
+    if filas:
+        assert {"client_id", "name", "email", "plan", "has_routine", "tiene_pdf",
+                "pdf_uploaded_at", "training_days", "routine_created_at"} <= set(filas[0])
+        assert "perfil" not in filas[0], "el perfil no viaja a la pantalla"
+
+
+class TestElCriterioEnCore:
+    """Las preguntas puras de `core.rutina_puesta`, sin base."""
+
+    @staticmethod
+    def _core():
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        import core.rutina_puesta as rp
+        return rp
+
+    def test_la_estructurada_manda_y_el_pdf_tambien_es_tener_rutina(self):
+        rp = self._core()
+        assert rp.estado_de(None) == "ninguna"
+        assert rp.estado_de({"activa": None, "pdf": None}) == "ninguna"
+        assert rp.estado_de({"activa": None, "pdf": "2026-08-26"}) == "pdf"
+        # Un PDF sin fecha sigue siendo un PDF.
+        assert rp.estado_de({"activa": None, "pdf": ""}) == "pdf"
+        assert rp.estado_de({"activa": {"days": []}, "pdf": "2026-08-26"}) == "activa"
+        assert rp.tiene_rutina({"activa": None, "pdf": ""}) is True
+        assert rp.tiene_rutina(None) is False
+
+    def test_opcional_no_es_incluida(self):
+        rp = self._core()
+        catalogo = {
+            "nivel2": {"habilitaciones": {"rutina": "personalizada"}},
+            "nivel1": {"habilitaciones": {"rutina": "del_mes"}},
+            "bronze": {"habilitaciones": {"rutina": "opcional"}},
+            "basica": {"habilitaciones": {"rutina": "ninguna"}},
+            "raro": {},
+        }
+        assert rp.la_lleva_en_su_plan("nivel2", catalogo) is True
+        assert rp.la_lleva_en_su_plan("nivel1", catalogo) is True
+        assert rp.la_lleva_en_su_plan("NIVEL2 ", catalogo) is True   # mayúsculas y espacios
+        assert rp.la_lleva_en_su_plan("bronze", catalogo) is False
+        assert rp.la_lleva_en_su_plan("basica", catalogo) is False
+        assert rp.la_lleva_en_su_plan("raro", catalogo) is False
+        assert rp.la_lleva_en_su_plan(None, catalogo) is False
+        assert rp.a_quien_le_falta([
+            {"la_lleva_en_su_plan": True, "has_routine": False, "n": 1},
+            {"la_lleva_en_su_plan": True, "has_routine": True, "n": 2},
+            {"la_lleva_en_su_plan": False, "has_routine": False, "n": 3},
+        ]) == [{"la_lleva_en_su_plan": True, "has_routine": False, "n": 1}]

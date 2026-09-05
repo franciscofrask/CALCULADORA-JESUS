@@ -1012,6 +1012,13 @@ async def get_client_detail(client_id: str, user = Depends(get_admin_user)):
 
     from core.plan_access import estado_de_acceso
 
+    # SI TIENE RUTINA, DICHO POR LA MISMA FUNCIÓN QUE EL PANEL (4-09, punto 80 del artefacto
+    # «La app, pantalla por pantalla»; Gonzalo: «Montalvo tiene rutina-152.pdf entregada y el
+    # cliente la ve y la abre. La ficha, en Resumen, dice Sin rutina»). El Resumen miraba
+    # solo `routines`, o sea las estructuradas, y el PDF solo lo cargaba la pestaña Entreno.
+    from core.rutina_puesta import rutina_puesta_de
+    rutina_puesta = await rutina_puesta_de(client_id)
+
     return {
         "profile": profile,
         # Si puede entrar en la app y, si no, por qué. Va calculado desde aquí por lo mismo
@@ -1019,6 +1026,8 @@ async def get_client_detail(client_id: str, user = Depends(get_admin_user)):
         "acceso": estado_de_acceso(profile),
         "user": user_data,
         "routines": routines,
+        # 'activa', 'pdf' o 'ninguna': lo que el Resumen pinta en «Rutina».
+        "rutina_puesta": rutina_puesta,
         "reports": reports,
         "payments": payments,
         "messages": messages,
@@ -2607,30 +2616,23 @@ async def get_todo_semana(user = Depends(get_admin_user)):
     # Rutinas activas y reportes recientes: una consulta cada uno (no N+1). De la rutina
     # se trae también su fecha: desde el doc del 19-08 la semana de RUTINA es la que
     # decide qué reporte toca, y este panel tiene que contar igual que el cliente.
-    rutinas_activas = await db.routines.find(
-        {"status": "active"}, {"_id": 0, "client_id": 1, "created_at": 1}).to_list(3000)
-    rutina_por_cliente = {r["client_id"]: r for r in rutinas_activas if r.get("client_id")}
-
-    # EL PDF TAMBIÉN ES TENER RUTINA (puntos 67 y 69 del doc del 24-08: «Montalvo tiene su
-    # PDF subido, su reparto por días y sus 8 semanas, y el sistema lo cuenta como sin
-    # rutina»). La pantalla de Rutinas lo cuenta así desde el 24-08 (`has_routine` = la
-    # estructurada O el PDF); este panel se quedó contando solo la estructurada, y los dos
-    # números se leen en la misma sesión.
     #
-    # Lo medido en producción el 28-08: de los 177 clientes activos cuyo plan incluye
-    # rutina, 0 tienen una estructurada y 33 tienen su PDF. Así que aquí salían 177 «sin
-    # rutina» y en Rutinas 33 «con rutina puesta».
-    #
-    # Y tiene una consecuencia que no se ve: la columna se esconde sola cuando le falta a
-    # más de nueve de cada diez, porque entonces «no es trabajo pendiente, es el estado de
-    # la casa» (Jesús, 11-08). Con 177 de 177 se escondía; con los PDF contados son 144 de
-    # 177, o sea el 81 %, y la columna vuelve sola, que es lo que aquella decisión prometía.
+    # EL PDF TAMBIÉN ES TENER RUTINA (puntos 67 y 69 del doc del 24-08), y desde el 4-09
+    # la respuesta a «¿tiene rutina?» vive en `core.rutina_puesta` y la leen las tres
+    # pantallas. Punto 103 del artefacto «La app, pantalla por pantalla» (Gonzalo, 4-09):
+    # «La pantalla de Rutinas ya cuenta bien (...) pero el Inicio del panel sigue diciendo
+    # Sin rutina: 93 como si no tuviera ninguno. Es el mismo arreglo a medias». Aquí el PDF
+    # ya se sumaba desde el 28-08; lo que seguía siendo distinto era QUIÉN la lleva en el
+    # plan: esto miraba las `features` del plan y Rutinas el modo del catálogo sin contar
+    # «opcional», así que Bronze y Mantenimiento salían aquí como tarea (43 de más en dev).
+    # Ahora la lista de «a quién le falta» es LA MISMA que en Rutinas, personas y criterio.
     #
     # OJO, esto es solo el CONTADOR del panel: cuál de las dos manda para lo que ve el
     # cliente y para la semana del reporte sigue siendo la decisión del punto 69, sin tomar.
-    from routes.routines import _ultimo_pdf_por_cliente
-    con_pdf = await _ultimo_pdf_por_cliente()
-    active_routine_clients = set(rutina_por_cliente) | set(con_pdf)
+    from core.rutina_puesta import a_quien_le_falta, clientes_y_su_rutina, rutinas_puestas
+    puestas = await rutinas_puestas()
+    rutina_por_cliente = {cid: p["activa"] for cid, p in puestas.items() if p.get("activa")}
+    clientes_rutina = await clientes_y_su_rutina(catalog)
     cutoff = (now - timedelta(days=10)).isoformat()
     # Con tope hoy (punto 22): un reporte fechado en 2027 cumple el «>= cutoff» y contaba
     # como reporte reciente, o sea que tapaba a su cliente en «Reporte pendiente».
@@ -2656,9 +2658,19 @@ async def get_todo_semana(user = Depends(get_admin_user)):
         if uid and ca and (uid not in ultimo_contacto or ca > ultimo_contacto[uid]):
             ultimo_contacto[uid] = ca
 
-    sin_macros, sin_rutina, reporte_pendiente, sin_contacto = [], [], [], []
+    sin_macros, reporte_pendiente, sin_contacto = [], [], []
     te_tocan, reporte_aplazado = [], []
-    con_rutina_en_plan = 0
+    # Sin rutina: el plan la incluye y el cliente no tiene ninguna PUESTA (ni estructurada
+    # ni en PDF). Sale de la misma lista que la pantalla de Rutinas, ver arriba. Y se cuenta
+    # también a cuántos les tocaría tenerla, no solo a los que no la tienen: el panel lo
+    # necesita para saber si «sin rutina» señala un pendiente o describe el estado normal
+    # de la casa (227 de 228), en cuyo caso deja de ocupar una columna.
+    con_rutina_en_plan = sum(1 for c in clientes_rutina if c["la_lleva_en_su_plan"])
+    sin_rutina = sorted(
+        ({"client_id": c["client_id"], "name": c["name"] or "?", "email": c["email"] or "",
+          "plan": c["plan"], "al_corriente": has_active_access(c["perfil"])}
+         for c in a_quien_le_falta(clientes_rutina)),
+        key=lambda x: (x["name"] or "").lower())
     for p in profiles:
         u = umap.get(p.get("user_id"), {})
         base = {
@@ -2671,16 +2683,6 @@ async def get_todo_semana(user = Depends(get_admin_user)):
         # Sin macros: el plan espera macros del coach (calculadora personalizada) y no los tiene.
         if hab.get("calculadora") == "personalizado" and not p.get("macros_training"):
             sin_macros.append(base)
-
-        # Sin rutina: el plan incluye rutina y el cliente no tiene una activa.
-        if plan_grants_feature(p.get("plan"), "rutina"):
-            # Contamos también a cuántos les tocaría tener rutina, no solo a los que no la
-            # tienen. El panel lo necesita para saber si «sin rutina» señala un pendiente o
-            # está describiendo el estado normal de la casa (227 de 228), en cuyo caso deja
-            # de ocupar una columna. Sin el total no se puede distinguir una cosa de la otra.
-            con_rutina_en_plan += 1
-            if p["id"] not in active_routine_clients:
-                sin_rutina.append(base)
 
         # Sin contacto: cuántos días lleva sin que nadie del equipo le hable. Solo para
         # los planes que incluyen chat -- al de autogestión no se le acompaña por ahí, así

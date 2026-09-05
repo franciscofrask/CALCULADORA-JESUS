@@ -22,6 +22,7 @@ import ObjetivoDelCliente from '../components/panel/ObjetivoDelCliente';
 import PicoDeForma, { EtiquetasDelPunto, puntoDelReporte } from '../components/panel/PicoDeForma';
 import { construirComparativa, TITULO_ETIQUETA } from '../lib/comparativaFotos';
 import { BIBLIOTECA_DE_CLIENTES } from '../lib/menuFuentes';
+import { sinElRelleno, notaDelCliente } from '../lib/rellenoDelImport';
 import { MEDIDAS, valorAnterior, diferencia } from '../lib/medidas';
 import CoachCheckins from '../components/CoachCheckins';
 import EvolucionMedidas from '../components/EvolucionMedidas';
@@ -1138,11 +1139,19 @@ const ClientDetailPage = () => {
     if (loading) return <div className="p-6 bg-[#0A0A0A] min-h-screen"><div className="animate-pulse space-y-4"><div className="h-8 bg-[#222] rounded w-1/4" /><div className="h-48 bg-[#111] rounded-xl" /></div></div>;
     if (!client) return <div className="p-6 bg-[#0A0A0A] min-h-screen text-center text-white/50">Cliente no encontrado</div>;
 
-    const { profile, user, routines, reports, payments, macro_history, nutrition_stats, calma_raw, acceso } = client;
+    const { profile, user, routines, reports, payments, macro_history, nutrition_stats, calma_raw, acceso, rutina_puesta } = client;
     const mt = profile?.macros_training;
     const mr = profile?.macros_rest;
     const mp = profile?.macros_periworkout;
     const activeRoutine = routines?.find(r => r.status === 'active');
+    // EL PDF ENTREGADO, PARA EL RESUMEN Y PARA ENTRENO (4-09, punto 80 del artefacto «La
+    // app, pantalla por pantalla»; Gonzalo: «la ficha dice Sin rutina y en la pestaña
+    // Entreno está la rutina 152 en PDF»). Lo dice el backend con la misma función que el
+    // panel (`rutina_puesta`), así el Resumen lo sabe sin haber pasado por Entreno; y si
+    // en esta sesión se sube o se quita uno desde Entreno, manda lo que diga esa pestaña.
+    const pdfEntregado = pdfRutina
+        ? (pdfRutina.hay ? pdfRutina : null)
+        : (rutina_puesta?.en_pdf ? { uploaded_at: rutina_puesta.pdf_uploaded_at } : null);
 
     // Macros guardados ahora mismo, en el mismo formato que el formulario: sirven
     // para precargar el editor, marcar lo que el coach ha tocado y poder descartar.
@@ -1290,7 +1299,11 @@ const ClientDetailPage = () => {
                                     </select>
                                 );
                             })()} />
-                            <InfoItem icon={Target} label="Rutina" value={activeRoutine ? plural(activeRoutine.days?.filter(d => !d.is_rest).length || 0, 'día') : 'Sin rutina'} />
+                            {/* «EN PDF» CUANDO LA TIENE ENTREGADA EN PDF (punto 80, 4-09). Esto miraba
+                                solo las estructuradas, y a Montalvo, con su rutina-152.pdf abierta por
+                                el cliente, le ponía «Sin rutina». Las mismas tres palabras que la lista
+                                de Rutinas: Activa (con sus días) / En PDF / Sin rutina. */}
+                            <InfoItem icon={Target} label="Rutina" value={<span data-testid="resumen-rutina">{activeRoutine ? plural(activeRoutine.days?.filter(d => !d.is_rest).length || 0, 'día') : pdfEntregado ? 'En PDF' : 'Sin rutina'}</span>} />
                             <InfoItem icon={CreditCard} label="Próx. cobro" value={profile?.next_payment ? new Date(profile.next_payment).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : '-'} />
                             {/* «ALTA» Y «INICIO DEL CICLO» SON DOS COSAS (2-09). Esto ponía
                                 «Inicio» y pintaba `created_at`, justo al lado de un «Semana
@@ -2170,12 +2183,14 @@ const ClientDetailPage = () => {
                             {activeRoutine.trainer_notes && <p className="text-white/30 text-xs mt-3 italic">{activeRoutine.trainer_notes}</p>}
                             </CardContent>
                         </Card>
-                    ) : pdfRutina?.hay ? (
+                    ) : pdfEntregado ? (
                         /* Sin estructurada pero con PDF: la rutina SÍ está entregada, solo
                            que en papel. Decir «sin rutina asignada» aquí contradecía al
                            «Rutina en PDF subida» de dos tarjetas más arriba. */
                         <EmptyState icon={FileText}
-                            message={`Rutina entregada en PDF el ${new Date(pdfRutina.uploaded_at).toLocaleDateString('es-ES')}.`} />
+                            message={pdfEntregado.uploaded_at
+                                ? `Rutina entregada en PDF el ${new Date(pdfEntregado.uploaded_at).toLocaleDateString('es-ES')}.`
+                                : 'Rutina entregada en PDF.'} />
                     ) : <EmptyState icon={Dumbbell} message="Sin rutina asignada." />}
 
                     {/* Generate routine */}
@@ -3096,9 +3111,12 @@ const ReporteParaDecidir = ({ reporte, reportes, pesoUltimoAjuste, onVerReportes
     const dias = Math.floor((new Date().setHours(0, 0, 0, 0) - new Date(fecha + 'T00:00:00').getTime()) / 86400000);
     const cuando = isNaN(dias) ? '' : dias <= 0 ? 'hoy' : dias === 1 ? 'ayer' : `hace ${dias} días`;
     const viejo = dias >= 30;
-    // El texto que dejó la migración no es lo que escribió el cliente: en el histórico ya se
-    // filtra igual, y enseñarlo entrecomillado como una nota suya sería mentir.
-    const notas = reporte.notes && reporte.notes !== 'Importado de Calma' ? reporte.notes : '';
+    // LA BASURA DEL IMPORT NO ES UNA NOTA (punto 104 del artefacto «La app, pantalla por
+    // pantalla», 4-09; Gonzalo: «El último reporte de Montalvo, entero, es: XX. Se dio por
+    // arreglado que los rellenos XX, -, n/a y ninguno ya no se pintaban»). Se había
+    // arreglado en Seguimiento, y este bloque pintaba `notes` en crudo por su cuenta: solo
+    // quitaba la marca «Importado de Calma». Ahora pasa por la misma regla que todo lo demás.
+    const notas = notaDelCliente(reporte) || '';
     const importado = !!(reporte.calma_migrated || reporte.notes === 'Importado de Calma');
     const dif = (pesoUltimoAjuste != null && reporte.weight != null)
         ? Math.round((reporte.weight - pesoUltimoAjuste) * 10) / 10
@@ -3129,6 +3147,12 @@ const ReporteParaDecidir = ({ reporte, reportes, pesoUltimoAjuste, onVerReportes
         ['Energía', reporte.energy_level],
         ['Estrés', reporte.stress_level],
     ].filter(([, v]) => v != null);
+    // ¿Queda algo que leer una vez fuera el relleno? Si no, se dice «sin respuesta» y no se
+    // deja un «XX» ni un hueco mudo (punto 104: «el hueco vacío o un sin respuesta»).
+    const hayRespuesta = !!(reporte.proximo_objetivo || reporte.viabilidad_ajuste || reporte.cumplimiento_entreno
+        || reporte.training_compliance != null || reporte.nutrition_compliance != null
+        || rangos.length > 0 || filasMedidas.length > 0 || notas
+        || hayRespuestasDelReporte(reporte) || filasDeCalma(reporte.calma_respuestas).length > 0);
 
     return (
         <Card className="bg-[#111] border-[#222] text-white" data-testid="decidir-reporte">
@@ -3190,6 +3214,13 @@ const ReporteParaDecidir = ({ reporte, reportes, pesoUltimoAjuste, onVerReportes
                     </div>
                 )}
 
+                {/* LO QUE CONTESTÓ, ENTERO (4-09, punto 104). Este bloque es «lo que el cliente
+                    contestó» y no enseñaba las respuestas: ni las del formulario nuevo ni las de
+                    los meses de Calma, que son justo lo que tiene un reporte migrado como el de
+                    Montalvo debajo del «XX». Los mismos dos bloques que Seguimiento, ya filtrados. */}
+                <RespuestasDelReporte reporte={reporte} />
+                <RespuestasDeCalma respuestas={reporte.calma_respuestas} />
+
                 {/* Las medidas, con la diferencia contra el último reporte que las traiga.
                     Plegadas: son diez y no siempre se leen, pero cuando se leen se leen aquí
                     y no en otra pestaña. */}
@@ -3220,6 +3251,11 @@ const ReporteParaDecidir = ({ reporte, reportes, pesoUltimoAjuste, onVerReportes
 
                 {notas && (
                     <p className="text-white/70 text-sm italic border-l-2 border-[#333] pl-3" data-testid="decidir-notas">"{notas}"</p>
+                )}
+                {!hayRespuesta && (
+                    <p className="text-white/30 text-sm italic" data-testid="decidir-sin-respuesta">
+                        Sin respuesta: el reporte solo trae el peso.
+                    </p>
                 )}
             </CardContent>
         </Card>
@@ -3437,6 +3473,8 @@ const _esRelleno = (v) => Number(v) === 1 && String(v).trim().replace(',', '.') 
 const CalmaField = ({ label, value }) => {
     if (value == null || value === '' || (Array.isArray(value) && !value.length)) return null;
     if (_esRelleno(value)) return null;
+    // Un «XX» o un «-» del volcado no es lo que escribió nadie (punto 104, 4-09).
+    if (typeof value === 'string' && !sinElRelleno(_limpiaCodigo(value))) return null;
     const text = Array.isArray(value) ? value.join(', ') : _limpiaCodigo(String(value));
     return (
         <div>
@@ -4434,9 +4472,12 @@ const RESPUESTA_LABEL = {
     rutina_del_mes: { basica: 'La quiere · básica', avanzada: 'La quiere · avanzada', ahora_no: 'Ahora no' },
 };
 
-const Fila = ({ que, valor }) => (valor ? (
-    <p className="text-white/50">{que} <b className="text-white">{valor}</b></p>
-) : null);
+// El texto libre pasa por el mismo filtro que el resto (punto 104, 4-09): un «-» o un
+// «XX» en molestias o sugerencias no es una respuesta, es un hueco que se rellenó.
+const Fila = ({ que, valor }) => {
+    const v = typeof valor === 'string' ? sinElRelleno(valor) : valor;
+    return v ? <p className="text-white/50">{que} <b className="text-white">{v}</b></p> : null;
+};
 
 // LO QUE CONTESTÓ EN EL REPORTE MENSUAL DE CALMA. Las ocho preguntas de siempre, con las
 // palabras del cliente. Se traen tal cual y no como un porcentaje: la respuesta es «Salvo
@@ -4459,31 +4500,18 @@ const PREGUNTAS_CALMA = [
     ['objetivo', 'Su objetivo ahora'],
 ];
 
-// «SIN CALIFICAR CUMPLIMIENTO» NO ES UNA RESPUESTA (doc 19-08, apartado 02). Es el valor
-// que Calma deja en el select del cardio cuando el cliente no lo toca -- 91 formularios,
-// sigue pasando en 2026 -- y la ficha lo pintaba como si el cliente lo hubiera dicho:
-// «el cliente pone que no se ha saltado nada y a mí me sale sin calificar el
-// cumplimiento». Si detrás del relleno hay algo escrito por el cliente («Sin calificar
-// cumplimiento. Este mes lo haré 100 %»), eso sí es suyo y eso es lo que se enseña.
-// Y LA BASURA DEL IMPORT DE CALMA TAMPOCO ES UNA RESPUESTA (revisión del 2-09).
-//
-// En los reportes migrados hay campos rellenos con marcas de relleno del formulario viejo
-// -- «XX», «xxx», «-», «.», «n/a» --, y se pintaban tal cual en la ficha: el entrenador leía
-// «Problemas para entrenar: XX» y un comentario del cliente que ponía "XX". Eso no es lo que
-// escribió nadie, es lo que quedó del volcado. Se filtra donde ya se filtraba el otro
-// relleno, así que cae en todas las pantallas que usan esta función a la vez.
-const _RELLENO_DEL_IMPORT = /^(x+|-+|_+|\.+|n\/?a|na|nada|ninguno?a?|null|none)$/i;
+// «SIN CALIFICAR CUMPLIMIENTO» NO ES UNA RESPUESTA, NI LA BASURA DEL IMPORT TAMPOCO: la
+// regla (`sinElRelleno`) vivía aquí y el 4-09 se fue a `lib/rellenoDelImport`, con su
+// porqué, para que el «Su último reporte» de Macros no tuviera «otro camino» (punto 104).
 
-const sinElRelleno = (v) => {
-    const limpio = String(v ?? '').replace(/^sin calificar (el )?cumplimiento[.,]?\s*/i, '').trim();
-    if (!limpio || _RELLENO_DEL_IMPORT.test(limpio)) return null;
-    return limpio;
-};
+// Las respuestas que de verdad son del cliente, ya sin el relleno. Aparte del componente
+// porque el bloque de Macros necesita saber si hay algo que leer o toca «sin respuesta».
+const filasDeCalma = (respuestas) => PREGUNTAS_CALMA
+    .map(([k, etiqueta]) => [k, etiqueta, sinElRelleno((respuestas || {})[k])])
+    .filter(([, , v]) => v);
 
 const RespuestasDeCalma = ({ respuestas }) => {
-    const filas = PREGUNTAS_CALMA
-        .map(([k, etiqueta]) => [k, etiqueta, sinElRelleno((respuestas || {})[k])])
-        .filter(([, , v]) => v);
+    const filas = filasDeCalma(respuestas);
     if (!filas.length) return null;
     return (
         <div className="space-y-1.5 text-sm bg-[#0A0A0A] rounded-lg p-3 border border-[#222]"
@@ -4500,14 +4528,21 @@ const RespuestasDeCalma = ({ respuestas }) => {
     );
 };
 
+// ¿Contestó algo en el formulario nuevo? Aparte del componente por lo mismo que
+// `filasDeCalma`: el bloque de Macros lo pregunta antes de decir «sin respuesta».
+const hayRespuestasDelReporte = (r) => {
+    const e = r.entreno || {};
+    const s = r.suplementacion || {};
+    return !!(r.tipo || r.molestias || r.sensaciones || r.semana_proxima || r.dieta_dificultad
+        || e.regularidad
+        || e.estrellas || e.rutina_del_mes || s.respuesta || r.cardio_proximo_mes
+        || (r.lesiones || []).length || r.valoracion_resultado || r.motivacion || r.sugerencias);
+};
+
 const RespuestasDelReporte = ({ reporte: r }) => {
     const e = r.entreno || {};
     const s = r.suplementacion || {};
-    const hayAlgo = r.tipo || r.molestias || r.sensaciones || r.semana_proxima || r.dieta_dificultad
-        || e.regularidad
-        || e.estrellas || e.rutina_del_mes || s.respuesta || r.cardio_proximo_mes
-        || (r.lesiones || []).length || r.valoracion_resultado || r.motivacion || r.sugerencias;
-    if (!hayAlgo) return null;
+    if (!hayRespuestasDelReporte(r)) return null;
     const estrellas = (n) => (n ? '★'.repeat(n) + '☆'.repeat(5 - n) : null);
 
     return (
@@ -4745,7 +4780,8 @@ const ReportsFeedbackList = ({ initialReports, clientId, profile, onObjetivoApli
                             las enseñaba ninguna pantalla. */}
                         <RespuestasDeCalma respuestas={abierto.calma_respuestas} />
 
-                        {abierto.notes && <p className="text-white/70 text-sm italic">"{abierto.notes}"</p>}
+                        {/* Por la misma regla que Macros: ni «Importado de Calma» ni «XX» (punto 104). */}
+                        {notaDelCliente(abierto) && <p className="text-white/70 text-sm italic">"{notaDelCliente(abierto)}"</p>}
 
                         {/* EL INFORME MONTADO. Se pide al abrirlo y no al cargar la ficha:
                             cruza dietas, cierres y macros de todo el mes, y no tiene

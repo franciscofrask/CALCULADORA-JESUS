@@ -303,83 +303,35 @@ admin_router = APIRouter(prefix="/admin/routines", tags=["admin-routines"])
 # El PDF es la vía de entrega real -- «se siguen generando como hasta ahora», bloque 11 del
 # doc 19-08 -- y para el panel de Rutinas no existía: el cliente que ya tenía la suya
 # entregada salía en rojo como trabajo pendiente, entraba en los grupos del «Ponérsela a los
-# N» y se le podía generar encima una rutina de IA que no necesitaba. Su ficha sí sabía
-# decirlo («Rutina entregada en PDF el ...»).
+# N» y se le podía generar encima una rutina de IA que no necesitaba.
 #
-# UNA SOLA FORMA DE PREGUNTARLO, y agrupando EN LA BASE: en `rutina_pdfs` cada fila lleva el
-# PDF entero dentro (hasta `MAX_PDF_BYTES`, 15 MB), así que lo que no se pida no viaja y
-# vuelve una fila por cliente en vez de una por PDF. Esta es justo la pantalla donde ya hubo
-# que arreglar siete segundos (ver `_los_que_no_tienen_rutina`).
-#
-# EL ÍNDICE YA ESTÁ (repaso 24-08). Este comentario decía «lo que falta es el índice por
-# client_id», y era verdad hasta el 24-08: en producción `index_information()` solo devolvía
-# `_id_`. Se creó en `core/database.create_indexes`, compuesto `("client_id", 1),
-# ("uploaded_at", -1)`, y con él los `find_one(..., sort=[("uploaded_at", -1)])` del PDF
-# salen por IXSCAN y sin ordenar en memoria (comprobado con explain en dev: `totalDocsExamined
-# 0`). Se crea al arrancar el backend, así que en producción aparece con el próximo deploy.
-# Este `aggregate` recorre la colección entera a propósito: los quiere todos.
+# DESDE EL 4-09 LA RESPUESTA VIVE EN `core.rutina_puesta` (puntos 80 y 103 del artefacto «La
+# app, pantalla por pantalla», Gonzalo: la ficha decía «Sin rutina» a Montalvo con su
+# rutina-152.pdf entregada, y el Inicio del panel contaba con otro criterio que esta
+# pantalla). Aquí se corrigió el 24-08 y las otras dos se quedaron con su copia; ahora las
+# tres leen la misma función. Este nombre se queda como atajo para `_los_que_no_tienen_rutina`.
+# Lo del `$project` delante del `$group` (el binario de cada PDF no viaja) y el índice
+# `(client_id, uploaded_at)` de `core/database.create_indexes` siguen ahí, en `core`.
 async def _ultimo_pdf_por_cliente() -> Dict[str, str]:
-    """{client_id: fecha del último PDF de rutina que se le subió}."""
-    fuera: Dict[str, str] = {}
-    # El `$project` va DELANTE del `$group` a propósito: sin él la tubería arrastra el
-    # documento entero de cada PDF (el binario, hasta 15 MB) para acabar quedándose con dos
-    # campos. Con la entrega mensual ya subida -- 35 filas en producción hoy y 165 clientes
-    # a los que les toca -- eso es medio giga moviéndose por dentro de Mongo cada vez que se
-    # abre el panel de Rutinas.
-    async for fila in db.rutina_pdfs.aggregate(
-            [{"$project": {"client_id": 1, "uploaded_at": 1}},
-             {"$group": {"_id": "$client_id", "ultimo": {"$max": "$uploaded_at"}}}]):
-        if fila.get("_id"):
-            fuera[fila["_id"]] = fila.get("ultimo") or ""
-    return fuera
+    """{client_id: fecha del último PDF de rutina}. Atajo a `core.rutina_puesta.pdf_por_cliente`."""
+    from core.rutina_puesta import pdf_por_cliente
+    return await pdf_por_cliente()
 
 
 @admin_router.get("/overview")
 async def routines_overview(user = Depends(get_admin_user)):
     """Vista general para el panel: cada cliente activo y si tiene rutina PUESTA o no,
     sea la estructurada (`db.routines`) o la entregada en PDF."""
-    # El equipo fuera, como en el resto del panel desde el 09-08. Aquí seguían dentro y
-    # salían "Admin" y los entrenadores entre los clientes sin rutina, contando como
-    # trabajo pendiente: nadie le va a poner una rutina al perfil de pruebas del admin.
-    # Con el helper compartido y no con una copia: así el filtro de cuentas de prueba
-    # (`es_prueba`, 21-08) arrastra aquí igual que al resto de contadores.
-    from routes.admin import _fuera_el_equipo
-    solo_clientes = await _fuera_el_equipo()
-    profiles = await db.client_profiles.find(
-        {**solo_clientes, "status": {"$ne": "baja"}}, {"_id": 0, "id": 1, "user_id": 1, "plan": 1}
-    ).to_list(2000)
-    uids = [p["user_id"] for p in profiles]
-    users = await db.users.find(
-        {"id": {"$in": uids}, "deleted_at": None}, {"_id": 0, "id": 1, "name": 1, "email": 1}
-    ).to_list(2000)
-    umap = {u["id"]: u for u in users}
-    routines = await db.routines.find(
-        {"status": "active"}, {"_id": 0, "client_id": 1, "days": 1, "created_at": 1}
-    ).to_list(2000)
-    rmap = {r["client_id"]: r for r in routines}
-    # El que tiene su rutina entregada en PDF no es trabajo pendiente: ver arriba.
-    pdfs = await _ultimo_pdf_por_cliente()
-
-    out = []
-    for p in profiles:
-        u = umap.get(p["user_id"])
-        if not u:
-            continue
-        r = rmap.get(p["id"])
-        pdf = pdfs.get(p["id"])
-        out.append({
-            "client_id": p["id"],
-            "name": u.get("name"),
-            "email": u.get("email"),
-            "plan": p.get("plan"),
-            "has_routine": bool(r) or bool(pdf),
-            # Cuál de las dos tiene: la estructurada se puede abrir por dentro (días y
-            # ejercicios) y el PDF no, así que la pantalla no puede tratarlos igual.
-            "tiene_pdf": bool(pdf),
-            "pdf_uploaded_at": pdf or None,
-            "training_days": len([d for d in r.get("days", []) if not d.get("is_rest")]) if r else 0,
-            "routine_created_at": r.get("created_at") if r else None,
-        })
+    # LA MISMA LISTA QUE EL INICIO DEL PANEL (4-09, punto 103: «se corrigió el conteo en
+    # Rutinas y el Inicio sigue con el suyo»). Quién entra (sin el equipo ni las cuentas de
+    # prueba, sin los de baja) y qué es tener rutina lo decide `core.rutina_puesta`, y de
+    # ahí sale también el «Sin rutina» del Inicio: dos números de la misma sesión que ya no
+    # pueden discrepar.
+    from core.plan_access import catalogo_vivo
+    from core.rutina_puesta import clientes_y_su_rutina
+    clientes = await clientes_y_su_rutina(await catalogo_vivo())
+    # El perfil viaja dentro para el «al corriente» del Inicio; esta pantalla no lo pinta.
+    out = [{k: v for k, v in c.items() if k != "perfil"} for c in clientes]
     # Primero los que NO tienen rutina (los que necesitan trabajo), luego alfabetico
     out.sort(key=lambda c: (c["has_routine"], (c["name"] or "").lower()))
     return out
