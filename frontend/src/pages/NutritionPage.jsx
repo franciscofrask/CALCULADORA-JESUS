@@ -2164,9 +2164,15 @@ const NutritionPage = () => {
             // guardada» a secas no decía dónde volver a encontrarla. El último tramo
             // nombra el tipo de día CONTRARIO al guardado, que es cuando de verdad se
             // recuadra al aplicarla.
+            // LA FRASE DECÍA LO CONTRARIO DE LO QUE PASA (5-09, prueba 1 de Gonzalo): «se
+            // recuadrará sola si la pones en un día de descanso» daba a entender que en el
+            // mismo tipo de día las cantidades vuelven tal cual, y no: al aplicar una favorita
+            // SIEMPRE se recuadra a los macros del día (`refit-diet`), sea el tipo que sea.
+            // Por eso a Gonzalo «las cantidades no eran exactamente las mismas» y le pareció
+            // un fallo. Se dice lo que hace.
             toast.success('Guardada · Ya es una de tus dietas', {
                 description: 'La tienes en Una de mis dietas cuando montes cualquier día. '
-                    + `Se recuadrará sola si la pones en un día de ${tipoDia === 'descanso' ? 'entreno' : 'descanso'}.`,
+                    + 'Al aplicarla, las cantidades se recuadran solas a los macros de ese día.',
                 duration: 8000,
             });
             loadDietFavorites();

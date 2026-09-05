@@ -57,6 +57,22 @@ const loQueHayEnElDia = (comidas, peri) => {
     return 'comidas';
 };
 
+// EL AVISO SE DESPLEGABA FUERA DE LA VISTA (Gonzalo, 4-09-2026, punto 36 del artefacto «La
+// app, pantalla por pantalla»): «intento aplicar una dieta favorita de 4 comidas, y al pulsar
+// el botón de aplicar no hace ninguna acción, simplemente lo ignora como si no estuvieras
+// haciendo click». El clic sí hacía algo: desplegaba «Este día ya tiene 3 comidas...» con su
+// botón debajo de esa favorita. Pero la lista hace scroll por su cuenta, y con la favorita en
+// la parte baja el aviso caía entero fuera de lo visible (reproducido en el móvil a 390: el
+// aviso en y=699..817 y la lista acababa en 661; en escritorio asomaba solo la primera línea,
+// sin el botón). Y el segundo clic lo volvía a plegar (detalle 5 del doc del 3-09), así que se
+// podía pulsar diez veces sin ver nunca nada. En cuanto el aviso se pinta se trae a la vista:
+// `nearest` mueve lo justo y deja la favorita encima, que es lo que se acaba de pulsar.
+const traerALaVista = (el) => {
+    if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+};
+
 const TipoDiaBadge = ({ tipo }) => (
     <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${esDescanso(tipo) ? 'bg-muted-foreground/10 text-muted-foreground' : 'bg-brand-orange/10 text-brand-orange'}`}>
         {esDescanso(tipo) ? 'Descanso' : 'Entreno'}
@@ -244,7 +260,8 @@ const FavoritesModal = ({ open, onClose, favorites, onSave, onApply, onDelete, o
                                     DESPUÉS EL TIPO DE DÍA. Las dos frases van juntas, una
                                     detrás de otra, no separadas. */}
                                 {confirmId === fav.id && (
-                                    <div className="mt-2 pt-2 border-t border-border space-y-2" data-testid={`fav-adapt-panel-${fav.id}`}>
+                                    <div className="mt-2 pt-2 border-t border-border space-y-2" data-testid={`fav-adapt-panel-${fav.id}`}
+                                        ref={traerALaVista}>
                                         {(!diaVacio || favTipo !== tipoDia) && (
                                             <p className="text-xs text-foreground">
                                                 {!diaVacio && (
